@@ -1,0 +1,26 @@
+BasedOnStyle: Google
+AlignConsecutiveAssignments: true
+AlignConsecutiveMacros: true
+AllowShortEnumsOnASingleLine: true
+BreakBeforeBinaryOperators: All
+BreakBeforeBraces: Stroustrup
+ColumnLimit: 0
+SortIncludes: true
+PackConstructorInitializers: Never
+IncludeBlocks: Regroup
+IncludeCategories:
+  # Headers in <> without extension.
+  - Regex: '<([A-Za-z0-9\Q/-_\E])+>'
+    Priority: 1
+  # boost specific headers
+  - Regex: '<(boost)\/'
+    Priority: 2
+  # rstream specific headers
+  - Regex: '<(rstream)\/'
+    Priority: 4
+  # All other headers in <> not matched by specific libraries above.
+  - Regex: "^<.*>"
+    Priority: 3
+  # Headers in "" with extension.
+  - Regex: '"([A-Za-z0-9.\Q/-_\E])+"'
+    Priority: 5
