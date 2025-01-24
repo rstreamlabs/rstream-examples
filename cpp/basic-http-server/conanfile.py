@@ -10,8 +10,7 @@ class ConanPackage(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
     exports_sources = "*"
     requires = \
-        "boost/[>=1.83.0]", \
-        "docopt.cpp/[>=0.6.3]", \
+        "boost/[]", \
         "rstream/[]"
         
     def generate(self):
