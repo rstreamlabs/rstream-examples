@@ -1,5 +1,5 @@
 .tmp
-webrtc-video-streaming
+/webrtc-video-streaming
 config.yaml
 dist
 internal/web/generated
