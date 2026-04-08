@@ -1,0 +1,51 @@
+server:
+  listen: 127.0.0.1:8080
+tunnel:
+  enabled: true
+  name: webrtc-video-streaming
+  auth:
+    mode: plain
+  reconnect:
+    enabled: true
+    interval: 5s
+turn:
+  ttl: 1h
+webrtc:
+  useTurn: true
+  maxViewers: 0
+  initialBitrateKbps: 5000
+  interceptors:
+    twcc: true
+    nack: true
+    rtx: true
+    flexFEC: false
+  adaptive:
+    enabled: false
+    backend: twcc-gcc
+    twccGCC:
+      minBitrateKbps: 1500
+      maxBitrateKbps: 8000
+      updateInterval: 1s
+      changeThresholdPct: 10
+      maxIncreasePct: 15
+      maxIncreaseStepKbps: 500
+  video:
+    mimeType: video/AV1
+    clockRate: 90000
+    payloadType: 45
+    rtxPayloadType: 46
+    streamID: rstream-webrtc-video-streaming
+    trackID: video
+media:
+  mode: shared
+  sinkName: video
+  pipeline: >-
+    avfvideosrc device-index=0 !
+    videoconvert !
+    video/x-raw,format=I420,width=1280,height=720,framerate=30/1 !
+    av1enc name=encoder usage-profile=realtime end-usage=cbr cpu-used=10 lag-in-frames=0 threads=8 row-mt=true tile-columns=2 target-bitrate=5000 keyframe-max-dist=60 qos=true drop-frame=25 !
+    av1parse !
+    video/x-av1,stream-format=obu-stream,alignment=tu !
+    appsink name=video emit-signals=true sync=false max-buffers=4 drop=true
+logging:
+  verbose: false

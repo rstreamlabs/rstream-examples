@@ -1,0 +1,7 @@
+.git
+.gitignore
+.tmp
+webrtc-video-streaming
+dist
+node_modules
+out
