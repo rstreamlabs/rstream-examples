@@ -190,6 +190,11 @@ func (s *GStreamerSource) Stop() error {
 func (s *GStreamerSource) Subscribe() (<-chan AccessUnit, func()) {
 	ch := make(chan AccessUnit, 8)
 	s.mu.Lock()
+	if s.closed || s.failed != nil {
+		close(ch)
+		s.mu.Unlock()
+		return ch, func() {}
+	}
 	s.subs[ch] = struct{}{}
 	s.mu.Unlock()
 	return ch, func() {

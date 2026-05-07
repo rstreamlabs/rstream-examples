@@ -3,6 +3,7 @@ package webrtc
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/rstreamlabs/rstream-examples/webrtc-video-streaming/internal/config"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video-streaming/internal/logs"
@@ -17,6 +18,32 @@ func (fakeSourceFactory) New() (media.Source, error) {
 
 type fakeSource struct {
 	subs map[chan media.AccessUnit]struct{}
+}
+
+type closedSourceFactory struct{}
+
+type closedSource struct{}
+
+func (closedSourceFactory) New() (media.Source, error) {
+	return closedSource{}, nil
+}
+
+func (closedSource) Start() error {
+	return nil
+}
+
+func (closedSource) Stop() error {
+	return nil
+}
+
+func (closedSource) Subscribe() (<-chan media.AccessUnit, func()) {
+	ch := make(chan media.AccessUnit)
+	close(ch)
+	return ch, func() {}
+}
+
+func (closedSource) Close() error {
+	return nil
 }
 
 func (s *fakeSource) Start() error {
@@ -69,5 +96,42 @@ func TestBroadcasterHonorsMaxViewers(t *testing.T) {
 		return nil
 	}); err == nil {
 		t.Fatal("expected the second viewer to be rejected")
+	}
+}
+
+func TestBroadcasterRemovesSessionWhenSourceStopsDuringOpen(t *testing.T) {
+	cfg := config.Default()
+	cfg.WebRTC.UseTURN = false
+	logger := logs.NewLogger(logs.NewHub(16), false)
+	broadcaster, err := NewBroadcaster(cfg, closedSourceFactory{}, nil, logger)
+	if err != nil {
+		t.Fatalf("failed to create the broadcaster: %v", err)
+	}
+	defer func() {
+		_ = broadcaster.Close()
+	}()
+	session, err := broadcaster.OpenSession(context.Background(), func(SignalMessage) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("failed to open the session: %v", err)
+	}
+	select {
+	case <-session.Done():
+	case <-time.After(time.Second):
+		t.Fatal("expected the session to close when the source stops")
+	}
+	deadline := time.Now().Add(time.Second)
+	for {
+		broadcaster.mu.Lock()
+		count := len(broadcaster.sessions)
+		broadcaster.mu.Unlock()
+		if count == 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("expected no active sessions, got %d", count)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

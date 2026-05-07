@@ -34,6 +34,8 @@ func TestAV1RequiresAV1Parse(t *testing.T) {
 }
 
 func TestReferenceConfigsAreValid(t *testing.T) {
+	t.Setenv("API_URL", "https://video.example.com")
+	t.Setenv("DEVICE_SECRET", "dev_test_secret")
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("failed to resolve the test file location")
@@ -41,6 +43,7 @@ func TestReferenceConfigsAreValid(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(filename), "..", ".."))
 	configs := []string{
 		"config.h264.yaml",
+		"config.provisioning.h264.yaml",
 		"config.av1.yaml",
 		"config.macos-webcam.h264.yaml",
 		"config.macos-webcam.h264.twcc-gcc.yaml",
@@ -57,6 +60,27 @@ func TestReferenceConfigsAreValid(t *testing.T) {
 				t.Fatalf("expected %s to load cleanly, got %v", name, err)
 			}
 		})
+	}
+}
+
+func TestRemoteProvisioningDoesNotRequireLocalTunnelAuth(t *testing.T) {
+	cfg := Default()
+	cfg.Tunnel.Provisioning.Mode = TunnelProvisioningModeRemote
+	cfg.Tunnel.Provisioning.Endpoint = "https://video.example.com"
+	cfg.Tunnel.Provisioning.Secret = "dev_test_secret"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected remote provisioning without local tunnel auth to be valid, got %v", err)
+	}
+}
+
+func TestRemoteProvisioningRejectsLocalTunnelAuthPolicy(t *testing.T) {
+	cfg := Default()
+	cfg.Tunnel.Provisioning.Mode = TunnelProvisioningModeRemote
+	cfg.Tunnel.Provisioning.Endpoint = "https://video.example.com"
+	cfg.Tunnel.Provisioning.Secret = "dev_test_secret"
+	cfg.Tunnel.Auth.Token = true
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected remote provisioning with local tunnel auth to fail validation")
 	}
 }
 

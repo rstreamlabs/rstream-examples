@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -12,16 +13,15 @@ import (
 )
 
 type (
-	TunnelAuthMode  string
-	MediaMode       string
-	VideoCodec      string
-	AdaptiveBackend string
+	TunnelProvisioningMode string
+	MediaMode              string
+	VideoCodec             string
+	AdaptiveBackend        string
 )
 
 const (
-	TunnelAuthModePlain   TunnelAuthMode = "plain"
-	TunnelAuthModeToken   TunnelAuthMode = "token"
-	TunnelAuthModeRstream TunnelAuthMode = "rstream"
+	TunnelProvisioningModeLocal  TunnelProvisioningMode = "local"
+	TunnelProvisioningModeRemote TunnelProvisioningMode = "remote"
 )
 
 const (
@@ -41,17 +41,19 @@ const (
 )
 
 const (
-	DefaultServerListen = "127.0.0.1:8080"
-	DefaultTunnelName   = "webrtc-video-streaming"
-	DefaultTURNTTL      = "1h"
-	DefaultReconnect    = "5s"
-	DefaultBitrateKbps  = 5000
-	MinBitrateKbps      = 1500
-	MaxBitrateKbps      = 8000
+	DefaultServerListen        = "127.0.0.1:8080"
+	DefaultTunnelName          = "webrtc-video-streaming"
+	DefaultTURNTTL             = "1h"
+	DefaultProvisioningTimeout = "10s"
+	DefaultReconnect           = "5s"
+	DefaultBitrateKbps         = 5000
+	MinBitrateKbps             = 1500
+	MaxBitrateKbps             = 8000
 )
 
 type Config struct {
 	Server  ServerConfig  `yaml:"server"`
+	Web     WebConfig     `yaml:"web"`
 	Tunnel  TunnelConfig  `yaml:"tunnel"`
 	TURN    TURNConfig    `yaml:"turn"`
 	WebRTC  WebRTCConfig  `yaml:"webrtc"`
@@ -63,21 +65,42 @@ type ServerConfig struct {
 	Listen string `yaml:"listen"`
 }
 
+type WebConfig struct {
+	Viewer WebViewerConfig `yaml:"viewer"`
+}
+
+type WebViewerConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
 type TunnelConfig struct {
-	Enabled   bool                  `yaml:"enabled"`
-	Name      string                `yaml:"name"`
-	Auth      TunnelAuthConfig      `yaml:"auth"`
-	Reconnect TunnelReconnectConfig `yaml:"reconnect"`
+	Enabled      bool                     `yaml:"enabled"`
+	Name         string                   `yaml:"name"`
+	Auth         TunnelAuthConfig         `yaml:"auth"`
+	Transport    TunnelTransportConfig    `yaml:"transport"`
+	Provisioning TunnelProvisioningConfig `yaml:"provisioning"`
+	Reconnect    TunnelReconnectConfig    `yaml:"reconnect"`
 }
 
 type TunnelAuthConfig struct {
-	Mode  TunnelAuthMode `yaml:"mode"`
-	Token string         `yaml:"token"`
+	Token   bool `yaml:"token" json:"token"`
+	Rstream bool `yaml:"rstream" json:"rstream"`
+}
+
+type TunnelTransportConfig struct {
+	UseQUIC bool `yaml:"useQuic"`
 }
 
 type TunnelReconnectConfig struct {
 	Enabled  bool   `yaml:"enabled"`
 	Interval string `yaml:"interval"`
+}
+
+type TunnelProvisioningConfig struct {
+	Mode     TunnelProvisioningMode `yaml:"mode"`
+	Endpoint string                 `yaml:"endpoint"`
+	Secret   string                 `yaml:"secret"`
+	Timeout  string                 `yaml:"timeout"`
 }
 
 type TURNConfig struct {
@@ -141,15 +164,24 @@ func Default() Config {
 		Server: ServerConfig{
 			Listen: DefaultServerListen,
 		},
+		Web: WebConfig{
+			Viewer: WebViewerConfig{
+				Enabled: true,
+			},
+		},
 		Tunnel: TunnelConfig{
 			Enabled: true,
 			Name:    DefaultTunnelName,
-			Auth: TunnelAuthConfig{
-				Mode: TunnelAuthModePlain,
+			Transport: TunnelTransportConfig{
+				UseQUIC: true,
 			},
 			Reconnect: TunnelReconnectConfig{
 				Enabled:  true,
 				Interval: DefaultReconnect,
+			},
+			Provisioning: TunnelProvisioningConfig{
+				Mode:    TunnelProvisioningModeLocal,
+				Timeout: DefaultProvisioningTimeout,
 			},
 		},
 		TURN: TURNConfig{
@@ -237,13 +269,31 @@ func (c Config) Validate() error {
 	if _, err := c.TURNTTL(); err != nil {
 		return err
 	}
+	if _, err := c.TunnelProvisioningTimeout(); err != nil {
+		return err
+	}
+	provisioningMode := c.TunnelProvisioningMode()
+	switch provisioningMode {
+	case TunnelProvisioningModeLocal:
+	case TunnelProvisioningModeRemote:
+		if strings.TrimSpace(c.Tunnel.Provisioning.Endpoint) == "" {
+			return errors.New("tunnel provisioning endpoint is required when mode is remote")
+		}
+		parsed, err := url.Parse(strings.TrimSpace(c.Tunnel.Provisioning.Endpoint))
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			return fmt.Errorf("invalid tunnel provisioning endpoint %q", c.Tunnel.Provisioning.Endpoint)
+		}
+		if strings.TrimSpace(c.Tunnel.Provisioning.Secret) == "" {
+			return errors.New("tunnel provisioning secret is required when mode is remote")
+		}
+	default:
+		return fmt.Errorf("invalid tunnel provisioning mode %q", c.Tunnel.Provisioning.Mode)
+	}
 	if _, err := c.TunnelReconnectInterval(); err != nil {
 		return err
 	}
-	switch c.TunnelAuthMode() {
-	case TunnelAuthModePlain, TunnelAuthModeToken, TunnelAuthModeRstream:
-	default:
-		return fmt.Errorf("invalid tunnel auth mode %q", c.Tunnel.Auth.Mode)
+	if provisioningMode == TunnelProvisioningModeRemote && c.HasLocalTunnelAuthPolicy() {
+		return errors.New("tunnel auth is only configurable when tunnel provisioning mode is local")
 	}
 	switch c.VideoCodec() {
 	case VideoCodecH264, VideoCodecAV1:
@@ -330,12 +380,16 @@ func (c Config) Validate() error {
 	return nil
 }
 
-func (c Config) TunnelAuthMode() TunnelAuthMode {
-	value := strings.TrimSpace(string(c.Tunnel.Auth.Mode))
+func (c Config) HasLocalTunnelAuthPolicy() bool {
+	return c.Tunnel.Auth.Token || c.Tunnel.Auth.Rstream
+}
+
+func (c Config) TunnelProvisioningMode() TunnelProvisioningMode {
+	value := strings.TrimSpace(string(c.Tunnel.Provisioning.Mode))
 	if value == "" {
-		return TunnelAuthModePlain
+		return TunnelProvisioningModeLocal
 	}
-	return TunnelAuthMode(value)
+	return TunnelProvisioningMode(value)
 }
 
 func (c Config) MediaMode() MediaMode {
@@ -417,6 +471,21 @@ func (c Config) TURNTTL() (time.Duration, error) {
 	dur, err := time.ParseDuration(value)
 	if err != nil {
 		return 0, fmt.Errorf("invalid TURN TTL %q", c.TURN.TTL)
+	}
+	return dur, nil
+}
+
+func (c Config) TunnelProvisioningTimeout() (time.Duration, error) {
+	value := strings.TrimSpace(c.Tunnel.Provisioning.Timeout)
+	if value == "" {
+		return 10 * time.Second, nil
+	}
+	dur, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("invalid tunnel provisioning timeout %q", c.Tunnel.Provisioning.Timeout)
+	}
+	if dur <= 0 {
+		return 0, errors.New("tunnel provisioning timeout must be greater than 0")
 	}
 	return dur, nil
 }

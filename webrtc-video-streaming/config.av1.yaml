@@ -3,8 +3,8 @@ server:
 tunnel:
   enabled: true
   name: webrtc-video-streaming
-  auth:
-    mode: plain
+  transport:
+    useQuic: true
   reconnect:
     enabled: true
     interval: 5s

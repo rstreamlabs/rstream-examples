@@ -3,15 +3,17 @@ import { z } from "zod";
 type TURNPolicy = "auto" | "direct" | "relay";
 
 const sampleInfoSchema = z.object({
-  authMode: z.enum(["plain", "token", "rstream"]),
   adaptiveBackend: z.enum(["off", "twcc-gcc"]),
   flexFECEnabled: z.boolean(),
   localURL: z.string(),
   nackEnabled: z.boolean(),
   publicURL: z.string().nullable().optional(),
   rtxEnabled: z.boolean(),
+  tunnelAuth: z.object({
+    token: z.boolean(),
+    rstream: z.boolean(),
+  }),
   twccEnabled: z.boolean(),
-  viewerURL: z.string().nullable().optional(),
   videoMimeType: z.string(),
 });
 
@@ -74,6 +76,8 @@ type State = {
   webSocket: WebSocket | null;
   viewerId: string | null;
   edgeToken: string | null;
+  offerPending: boolean;
+  iceRestartTimer: number | null;
 };
 
 const EMPTY_LOG_MESSAGE = "No events yet.";
@@ -84,6 +88,8 @@ const state: State = {
   webSocket: null,
   viewerId: null,
   edgeToken: new URL(window.location.href).searchParams.get("rstream.token"),
+  offerPending: false,
+  iceRestartTimer: null,
 };
 
 function requiredHTMLElement(id: string): HTMLElement {
@@ -119,7 +125,7 @@ function requiredSelectElement(id: string): HTMLSelectElement {
 }
 
 const publicURL = requiredHTMLElement("public-url");
-const authMode = requiredHTMLElement("auth-mode");
+const tunnelAuth = requiredHTMLElement("tunnel-auth");
 const peerStatus = requiredHTMLElement("peer-status");
 const iceStatus = requiredHTMLElement("ice-status");
 const wsStatus = requiredHTMLElement("ws-status");
@@ -135,7 +141,6 @@ const video = requiredVideoElement("video");
 const logOutput = requiredHTMLElement("log");
 const connectButton = requiredButtonElement("connect");
 const disconnectButton = requiredButtonElement("disconnect");
-const copyURLButton = requiredButtonElement("copy-url");
 const clearLogButton = requiredButtonElement("clear-log");
 const turnPolicy = requiredSelectElement("turn-policy");
 
@@ -211,6 +216,14 @@ function setBadge(node: HTMLElement, label: string, value: string) {
   node.textContent = `${label}: ${value}`;
 }
 
+function formatTunnelAuth(auth: SampleInfo["tunnelAuth"]): string {
+  const modes = [
+    auth.token ? "Token" : null,
+    auth.rstream ? "rstream" : null,
+  ].filter((value) => value !== null);
+  return modes.join(" + ") || "Off";
+}
+
 function setDisconnectedState() {
   disconnectButton.disabled = true;
   connectButton.disabled = false;
@@ -230,10 +243,9 @@ async function loadInfo() {
     throw new Error("Failed to load the sample status");
   }
   state.info = sampleInfoSchema.parse(await response.json());
-  const viewerURLText =
-    state.info.viewerURL ?? state.info.publicURL ?? "Unavailable";
-  publicURL.textContent = viewerURLText;
-  setBadge(authMode, "Auth", state.info.authMode);
+  const publicURLText = state.info.publicURL ?? "Unavailable";
+  publicURL.textContent = publicURLText;
+  setBadge(tunnelAuth, "Auth", formatTunnelAuth(state.info.tunnelAuth));
   setField(codecStatus, state.info.videoMimeType.replace("video/", ""));
   setField(
     recoveryStatus,
@@ -250,7 +262,7 @@ async function loadInfo() {
     adaptiveStatus,
     state.info.adaptiveBackend === "off" ? "Off" : state.info.adaptiveBackend,
   );
-  log(`Public URL ready: ${viewerURLText}`);
+  log(`Public URL ready: ${publicURLText}`);
 }
 
 async function loadTURNConfiguration(
@@ -320,17 +332,37 @@ async function createPeerConnection(policy: TURNPolicy) {
   peerConnection.onconnectionstatechange = () => {
     setBadge(peerStatus, "Peer", peerConnection.connectionState);
     log(`Peer connection state: ${peerConnection.connectionState}`);
-    if (
-      ["closed", "failed", "disconnected"].includes(
-        peerConnection.connectionState,
-      )
-    ) {
+    if (peerConnection.connectionState === "connected") {
+      setConnectedState();
+      return;
+    }
+    if (peerConnection.connectionState === "closed") {
       setDisconnectedState();
+      return;
+    }
+    if (
+      peerConnection.connectionState === "disconnected" ||
+      peerConnection.connectionState === "failed"
+    ) {
+      scheduleICERestart(`peer ${peerConnection.connectionState}`);
     }
   };
   peerConnection.oniceconnectionstatechange = () => {
     setBadge(iceStatus, "ICE", peerConnection.iceConnectionState);
     log(`ICE connection state: ${peerConnection.iceConnectionState}`);
+    if (
+      peerConnection.iceConnectionState === "connected" ||
+      peerConnection.iceConnectionState === "completed"
+    ) {
+      setConnectedState();
+      return;
+    }
+    if (
+      peerConnection.iceConnectionState === "disconnected" ||
+      peerConnection.iceConnectionState === "failed"
+    ) {
+      scheduleICERestart(`ICE ${peerConnection.iceConnectionState}`);
+    }
   };
   peerConnection.onicecandidate = (event) => {
     if (
@@ -370,6 +402,58 @@ function createSignalSocket(policy: TURNPolicy) {
       reject(new Error("The signaling socket could not be opened"));
     };
   });
+}
+
+async function sendOffer(options: { iceRestart?: boolean } = {}) {
+  if (!state.peerConnection || !state.webSocket) {
+    throw new Error("The viewer session is not ready");
+  }
+  if (state.offerPending) {
+    return;
+  }
+  if (state.webSocket.readyState !== WebSocket.OPEN) {
+    throw new Error("The signaling socket is not open");
+  }
+  state.offerPending = true;
+  try {
+    // An ICE restart keeps the same WebRTC session and gathers fresh
+    // candidates after an IP address or network interface change.
+    const offer = await state.peerConnection.createOffer(
+      options.iceRestart ? { iceRestart: true } : undefined,
+    );
+    await state.peerConnection.setLocalDescription(offer);
+    state.webSocket.send(
+      JSON.stringify({ type: "webrtc.offer", sdp: offer.sdp }),
+    );
+    log(options.iceRestart ? "ICE restart offer sent" : "Offer sent");
+  } finally {
+    state.offerPending = false;
+  }
+}
+
+function scheduleICERestart(reason: string) {
+  if (
+    !state.peerConnection ||
+    !state.webSocket ||
+    state.iceRestartTimer !== null ||
+    state.offerPending ||
+    state.peerConnection.signalingState !== "stable" ||
+    state.webSocket.readyState !== WebSocket.OPEN
+  ) {
+    return;
+  }
+  log(`Scheduling ICE restart after ${reason}`);
+  state.iceRestartTimer = window.setTimeout(() => {
+    state.iceRestartTimer = null;
+    sendOffer({ iceRestart: true }).catch((error: unknown) => {
+      if (error instanceof Error) {
+        log(error.message);
+      } else {
+        log("ICE restart failed");
+      }
+      stop();
+    });
+  }, 500);
 }
 
 async function start() {
@@ -473,12 +557,7 @@ async function start() {
       log("WebSocket signaling channel closed");
       stop();
     };
-    const offer = await state.peerConnection.createOffer();
-    await state.peerConnection.setLocalDescription(offer);
-    state.webSocket.send(
-      JSON.stringify({ type: "webrtc.offer", sdp: offer.sdp }),
-    );
-    log("Offer sent");
+    await sendOffer();
   } catch (error: unknown) {
     if (error instanceof Error) {
       log(error.message);
@@ -490,6 +569,11 @@ async function start() {
 }
 
 function stop() {
+  if (state.iceRestartTimer !== null) {
+    window.clearTimeout(state.iceRestartTimer);
+    state.iceRestartTimer = null;
+  }
+  state.offerPending = false;
   if (state.webSocket) {
     try {
       state.webSocket.close();
@@ -527,18 +611,6 @@ connectButton.addEventListener("click", () => {
 disconnectButton.addEventListener("click", () => {
   log("Viewer requested shutdown");
   stop();
-});
-
-copyURLButton.addEventListener("click", async () => {
-  if (!state.info?.viewerURL && !state.info?.publicURL) {
-    return;
-  }
-  const target = state.info.viewerURL ?? state.info.publicURL;
-  if (!target) {
-    return;
-  }
-  await navigator.clipboard.writeText(target);
-  log("Public URL copied to the clipboard");
 });
 
 clearLogButton.addEventListener("click", () => {

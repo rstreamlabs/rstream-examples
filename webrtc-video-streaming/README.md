@@ -25,7 +25,7 @@ rstream login
 rstream project use <project-endpoint> --default
 ```
 
-For local development you also need Go `1.25+`, Node.js `20+`, `pkg-config`, and a GStreamer installation that includes the elements required by the selected pipeline.
+For local development you also need Go `1.26+`, Node.js `20+`, `pkg-config`, and a GStreamer installation that includes the elements required by the selected pipeline.
 
 The H.264 profiles use `videotestsrc`, `videoconvert`, `x264enc`, `h264parse`, and `appsink`. The AV1 profiles use `av1enc` and `av1parse` on top of the same structure.
 
@@ -96,6 +96,7 @@ That serves the viewer on `http://127.0.0.1:8080`.
 The repository ships a small set of reference YAML files so you can start from known working configurations.
 
 - `config.h264.yaml` and `config.av1.yaml` use a test-pattern source and are useful when you want to validate the WebRTC path itself.
+- `config.provisioning.h264.yaml` keeps the H.264 media path and moves tunnel credentials and TURN credentials to a product API.
 - `config.macos-webcam.h264.yaml` and `config.macos-webcam.av1.yaml` are the macOS webcam variants built around `avfvideosrc`.
 - `config.raspberry-pi-camera.h264.yaml` and `config.raspberry-pi-camera.av1.yaml` are the Raspberry Pi variants built around `libcamerasrc`.
 - The `.twcc-gcc.yaml` variants enable adaptive bitrate. The plain variants keep TWCC enabled but leave the encoder on a fixed target bitrate.
@@ -109,7 +110,8 @@ Start from one of the shipped profiles and adjust only the sections you need. Th
 The configuration is split by responsibility:
 
 - `server` controls the local HTTP listener.
-- `tunnel` controls publication through `rstream`, edge authentication, and tunnel reconnection.
+- `web` controls whether the producer serves its local viewer.
+- `tunnel` controls publication through `rstream`, edge authentication, provisioning, and tunnel reconnection.
 - `turn` controls TURN credential lifetime.
 - `webrtc` controls codec settings, interceptors, adaptive bitrate, and viewer limits.
 - `media` controls the GStreamer pipeline itself and how pipelines are allocated across viewers.
@@ -119,15 +121,51 @@ The configuration is split by responsibility:
 
 `tunnel.enabled` decides whether the process publishes the local server through `rstream` or stays local-only.
 
-`tunnel.auth.mode` controls how the published viewer is protected. `plain` publishes the viewer without edge authentication. `token` appends an `rstream.token` query parameter to the viewer URL and lets the frontend reuse it for embedded API and signaling calls. `rstream` protects the viewer with `rstream` authentication at the edge.
+`tunnel.transport.useQuic` controls the producer-to-rstream upstream session. The published tunnel remains a standard HTTP tunnel for the browser UI, signaling WebSocket, and API endpoints; this flag only changes how the Go producer connects to the rstream engine.
 
-If you leave `tunnel.auth.token` empty while using `mode: token`, the process reuses the current `rstream` token from the local CLI context. That is acceptable for local testing. For a real deployment, use `rstream` auth at the edge or dedicated fine-grained tokens issued by a backend you control.
+```yaml
+tunnel:
+  transport:
+    useQuic: true
+```
+
+`tunnel.auth.token` and `tunnel.auth.rstream` decide which edge authentication policies the tunnel enforces. The producer never builds a second public URL with an embedded token. It logs only the published tunnel URL returned by `rstream`.
+
+```yaml
+tunnel:
+  auth:
+    token: true
+    rstream: false
+```
+
+When token authentication is enabled, viewer tokens must be distributed by another trusted surface, such as your product API, the rstream dashboard, or an operator workflow. The device-side process does not leak its own client token into a shareable URL.
 
 `tunnel.reconnect.enabled` controls what happens when the HTTP tunnel drops. If it is enabled, the process recreates the tunnel after `tunnel.reconnect.interval` and logs the new public URL. If it is disabled, a tunnel disconnect becomes a clean process exit.
+
+### Remote provisioning
+
+`config.provisioning.h264.yaml` is the product-integration profile used by the Next.js platform example. In that mode, the producer does not read a local rstream CLI context. It calls the product API configured under `tunnel.provisioning`, receives the short-lived rstream client configuration required to create one tunnel, and then creates that tunnel from those values.
+
+```yaml
+web:
+  viewer:
+    enabled: false
+tunnel:
+  provisioning:
+    mode: remote
+    endpoint: ${API_URL}
+    secret: ${DEVICE_SECRET}
+```
+
+`API_URL` and `DEVICE_SECRET` belong to the third-party product, not to rstream. The `RSTREAM_*` values stay on that product backend, where the app can issue scoped producer and viewer tokens.
+
+When `tunnel.provisioning.mode` is `remote`, `tunnel.auth` is not part of the producer configuration. The producer always requests a token-authenticated HTTP tunnel in that mode, and the short-lived token issued by the product API enforces the exact tunnel creation policy. TURN credentials stay separate: the producer asks the product API for fresh TURN credentials whenever the WebRTC path needs them.
 
 ### TURN and ICE
 
 `turn.ttl` controls the lifetime of TURN credentials minted by the local process. `webrtc.useTurn` controls whether the Go peer itself uses the managed `rstream` TURN service. The browser can still be forced into direct or relay-only mode from the viewer page, but the default path keeps both peers on the same TURN service when relay is required.
+
+The signaling path uses Trickle ICE: both peers exchange candidates as soon as they are discovered. If the selected network path disappears during playback, the browser keeps the same WebRTC session and sends a new offer with ICE restart enabled. The producer keeps the session open during that recovery window and only closes it if ICE does not reconnect.
 
 ### Codecs and media pipelines
 

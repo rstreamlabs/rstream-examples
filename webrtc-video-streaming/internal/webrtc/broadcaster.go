@@ -81,7 +81,11 @@ type Session struct {
 	onClose     func(string)
 	statsMu     sync.RWMutex
 	stats       SessionStats
+	recoveryMu  sync.Mutex
+	recovery    *time.Timer
 }
+
+const networkRecoveryTimeout = 30 * time.Second
 
 func NewBroadcaster(cfg config.Config, sourceFactory media.Factory, turn *turnprovider.Provider, logger *logs.Logger) (*Broadcaster, error) {
 	peerFactory, codec, err := newPeerConnectionFactory(cfg)
@@ -154,7 +158,6 @@ func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) 
 	}
 	sender, err := peerConnection.AddTrack(track)
 	if err != nil {
-		release()
 		_ = peerConnection.Close()
 		return nil, fmt.Errorf("failed to attach the video track: %w", err)
 	}
@@ -192,21 +195,35 @@ func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) 
 			return
 		}
 		init := candidate.ToJSON()
-		_ = send(SignalMessage{
+		if err := send(SignalMessage{
 			Type:          "webrtc.candidate",
 			Candidate:     init.Candidate,
 			SDPMid:        trimmedStringPtr(init.SDPMid),
 			SDPMLineIndex: init.SDPMLineIndex,
-		})
+		}); err != nil {
+			b.logger.Warn("Viewer %s signaling write failed: %v", session.id, err)
+			session.Close("signaling write failed")
+		}
 	})
 	peerConnection.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		b.logger.Info("Viewer %s peer connection state: %s", session.id, state.String())
-		if state == webrtc.PeerConnectionStateFailed || state == webrtc.PeerConnectionStateClosed || state == webrtc.PeerConnectionStateDisconnected {
-			session.Close("peer connection stopped")
+		switch state {
+		case webrtc.PeerConnectionStateConnected:
+			session.clearNetworkRecovery()
+		case webrtc.PeerConnectionStateDisconnected, webrtc.PeerConnectionStateFailed:
+			session.scheduleNetworkRecovery(state.String())
+		case webrtc.PeerConnectionStateClosed:
+			session.Close("peer connection closed")
 		}
 	})
 	peerConnection.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
 		b.logger.Info("Viewer %s ICE connection state: %s", session.id, state.String())
+		switch state {
+		case webrtc.ICEConnectionStateConnected, webrtc.ICEConnectionStateCompleted:
+			session.clearNetworkRecovery()
+		case webrtc.ICEConnectionStateDisconnected, webrtc.ICEConnectionStateFailed:
+			session.scheduleNetworkRecovery("ICE " + state.String())
+		}
 	})
 	if adaptiveController, ok := b.newAdaptiveController(encoderController); ok {
 		session.adaptive = adaptiveController
@@ -248,10 +265,13 @@ func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) 
 			}
 		})
 	}
-	go session.drainRTCP()
-	go session.writeSamples(samples)
-	go session.pushStats()
 	b.mu.Lock()
+	if b.closed {
+		b.mu.Unlock()
+		releaseSource = false
+		session.Close("broadcaster closed")
+		return nil, errors.New("the broadcaster is closed")
+	}
 	if b.opening > 0 {
 		b.opening--
 	}
@@ -260,6 +280,9 @@ func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) 
 	b.mu.Unlock()
 	releaseReservation = false
 	releaseSource = false
+	go session.drainRTCP()
+	go session.writeSamples(samples)
+	go session.pushStats()
 	b.logger.Info("Viewer %s connected (active viewers: %d)", session.id, count)
 	return session, nil
 }
@@ -328,6 +351,8 @@ func (s *Session) HandleOffer(offer string) error {
 	if strings.TrimSpace(offer) == "" {
 		return errors.New("offer SDP is required")
 	}
+	// The browser may send more than one offer on the same session when it
+	// performs an ICE restart after a network interface or IP change.
 	if err := s.pc.SetRemoteDescription(webrtc.SessionDescription{
 		Type: webrtc.SDPTypeOffer,
 		SDP:  offer,
@@ -363,6 +388,7 @@ func (s *Session) AddICECandidate(candidate string, sdpMid *string, sdpMLineInde
 
 func (s *Session) Close(reason string) {
 	s.close.Do(func() {
+		s.clearNetworkRecovery()
 		close(s.closed)
 		if s.unsubscribe != nil {
 			s.unsubscribe()
@@ -380,6 +406,48 @@ func (s *Session) Close(reason string) {
 			s.onClose(reason)
 		}
 	})
+}
+
+func (s *Session) scheduleNetworkRecovery(reason string) {
+	if s.isClosed() {
+		return
+	}
+	s.recoveryMu.Lock()
+	defer s.recoveryMu.Unlock()
+	if s.isClosed() {
+		return
+	}
+	if s.recovery != nil {
+		s.recovery.Stop()
+	}
+	s.logger.Warn(
+		"Viewer %s network path changed (%s); waiting up to %s for ICE recovery",
+		s.id,
+		reason,
+		networkRecoveryTimeout,
+	)
+	s.recovery = time.AfterFunc(networkRecoveryTimeout, func() {
+		s.Close("network recovery timed out")
+	})
+}
+
+func (s *Session) isClosed() bool {
+	select {
+	case <-s.closed:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *Session) clearNetworkRecovery() {
+	s.recoveryMu.Lock()
+	defer s.recoveryMu.Unlock()
+	if s.recovery == nil {
+		return
+	}
+	s.recovery.Stop()
+	s.recovery = nil
 }
 
 func (s *Session) StatsSnapshot() SessionStats {
@@ -413,6 +481,8 @@ func (s *Session) pushStats() {
 				Type:  "session.stats",
 				Stats: ptrSessionStats(s.StatsSnapshot()),
 			}); err != nil {
+				s.logger.Warn("Viewer %s stats write failed: %v", s.id, err)
+				s.Close("signaling write failed")
 				return
 			}
 		case <-s.closed:

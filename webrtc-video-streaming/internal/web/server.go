@@ -21,20 +21,15 @@ import (
 var assets embed.FS
 
 type Info struct {
-	LocalURL        string                 `json:"localURL"`
-	PublicURL       *string                `json:"publicURL,omitempty"`
-	ViewerURL       *string                `json:"viewerURL,omitempty"`
-	AuthMode        config.TunnelAuthMode  `json:"authMode"`
-	VideoMimeType   string                 `json:"videoMimeType"`
-	TWCCEnabled     bool                   `json:"twccEnabled"`
-	NACKEnabled     bool                   `json:"nackEnabled"`
-	RTXEnabled      bool                   `json:"rtxEnabled"`
-	FlexFECEnabled  bool                   `json:"flexFECEnabled"`
-	AdaptiveBackend config.AdaptiveBackend `json:"adaptiveBackend"`
-}
-
-func (i Info) HasDedicatedViewerURL() bool {
-	return i.ViewerURL != nil && i.PublicURL != nil && *i.ViewerURL != *i.PublicURL
+	LocalURL        string                  `json:"localURL"`
+	PublicURL       *string                 `json:"publicURL,omitempty"`
+	TunnelAuth      config.TunnelAuthConfig `json:"tunnelAuth"`
+	VideoMimeType   string                  `json:"videoMimeType"`
+	TWCCEnabled     bool                    `json:"twccEnabled"`
+	NACKEnabled     bool                    `json:"nackEnabled"`
+	RTXEnabled      bool                    `json:"rtxEnabled"`
+	FlexFECEnabled  bool                    `json:"flexFECEnabled"`
+	AdaptiveBackend config.AdaptiveBackend  `json:"adaptiveBackend"`
 }
 
 type Server struct {
@@ -42,9 +37,14 @@ type Server struct {
 	logHub      *logs.Hub
 	createTURN  func(context.Context) (*rstream.TURNCredentials, error)
 	openSession func(context.Context, func(rtc.SignalMessage) error) (*rtc.Session, error)
+	viewer      bool
 	mu          sync.RWMutex
 	info        Info
 	upgrader    websocket.Upgrader
+}
+
+type ServerOptions struct {
+	Viewer bool
 }
 
 func NewServer(
@@ -52,12 +52,18 @@ func NewServer(
 	logHub *logs.Hub,
 	createTURN func(context.Context) (*rstream.TURNCredentials, error),
 	openSession func(context.Context, func(rtc.SignalMessage) error) (*rtc.Session, error),
+	options ...ServerOptions,
 ) *Server {
+	viewer := true
+	if len(options) > 0 {
+		viewer = options[0].Viewer
+	}
 	return &Server{
 		logger:      logger,
 		logHub:      logHub,
 		createTURN:  createTURN,
 		openSession: openSession,
+		viewer:      viewer,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(*http.Request) bool { return true },
 		},
@@ -72,17 +78,32 @@ func (s *Server) SetInfo(info Info) {
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", s.handleIndex)
-	mux.HandleFunc("/app.js", s.handleStatic)
-	mux.HandleFunc("/app.css", s.handleStatic)
-	mux.HandleFunc("/api/status", s.handleStatus)
-	mux.HandleFunc("/api/turn", s.handleTURN)
-	mux.HandleFunc("/ws", s.handleWS)
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
+	s.mountViewerRoutes(mux)
+	s.mountAPIRoutes(mux)
+	s.mountRealtimeRoutes(mux)
+	s.mountHealthRoutes(mux)
 	return mux
+}
+
+func (s *Server) mountViewerRoutes(mux *http.ServeMux) {
+	if s.viewer {
+		mux.HandleFunc("GET /{$}", s.handleIndex)
+		mux.HandleFunc("GET /app.js", s.handleStatic)
+		mux.HandleFunc("GET /app.css", s.handleStatic)
+	}
+}
+
+func (s *Server) mountAPIRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/status", s.handleAPIStatus)
+	mux.HandleFunc("GET /api/turn", s.handleAPITURN)
+}
+
+func (s *Server) mountRealtimeRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /ws", s.handleWS)
+}
+
+func (s *Server) mountHealthRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /healthz", s.handleHealth)
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, _ *http.Request) {
@@ -100,14 +121,14 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleAPIStatus(w http.ResponseWriter, _ *http.Request) {
 	s.mu.RLock()
 	info := s.info
 	s.mu.RUnlock()
 	writeJSON(w, http.StatusOK, info)
 }
 
-func (s *Server) handleTURN(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleAPITURN(w http.ResponseWriter, r *http.Request) {
 	credentials, err := s.createTURN(r.Context())
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -116,6 +137,11 @@ func (s *Server) handleTURN(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, credentials)
+}
+
+func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok"))
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
@@ -146,16 +172,22 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 	recent := s.logHub.Recent()
 	for _, entry := range recent {
-		_ = writer.WriteJSON(rtc.SignalMessage{
+		if err := writer.WriteJSON(rtc.SignalMessage{
 			Type:    "log",
 			Message: entry.Message,
-		})
+		}); err != nil {
+			session.Close("websocket write failed")
+			_ = conn.Close()
+			return
+		}
 	}
 	logEvents, unsubscribe := s.logHub.Subscribe()
 	defer unsubscribe()
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
 		for {
 			select {
 			case entry, ok := <-logEvents:
@@ -166,12 +198,18 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 					Type:    "log",
 					Message: entry.Message,
 				}); err != nil {
+					session.Close("websocket write failed")
+					_ = conn.Close()
 					return
 				}
-			case <-time.After(30 * time.Second):
+			case <-ticker.C:
 				if err := writer.WriteControl(websocket.PingMessage, nil); err != nil {
+					session.Close("websocket write failed")
+					_ = conn.Close()
 					return
 				}
+			case <-session.Done():
+				return
 			}
 		}
 	}()
@@ -196,20 +234,35 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		switch strings.TrimSpace(message.Type) {
 		case "offer", "webrtc.offer":
 			if err := session.HandleOffer(message.SDP); err != nil {
-				_ = writer.WriteJSON(rtc.SignalMessage{
+				if writeErr := writer.WriteJSON(rtc.SignalMessage{
 					Type:    "error",
 					Message: err.Error(),
-				})
+				}); writeErr != nil {
+					session.Close("websocket write failed")
+					_ = conn.Close()
+					<-done
+					return
+				}
 			}
 		case "candidate", "webrtc.candidate":
 			if err := session.AddICECandidate(message.Candidate, message.SDPMid, message.SDPMLineIndex); err != nil {
-				_ = writer.WriteJSON(rtc.SignalMessage{
+				if writeErr := writer.WriteJSON(rtc.SignalMessage{
 					Type:    "error",
 					Message: err.Error(),
-				})
+				}); writeErr != nil {
+					session.Close("websocket write failed")
+					_ = conn.Close()
+					<-done
+					return
+				}
 			}
 		case "ping":
-			_ = writer.WriteJSON(rtc.SignalMessage{Type: "pong"})
+			if err := writer.WriteJSON(rtc.SignalMessage{Type: "pong"}); err != nil {
+				session.Close("websocket write failed")
+				_ = conn.Close()
+				<-done
+				return
+			}
 		}
 	}
 }

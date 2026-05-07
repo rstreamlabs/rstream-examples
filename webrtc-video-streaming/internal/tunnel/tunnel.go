@@ -2,10 +2,11 @@ package tunnel
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
-	"net/url"
 	"strings"
+	"sync"
 
 	"github.com/rstreamlabs/rstream-examples/webrtc-video-streaming/internal/config"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video-streaming/internal/logs"
@@ -18,101 +19,126 @@ type Manager struct {
 	control   interface{ Close() error }
 	tunnel    rstream.BytestreamTunnel
 	publicURL string
-	viewerURL string
-	authMode  config.TunnelAuthMode
+	auth      config.TunnelAuthConfig
+	closeOnce sync.Once
+	closeErr  error
 }
 
-func ResolveAccessToken(cfg config.Config) (*string, error) {
-	if cfg.TunnelAuthMode() != config.TunnelAuthModeToken {
-		return nil, nil
-	}
-	if token := strings.TrimSpace(cfg.Tunnel.Auth.Token); token != "" {
-		return &token, nil
-	}
-	resolution, err := rsconfig.ResolveFromEnv(rsconfig.ClientEnvOptions{
-		RequireToken: true,
-	})
-	if err != nil {
-		return nil, err
-	}
-	token := resolution.Resolved.Token
-	return &token, nil
+type OpenOptions struct {
+	Engine      string
+	Token       string
+	Name        string
+	Labels      map[string]string
+	Provisioned bool
 }
 
-func Open(ctx context.Context, cfg config.Config, logger *logs.Logger, accessToken *string) (*Manager, error) {
-	resolution, err := rsconfig.ResolveFromEnv(rsconfig.ClientEnvOptions{
-		RequireEngine: true,
-		RequireToken:  true,
-	})
-	if err != nil {
-		return nil, err
-	}
-	client, err := rsconfig.NewClientFromResolved(resolution.Resolved)
+func Open(ctx context.Context, cfg config.Config, logger *logs.Logger, opts OpenOptions) (*Manager, error) {
+	client, err := newRstreamClient(opts, cfg.Tunnel.Transport.UseQUIC)
 	if err != nil {
 		return nil, err
 	}
 	control, err := client.Connect(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to the rstream engine server: %w", err)
+		return nil, fmt.Errorf("connect to rstream tunnel engine: %w", err)
+	}
+	auth := cfg.Tunnel.Auth
+	if opts.Provisioned {
+		auth = config.TunnelAuthConfig{Token: true}
+	}
+	name := strings.TrimSpace(opts.Name)
+	if name == "" {
+		name = strings.TrimSpace(cfg.Tunnel.Name)
 	}
 	properties := rstream.TunnelProperties{
-		Name:        rstream.StringPtr(strings.TrimSpace(cfg.Tunnel.Name)),
+		Name:        rstream.StringPtr(name),
 		Publish:     rstream.BoolPtr(true),
 		Protocol:    rstream.ProtocolPtr(rstream.ProtocolHTTP),
 		HTTPVersion: rstream.HTTPVersionPtr(rstream.HTTP1_1),
 	}
-	authMode := cfg.TunnelAuthMode()
-	switch authMode {
-	case config.TunnelAuthModePlain:
-	case config.TunnelAuthModeToken:
+	if auth.Token {
 		properties.TokenAuth = rstream.BoolPtr(true)
-	case config.TunnelAuthModeRstream:
+	}
+	if auth.Rstream {
 		properties.RstreamAuth = rstream.BoolPtr(true)
-	default:
-		_ = control.Close()
-		return nil, fmt.Errorf("invalid tunnel auth mode %q", cfg.Tunnel.Auth.Mode)
+	}
+	if len(opts.Labels) > 0 {
+		labels := make(map[string]string, len(opts.Labels))
+		for key, value := range opts.Labels {
+			key = strings.TrimSpace(key)
+			value = strings.TrimSpace(value)
+			if key != "" && value != "" {
+				labels[key] = value
+			}
+		}
+		if len(labels) > 0 {
+			properties.Labels = labels
+		}
 	}
 	rawTunnel, err := control.CreateTunnel(ctx, properties)
 	if err != nil {
 		_ = control.Close()
-		return nil, fmt.Errorf("failed to create the published HTTP tunnel: %w", err)
+		return nil, fmt.Errorf("create published HTTP tunnel: %w", err)
 	}
 	tunnel, ok := rawTunnel.(rstream.BytestreamTunnel)
 	if !ok {
 		_ = rawTunnel.Close()
 		_ = control.Close()
-		return nil, fmt.Errorf("the tunnel does not expose a bytestream listener")
+		return nil, errors.New("created tunnel does not expose a bytestream listener")
 	}
 	publicURL, err := tunnel.ForwardingAddress()
 	if err != nil {
 		_ = tunnel.Close()
 		_ = control.Close()
-		return nil, fmt.Errorf("failed to compute the public tunnel URL: %w", err)
-	}
-	viewerURL := publicURL
-	if authMode == config.TunnelAuthModeToken {
-		token := resolution.Resolved.Token
-		if accessToken != nil {
-			token = strings.TrimSpace(*accessToken)
-		}
-		if strings.TrimSpace(cfg.Tunnel.Auth.Token) == "" {
-			logger.Warn("Tunnel token auth is using the current rstream token. Use a dedicated token for any shared or repeatable deployment.")
-		}
-		viewerURL, err = appendQueryToken(publicURL, token)
-		if err != nil {
-			_ = tunnel.Close()
-			_ = control.Close()
-			return nil, err
-		}
+		return nil, fmt.Errorf("resolve published tunnel URL: %w", err)
 	}
 	return &Manager{
 		logger:    logger,
 		control:   control,
 		tunnel:    tunnel,
 		publicURL: publicURL,
-		viewerURL: viewerURL,
-		authMode:  authMode,
+		auth:      auth,
 	}, nil
+}
+
+func newRstreamClient(opts OpenOptions, useQUIC bool) (*rstream.Client, error) {
+	engine := strings.TrimSpace(opts.Engine)
+	token := strings.TrimSpace(opts.Token)
+	useQUIC = useQUIC || rsconfig.ReadEnv().UseQUIC
+	if engine != "" || token != "" {
+		if engine == "" {
+			return nil, errors.New("rstream engine is required when a provisioned token is provided")
+		}
+		if token == "" {
+			return nil, errors.New("rstream token is required when a provisioned engine is provided")
+		}
+		options := rstream.ClientOptions{
+			Engine: engine,
+			Token:  token,
+		}
+		if useQUIC {
+			options.Transport = &rstream.QUICTransport{}
+		}
+		client, err := rstream.NewClient(options)
+		if err != nil {
+			return nil, fmt.Errorf("create rstream client from provisioned configuration: %w", err)
+		}
+		return client, nil
+	}
+	resolution, err := rsconfig.ResolveFromEnv(rsconfig.ClientEnvOptions{
+		RequireEngine: true,
+		RequireToken:  true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("resolve local rstream client configuration: %w", err)
+	}
+	if useQUIC {
+		resolution.Resolved.Transport = &rstream.QUICTransport{}
+	}
+	client, err := rsconfig.NewClientFromResolved(resolution.Resolved)
+	if err != nil {
+		return nil, fmt.Errorf("create rstream client from local configuration: %w", err)
+	}
+	return client, nil
 }
 
 func (m *Manager) Listener() net.Listener {
@@ -123,33 +149,21 @@ func (m *Manager) PublicURL() string {
 	return m.publicURL
 }
 
-func (m *Manager) ViewerURL() string {
-	return m.viewerURL
-}
-
-func (m *Manager) AuthMode() config.TunnelAuthMode {
-	return m.authMode
+func (m *Manager) Auth() config.TunnelAuthConfig {
+	return m.auth
 }
 
 func (m *Manager) Close() error {
-	if m.tunnel != nil {
-		if err := m.tunnel.Close(); err != nil {
-			return err
+	m.closeOnce.Do(func() {
+		if m.tunnel != nil {
+			m.closeErr = errors.Join(m.closeErr, m.tunnel.Close())
 		}
-	}
-	if m.control != nil {
-		return m.control.Close()
-	}
-	return nil
-}
-
-func appendQueryToken(rawURL, token string) (string, error) {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return "", fmt.Errorf("failed to build the tokenized public URL: %w", err)
-	}
-	query := u.Query()
-	query.Set("rstream.token", token)
-	u.RawQuery = query.Encode()
-	return u.String(), nil
+		if m.control != nil {
+			m.closeErr = errors.Join(m.closeErr, m.control.Close())
+		}
+		if m.closeErr != nil && m.logger != nil {
+			m.logger.Warn("Public tunnel close failed: %v", m.closeErr)
+		}
+	})
+	return m.closeErr
 }

@@ -1,10 +1,18 @@
 server:
   listen: 127.0.0.1:8080
+web:
+  viewer:
+    enabled: false
 tunnel:
   enabled: true
   name: webrtc-video-streaming
   transport:
     useQuic: true
+  provisioning:
+    mode: remote
+    endpoint: ${API_URL}
+    secret: ${DEVICE_SECRET}
+    timeout: 10s
   reconnect:
     enabled: true
     interval: 5s
@@ -41,7 +49,7 @@ media:
   mode: shared
   sinkName: video
   pipeline: >-
-    libcamerasrc !
+    videotestsrc is-live=true pattern=smpte !
     videoconvert !
     video/x-raw,width=1920,height=1080,framerate=30/1 !
     x264enc name=encoder tune=zerolatency speed-preset=veryfast bitrate=5000 key-int-max=60 bframes=0 byte-stream=true aud=true !

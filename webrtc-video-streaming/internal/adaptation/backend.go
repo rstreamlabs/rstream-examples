@@ -40,7 +40,8 @@ type Controller struct {
 	updates  chan int
 	close    chan struct{}
 	done     chan struct{}
-
+	start    sync.Once
+	stop     sync.Once
 	mu       sync.RWMutex
 	snapshot Snapshot
 }
@@ -70,18 +71,32 @@ func NewController(
 }
 
 func (c *Controller) Start() {
-	go c.run()
+	c.start.Do(func() {
+		go c.run()
+	})
 }
 
 func (c *Controller) UpdateEstimatedBitrate(bps int) {
 	select {
-	case c.updates <- bps:
+	case <-c.close:
+		return
 	default:
-		select {
-		case <-c.updates:
-		default:
-		}
-		c.updates <- bps
+	}
+	select {
+	case c.updates <- bps:
+		return
+	case <-c.close:
+		return
+	default:
+	}
+	select {
+	case <-c.updates:
+	default:
+	}
+	select {
+	case c.updates <- bps:
+	case <-c.close:
+	default:
 	}
 }
 
@@ -92,13 +107,13 @@ func (c *Controller) Snapshot() Snapshot {
 }
 
 func (c *Controller) Close() {
-	select {
-	case <-c.close:
-		return
-	default:
+	c.stop.Do(func() {
 		close(c.close)
-		<-c.done
-	}
+	})
+	c.start.Do(func() {
+		close(c.done)
+	})
+	<-c.done
 }
 
 func (c *Controller) run() {

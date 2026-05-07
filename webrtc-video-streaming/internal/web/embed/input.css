@@ -4,23 +4,11 @@
 
 @layer base {
   html {
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   body {
-    @apply bg-stone-950 text-stone-100;
-    background:
-      radial-gradient(
-        circle at top center,
-        rgba(255, 255, 255, 0.08),
-        transparent 32rem
-      ),
-      radial-gradient(
-        circle at bottom right,
-        rgba(120, 113, 108, 0.14),
-        transparent 28rem
-      ),
-      #0c0a09;
+    @apply bg-[#f5f2e9] text-[#171512];
   }
 
   pre {
