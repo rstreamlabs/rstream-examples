@@ -16,6 +16,11 @@ export const authOptions: NextAuthOptions = {
     GithubProvider({
       clientId: requiredEnv("GITHUB_CLIENT_ID"),
       clientSecret: requiredEnv("GITHUB_CLIENT_SECRET"),
+      authorization: {
+        params: {
+          prompt: "select_account",
+        },
+      },
       httpOptions: {
         timeout: 30000,
       },

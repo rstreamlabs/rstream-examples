@@ -5,6 +5,9 @@ import { RstreamLogo } from "@/components/rstream-logo"
 import { SignInButton } from "@/components/sign-in-button"
 import { SignOutButton } from "@/components/sign-out-button"
 
+const GUIDE_URL =
+  "https://rstream.io/guides/integrate-webrtc-video-streaming-into-a-nextjs-platform-with-rstream"
+
 export default async function Page() {
   const user = await getServerUser()
   if (!user?.id) {
@@ -37,17 +40,7 @@ export default async function Page() {
             <SignInButton />
           </div>
         </section>
-        <footer className="flex flex-col gap-3 border-t border-border pt-5 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <p>Powered by rstream tunnels.</p>
-          <a
-            href="https://rstream.io"
-            target="_blank"
-            rel="noreferrer"
-            className="font-medium text-foreground transition hover:text-muted-foreground"
-          >
-            Visit rstream.io
-          </a>
-        </footer>
+        <PageFooter />
       </main>
     )
   }
@@ -82,8 +75,27 @@ export default async function Page() {
       <section className="flex-1 py-8">
         <DeviceDashboard initialDevices={devices} />
       </section>
-      <footer className="flex flex-col gap-3 border-t border-border pt-5 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+      <PageFooter account={user.email ?? user.name ?? user.id} />
+    </main>
+  )
+}
+
+function PageFooter({ account }: { account?: string }) {
+  return (
+    <footer className="flex flex-col gap-3 border-t border-border pt-5 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+      <div className="space-y-1">
         <p>Powered by rstream tunnels.</p>
+        {account ? <p className="break-all">Signed in as {account}.</p> : null}
+      </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
+        <a
+          href={GUIDE_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="font-medium text-foreground transition hover:text-muted-foreground"
+        >
+          Read the guide
+        </a>
         <a
           href="https://rstream.io"
           target="_blank"
@@ -92,7 +104,7 @@ export default async function Page() {
         >
           Visit rstream.io
         </a>
-      </footer>
-    </main>
+      </div>
+    </footer>
   )
 }

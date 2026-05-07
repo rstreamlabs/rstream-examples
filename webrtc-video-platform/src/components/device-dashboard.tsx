@@ -51,7 +51,7 @@ export function DeviceDashboard({
   initialDevices: DeviceView[]
 }) {
   const [devices, setDevices] = useState(initialDevices)
-  const [activeId, setActiveId] = useState(initialDevices[0]?.id ?? null)
+  const [manualActiveId, setManualActiveId] = useState<string | null>(null)
   const [watch, setWatch] = useState<WatchPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
   const apiUrl = useAppOrigin()
@@ -69,10 +69,10 @@ export function DeviceDashboard({
     }))
     return sortDevices(withStatus)
   }, [devices, onlineIds])
-  const active =
-    visibleDevices.find((device) => device.id === activeId) ??
-    visibleDevices[0] ??
-    null
+  const manualActive = manualActiveId
+    ? visibleDevices.find((device) => device.id === manualActiveId)
+    : null
+  const active = manualActive ?? visibleDevices[0] ?? null
   useEffect(() => {
     void fetchWatch()
       .then((payload) => {
@@ -81,12 +81,6 @@ export function DeviceDashboard({
       })
       .catch((err) => setError(errorMessage(err)))
   }, [])
-  useEffect(() => {
-    if (activeId || !visibleDevices[0]) {
-      return
-    }
-    setActiveId(visibleDevices[0].id)
-  }, [activeId, visibleDevices])
   async function removeDevice(deviceId: string) {
     try {
       const response = await fetch(`/api/devices/${deviceId}`, {
@@ -98,9 +92,9 @@ export function DeviceDashboard({
       }
       const nextDevices = devices.filter((device) => device.id !== deviceId)
       setDevices(nextDevices)
-      setActiveId(
-        activeId === deviceId ? (nextDevices[0]?.id ?? null) : activeId,
-      )
+      if (manualActiveId === deviceId) {
+        setManualActiveId(null)
+      }
       setError(null)
     } catch (err) {
       setError(errorMessage(err))
@@ -114,7 +108,7 @@ export function DeviceDashboard({
           apiUrl={apiUrl}
           onCreated={(created) => {
             setDevices((current) => [created.device, ...current])
-            setActiveId(created.device.id)
+            setManualActiveId(created.device.id)
           }}
         />
         {error ? (
@@ -133,7 +127,7 @@ export function DeviceDashboard({
                 active={active?.id === device.id}
                 device={device}
                 onRemove={() => removeDevice(device.id)}
-                onSelect={() => setActiveId(device.id)}
+                onSelect={() => setManualActiveId(device.id)}
               />
             ))
           ) : (
@@ -141,7 +135,7 @@ export function DeviceDashboard({
           )}
         </div>
       </section>
-      <section className="min-h-[520px] rounded-lg border border-border bg-card p-5">
+      <section className="rounded-lg border border-border bg-card p-5">
         <div className="space-y-5">
           <SelectedDeviceHeader device={active} />
           {active?.online ? (

@@ -43,7 +43,10 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
       <div className="relative aspect-video overflow-hidden rounded-lg border border-foreground/20 bg-background">
         <video
           ref={videoRef}
-          className="h-full w-full object-contain"
+          className={[
+            "h-full w-full object-contain transition-opacity",
+            playing ? "opacity-100" : "opacity-0",
+          ].join(" ")}
           playsInline
           muted
           autoPlay
@@ -187,9 +190,12 @@ async function start(
     if (!videoRef.current || !stream) {
       return
     }
-    videoRef.current.srcObject = stream
-    void videoRef.current
-      .play()
+    const video = videoRef.current
+    video.autoplay = true
+    video.muted = true
+    video.playsInline = true
+    video.srcObject = stream
+    void playVideo(video)
       .then(() => {
         setPlaying(true)
         setStatus("Playing")
@@ -200,8 +206,7 @@ async function start(
     switch (peer.connectionState) {
       case "connected":
         if (videoRef.current?.srcObject) {
-          setPlaying(true)
-          setStatus("Playing")
+          setStatus("Starting")
         }
         break
       case "disconnected":
@@ -222,8 +227,7 @@ async function start(
       case "connected":
       case "completed":
         if (videoRef.current?.srcObject) {
-          setPlaying(true)
-          setStatus("Playing")
+          setStatus("Starting")
         }
         break
       case "disconnected":
@@ -259,6 +263,33 @@ async function start(
   socket.onclose = () => {
     scheduleSessionReconnect()
   }
+}
+
+async function playVideo(video: HTMLVideoElement) {
+  try {
+    await video.play()
+    return
+  } catch {
+    await waitForMediaReady(video)
+    await video.play()
+  }
+}
+
+function waitForMediaReady(video: HTMLVideoElement) {
+  if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+    return Promise.resolve()
+  }
+  return new Promise<void>((resolve) => {
+    const done = () => {
+      window.clearTimeout(timeout)
+      video.removeEventListener("loadedmetadata", done)
+      video.removeEventListener("canplay", done)
+      resolve()
+    }
+    const timeout = window.setTimeout(done, 300)
+    video.addEventListener("loadedmetadata", done, { once: true })
+    video.addEventListener("canplay", done, { once: true })
+  })
 }
 
 async function sendOffer(
