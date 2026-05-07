@@ -155,6 +155,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 	session, err := s.openSession(r.Context(), send)
 	if err != nil {
+		s.logger.Warn("WebRTC session creation failed: %v", err)
 		_ = writer.WriteJSON(rtc.SignalMessage{
 			Type:    "error",
 			Message: err.Error(),
@@ -234,6 +235,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		switch strings.TrimSpace(message.Type) {
 		case "offer", "webrtc.offer":
 			if err := session.HandleOffer(message.SDP); err != nil {
+				s.logger.Warn("Viewer %s offer handling failed: %v", session.ID(), err)
 				if writeErr := writer.WriteJSON(rtc.SignalMessage{
 					Type:    "error",
 					Message: err.Error(),
@@ -245,7 +247,13 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		case "candidate", "webrtc.candidate":
-			if err := session.AddICECandidate(message.Candidate, message.SDPMid, message.SDPMLineIndex); err != nil {
+			if err := session.AddICECandidate(
+				message.Candidate,
+				message.SDPMid,
+				message.SDPMLineIndex,
+				message.UsernameFragment,
+			); err != nil {
+				s.logger.Warn("Viewer %s ICE candidate handling failed: %v", session.ID(), err)
 				if writeErr := writer.WriteJSON(rtc.SignalMessage{
 					Type:    "error",
 					Message: err.Error(),

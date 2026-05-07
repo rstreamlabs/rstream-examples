@@ -245,11 +245,14 @@ func (a *App) serveTunnelOnce(
 		}
 		return fmt.Errorf("the public tunnel stopped: %w", err)
 	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+		_ = tunnelManager.Close()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		_ = server.Shutdown(shutdownCtx)
-		if err := <-serverErrors; err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return err
+		cancel()
+		select {
+		case <-serverErrors:
+		case <-time.After(2 * time.Second):
+			_ = server.Close()
 		}
 		return ctx.Err()
 	}

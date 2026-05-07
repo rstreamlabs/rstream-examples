@@ -21,14 +21,15 @@ import (
 )
 
 type SignalMessage struct {
-	Type          string        `json:"type"`
-	ViewerID      string        `json:"viewerId,omitempty"`
-	SDP           string        `json:"sdp,omitempty"`
-	Candidate     string        `json:"candidate,omitempty"`
-	SDPMid        *string       `json:"sdpMid,omitempty"`
-	SDPMLineIndex *uint16       `json:"sdpMLineIndex,omitempty"`
-	Message       string        `json:"message,omitempty"`
-	Stats         *SessionStats `json:"stats,omitempty"`
+	Type             string        `json:"type"`
+	ViewerID         string        `json:"viewerId,omitempty"`
+	SDP              string        `json:"sdp,omitempty"`
+	Candidate        string        `json:"candidate,omitempty"`
+	SDPMid           *string       `json:"sdpMid,omitempty"`
+	SDPMLineIndex    *uint16       `json:"sdpMLineIndex,omitempty"`
+	UsernameFragment *string       `json:"usernameFragment,omitempty"`
+	Message          string        `json:"message,omitempty"`
+	Stats            *SessionStats `json:"stats,omitempty"`
 }
 
 type SessionStats struct {
@@ -81,8 +82,21 @@ type Session struct {
 	onClose     func(string)
 	statsMu     sync.RWMutex
 	stats       SessionStats
+	signalingMu sync.Mutex
+	pendingICE  []webrtc.ICECandidateInit
+	candidateMu sync.Mutex
+	localICE    candidateCounts
+	remoteICE   candidateCounts
 	recoveryMu  sync.Mutex
 	recovery    *time.Timer
+}
+
+type candidateCounts struct {
+	Host            int
+	ServerReflexive int
+	PeerReflexive   int
+	Relay           int
+	Unknown         int
 }
 
 const networkRecoveryTimeout = 30 * time.Second
@@ -133,8 +147,12 @@ func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) 
 	if b.useTURN {
 		credentials, err = b.turn.Credentials(ctx)
 		if err != nil {
+			b.logger.Warn("Failed to load TURN credentials for viewer session: %v", err)
 			return nil, err
 		}
+		b.logger.Info("Viewer session TURN credentials loaded (%d URL(s))", len(credentials.URLs))
+	} else {
+		b.logger.Info("Viewer session TURN disabled")
 	}
 	initialBitrateBps := b.cfg.InitialBitrateKbps() * 1000
 	if encoderController != nil {
@@ -195,6 +213,7 @@ func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) 
 			return
 		}
 		init := candidate.ToJSON()
+		session.recordLocalICECandidate(init.Candidate)
 		if err := send(SignalMessage{
 			Type:          "webrtc.candidate",
 			Candidate:     init.Candidate,
@@ -351,6 +370,8 @@ func (s *Session) HandleOffer(offer string) error {
 	if strings.TrimSpace(offer) == "" {
 		return errors.New("offer SDP is required")
 	}
+	s.signalingMu.Lock()
+	defer s.signalingMu.Unlock()
 	// The browser may send more than one offer on the same session when it
 	// performs an ICE restart after a network interface or IP change.
 	if err := s.pc.SetRemoteDescription(webrtc.SessionDescription{
@@ -358,6 +379,9 @@ func (s *Session) HandleOffer(offer string) error {
 		SDP:  offer,
 	}); err != nil {
 		return fmt.Errorf("failed to apply the remote offer: %w", err)
+	}
+	if err := s.flushPendingICECandidates(); err != nil {
+		return err
 	}
 	answer, err := s.pc.CreateAnswer(nil)
 	if err != nil {
@@ -375,15 +399,41 @@ func (s *Session) HandleOffer(offer string) error {
 	return nil
 }
 
-func (s *Session) AddICECandidate(candidate string, sdpMid *string, sdpMLineIndex *uint16) error {
+func (s *Session) AddICECandidate(
+	candidate string,
+	sdpMid *string,
+	sdpMLineIndex *uint16,
+	usernameFragment *string,
+) error {
 	if strings.TrimSpace(candidate) == "" {
 		return errors.New("candidate is required")
 	}
-	return s.pc.AddICECandidate(webrtc.ICECandidateInit{
-		Candidate:     candidate,
-		SDPMid:        trimmedStringPtr(sdpMid),
-		SDPMLineIndex: sdpMLineIndex,
-	})
+	s.recordRemoteICECandidate(candidate)
+	init := webrtc.ICECandidateInit{
+		Candidate:        candidate,
+		SDPMid:           trimmedStringPtr(sdpMid),
+		SDPMLineIndex:    sdpMLineIndex,
+		UsernameFragment: trimmedStringPtr(usernameFragment),
+	}
+	s.signalingMu.Lock()
+	defer s.signalingMu.Unlock()
+	if s.pc.RemoteDescription() == nil {
+		s.pendingICE = append(s.pendingICE, init)
+		return nil
+	}
+	return s.pc.AddICECandidate(init)
+}
+
+func (s *Session) flushPendingICECandidates() error {
+	for len(s.pendingICE) > 0 {
+		candidate := s.pendingICE[0]
+		s.pendingICE = s.pendingICE[1:]
+		if err := s.pc.AddICECandidate(candidate); err != nil {
+			s.pendingICE = nil
+			return fmt.Errorf("failed to apply a buffered ICE candidate: %w", err)
+		}
+	}
+	return nil
 }
 
 func (s *Session) Close(reason string) {
@@ -418,7 +468,7 @@ func (s *Session) scheduleNetworkRecovery(reason string) {
 		return
 	}
 	if s.recovery != nil {
-		s.recovery.Stop()
+		return
 	}
 	s.logger.Warn(
 		"Viewer %s network path changed (%s); waiting up to %s for ICE recovery",
@@ -426,6 +476,7 @@ func (s *Session) scheduleNetworkRecovery(reason string) {
 		reason,
 		networkRecoveryTimeout,
 	)
+	s.logger.Info("Viewer %s ICE candidates: %s", s.id, s.iceCandidateSummary())
 	s.recovery = time.AfterFunc(networkRecoveryTimeout, func() {
 		s.Close("network recovery timed out")
 	})
@@ -448,6 +499,60 @@ func (s *Session) clearNetworkRecovery() {
 	}
 	s.recovery.Stop()
 	s.recovery = nil
+}
+
+func (s *Session) recordLocalICECandidate(candidate string) {
+	s.candidateMu.Lock()
+	s.localICE.add(candidate)
+	s.candidateMu.Unlock()
+}
+
+func (s *Session) recordRemoteICECandidate(candidate string) {
+	s.candidateMu.Lock()
+	s.remoteICE.add(candidate)
+	s.candidateMu.Unlock()
+}
+
+func (s *Session) iceCandidateSummary() string {
+	s.candidateMu.Lock()
+	defer s.candidateMu.Unlock()
+	return fmt.Sprintf("local %s, remote %s", s.localICE.String(), s.remoteICE.String())
+}
+
+func (c *candidateCounts) add(candidate string) {
+	switch candidateType(candidate) {
+	case "host":
+		c.Host++
+	case "srflx":
+		c.ServerReflexive++
+	case "prflx":
+		c.PeerReflexive++
+	case "relay":
+		c.Relay++
+	default:
+		c.Unknown++
+	}
+}
+
+func (c candidateCounts) String() string {
+	return fmt.Sprintf(
+		"host=%d srflx=%d prflx=%d relay=%d unknown=%d",
+		c.Host,
+		c.ServerReflexive,
+		c.PeerReflexive,
+		c.Relay,
+		c.Unknown,
+	)
+}
+
+func candidateType(candidate string) string {
+	fields := strings.Fields(candidate)
+	for i := 0; i < len(fields)-1; i++ {
+		if fields[i] == "typ" {
+			return fields[i+1]
+		}
+	}
+	return "unknown"
 }
 
 func (s *Session) StatsSnapshot() SessionStats {

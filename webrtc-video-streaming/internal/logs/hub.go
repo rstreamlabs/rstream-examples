@@ -123,6 +123,7 @@ type handler struct {
 	hub   *Hub
 	level slog.Level
 	std   *os.File
+	mu    sync.Mutex
 }
 
 func (h *handler) Enabled(_ context.Context, level slog.Level) bool {
@@ -132,6 +133,8 @@ func (h *handler) Enabled(_ context.Context, level slog.Level) bool {
 func (h *handler) Handle(_ context.Context, record slog.Record) error {
 	level := strings.ToLower(record.Level.String())
 	line := fmt.Sprintf("%s %-5s %s\n", time.Now().UTC().Format(time.RFC3339), level, record.Message)
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	if _, err := h.std.WriteString(line); err != nil {
 		return err
 	}

@@ -164,6 +164,8 @@ async function startViewerSession({
   let reconnectTimer: number | null = null
   // Trickle ICE candidates may arrive before the SDP answer.
   const pendingRemoteCandidates: RTCIceCandidateInit[] = []
+  // setLocalDescription() may gather local candidates before the offer is sent.
+  const pendingLocalCandidates: RTCIceCandidateInit[] = []
   const options = {
     cleanupRef,
     deviceId,
@@ -181,9 +183,38 @@ async function startViewerSession({
     }
     offerPending = true
     try {
-      await sendOffer(peer, socket, { iceRestart })
+      const offer = await peer.createOffer(
+        iceRestart ? { iceRestart: true } : undefined,
+      )
+      await peer.setLocalDescription(offer)
+      socket.send(
+        JSON.stringify({
+          type: "webrtc.offer",
+          sdp: offer.sdp,
+        }),
+      )
+      flushLocalCandidates()
     } finally {
       offerPending = false
+    }
+  }
+  function sendLocalCandidate(candidate: RTCIceCandidateInit) {
+    if (socket.readyState !== WebSocket.OPEN) {
+      return
+    }
+    socket.send(
+      JSON.stringify({
+        type: "webrtc.candidate",
+        ...candidate,
+      }),
+    )
+  }
+  function flushLocalCandidates() {
+    while (pendingLocalCandidates.length > 0) {
+      const candidate = pendingLocalCandidates.shift()
+      if (candidate) {
+        sendLocalCandidate(candidate)
+      }
     }
   }
   function scheduleIceRestart() {
@@ -280,14 +311,12 @@ async function startViewerSession({
     if (!event.candidate || socket.readyState !== WebSocket.OPEN) {
       return
     }
-    socket.send(
-      JSON.stringify({
-        type: "webrtc.candidate",
-        candidate: event.candidate.candidate,
-        sdpMid: event.candidate.sdpMid,
-        sdpMLineIndex: event.candidate.sdpMLineIndex,
-      }),
-    )
+    const candidate = event.candidate.toJSON()
+    if (offerPending) {
+      pendingLocalCandidates.push(candidate)
+      return
+    }
+    sendLocalCandidate(candidate)
   }
   socket.onopen = () => {
     void sendLocalOffer().catch(fail)
@@ -332,25 +361,6 @@ function waitForMediaReady(video: HTMLVideoElement) {
   })
 }
 
-async function sendOffer(
-  peer: RTCPeerConnection,
-  socket: WebSocket,
-  options: { iceRestart?: boolean } = {},
-) {
-  // ICE restart keeps the same viewer session and asks both peers to gather
-  // fresh candidates after an IP address or network interface change.
-  const offer = await peer.createOffer(
-    options.iceRestart ? { iceRestart: true } : undefined,
-  )
-  await peer.setLocalDescription(offer)
-  socket.send(
-    JSON.stringify({
-      type: "webrtc.offer",
-      sdp: offer.sdp,
-    }),
-  )
-}
-
 async function handleMessage(
   peer: RTCPeerConnection,
   data: unknown,
@@ -376,6 +386,7 @@ async function handleMessage(
         candidate: parsed.data.candidate,
         sdpMid: parsed.data.sdpMid ?? null,
         sdpMLineIndex: parsed.data.sdpMLineIndex,
+        usernameFragment: parsed.data.usernameFragment ?? null,
       })
       break
     case "error":

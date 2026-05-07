@@ -50,6 +50,7 @@ const signalMessageSchema = z.discriminatedUnion("type", [
     candidate: z.string().optional(),
     sdpMid: z.string().nullable().optional(),
     sdpMLineIndex: z.number().int().optional(),
+    usernameFragment: z.string().nullable().optional(),
   }),
   z.object({
     type: z.literal("log"),
@@ -78,6 +79,7 @@ type State = {
   edgeToken: string | null;
   offerPending: boolean;
   iceRestartTimer: number | null;
+  pendingLocalCandidates: RTCIceCandidateInit[];
   pendingRemoteCandidates: RTCIceCandidateInit[];
   // Guards against stale WebSocket and WebRTC callbacks after stop/restart.
   sessionID: number;
@@ -93,6 +95,7 @@ const state: State = {
   edgeToken: new URL(window.location.href).searchParams.get("rstream.token"),
   offerPending: false,
   iceRestartTimer: null,
+  pendingLocalCandidates: [],
   pendingRemoteCandidates: [],
   sessionID: 0,
 };
@@ -391,14 +394,12 @@ async function createPeerConnection(policy: TURNPolicy, sessionID: number) {
     ) {
       return;
     }
-    state.webSocket.send(
-      JSON.stringify({
-        type: "webrtc.candidate",
-        candidate: event.candidate.candidate,
-        sdpMid: event.candidate.sdpMid,
-        sdpMLineIndex: event.candidate.sdpMLineIndex,
-      }),
-    );
+    const candidate = event.candidate.toJSON();
+    if (state.offerPending) {
+      state.pendingLocalCandidates.push(candidate);
+      return;
+    }
+    sendLocalCandidate(candidate);
   };
   return peerConnection;
 }
@@ -459,9 +460,31 @@ async function sendOffer(
     state.webSocket.send(
       JSON.stringify({ type: "webrtc.offer", sdp: offer.sdp }),
     );
+    flushLocalCandidates();
     log(options.iceRestart ? "ICE restart offer sent" : "Offer sent");
   } finally {
     state.offerPending = false;
+  }
+}
+
+function sendLocalCandidate(candidate: RTCIceCandidateInit) {
+  if (!state.webSocket || state.webSocket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+  state.webSocket.send(
+    JSON.stringify({
+      type: "webrtc.candidate",
+      ...candidate,
+    }),
+  );
+}
+
+function flushLocalCandidates() {
+  while (state.pendingLocalCandidates.length > 0) {
+    const candidate = state.pendingLocalCandidates.shift();
+    if (candidate) {
+      sendLocalCandidate(candidate);
+    }
   }
 }
 
@@ -544,6 +567,7 @@ async function start() {
               candidate: message.candidate,
               sdpMid: message.sdpMid ?? null,
               sdpMLineIndex: message.sdpMLineIndex,
+              usernameFragment: message.usernameFragment ?? null,
             });
             break;
           case "log":
@@ -628,6 +652,7 @@ function stop(sessionID?: number) {
     state.iceRestartTimer = null;
   }
   state.offerPending = false;
+  state.pendingLocalCandidates = [];
   state.pendingRemoteCandidates = [];
   if (state.webSocket) {
     try {

@@ -251,17 +251,20 @@ export async function createWatchToken(userId: string) {
   return token.token
 }
 
-export async function onlineTunnel(device: Pick<Device, "id" | "userId">) {
+export async function onlineTunnel(
+  device: Pick<Device, "id" | "tunnelName" | "userId">,
+) {
   const activeTunnels = await rstream.tunnels.list({
     limit: 20,
     filters: {
+      name: device.tunnelName,
       status: "online",
       publish: true,
       protocol: "http",
       labels: labels(device),
     },
   })
-  return activeTunnels[0] ?? null
+  return newestTunnel(activeTunnels)
 }
 
 export async function onlineTunnels(userId: string) {
@@ -277,6 +280,23 @@ export async function onlineTunnels(userId: string) {
       },
     },
   })
+}
+
+function newestTunnel(tunnels: Tunnel[]) {
+  return (
+    [...tunnels].sort((left, right) => {
+      return tunnelTimestamp(right) - tunnelTimestamp(left)
+    })[0] ?? null
+  )
+}
+
+function tunnelTimestamp(tunnel: Tunnel) {
+  const value = tunnel.creation_date
+  if (!value) {
+    return 0
+  }
+  const timestamp = new Date(value).getTime()
+  return Number.isFinite(timestamp) ? timestamp : 0
 }
 
 export async function tunnelPayload(device: Device) {

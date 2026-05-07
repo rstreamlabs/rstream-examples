@@ -67,6 +67,7 @@ export const signalMessageSchema = z.discriminatedUnion("type", [
     candidate: z.string().optional(),
     sdpMid: z.string().nullable().optional(),
     sdpMLineIndex: z.number().optional(),
+    usernameFragment: z.string().nullable().optional(),
   }),
   z.object({
     type: z.literal("error"),
