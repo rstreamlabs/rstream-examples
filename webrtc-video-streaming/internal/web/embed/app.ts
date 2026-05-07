@@ -78,6 +78,9 @@ type State = {
   edgeToken: string | null;
   offerPending: boolean;
   iceRestartTimer: number | null;
+  pendingRemoteCandidates: RTCIceCandidateInit[];
+  // Guards against stale WebSocket and WebRTC callbacks after stop/restart.
+  sessionID: number;
 };
 
 const EMPTY_LOG_MESSAGE = "No events yet.";
@@ -90,6 +93,8 @@ const state: State = {
   edgeToken: new URL(window.location.href).searchParams.get("rstream.token"),
   offerPending: false,
   iceRestartTimer: null,
+  pendingRemoteCandidates: [],
+  sessionID: 0,
 };
 
 function requiredHTMLElement(id: string): HTMLElement {
@@ -237,6 +242,10 @@ function setConnectedState() {
   turnPolicy.disabled = true;
 }
 
+function isCurrentSession(sessionID: number) {
+  return state.sessionID === sessionID;
+}
+
 async function loadInfo() {
   const response = await fetch(endpoint("/api/status"));
   if (!response.ok) {
@@ -298,11 +307,14 @@ async function loadTURNConfiguration(
   return configuration;
 }
 
-async function createPeerConnection(policy: TURNPolicy) {
+async function createPeerConnection(policy: TURNPolicy, sessionID: number) {
   const configuration = await loadTURNConfiguration(policy);
   const peerConnection = new RTCPeerConnection(configuration);
   peerConnection.addTransceiver("video", { direction: "recvonly" });
   peerConnection.ontrack = (event) => {
+    if (!isCurrentSession(sessionID)) {
+      return;
+    }
     const [stream] = event.streams;
     if (!stream) {
       return;
@@ -330,6 +342,9 @@ async function createPeerConnection(policy: TURNPolicy) {
     setField(playbackStatus, "Playing");
   };
   peerConnection.onconnectionstatechange = () => {
+    if (!isCurrentSession(sessionID)) {
+      return;
+    }
     setBadge(peerStatus, "Peer", peerConnection.connectionState);
     log(`Peer connection state: ${peerConnection.connectionState}`);
     if (peerConnection.connectionState === "connected") {
@@ -344,10 +359,13 @@ async function createPeerConnection(policy: TURNPolicy) {
       peerConnection.connectionState === "disconnected" ||
       peerConnection.connectionState === "failed"
     ) {
-      scheduleICERestart(`peer ${peerConnection.connectionState}`);
+      scheduleICERestart(sessionID, `peer ${peerConnection.connectionState}`);
     }
   };
   peerConnection.oniceconnectionstatechange = () => {
+    if (!isCurrentSession(sessionID)) {
+      return;
+    }
     setBadge(iceStatus, "ICE", peerConnection.iceConnectionState);
     log(`ICE connection state: ${peerConnection.iceConnectionState}`);
     if (
@@ -361,11 +379,12 @@ async function createPeerConnection(policy: TURNPolicy) {
       peerConnection.iceConnectionState === "disconnected" ||
       peerConnection.iceConnectionState === "failed"
     ) {
-      scheduleICERestart(`ICE ${peerConnection.iceConnectionState}`);
+      scheduleICERestart(sessionID, `ICE ${peerConnection.iceConnectionState}`);
     }
   };
   peerConnection.onicecandidate = (event) => {
     if (
+      !isCurrentSession(sessionID) ||
       !event.candidate ||
       !state.webSocket ||
       state.webSocket.readyState !== WebSocket.OPEN
@@ -384,13 +403,18 @@ async function createPeerConnection(policy: TURNPolicy) {
   return peerConnection;
 }
 
-function createSignalSocket(policy: TURNPolicy) {
+function createSignalSocket(policy: TURNPolicy, sessionID: number) {
   return new Promise<WebSocket>((resolve, reject) => {
     const socketURL = endpoint("/ws", {
       protocol: window.location.protocol === "https:" ? "wss:" : "ws:",
     });
     const socket = new WebSocket(socketURL);
     socket.onopen = () => {
+      if (!isCurrentSession(sessionID)) {
+        socket.close();
+        reject(new Error("The signaling session was stopped"));
+        return;
+      }
       setField(wsStatus, "Open");
       log("WebSocket signaling channel opened");
       if (policy === "direct") {
@@ -399,12 +423,22 @@ function createSignalSocket(policy: TURNPolicy) {
       resolve(socket);
     };
     socket.onerror = () => {
+      if (!isCurrentSession(sessionID)) {
+        reject(new Error("The signaling session was stopped"));
+        return;
+      }
       reject(new Error("The signaling socket could not be opened"));
     };
   });
 }
 
-async function sendOffer(options: { iceRestart?: boolean } = {}) {
+async function sendOffer(
+  sessionID: number,
+  options: { iceRestart?: boolean } = {},
+) {
+  if (!isCurrentSession(sessionID)) {
+    return;
+  }
   if (!state.peerConnection || !state.webSocket) {
     throw new Error("The viewer session is not ready");
   }
@@ -431,8 +465,9 @@ async function sendOffer(options: { iceRestart?: boolean } = {}) {
   }
 }
 
-function scheduleICERestart(reason: string) {
+function scheduleICERestart(sessionID: number, reason: string) {
   if (
+    !isCurrentSession(sessionID) ||
     !state.peerConnection ||
     !state.webSocket ||
     state.iceRestartTimer !== null ||
@@ -445,13 +480,13 @@ function scheduleICERestart(reason: string) {
   log(`Scheduling ICE restart after ${reason}`);
   state.iceRestartTimer = window.setTimeout(() => {
     state.iceRestartTimer = null;
-    sendOffer({ iceRestart: true }).catch((error: unknown) => {
+    sendOffer(sessionID, { iceRestart: true }).catch((error: unknown) => {
       if (error instanceof Error) {
         log(error.message);
       } else {
         log("ICE restart failed");
       }
-      stop();
+      stop(sessionID);
     });
   }, 500);
 }
@@ -460,6 +495,8 @@ async function start() {
   if (state.peerConnection || state.webSocket) {
     return;
   }
+  const sessionID = state.sessionID + 1;
+  state.sessionID = sessionID;
   connectButton.disabled = true;
   const policy = currentTURNPolicy();
   try {
@@ -468,10 +505,16 @@ async function start() {
         `This browser does not advertise WebRTC support for ${state.info.videoMimeType}.`,
       );
     }
-    state.peerConnection = await createPeerConnection(policy);
-    state.webSocket = await createSignalSocket(policy);
+    state.peerConnection = await createPeerConnection(policy, sessionID);
+    state.webSocket = await createSignalSocket(policy, sessionID);
+    if (!isCurrentSession(sessionID)) {
+      return;
+    }
     setConnectedState();
     state.webSocket.onmessage = async (event) => {
+      if (!isCurrentSession(sessionID)) {
+        return;
+      }
       try {
         const message = signalMessageSchema.parse(JSON.parse(event.data));
         switch (message.type) {
@@ -490,13 +533,14 @@ async function start() {
               type: "answer",
               sdp: message.sdp,
             });
+            await flushRemoteCandidates(sessionID);
             log("Remote answer applied");
             break;
           case "webrtc.candidate":
             if (!message.candidate) {
               return;
             }
-            await state.peerConnection?.addIceCandidate({
+            await addRemoteCandidate(sessionID, {
               candidate: message.candidate,
               sdpMid: message.sdpMid ?? null,
               sdpMLineIndex: message.sdpMLineIndex,
@@ -549,31 +593,42 @@ async function start() {
         } else {
           log("The signaling channel returned an invalid response");
         }
-        stop();
+        stop(sessionID);
       }
     };
     state.webSocket.onclose = () => {
+      if (!isCurrentSession(sessionID)) {
+        return;
+      }
       setField(wsStatus, "Closed");
       log("WebSocket signaling channel closed");
-      stop();
+      stop(sessionID);
     };
-    await sendOffer();
+    await sendOffer(sessionID);
   } catch (error: unknown) {
+    if (!isCurrentSession(sessionID)) {
+      return;
+    }
     if (error instanceof Error) {
       log(error.message);
     } else {
       log("Failed to start the session");
     }
-    stop();
+    stop(sessionID);
   }
 }
 
-function stop() {
+function stop(sessionID?: number) {
+  if (sessionID !== undefined && !isCurrentSession(sessionID)) {
+    return;
+  }
+  state.sessionID += 1;
   if (state.iceRestartTimer !== null) {
     window.clearTimeout(state.iceRestartTimer);
     state.iceRestartTimer = null;
   }
   state.offerPending = false;
+  state.pendingRemoteCandidates = [];
   if (state.webSocket) {
     try {
       state.webSocket.close();
@@ -602,6 +657,35 @@ function stop() {
   setField(viewerID, "Pending");
   video.srcObject = null;
   setDisconnectedState();
+}
+
+async function addRemoteCandidate(
+  sessionID: number,
+  candidate: RTCIceCandidateInit,
+) {
+  if (!isCurrentSession(sessionID)) {
+    return;
+  }
+  if (!state.peerConnection) {
+    return;
+  }
+  if (!state.peerConnection.remoteDescription) {
+    state.pendingRemoteCandidates.push(candidate);
+    return;
+  }
+  await state.peerConnection.addIceCandidate(candidate);
+}
+
+async function flushRemoteCandidates(sessionID: number) {
+  while (state.pendingRemoteCandidates.length > 0) {
+    const candidate = state.pendingRemoteCandidates.shift();
+    if (!isCurrentSession(sessionID)) {
+      return;
+    }
+    if (candidate && state.peerConnection) {
+      await state.peerConnection.addIceCandidate(candidate);
+    }
+  }
 }
 
 connectButton.addEventListener("click", () => {

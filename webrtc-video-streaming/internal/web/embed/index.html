@@ -249,10 +249,24 @@ No events yet.</pre
         </section>
       </main>
       <footer
-        class="flex flex-col gap-3 border-t border-[#171512]/15 pt-5 text-sm text-[#6b665c] sm:flex-row sm:items-center sm:justify-between"
+        class="flex flex-col gap-3 border-t border-[#171512]/15 pt-5 text-sm text-[#6b665c] lg:flex-row lg:items-center lg:justify-between"
       >
-        <p>Powered by rstream tunnels.</p>
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
+        <div
+          class="flex min-w-0 flex-col gap-1 lg:flex-row lg:items-center lg:gap-5"
+        >
+          <p class="lg:whitespace-nowrap">Powered by rstream tunnels.</p>
+        </div>
+        <div
+          class="flex flex-col gap-1 lg:flex-row lg:items-center lg:gap-5 lg:whitespace-nowrap"
+        >
+          <a
+            href="https://github.com/rstreamlabs/rstream-examples/tree/main/webrtc-video-streaming"
+            target="_blank"
+            rel="noreferrer"
+            class="font-medium text-[#171512] transition hover:text-[#4f4a43]"
+          >
+            Browse source code
+          </a>
           <a
             href="https://rstream.io/guides/build-device-to-browser-webrtc-streaming-with-rstream"
             target="_blank"

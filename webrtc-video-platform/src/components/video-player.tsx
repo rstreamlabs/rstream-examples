@@ -11,49 +11,104 @@ import { Button } from "@/components/ui/button"
 import { signalMessageSchema } from "@/lib/validations/device"
 import { viewerPayloadSchema } from "@/lib/validations/device"
 
+type PlayerPhase =
+  | "connecting"
+  | "reconnecting"
+  | "blocked"
+  | "error"
+  | "playing"
+
+type ViewerSessionOptions = {
+  cleanupRef: MutableRefObject<(() => void) | null>
+  deviceId: string
+  fail: (err: unknown) => void
+  isCurrent: () => boolean
+  setPhase: (phase: PlayerPhase) => void
+  videoRef: RefObject<HTMLVideoElement | null>
+}
+
 export function VideoPlayer({ deviceId }: { deviceId: string }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
-  const [status, setStatus] = useState("Connecting")
+  // Guards against React Strict Mode remounts and stale WebRTC callbacks.
+  const sessionRef = useRef(0)
+  const [phase, setPhase] = useState<PlayerPhase>("connecting")
   const [error, setError] = useState<string | null>(null)
-  const [playing, setPlaying] = useState(false)
+  const [retryKey, setRetryKey] = useState(0)
   useEffect(() => {
+    const session = sessionRef.current + 1
+    sessionRef.current = session
+    const isCurrent = () => sessionRef.current === session
+    const setCurrentPhase = (nextPhase: PlayerPhase) => {
+      if (isCurrent()) {
+        setPhase(nextPhase)
+      }
+    }
     const fail = (err: unknown) => {
+      if (!isCurrent()) {
+        return
+      }
       cleanupRef.current?.()
       cleanupRef.current = null
-      setStatus("Idle")
-      setPlaying(false)
+      setPhase("error")
       setError(errorMessage(err))
     }
-    void start(
-      deviceId,
-      videoRef,
+    setError(null)
+    setPhase("connecting")
+    void startViewerSession({
       cleanupRef,
-      setStatus,
-      setPlaying,
+      deviceId,
       fail,
-    ).catch(fail)
+      isCurrent,
+      setPhase: setCurrentPhase,
+      videoRef,
+    }).catch(fail)
     return () => {
+      if (isCurrent()) {
+        sessionRef.current += 1
+      }
       cleanupRef.current?.()
       cleanupRef.current = null
     }
-  }, [deviceId])
+  }, [deviceId, retryKey])
+  async function playCurrentStream() {
+    const video = videoRef.current
+    if (!video) {
+      return
+    }
+    setPhase("connecting")
+    try {
+      await playVideo(video)
+      setPhase("playing")
+    } catch {
+      setPhase("blocked")
+    }
+  }
   return (
     <div className="space-y-3">
       <div className="relative aspect-video overflow-hidden rounded-lg border border-foreground/20 bg-background">
         <video
           ref={videoRef}
-          className={[
-            "h-full w-full object-contain transition-opacity",
-            playing ? "opacity-100" : "opacity-0",
-          ].join(" ")}
+          className="h-full w-full object-contain"
           playsInline
           muted
           autoPlay
         />
-        {playing ? null : (
-          <div className="absolute inset-0 flex items-center justify-center bg-background/80">
-            <span className="text-sm text-muted-foreground">{status}</span>
+        {phase === "playing" ? null : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background">
+            {phase === "blocked" ? (
+              <Button type="button" size="sm" onClick={playCurrentStream}>
+                Play stream
+              </Button>
+            ) : phase === "error" ? (
+              <span className="text-sm text-muted-foreground">
+                Unable to start stream
+              </span>
+            ) : (
+              <span className="text-sm text-muted-foreground">
+                {phaseLabel(phase)}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -65,24 +120,9 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
             variant="outline"
             size="sm"
             onClick={() => {
-              const fail = (err: unknown) => {
-                cleanupRef.current?.()
-                cleanupRef.current = null
-                setStatus("Idle")
-                setPlaying(false)
-                setError(errorMessage(err))
-              }
               setError(null)
-              setStatus("Connecting")
-              setPlaying(false)
-              void start(
-                deviceId,
-                videoRef,
-                cleanupRef,
-                setStatus,
-                setPlaying,
-                fail,
-              ).catch(fail)
+              setPhase("connecting")
+              setRetryKey((current) => current + 1)
             }}
           >
             Retry
@@ -93,18 +133,21 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
   )
 }
 
-async function start(
-  deviceId: string,
-  videoRef: RefObject<HTMLVideoElement | null>,
-  cleanupRef: MutableRefObject<(() => void) | null>,
-  setStatus: (status: string) => void,
-  setPlaying: (playing: boolean) => void,
-  fail: (err: unknown) => void,
-) {
+async function startViewerSession({
+  cleanupRef,
+  deviceId,
+  fail,
+  isCurrent,
+  setPhase,
+  videoRef,
+}: ViewerSessionOptions) {
   cleanupRef.current?.()
-  setStatus("Starting")
-  setPlaying(false)
+  cleanupRef.current = null
+  setPhase("connecting")
   const viewer = await fetchViewer(deviceId)
+  if (!isCurrent()) {
+    return
+  }
   const peer = new RTCPeerConnection({
     iceServers: [
       {
@@ -119,8 +162,18 @@ async function start(
   let offerPending = false
   let restartTimer: number | null = null
   let reconnectTimer: number | null = null
+  // Trickle ICE candidates may arrive before the SDP answer.
+  const pendingRemoteCandidates: RTCIceCandidateInit[] = []
+  const options = {
+    cleanupRef,
+    deviceId,
+    fail,
+    isCurrent,
+    setPhase,
+    videoRef,
+  }
   async function sendLocalOffer({ iceRestart = false } = {}) {
-    if (offerPending) {
+    if (offerPending || !isCurrent()) {
       return
     }
     if (socket.readyState !== WebSocket.OPEN) {
@@ -128,7 +181,7 @@ async function start(
     }
     offerPending = true
     try {
-      await sendOffer(peer, socket, setStatus, { iceRestart })
+      await sendOffer(peer, socket, { iceRestart })
     } finally {
       offerPending = false
     }
@@ -137,34 +190,31 @@ async function start(
     if (
       restartTimer ||
       peer.signalingState !== "stable" ||
-      socket.readyState !== WebSocket.OPEN
+      socket.readyState !== WebSocket.OPEN ||
+      !isCurrent()
     ) {
       return
     }
-    setStatus("Reconnecting")
+    setPhase("reconnecting")
     restartTimer = window.setTimeout(() => {
       restartTimer = null
+      if (!isCurrent()) {
+        return
+      }
       void sendLocalOffer({ iceRestart: true }).catch(fail)
     }, 500)
   }
   function scheduleSessionReconnect() {
-    if (stopped || reconnectTimer) {
+    if (stopped || reconnectTimer || !isCurrent()) {
       return
     }
-    setStatus("Reconnecting")
+    setPhase("reconnecting")
     reconnectTimer = window.setTimeout(() => {
       reconnectTimer = null
-      if (stopped) {
+      if (stopped || !isCurrent()) {
         return
       }
-      void start(
-        deviceId,
-        videoRef,
-        cleanupRef,
-        setStatus,
-        setPlaying,
-        fail,
-      ).catch(fail)
+      void startViewerSession(options).catch(fail)
     }, 1000)
   }
   cleanupRef.current = () => {
@@ -182,12 +232,11 @@ async function start(
     if (videoRef.current) {
       videoRef.current.srcObject = null
     }
-    setPlaying(false)
   }
   peer.addTransceiver("video", { direction: "recvonly" })
   peer.ontrack = (event) => {
     const stream = event.streams[0]
-    if (!videoRef.current || !stream) {
+    if (!isCurrent() || !videoRef.current || !stream) {
       return
     }
     const video = videoRef.current
@@ -197,26 +246,21 @@ async function start(
     video.srcObject = stream
     void playVideo(video)
       .then(() => {
-        setPlaying(true)
-        setStatus("Playing")
+        if (isCurrent()) {
+          setPhase("playing")
+        }
       })
-      .catch(() => setStatus("Paused"))
+      .catch(() => {
+        if (isCurrent()) {
+          setPhase("blocked")
+        }
+      })
   }
   peer.onconnectionstatechange = () => {
     switch (peer.connectionState) {
-      case "connected":
-        if (videoRef.current?.srcObject) {
-          setStatus("Starting")
-        }
-        break
       case "disconnected":
-        scheduleIceRestart()
-        break
       case "failed":
         scheduleIceRestart()
-        break
-      case "closed":
-        setStatus("Closed")
         break
       default:
         break
@@ -224,12 +268,6 @@ async function start(
   }
   peer.oniceconnectionstatechange = () => {
     switch (peer.iceConnectionState) {
-      case "connected":
-      case "completed":
-        if (videoRef.current?.srcObject) {
-          setStatus("Starting")
-        }
-        break
       case "disconnected":
       case "failed":
         scheduleIceRestart()
@@ -255,10 +293,12 @@ async function start(
     void sendLocalOffer().catch(fail)
   }
   socket.onmessage = (event) => {
-    void handleMessage(peer, event.data, setStatus).catch(fail)
+    void handleMessage(peer, event.data, pendingRemoteCandidates).catch(fail)
   }
   socket.onerror = () => {
-    setStatus("Reconnecting")
+    if (isCurrent()) {
+      setPhase("reconnecting")
+    }
   }
   socket.onclose = () => {
     scheduleSessionReconnect()
@@ -282,12 +322,12 @@ function waitForMediaReady(video: HTMLVideoElement) {
   return new Promise<void>((resolve) => {
     const done = () => {
       window.clearTimeout(timeout)
-      video.removeEventListener("loadedmetadata", done)
+      video.removeEventListener("loadeddata", done)
       video.removeEventListener("canplay", done)
       resolve()
     }
-    const timeout = window.setTimeout(done, 300)
-    video.addEventListener("loadedmetadata", done, { once: true })
+    const timeout = window.setTimeout(done, 1500)
+    video.addEventListener("loadeddata", done, { once: true })
     video.addEventListener("canplay", done, { once: true })
   })
 }
@@ -295,10 +335,8 @@ function waitForMediaReady(video: HTMLVideoElement) {
 async function sendOffer(
   peer: RTCPeerConnection,
   socket: WebSocket,
-  setStatus: (status: string) => void,
   options: { iceRestart?: boolean } = {},
 ) {
-  setStatus(options.iceRestart ? "Reconnecting" : "Connecting")
   // ICE restart keeps the same viewer session and asks both peers to gather
   // fresh candidates after an IP address or network interface change.
   const offer = await peer.createOffer(
@@ -316,7 +354,7 @@ async function sendOffer(
 async function handleMessage(
   peer: RTCPeerConnection,
   data: unknown,
-  setStatus: (status: string) => void,
+  pendingRemoteCandidates: RTCIceCandidateInit[],
 ) {
   const parsed = signalMessageSchema.safeParse(JSON.parse(String(data)))
   if (!parsed.success) {
@@ -328,13 +366,13 @@ async function handleMessage(
         type: "answer",
         sdp: parsed.data.sdp,
       })
-      setStatus("Connecting")
+      await flushRemoteCandidates(peer, pendingRemoteCandidates)
       break
     case "webrtc.candidate":
       if (!parsed.data.candidate) {
         return
       }
-      await peer.addIceCandidate({
+      await addRemoteCandidate(peer, pendingRemoteCandidates, {
         candidate: parsed.data.candidate,
         sdpMid: parsed.data.sdpMid ?? null,
         sdpMLineIndex: parsed.data.sdpMLineIndex,
@@ -344,6 +382,30 @@ async function handleMessage(
       throw new Error(parsed.data.message ?? "Producer returned an error")
     default:
       break
+  }
+}
+
+async function addRemoteCandidate(
+  peer: RTCPeerConnection,
+  pendingRemoteCandidates: RTCIceCandidateInit[],
+  candidate: RTCIceCandidateInit,
+) {
+  if (!peer.remoteDescription) {
+    pendingRemoteCandidates.push(candidate)
+    return
+  }
+  await peer.addIceCandidate(candidate)
+}
+
+async function flushRemoteCandidates(
+  peer: RTCPeerConnection,
+  pendingRemoteCandidates: RTCIceCandidateInit[],
+) {
+  while (pendingRemoteCandidates.length > 0) {
+    const candidate = pendingRemoteCandidates.shift()
+    if (candidate) {
+      await peer.addIceCandidate(candidate)
+    }
   }
 }
 
@@ -360,6 +422,12 @@ async function fetchViewer(deviceId: string) {
 
 async function responseJSON(response: Response): Promise<unknown> {
   return response.json()
+}
+
+function phaseLabel(
+  phase: Exclude<PlayerPhase, "blocked" | "error" | "playing">,
+) {
+  return phase === "reconnecting" ? "Reconnecting" : "Connecting"
 }
 
 function errorMessage(err: unknown) {

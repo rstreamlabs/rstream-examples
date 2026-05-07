@@ -7,6 +7,8 @@ import { SignOutButton } from "@/components/sign-out-button"
 
 const GUIDE_URL =
   "https://rstream.io/guides/integrate-webrtc-video-streaming-into-a-nextjs-platform-with-rstream"
+const GITHUB_URL =
+  "https://github.com/rstreamlabs/rstream-examples/tree/main/webrtc-video-platform"
 
 export default async function Page() {
   const user = await getServerUser()
@@ -82,12 +84,24 @@ export default async function Page() {
 
 function PageFooter({ account }: { account?: string }) {
   return (
-    <footer className="flex flex-col gap-3 border-t border-border pt-5 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-      <div className="space-y-1">
-        <p>Powered by rstream tunnels.</p>
-        {account ? <p className="break-all">Signed in as {account}.</p> : null}
+    <footer className="flex flex-col gap-3 border-t border-border pt-5 text-sm text-muted-foreground lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex min-w-0 flex-col gap-1 lg:flex-row lg:items-center lg:gap-5">
+        <p className="lg:whitespace-nowrap">Powered by rstream tunnels.</p>
+        {account ? (
+          <p className="break-all lg:truncate lg:break-normal">
+            Signed in as {account}.
+          </p>
+        ) : null}
       </div>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
+      <div className="flex flex-col gap-1 lg:flex-row lg:items-center lg:gap-5 lg:whitespace-nowrap">
+        <a
+          href={GITHUB_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="font-medium text-foreground transition hover:text-muted-foreground"
+        >
+          Browse source code
+        </a>
         <a
           href={GUIDE_URL}
           target="_blank"
