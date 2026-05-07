@@ -6,11 +6,12 @@ Each example shows a complete integration path and provides a base that can be a
 
 ## Repository layout
 
-The repository currently includes the following example:
+The repository currently includes the following examples:
 
 | Directory | What it shows |
 | --- | --- |
 | `webrtc-video-streaming` | A device-side Go application that captures video with GStreamer, serves its own browser UI, publishes that UI through an `rstream` HTTP tunnel, uses the managed `rstream` STUN/TURN service for WebRTC connectivity, and packages cleanly for Linux devices. |
+| `webrtc-video-platform` | A third-party Next.js application that owns device inventory, GitHub authentication, producer provisioning, and short-lived viewer URLs while using the rstream JS SDKs for tunnel inventory, TURN credentials, and fine-grained auth tokens. |
 
 Each example directory contains its own README with the platform-specific setup, configuration profiles, build commands, and operational notes required by that example.
 
@@ -23,7 +24,7 @@ rstream login
 rstream project use <project-endpoint> --default
 ```
 
-Once the local context is in place, move into the example directory you want to run and follow its README.
+Once the local context is in place, move into the example directory you want to run and follow its README. The Next.js platform example uses rstream application credentials instead of a local CLI context.
 
 ```bash
 cd webrtc-video-streaming
