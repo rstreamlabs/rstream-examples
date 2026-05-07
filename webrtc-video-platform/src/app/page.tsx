@@ -14,7 +14,7 @@ export default async function Page() {
   const user = await getServerUser()
   if (!user?.id) {
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-6 py-8 lg:px-10">
+      <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-8 sm:px-6 lg:px-10">
         <header className="border-b border-border pb-8">
           <div className="flex h-9 items-center">
             <a
@@ -48,7 +48,7 @@ export default async function Page() {
   }
   const devices = await deviceViews(user.id)
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-6 py-8 lg:px-10">
+    <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-8 sm:px-6 lg:px-10">
       <header className="border-b border-border pb-8">
         <div className="flex h-9 items-center justify-between gap-6">
           <a

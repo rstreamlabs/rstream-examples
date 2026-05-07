@@ -102,8 +102,8 @@ export function DeviceDashboard({
     }
   }
   return (
-    <div className="grid gap-5 lg:grid-cols-[360px_1fr]">
-      <section className="space-y-4">
+    <div className="grid min-w-0 gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
+      <section className="min-w-0 space-y-4">
         <DeviceDialog
           apiUrl={apiUrl}
           onCreated={(created) => {
@@ -119,7 +119,7 @@ export function DeviceDashboard({
             rstream watch: {rstream.error.message}
           </p>
         ) : null}
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2">
           {visibleDevices.length > 0 ? (
             visibleDevices.map((device) => (
               <DeviceRow
@@ -135,8 +135,8 @@ export function DeviceDashboard({
           )}
         </div>
       </section>
-      <section className="rounded-lg border border-border bg-card p-5">
-        <div className="space-y-5">
+      <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card p-4 sm:p-5">
+        <div className="min-w-0 space-y-5">
           <SelectedDeviceHeader device={active} />
           {active?.online ? (
             <VideoPlayer deviceId={active.id} />
@@ -164,16 +164,19 @@ export function DeviceDashboard({
 
 function SelectedDeviceHeader({ device }: { device: DeviceWithStatus | null }) {
   return (
-    <div className="flex min-h-[56px] flex-wrap items-center justify-between gap-3">
+    <div className="flex min-h-[56px] min-w-0 flex-wrap items-center justify-between gap-3">
       {device ? (
         <>
-          <div>
+          <div className="min-w-0">
             <p className="text-sm text-muted-foreground">Selected device</p>
-            <h2 className="text-2xl font-semibold text-foreground">
+            <h2 className="break-words text-2xl font-semibold text-foreground">
               {device.name}
             </h2>
           </div>
-          <Badge tone={device.online ? "online" : "offline"}>
+          <Badge
+            className="shrink-0"
+            tone={device.online ? "online" : "offline"}
+          >
             {device.online ? "Online" : "Offline"}
           </Badge>
         </>
@@ -253,7 +256,7 @@ function DeviceDialog({
           Add device
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] overflow-y-auto p-4 sm:max-w-2xl sm:p-5">
         <DialogHeader>
           <DialogTitle>Add device</DialogTitle>
           <DialogDescription>
@@ -270,7 +273,7 @@ function DeviceDialog({
                 Copy it now and set it on the video producer as DEVICE_SECRET.
               </p>
             </div>
-            <pre className="max-w-full overflow-hidden whitespace-pre-wrap break-all rounded-md border border-border bg-background p-3 text-sm leading-6 text-foreground">
+            <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-md border border-border bg-background p-3 text-xs leading-6 text-foreground sm:text-sm">
               <code>{created.secret}</code>
             </pre>
             <div>
@@ -280,12 +283,13 @@ function DeviceDialog({
               <p className="mt-1 text-sm leading-6 text-muted-foreground">
                 Run these commands on the video producer.
               </p>
-              <pre className="mt-2 max-w-full overflow-hidden whitespace-pre-wrap break-words rounded-md border border-border bg-background p-3 text-sm leading-6 text-foreground">
+              <pre className="mt-2 max-w-full overflow-x-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background p-3 text-xs leading-6 text-foreground sm:text-sm">
                 <code>{command}</code>
               </pre>
             </div>
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <CopyPromptButton
+                className="w-full sm:w-auto"
                 prompt={producerSetupPrompt({
                   device: created.device,
                   apiUrl,
@@ -293,13 +297,20 @@ function DeviceDialog({
                 })}
               />
               <DialogClose asChild>
-                <Button type="button">Close</Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                >
+                  Close
+                </Button>
               </DialogClose>
             </div>
           </div>
         ) : (
-          <form className="space-y-4" onSubmit={onCreate}>
+          <form className="min-w-0 space-y-4" onSubmit={onCreate}>
             <Input
+              className="min-w-0"
               value={name}
               onChange={(event) => {
                 setName(event.target.value)
@@ -315,7 +326,11 @@ function DeviceDialog({
                 {error}
               </p>
             ) : null}
-            <Button disabled={pending} type="submit">
+            <Button
+              className="w-full sm:w-auto"
+              disabled={pending}
+              type="submit"
+            >
               {pending ? "Creating..." : "Create device"}
             </Button>
           </form>
@@ -340,7 +355,7 @@ function DeviceRow({
     <div
       onClick={onSelect}
       className={[
-        "cursor-pointer rounded-lg border bg-card transition-colors",
+        "min-w-0 cursor-pointer rounded-lg border bg-card transition-colors",
         active
           ? "border-foreground"
           : "border-border hover:border-foreground/30",
@@ -349,19 +364,19 @@ function DeviceRow({
       <Button
         type="button"
         variant="ghost"
-        className="h-auto w-full justify-between rounded-b-none rounded-t-lg px-4 py-4 text-left hover:bg-transparent"
+        className="h-auto min-w-0 w-full justify-between rounded-b-none rounded-t-lg px-4 py-4 text-left hover:bg-transparent"
         onClick={(event) => {
           event.stopPropagation()
           onSelect()
         }}
       >
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate font-medium text-foreground">{device.name}</p>
           <p className="mt-1 truncate text-xs text-muted-foreground">
             {device.tunnelName}
           </p>
         </div>
-        <Badge tone={device.online ? "online" : "offline"}>
+        <Badge className="shrink-0" tone={device.online ? "online" : "offline"}>
           {device.online ? "Online" : "Offline"}
         </Badge>
       </Button>
@@ -378,7 +393,7 @@ function DeviceListSkeleton() {
       <div className="flex items-center justify-between gap-3 p-4">
         <div className="min-w-0 space-y-2">
           <Skeleton className="h-4 w-28" />
-          <Skeleton className="h-3 w-56" />
+          <Skeleton className="h-3 w-40 sm:w-56" />
         </div>
         <Skeleton className="h-8 w-16" />
       </div>
@@ -437,7 +452,7 @@ function DeleteDeviceDialog({
           <span className="sr-only">Delete {device.name}</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] overflow-y-auto p-4 sm:max-w-md sm:p-5">
         <DialogHeader>
           <DialogTitle>Delete device</DialogTitle>
           <DialogDescription>
@@ -446,10 +461,11 @@ function DeleteDeviceDialog({
           </DialogDescription>
         </DialogHeader>
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button
             type="button"
             variant="outline"
+            className="w-full sm:w-auto"
             onClick={() => setOpen(false)}
           >
             Cancel
@@ -457,6 +473,7 @@ function DeleteDeviceDialog({
           <Button
             type="button"
             variant="destructive"
+            className="w-full sm:w-auto"
             disabled={pending}
             onClick={deleteDevice}
           >

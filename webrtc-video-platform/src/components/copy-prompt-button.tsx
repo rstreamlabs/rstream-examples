@@ -10,9 +10,11 @@ import { Button } from "@/components/ui/button"
 type CopyState = "idle" | "copied" | "failed"
 
 export function CopyPromptButton({
+  className,
   prompt,
   label = "Copy setup prompt",
 }: {
+  className?: string
   prompt: string
   label?: string
 }) {
@@ -28,7 +30,12 @@ export function CopyPromptButton({
     }
   }, [prompt])
   return (
-    <Button type="button" variant="outline" onClick={onCopy}>
+    <Button
+      type="button"
+      variant="outline"
+      className={className}
+      onClick={onCopy}
+    >
       {state === "copied" ? (
         <Check className="h-4 w-4" />
       ) : (
