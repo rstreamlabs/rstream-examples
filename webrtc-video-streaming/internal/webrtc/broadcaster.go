@@ -66,29 +66,30 @@ type Broadcaster struct {
 }
 
 type Session struct {
-	id          string
-	logger      *logs.Logger
-	pc          *webrtc.PeerConnection
-	track       *webrtc.TrackLocalStaticSample
-	sender      *webrtc.RTPSender
-	unsubscribe func()
-	release     func()
-	estimator   bandwidthEstimator
-	encoder     media.EncoderController
-	adaptive    *adaptation.Controller
-	send        func(SignalMessage) error
-	close       sync.Once
-	closed      chan struct{}
-	onClose     func(string)
-	statsMu     sync.RWMutex
-	stats       SessionStats
-	signalingMu sync.Mutex
-	pendingICE  []webrtc.ICECandidateInit
-	candidateMu sync.Mutex
-	localICE    candidateCounts
-	remoteICE   candidateCounts
-	recoveryMu  sync.Mutex
-	recovery    *time.Timer
+	id           string
+	logger       *logs.Logger
+	pc           *webrtc.PeerConnection
+	track        *webrtc.TrackLocalStaticSample
+	sender       *webrtc.RTPSender
+	unsubscribe  func()
+	release      func()
+	estimator    bandwidthEstimator
+	encoder      media.EncoderController
+	adaptive     *adaptation.Controller
+	send         func(SignalMessage) error
+	close        sync.Once
+	closed       chan struct{}
+	onClose      func(string)
+	statsMu      sync.RWMutex
+	stats        SessionStats
+	signalingMu  sync.Mutex
+	pendingICE   []webrtc.ICECandidateInit
+	pendingBytes int
+	candidateMu  sync.Mutex
+	localICE     candidateCounts
+	remoteICE    candidateCounts
+	recoveryMu   sync.Mutex
+	recovery     *time.Timer
 }
 
 type candidateCounts struct {
@@ -99,7 +100,11 @@ type candidateCounts struct {
 	Unknown         int
 }
 
-const networkRecoveryTimeout = 30 * time.Second
+const (
+	networkRecoveryTimeout      = 30 * time.Second
+	maxPendingICECandidates     = 64
+	maxPendingICECandidateBytes = 64 * 1024
+)
 
 func NewBroadcaster(cfg config.Config, sourceFactory media.Factory, turn *turnprovider.Provider, logger *logs.Logger) (*Broadcaster, error) {
 	peerFactory, codec, err := newPeerConnectionFactory(cfg)
@@ -418,7 +423,14 @@ func (s *Session) AddICECandidate(
 	s.signalingMu.Lock()
 	defer s.signalingMu.Unlock()
 	if s.pc.RemoteDescription() == nil {
+		if len(s.pendingICE) >= maxPendingICECandidates {
+			return errors.New("too many pending ICE candidates")
+		}
+		if s.pendingBytes+len(candidate) > maxPendingICECandidateBytes {
+			return errors.New("too many pending ICE candidates")
+		}
 		s.pendingICE = append(s.pendingICE, init)
+		s.pendingBytes += len(candidate)
 		return nil
 	}
 	return s.pc.AddICECandidate(init)
@@ -428,11 +440,19 @@ func (s *Session) flushPendingICECandidates() error {
 	for len(s.pendingICE) > 0 {
 		candidate := s.pendingICE[0]
 		s.pendingICE = s.pendingICE[1:]
+		candidateBytes := len(candidate.Candidate)
+		if s.pendingBytes >= candidateBytes {
+			s.pendingBytes -= candidateBytes
+		} else {
+			s.pendingBytes = 0
+		}
 		if err := s.pc.AddICECandidate(candidate); err != nil {
 			s.pendingICE = nil
+			s.pendingBytes = 0
 			return fmt.Errorf("failed to apply a buffered ICE candidate: %w", err)
 		}
 	}
+	s.pendingBytes = 0
 	return nil
 }
 

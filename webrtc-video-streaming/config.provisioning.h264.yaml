@@ -6,6 +6,9 @@ web:
 tunnel:
   enabled: true
   name: webrtc-video-streaming
+  auth:
+    token: false
+    rstream: false
   transport:
     useQuic: true
   provisioning:
@@ -17,7 +20,7 @@ tunnel:
     enabled: true
     interval: 5s
 turn:
-  ttl: 1h
+  ttl: 10m
 webrtc:
   useTurn: true
   maxViewers: 0

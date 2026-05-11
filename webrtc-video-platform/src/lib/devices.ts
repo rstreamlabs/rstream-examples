@@ -7,9 +7,34 @@ import { type Tunnel } from "@rstreamlabs/tunnels"
 import { APP_LABEL } from "@/lib/rstream-labels"
 import { DEVICE_LABEL } from "@/lib/rstream-labels"
 import { USER_LABEL } from "@/lib/rstream-labels"
-import { rstreamEnv } from "@/lib/env"
+import { getRstreamClient } from "@/lib/rstream"
+import { getRstreamProjectId } from "@/lib/rstream"
+import { rstreamConfigMissingMessage } from "@/lib/env"
+import { rstreamEnvResult } from "@/lib/env"
 import prisma from "@/lib/prisma"
-import rstream from "@/lib/rstream"
+
+const maxDevicesPerUser = 20
+const maxDeviceCreationsPerWindow = 5
+const deviceCreationWindowMs = 60 * 60 * 1000
+const maxTurnCredentialsPerWindow = 20
+const turnCredentialWindowMs = 60 * 1000
+const turnCredentialTTLSeconds = 10 * 60
+
+type MemoryQuota = {
+  count: number
+  expiresAt: number
+}
+
+declare global {
+  var rstreamExampleQuota: Map<string, MemoryQuota> | undefined
+}
+
+const memoryQuota =
+  globalThis.rstreamExampleQuota ?? new Map<string, MemoryQuota>()
+
+if (!globalThis.rstreamExampleQuota) {
+  globalThis.rstreamExampleQuota = memoryQuota
+}
 
 export function labels(device: Pick<Device, "id" | "userId">) {
   return {
@@ -28,6 +53,17 @@ export function createSecret() {
 }
 
 export async function createDevice(userId: string, name: string) {
+  requireMemoryQuota(
+    `device:create:${userId}`,
+    maxDeviceCreationsPerWindow,
+    deviceCreationWindowMs,
+  )
+  const deviceCount = await prisma.device.count({
+    where: { userId },
+  })
+  if (deviceCount >= maxDevicesPerUser) {
+    throw new HTTPError(429, "Device limit reached.")
+  }
   const id = randomUUID()
   const secret = createSecret()
   const deviceName = name.trim()
@@ -110,9 +146,7 @@ export async function deviceViews(userId: string) {
     where: { userId },
     orderBy: { createdAt: "desc" },
   })
-  const tunnelByDevice = new Map(
-    (await onlineTunnels(userId)).flatMap(tunnelEntry),
-  )
+  const tunnelByDevice = new Map(await onlineTunnelEntries(userId))
   return devices.map((device) => toView(device, tunnelByDevice.has(device.id)))
 }
 
@@ -129,25 +163,24 @@ export function toView(device: Device, online = false): DeviceView {
 }
 
 export async function engine() {
-  return rstreamEnv().RSTREAM_ENGINE ?? rstream.getEngine()
+  const env = requireRstreamEnv()
+  const rstream = getRstreamClient()
+  return env.RSTREAM_ENGINE ?? rstream.getEngine()
 }
 
 export async function createTunnelToken(
   device: Pick<Device, "id" | "tunnelName" | "userId">,
 ) {
-  const env = rstreamEnv()
-  if (!env.RSTREAM_FINE_GRAINED_GRANTS) {
-    // Basic-plan fallback: short-lived token, but no tunnel-level grant.
-    const token = await rstream.auth.createAuthToken({
-      expires_in: env.DEVICE_TOKEN_TTL_SECONDS,
-    })
-    return token.token
-  }
+  const env = requireRstreamEnv()
+  const rstream = getRstreamClient()
+  const projectId = await getRstreamProjectId()
+  requireFineGrainedGrants(env.RSTREAM_FINE_GRAINED_GRANTS)
   // Producer tokens are scoped to one tunnel name and one device label.
   const token = await rstream.auth.createAuthToken({
     expires_in: env.DEVICE_TOKEN_TTL_SECONDS,
     tunnelsGrants: [
       {
+        projects: [projectId],
         scopes: {
           tunnels: {
             create: {
@@ -171,19 +204,16 @@ export async function createViewerToken(
   device: Pick<Device, "id" | "userId">,
   tunnel: Tunnel,
 ) {
-  const env = rstreamEnv()
-  if (!env.RSTREAM_FINE_GRAINED_GRANTS) {
-    // Basic-plan fallback: short-lived token, but no tunnel/path isolation.
-    const token = await rstream.auth.createAuthToken({
-      expires_in: env.VIEWER_TOKEN_TTL_SECONDS,
-    })
-    return token.token
-  }
+  const env = requireRstreamEnv()
+  const rstream = getRstreamClient()
+  const projectId = await getRstreamProjectId()
+  requireFineGrainedGrants(env.RSTREAM_FINE_GRAINED_GRANTS)
   // Viewer tokens can only connect to the selected online tunnel WebRTC path.
   const token = await rstream.auth.createAuthToken({
     expires_in: env.VIEWER_TOKEN_TTL_SECONDS,
     tunnelsGrants: [
       {
+        projects: [projectId],
         scopes: {
           tunnels: {
             connect: {
@@ -207,19 +237,16 @@ export async function createViewerToken(
 }
 
 export async function createWatchToken(userId: string) {
-  const env = rstreamEnv()
-  if (!env.RSTREAM_FINE_GRAINED_GRANTS) {
-    // Basic-plan fallback: short-lived token, but no server-side list filter.
-    const token = await rstream.auth.createAuthToken({
-      expires_in: env.VIEWER_TOKEN_TTL_SECONDS,
-    })
-    return token.token
-  }
+  const env = requireRstreamEnv()
+  const rstream = getRstreamClient()
+  const projectId = await getRstreamProjectId()
+  requireFineGrainedGrants(env.RSTREAM_FINE_GRAINED_GRANTS)
   // Watch tokens only list published sample tunnels for the dashboard state.
   const token = await rstream.auth.createAuthToken({
     expires_in: env.VIEWER_TOKEN_TTL_SECONDS,
     tunnelsGrants: [
       {
+        projects: [projectId],
         scopes: {
           tunnels: {
             list: {
@@ -251,9 +278,30 @@ export async function createWatchToken(userId: string) {
   return token.token
 }
 
+function requireFineGrainedGrants(enabled: boolean) {
+  if (!enabled) {
+    throw new HTTPError(503, "Fine-grained rstream tunnel grants are required.")
+  }
+}
+
+function requireMemoryQuota(key: string, maxCount: number, windowMs: number) {
+  const now = Date.now()
+  const current = memoryQuota.get(key)
+  if (!current || current.expiresAt <= now) {
+    memoryQuota.set(key, { count: 1, expiresAt: now + windowMs })
+    return
+  }
+  if (current.count >= maxCount) {
+    throw new HTTPError(429, "Too many requests.")
+  }
+  current.count += 1
+}
+
 export async function onlineTunnel(
   device: Pick<Device, "id" | "tunnelName" | "userId">,
 ) {
+  requireRstreamEnv()
+  const rstream = getRstreamClient()
   const activeTunnels = await rstream.tunnels.list({
     limit: 20,
     filters: {
@@ -268,6 +316,8 @@ export async function onlineTunnel(
 }
 
 export async function onlineTunnels(userId: string) {
+  requireRstreamEnv()
+  const rstream = getRstreamClient()
   return rstream.tunnels.list({
     limit: 100,
     filters: {
@@ -300,7 +350,7 @@ function tunnelTimestamp(tunnel: Tunnel) {
 }
 
 export async function tunnelPayload(device: Device) {
-  const env = rstreamEnv()
+  const env = requireRstreamEnv()
   const [resolvedEngine, token] = await Promise.all([
     engine(),
     createTunnelToken(device),
@@ -317,8 +367,38 @@ export async function tunnelPayload(device: Device) {
   }
 }
 
-export async function turnPayload() {
-  return rstream.turn.createCredentials()
+export async function turnPayload(deviceId: string) {
+  requireRstreamEnv()
+  const rstream = getRstreamClient()
+  requireMemoryQuota(
+    `turn:${deviceId}`,
+    maxTurnCredentialsPerWindow,
+    turnCredentialWindowMs,
+  )
+  return rstream.turn.createCredentials({
+    ttlSeconds: turnCredentialTTLSeconds,
+  })
+}
+
+function requireRstreamEnv() {
+  const result = rstreamEnvResult()
+  if (!result.success) {
+    throw new HTTPError(503, rstreamConfigMissingMessage(result.error))
+  }
+  return result.data
+}
+
+async function onlineTunnelEntries(
+  userId: string,
+): Promise<[string, Tunnel][]> {
+  if (!rstreamEnvResult().success) {
+    return []
+  }
+  try {
+    return (await onlineTunnels(userId)).flatMap(tunnelEntry)
+  } catch {
+    return []
+  }
 }
 
 function publicUrl(tunnel: Tunnel) {
@@ -342,7 +422,7 @@ export async function viewerPayload(device: Device) {
   }
   const [token, turn] = await Promise.all([
     createViewerToken(device, tunnel),
-    rstream.turn.createCredentials(),
+    turnPayload(device.id),
   ])
   const base = publicUrl(tunnel)
   if (!base) {

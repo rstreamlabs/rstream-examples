@@ -57,3 +57,58 @@ func TestStatusReturnsLowercaseTunnelAuthFields(t *testing.T) {
 		t.Fatal("expected tunnelAuth.rstream to be a boolean")
 	}
 }
+
+func TestSameOriginAllowsBrowserViewerOrigin(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "https://viewer.example/ws", nil)
+	req.Host = "viewer.example"
+	req.Header.Set("Origin", "https://viewer.example")
+	if !sameOrigin(req) {
+		t.Fatal("expected same-origin websocket upgrade to be allowed")
+	}
+}
+
+func TestSameOriginRejectsCrossOriginViewerOrigin(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "https://viewer.example/ws", nil)
+	req.Host = "viewer.example"
+	req.Header.Set("Origin", "https://evil.example")
+	if sameOrigin(req) {
+		t.Fatal("expected cross-origin websocket upgrade to be rejected")
+	}
+}
+
+func TestProvisioningModeAllowsProductViewerOrigin(t *testing.T) {
+	hub := logs.NewHub(16)
+	server := NewServer(
+		logs.NewLogger(hub, false),
+		hub,
+		func(context.Context) (*rstream.TURNCredentials, error) {
+			return nil, errors.New("not implemented")
+		},
+		func(context.Context, func(rtc.SignalMessage) error) (*rtc.Session, error) {
+			return nil, errors.New("not implemented")
+		},
+		ServerOptions{Viewer: false},
+	)
+	req := httptest.NewRequest(http.MethodGet, "https://device-tunnel.example/ws", nil)
+	req.Host = "device-tunnel.example"
+	req.Header.Set("Origin", "https://platform.example")
+	if !server.upgrader.CheckOrigin(req) {
+		t.Fatal("expected product viewer origin to be allowed in provisioning mode")
+	}
+	req.Header.Set("Origin", "not a URL")
+	if server.upgrader.CheckOrigin(req) {
+		t.Fatal("expected invalid Origin header to be rejected")
+	}
+}
+
+func TestSameOriginAllowsMissingOriginAndRejectsInvalidOrigin(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "https://viewer.example/ws", nil)
+	req.Host = "viewer.example"
+	if !sameOrigin(req) {
+		t.Fatal("expected non-browser clients without Origin to be allowed")
+	}
+	req.Header.Set("Origin", "://bad")
+	if sameOrigin(req) {
+		t.Fatal("expected invalid Origin header to be rejected")
+	}
+}

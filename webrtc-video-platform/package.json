@@ -10,6 +10,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "smoke:dev": "node scripts/smoke-dev.mjs",
     "start": "next start",
     "typecheck": "npm run check-types"
   },
@@ -20,6 +21,7 @@
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-slot": "^1.2.4",
     "@rstreamlabs/react": "^1.7.12",
+    "@rstreamlabs/rstream": "^2.1.0",
     "@rstreamlabs/tunnels": "^1.0.7",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -43,6 +45,8 @@
   },
   "overrides": {
     "@hono/node-server": "1.19.13",
+    "fast-uri": "3.1.2",
+    "hono": "4.12.18",
     "postcss": "8.5.14"
   }
 }

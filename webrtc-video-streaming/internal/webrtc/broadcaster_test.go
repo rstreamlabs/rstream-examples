@@ -2,6 +2,7 @@ package webrtc
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -192,5 +193,68 @@ func TestSessionBuffersICECandidatesBeforeOffer(t *testing.T) {
 	}
 	if got := len(session.pendingICE); got != 0 {
 		t.Fatalf("expected no buffered candidates after offer, got %d", got)
+	}
+}
+
+func TestSessionLimitsBufferedICECandidatesBeforeOffer(t *testing.T) {
+	cfg := config.Default()
+	cfg.WebRTC.UseTURN = false
+	logger := logs.NewLogger(logs.NewHub(16), false)
+	broadcaster, err := NewBroadcaster(cfg, fakeSourceFactory{}, nil, logger)
+	if err != nil {
+		t.Fatalf("failed to create the broadcaster: %v", err)
+	}
+	defer func() {
+		_ = broadcaster.Close()
+	}()
+	session, err := broadcaster.OpenSession(context.Background(), func(SignalMessage) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("failed to open the session: %v", err)
+	}
+	defer session.Close("test cleanup")
+	mid := "0"
+	line := uint16(0)
+	for i := 0; i < maxPendingICECandidates; i++ {
+		candidate := "candidate:1 1 udp 2122260223 127.0.0.1 12345 typ host"
+		if err := session.AddICECandidate(candidate, &mid, &line, nil); err != nil {
+			t.Fatalf("expected candidate %d to be buffered, got %v", i, err)
+		}
+	}
+	if err := session.AddICECandidate(
+		"candidate:2 1 udp 2122260223 127.0.0.1 12346 typ host",
+		&mid,
+		&line,
+		nil,
+	); err == nil {
+		t.Fatal("expected excess pending ICE candidate to be rejected")
+	}
+}
+
+func TestSessionLimitsBufferedICECandidateBytesBeforeOffer(t *testing.T) {
+	cfg := config.Default()
+	cfg.WebRTC.UseTURN = false
+	logger := logs.NewLogger(logs.NewHub(16), false)
+	broadcaster, err := NewBroadcaster(cfg, fakeSourceFactory{}, nil, logger)
+	if err != nil {
+		t.Fatalf("failed to create the broadcaster: %v", err)
+	}
+	defer func() {
+		_ = broadcaster.Close()
+	}()
+	session, err := broadcaster.OpenSession(context.Background(), func(SignalMessage) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("failed to open the session: %v", err)
+	}
+	defer session.Close("test cleanup")
+	mid := "0"
+	line := uint16(0)
+	candidate := "candidate:1 1 udp 2122260223 127.0.0.1 12345 typ host " +
+		strings.Repeat("x", maxPendingICECandidateBytes)
+	if err := session.AddICECandidate(candidate, &mid, &line, nil); err == nil {
+		t.Fatal("expected oversized pending ICE candidate to be rejected")
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 	"sync"
@@ -58,6 +59,10 @@ func NewServer(
 	if len(options) > 0 {
 		viewer = options[0].Viewer
 	}
+	checkOrigin := sameOrigin
+	if !viewer {
+		checkOrigin = browserOrigin
+	}
 	return &Server{
 		logger:      logger,
 		logHub:      logHub,
@@ -65,7 +70,7 @@ func NewServer(
 		openSession: openSession,
 		viewer:      viewer,
 		upgrader: websocket.Upgrader{
-			CheckOrigin: func(*http.Request) bool { return true },
+			CheckOrigin: checkOrigin,
 		},
 	}
 }
@@ -295,6 +300,30 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_, _ = w.Write(data)
+}
+
+func sameOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(parsed.Host, r.Host)
+}
+
+func browserOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	return parsed.Host != "" && (parsed.Scheme == "http" || parsed.Scheme == "https")
 }
 
 type wsWriter struct {

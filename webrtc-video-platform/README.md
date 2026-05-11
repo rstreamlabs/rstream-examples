@@ -52,6 +52,7 @@ NEXTAUTH_SECRET="replace-with-a-random-secret"
 GITHUB_CLIENT_ID="github-oauth-client-id"
 GITHUB_CLIENT_SECRET="github-oauth-client-secret"
 CRON_SECRET="replace-with-a-random-secret"
+DEMO_CLEANUP_ENABLED="false"
 ```
 
 Use the pooled PostgreSQL URL for `POSTGRES_PRISMA_POOL_URL`. Use the direct, non-pooled PostgreSQL URL for `POSTGRES_PRISMA_DIRECT_URL`; Prisma uses it for migrations.
@@ -62,10 +63,11 @@ Fill the rstream application credentials and target tunnels project:
 RSTREAM_CLIENT_ID="rstream-app-client-id"
 RSTREAM_CLIENT_SECRET="hex-encoded-rstream-app-client-secret"
 RSTREAM_PROJECT_ENDPOINT="rstream-project-endpoint"
+RSTREAM_PROJECT_ID=""
 RSTREAM_FINE_GRAINED_GRANTS="true"
 ```
 
-The sample resolves the project from its endpoint. `RSTREAM_API_URL` and `RSTREAM_ENGINE` are intentionally left out of `.env.example`; they are only useful for custom rstream deployments.
+The sample resolves the engine and project id from `RSTREAM_PROJECT_ENDPOINT`. `RSTREAM_PROJECT_ID` is optional when an endpoint is configured; it is only needed if you run against a fixed `RSTREAM_ENGINE` without endpoint resolution. `RSTREAM_API_URL` and `RSTREAM_ENGINE` are intentionally left out of `.env.example`; they are only useful for custom rstream deployments.
 
 ### rstream Project Setup
 
@@ -73,11 +75,7 @@ Use a dedicated rstream project for this sample. Create an application token sco
 
 The app token is used server-side only. It creates short-lived producer tokens, viewer tokens, TURN credentials, and dashboard watch tokens. Devices and browsers should never receive the application client secret.
 
-TODO: Add screenshots for the project creation flow.
-
-TODO: Add screenshots for the app token creation flow and project scope selection.
-
-### rstream Plan Compatibility
+### rstream Grant Requirements
 
 The reference design uses fine-grained tunnel grants:
 
@@ -87,13 +85,7 @@ RSTREAM_FINE_GRAINED_GRANTS="true"
 
 That is the production path. Producer tokens can only create the expected tunnel for one device, and viewer tokens can only connect to the selected online tunnel on `/ws`.
 
-For basic or free accounts that do not include fine-grained tunnel grants, set:
-
-```bash
-RSTREAM_FINE_GRAINED_GRANTS="false"
-```
-
-The app still issues short-lived producer, viewer, and watch tokens, but those tokens are not restricted by rstream grant filters. Device and user checks still happen in this Next.js app, and tokens still expire quickly, but rstream no longer enforces user-level, device-level, tunnel-level, or path-level segregation at the edge. Treat that mode as a compatibility/demo mode, not as the recommended multi-tenant production design.
+Keep `RSTREAM_FINE_GRAINED_GRANTS="true"` for this sample. The app refuses to mint producer, viewer, or dashboard watch tokens when fine-grained grants are disabled because unscoped tunnel tokens would remove rstream-side user, device, tunnel, and path segregation.
 
 Install dependencies, create the database, and start the app:
 
@@ -154,7 +146,7 @@ For public demos, `vercel.json` registers a weekly cleanup job:
 }
 ```
 
-Set `CRON_SECRET` in Vercel. Vercel sends it as a Bearer token in the `Authorization` header when it invokes `/api/cron/cleanup`. The endpoint deletes demo users, accounts, sessions, device records, and verification tokens. It does not touch rstream project configuration.
+Set `CRON_SECRET` and `DEMO_CLEANUP_ENABLED="true"` only for disposable demo deployments. Vercel sends the cron secret as a Bearer token in the `Authorization` header when it invokes `/api/cron/cleanup`. The endpoint deletes demo users, accounts, sessions, device records, and verification tokens. It does not touch rstream project configuration.
 
 ## Security Shape
 
@@ -164,6 +156,7 @@ Set `CRON_SECRET` in Vercel. Vercel sends it as a Bearer token in the `Authoriza
 - Producer TURN credentials are fetched from the product API when needed.
 - Viewer tokens are short-lived and grant only tunnel connection to `/ws`.
 - Dashboard watch tokens are short-lived and, with fine-grained grants enabled, only list tunnels labelled for the signed-in user.
+- Device creation and TURN credential issuance are bounded to keep the public sample from being used as an unmetered relay minting endpoint.
 - The local producer viewer can stay enabled for operator workflows, but the product viewer token does not grant access to `/`.
-- When `RSTREAM_FINE_GRAINED_GRANTS=false`, producer, viewer, and watch tokens are still short-lived, but rstream does not receive user, device, tunnel, or path filters. Keep that mode for local evaluation.
-- The demo cleanup cron is protected by `CRON_SECRET` and should only be enabled for disposable demo databases.
+- Fine-grained grants are required; unscoped rstream tokens are intentionally not issued by this sample.
+- The demo cleanup cron is disabled by default, protected by `CRON_SECRET`, and should only be enabled for disposable demo databases.

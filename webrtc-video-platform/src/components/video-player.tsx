@@ -23,9 +23,16 @@ type ViewerSessionOptions = {
   deviceId: string
   fail: (err: unknown) => void
   isCurrent: () => boolean
+  reconnectAttempt: number
   setPhase: (phase: PlayerPhase) => void
   videoRef: RefObject<HTMLVideoElement | null>
 }
+
+const maxSessionReconnects = 5
+const maxPendingRemoteCandidates = 64
+const sessionReconnectBaseDelayMs = 1000
+const sessionReconnectJitterMs = 250
+const sessionReconnectMaxDelayMs = 15000
 
 export function VideoPlayer({ deviceId }: { deviceId: string }) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -60,6 +67,7 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
       deviceId,
       fail,
       isCurrent,
+      reconnectAttempt: 0,
       setPhase: setCurrentPhase,
       videoRef,
     }).catch(fail)
@@ -138,6 +146,7 @@ async function startViewerSession({
   deviceId,
   fail,
   isCurrent,
+  reconnectAttempt,
   setPhase,
   videoRef,
 }: ViewerSessionOptions) {
@@ -171,6 +180,7 @@ async function startViewerSession({
     deviceId,
     fail,
     isCurrent,
+    reconnectAttempt,
     setPhase,
     videoRef,
   }
@@ -239,14 +249,22 @@ async function startViewerSession({
     if (stopped || reconnectTimer || !isCurrent()) {
       return
     }
+    if (options.reconnectAttempt >= maxSessionReconnects) {
+      fail(new Error("Viewer reconnect limit reached."))
+      return
+    }
+    const nextAttempt = options.reconnectAttempt + 1
     setPhase("reconnecting")
     reconnectTimer = window.setTimeout(() => {
       reconnectTimer = null
       if (stopped || !isCurrent()) {
         return
       }
-      void startViewerSession(options).catch(fail)
-    }, 1000)
+      void startViewerSession({
+        ...options,
+        reconnectAttempt: nextAttempt,
+      }).catch(fail)
+    }, sessionReconnectDelay(nextAttempt))
   }
   cleanupRef.current = () => {
     stopped = true
@@ -361,6 +379,13 @@ function waitForMediaReady(video: HTMLVideoElement) {
   })
 }
 
+function sessionReconnectDelay(attempt: number) {
+  const exponentialDelay = sessionReconnectBaseDelayMs * 2 ** (attempt - 1)
+  const boundedDelay = Math.min(exponentialDelay, sessionReconnectMaxDelayMs)
+  const jitter = Math.floor(Math.random() * sessionReconnectJitterMs)
+  return boundedDelay + jitter
+}
+
 async function handleMessage(
   peer: RTCPeerConnection,
   data: unknown,
@@ -402,6 +427,9 @@ async function addRemoteCandidate(
   candidate: RTCIceCandidateInit,
 ) {
   if (!peer.remoteDescription) {
+    if (pendingRemoteCandidates.length >= maxPendingRemoteCandidates) {
+      throw new Error("Too many pending remote ICE candidates")
+    }
     pendingRemoteCandidates.push(candidate)
     return
   }

@@ -134,11 +134,13 @@ tunnel:
 ```yaml
 tunnel:
   auth:
-    token: true
+    token: false
     rstream: false
 ```
 
 When token authentication is enabled, viewer tokens must be distributed by another trusted surface, such as your product API, the rstream dashboard, or an operator workflow. The device-side process does not leak its own client token into a shareable URL.
+
+The shipped local profiles publish a public viewer URL by default so the sample behaves like a simple developer tunnel. Enable `token` or `rstream` authentication explicitly when the public viewer must be protected.
 
 `tunnel.reconnect.enabled` controls what happens when the HTTP tunnel drops. If it is enabled, the process recreates the tunnel after `tunnel.reconnect.interval` and logs the new public URL. If it is disabled, a tunnel disconnect becomes a clean process exit.
 
@@ -151,6 +153,9 @@ web:
   viewer:
     enabled: false
 tunnel:
+  auth:
+    token: false
+    rstream: false
   provisioning:
     mode: remote
     endpoint: ${API_URL}
@@ -159,7 +164,7 @@ tunnel:
 
 `API_URL` and `DEVICE_SECRET` belong to the third-party product, not to rstream. The `RSTREAM_*` values stay on that product backend, where the app can issue scoped producer and viewer tokens.
 
-When `tunnel.provisioning.mode` is `remote`, `tunnel.auth` is not part of the producer configuration. The producer always requests a token-authenticated HTTP tunnel in that mode, and the short-lived token issued by the product API enforces the exact tunnel creation policy. TURN credentials stay separate: the producer asks the product API for fresh TURN credentials whenever the WebRTC path needs them.
+When `tunnel.provisioning.mode` is `remote`, local tunnel auth is disabled in the producer config because the product API issues the scoped tunnel creation token. The producer always requests a token-authenticated HTTP tunnel in that mode, and the short-lived token issued by the product API enforces the exact tunnel creation policy. TURN credentials stay separate: the producer asks the product API for fresh TURN credentials whenever the WebRTC path needs them.
 
 ### TURN and ICE
 

@@ -43,7 +43,7 @@ const (
 const (
 	DefaultServerListen        = "127.0.0.1:8080"
 	DefaultTunnelName          = "webrtc-video-streaming"
-	DefaultTURNTTL             = "1h"
+	DefaultTURNTTL             = "10m"
 	DefaultProvisioningTimeout = "10s"
 	DefaultReconnect           = "5s"
 	DefaultBitrateKbps         = 5000
@@ -466,7 +466,7 @@ func (c Config) AdaptiveUpdateInterval() (time.Duration, error) {
 func (c Config) TURNTTL() (time.Duration, error) {
 	value := strings.TrimSpace(c.TURN.TTL)
 	if value == "" {
-		return time.Hour, nil
+		return time.ParseDuration(DefaultTURNTTL)
 	}
 	dur, err := time.ParseDuration(value)
 	if err != nil {

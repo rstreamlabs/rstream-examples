@@ -68,6 +68,7 @@ func TestRemoteProvisioningDoesNotRequireLocalTunnelAuth(t *testing.T) {
 	cfg.Tunnel.Provisioning.Mode = TunnelProvisioningModeRemote
 	cfg.Tunnel.Provisioning.Endpoint = "https://video.example.com"
 	cfg.Tunnel.Provisioning.Secret = "dev_test_secret"
+	cfg.Tunnel.Auth = TunnelAuthConfig{}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected remote provisioning without local tunnel auth to be valid, got %v", err)
 	}
@@ -81,6 +82,14 @@ func TestRemoteProvisioningRejectsLocalTunnelAuthPolicy(t *testing.T) {
 	cfg.Tunnel.Auth.Token = true
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("expected remote provisioning with local tunnel auth to fail validation")
+	}
+}
+
+func TestLocalPublishedViewerCanBePublicByDefault(t *testing.T) {
+	cfg := Default()
+	cfg.Tunnel.Auth = TunnelAuthConfig{}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected the published local viewer to allow public access by default, got %v", err)
 	}
 }
 
