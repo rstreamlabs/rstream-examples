@@ -227,7 +227,9 @@ export async function createViewerToken(
 export async function createWatchToken(userId: string) {
   const env = requireRstreamEnv()
   const rstream = getRstreamClient()
-  // Watch tokens only list published sample tunnels for the dashboard state.
+  // This token is sent in the WebSocket query string. Keep it short-lived and
+  // restricted to read-only tunnel listing; the engine rejects query tokens
+  // that can create tunnels or connect to streams.
   const token = await rstream.auth.createAuthToken({
     expires_in: env.VIEWER_TOKEN_TTL_SECONDS,
     tunnelsGrants: {
