@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-ARG GO_VERSION=1.26.2
+ARG GO_VERSION=1.26.3
 
 ARG GST_VERSION=1.28.1
 
@@ -26,7 +26,6 @@ RUN apk add --no-cache \
 	ninja \
 	nodejs \
 	npm \
-	openssh-client \
 	perl \
 	pkgconf \
 	python3 \
@@ -52,21 +51,13 @@ RUN --mount=type=cache,target=/root/.npm \
 
 FROM base AS builder
 
-ENV GOPRIVATE=github.com/rstreamlabs/*
-
-ENV GONOSUMDB=github.com/rstreamlabs/*
-
 ENV GOMODCACHE=/go/pkg/mod-linux
 
 COPY --from=gstreamer /opt/gstreamer /opt/gstreamer
 
 COPY go.mod go.sum ./
 
-RUN --mount=type=ssh \
-	--mount=type=cache,target=/go/pkg/mod-linux \
-	mkdir -p -m 0700 /root/.ssh && \
-	ssh-keyscan github.com >> /root/.ssh/known_hosts && \
-	git config --global url."ssh://git@github.com/".insteadOf "https://github.com/" && \
+RUN --mount=type=cache,target=/go/pkg/mod-linux \
 	go mod download
 
 COPY cmd ./cmd

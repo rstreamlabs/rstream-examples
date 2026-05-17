@@ -57,7 +57,6 @@ dist-linux-amd64:
 	mkdir -p ./dist/linux-amd64
 	docker buildx build \
 		--platform linux/amd64 \
-		--ssh default \
 		-f $(DOCKERFILE_LINUX) \
 		--target export \
 		--output type=local,dest=./dist/linux-amd64 \
@@ -68,7 +67,6 @@ dist-linux-arm64:
 	mkdir -p ./dist/linux-arm64
 	docker buildx build \
 		--platform linux/arm64 \
-		--ssh default \
 		-f $(DOCKERFILE_LINUX) \
 		--target export \
 		--output type=local,dest=./dist/linux-arm64 \

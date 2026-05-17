@@ -10,13 +10,6 @@ function secondsSchema(defaultValue: string) {
     .transform((value) => Number.parseInt(value, 10))
 }
 
-function booleanSchema(defaultValue: "true" | "false" | "1" | "0") {
-  return z
-    .enum(["true", "false", "1", "0"])
-    .default(defaultValue)
-    .transform((value) => value === "true" || value === "1")
-}
-
 const optionalStringSchema = z
   .string()
   .trim()
@@ -37,7 +30,6 @@ const rstreamEnvSchema = z
     RSTREAM_CLIENT_SECRET: z.string().trim().min(1),
     RSTREAM_PROJECT_ID: optionalStringSchema,
     RSTREAM_PROJECT_ENDPOINT: optionalStringSchema,
-    RSTREAM_FINE_GRAINED_GRANTS: booleanSchema("true"),
     RSTREAM_API_URL: optionalUrlSchema,
     RSTREAM_ENGINE: optionalStringSchema,
     DEVICE_TOKEN_TTL_SECONDS: secondsSchema("300"),
@@ -86,7 +78,11 @@ export function rstreamConfigMissingMessage(error: ZodError): string {
 }
 
 export function demoCleanupEnabled(): boolean {
-  return booleanSchema("false").parse(process.env.DEMO_CLEANUP_ENABLED)
+  return z
+    .enum(["true", "false", "1", "0"])
+    .default("false")
+    .transform((value) => value === "true" || value === "1")
+    .parse(process.env.DEMO_CLEANUP_ENABLED)
 }
 
 export function requiredEnv(name: string): string {

@@ -64,10 +64,9 @@ RSTREAM_CLIENT_ID="rstream-app-client-id"
 RSTREAM_CLIENT_SECRET="hex-encoded-rstream-app-client-secret"
 RSTREAM_PROJECT_ENDPOINT="rstream-project-endpoint"
 RSTREAM_PROJECT_ID=""
-RSTREAM_FINE_GRAINED_GRANTS="true"
 ```
 
-The sample resolves the engine and project id from `RSTREAM_PROJECT_ENDPOINT`. `RSTREAM_PROJECT_ID` is optional when an endpoint is configured; it is only needed if you run against a fixed `RSTREAM_ENGINE` without endpoint resolution. `RSTREAM_API_URL` and `RSTREAM_ENGINE` are intentionally left out of `.env.example`; they are only useful for custom rstream deployments.
+The sample resolves the engine from `RSTREAM_PROJECT_ENDPOINT`. `RSTREAM_PROJECT_ID` is optional when an endpoint is configured; when present, it is used by the SDK as the default project scope for short-lived tunnel tokens.
 
 ### rstream Project Setup
 
@@ -77,15 +76,7 @@ The app token is used server-side only. It creates short-lived producer tokens, 
 
 ### rstream Grant Requirements
 
-The reference design uses fine-grained tunnel grants:
-
-```bash
-RSTREAM_FINE_GRAINED_GRANTS="true"
-```
-
-That is the production path. Producer tokens can only create the expected tunnel for one device, and viewer tokens can only connect to the selected online tunnel on `/ws`.
-
-Keep `RSTREAM_FINE_GRAINED_GRANTS="true"` for this sample. The app refuses to mint producer, viewer, or dashboard watch tokens when fine-grained grants are disabled because unscoped tunnel tokens would remove rstream-side user, device, tunnel, and path segregation.
+The sample always mints short-lived tokens with tunnel grants. Producer tokens can only create the expected tunnel for one device, viewer tokens can only connect to the selected online tunnel on `/ws`, and dashboard watch tokens can only list the sample tunnels for the signed-in user.
 
 Install dependencies, create the database, and start the app:
 
@@ -155,8 +146,8 @@ Set `CRON_SECRET` and `DEMO_CLEANUP_ENABLED="true"` only for disposable demo dep
 - Producer tokens are short-lived and grant only tunnel creation for one device tunnel.
 - Producer TURN credentials are fetched from the product API when needed.
 - Viewer tokens are short-lived and grant only tunnel connection to `/ws`.
-- Dashboard watch tokens are short-lived and, with fine-grained grants enabled, only list tunnels labelled for the signed-in user.
+- Dashboard watch tokens are short-lived and only list tunnels labelled for the signed-in user.
 - Device creation and TURN credential issuance are bounded to keep the public sample from being used as an unmetered relay minting endpoint.
 - The local producer viewer can stay enabled for operator workflows, but the product viewer token does not grant access to `/`.
-- Fine-grained grants are required; unscoped rstream tokens are intentionally not issued by this sample.
+- Unscoped rstream tokens are intentionally not issued by this sample.
 - The demo cleanup cron is disabled by default, protected by `CRON_SECRET`, and should only be enabled for disposable demo databases.

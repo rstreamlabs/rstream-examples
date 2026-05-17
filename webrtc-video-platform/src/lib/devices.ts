@@ -1,16 +1,14 @@
+import { APP_LABEL } from "@/lib/rstream-labels"
 import { createHash, randomBytes, randomUUID } from "crypto"
+import { DEVICE_LABEL } from "@/lib/rstream-labels"
+import { getRstreamClient } from "@/lib/rstream"
 import { HTTPError } from "@/lib/error"
+import { rstreamConfigMissingMessage } from "@/lib/env"
+import { rstreamEnvResult } from "@/lib/env"
 import { type Device } from "@/prisma/generated/client"
 import { type DeviceView } from "@/lib/validations/device"
 import { type Tunnel } from "@rstreamlabs/tunnels"
-
-import { APP_LABEL } from "@/lib/rstream-labels"
-import { DEVICE_LABEL } from "@/lib/rstream-labels"
 import { USER_LABEL } from "@/lib/rstream-labels"
-import { getRstreamClient } from "@/lib/rstream"
-import { getRstreamProjectId } from "@/lib/rstream"
-import { rstreamConfigMissingMessage } from "@/lib/env"
-import { rstreamEnvResult } from "@/lib/env"
 import prisma from "@/lib/prisma"
 
 const maxDevicesPerUser = 20
@@ -142,7 +140,7 @@ function tunnelEntry(tunnel: Tunnel): [string, Tunnel][] {
 }
 
 export async function deviceViews(userId: string) {
-  const devices = await prisma.device.findMany({
+  const devices: Device[] = await prisma.device.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
   })
@@ -173,29 +171,24 @@ export async function createTunnelToken(
 ) {
   const env = requireRstreamEnv()
   const rstream = getRstreamClient()
-  const projectId = await getRstreamProjectId()
-  requireFineGrainedGrants(env.RSTREAM_FINE_GRAINED_GRANTS)
   // Producer tokens are scoped to one tunnel name and one device label.
   const token = await rstream.auth.createAuthToken({
     expires_in: env.DEVICE_TOKEN_TTL_SECONDS,
-    tunnelsGrants: [
-      {
-        projects: [projectId],
-        scopes: {
-          tunnels: {
-            create: {
-              filters: {
-                name: { exact: device.tunnelName },
-                protocol: "http",
-                publish: true,
-                token_auth: true,
-                labels: labels(device),
-              },
+    tunnelsGrants: {
+      scopes: {
+        tunnels: {
+          create: {
+            filters: {
+              name: { exact: device.tunnelName },
+              protocol: "http",
+              publish: true,
+              token_auth: true,
+              labels: labels(device),
             },
           },
         },
       },
-    ],
+    },
   })
   return token.token
 }
@@ -206,32 +199,27 @@ export async function createViewerToken(
 ) {
   const env = requireRstreamEnv()
   const rstream = getRstreamClient()
-  const projectId = await getRstreamProjectId()
-  requireFineGrainedGrants(env.RSTREAM_FINE_GRAINED_GRANTS)
   // Viewer tokens can only connect to the selected online tunnel WebRTC path.
   const token = await rstream.auth.createAuthToken({
     expires_in: env.VIEWER_TOKEN_TTL_SECONDS,
-    tunnelsGrants: [
-      {
-        projects: [projectId],
-        scopes: {
-          tunnels: {
-            connect: {
-              filters: {
-                id: tunnel.id,
-                status: "online",
-                protocol: "http",
-                publish: true,
-                labels: labels(device),
-              },
-              params: {
-                path: { regex: "^/ws$" },
-              },
+    tunnelsGrants: {
+      scopes: {
+        tunnels: {
+          connect: {
+            filters: {
+              id: tunnel.id,
+              status: "online",
+              protocol: "http",
+              publish: true,
+              labels: labels(device),
+            },
+            params: {
+              path: { regex: "^/ws$" },
             },
           },
         },
       },
-    ],
+    },
   })
   return token.token
 }
@@ -239,49 +227,38 @@ export async function createViewerToken(
 export async function createWatchToken(userId: string) {
   const env = requireRstreamEnv()
   const rstream = getRstreamClient()
-  const projectId = await getRstreamProjectId()
-  requireFineGrainedGrants(env.RSTREAM_FINE_GRAINED_GRANTS)
   // Watch tokens only list published sample tunnels for the dashboard state.
   const token = await rstream.auth.createAuthToken({
     expires_in: env.VIEWER_TOKEN_TTL_SECONDS,
-    tunnelsGrants: [
-      {
-        projects: [projectId],
-        scopes: {
-          tunnels: {
-            list: {
-              filters: {
-                labels: {
-                  app: APP_LABEL,
-                  [USER_LABEL]: userId,
-                },
-                protocol: "http",
-                publish: true,
+    tunnelsGrants: {
+      scopes: {
+        tunnels: {
+          list: {
+            filters: {
+              labels: {
+                app: APP_LABEL,
+                [USER_LABEL]: userId,
               },
-              select: {
-                id: true,
-                status: true,
-                name: true,
-                protocol: true,
-                publish: true,
-                labels: true,
-                host: true,
-                hostname: true,
-                client_id: true,
-              },
+              protocol: "http",
+              publish: true,
+            },
+            select: {
+              id: true,
+              status: true,
+              name: true,
+              protocol: true,
+              publish: true,
+              labels: true,
+              host: true,
+              hostname: true,
+              client_id: true,
             },
           },
         },
       },
-    ],
+    },
   })
   return token.token
-}
-
-function requireFineGrainedGrants(enabled: boolean) {
-  if (!enabled) {
-    throw new HTTPError(503, "Fine-grained rstream tunnel grants are required.")
-  }
 }
 
 function requireMemoryQuota(key: string, maxCount: number, windowMs: number) {
