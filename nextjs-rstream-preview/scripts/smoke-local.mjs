@@ -37,6 +37,39 @@ async function waitForReady(child) {
   throw lastError ?? new Error("server did not become ready");
 }
 
+async function stopServer(child) {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+  const exited = new Promise((resolve) => child.once("exit", resolve));
+  if (child.pid && process.platform !== "win32") {
+    try {
+      process.kill(-child.pid, "SIGTERM");
+    } catch {
+      child.kill("SIGTERM");
+    }
+  } else {
+    child.kill("SIGTERM");
+  }
+  const stopped = await Promise.race([
+    exited.then(() => true),
+    new Promise((resolve) => setTimeout(() => resolve(false), 5_000)),
+  ]);
+  if (stopped || child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+  if (child.pid && process.platform !== "win32") {
+    try {
+      process.kill(-child.pid, "SIGKILL");
+    } catch {
+      child.kill("SIGKILL");
+    }
+  } else {
+    child.kill("SIGKILL");
+  }
+  await exited;
+}
+
 await rm(dataDir, { force: true, recursive: true });
 
 const child = spawn(
@@ -50,6 +83,7 @@ const child = spawn(
       WEBHOOK_DATA_DIR: dataDir,
     },
     stdio: ["ignore", "pipe", "pipe"],
+    detached: process.platform !== "win32",
   },
 );
 
@@ -100,7 +134,6 @@ try {
   console.error(logs);
   throw error;
 } finally {
-  child.kill("SIGTERM");
-  await new Promise((resolve) => child.once("exit", resolve));
+  await stopServer(child);
   await rm(dataDir, { force: true, recursive: true });
 }
