@@ -1,0 +1,5 @@
+.data-smoke/
+.data/
+.next/
+node_modules/
+tsconfig.tsbuildinfo

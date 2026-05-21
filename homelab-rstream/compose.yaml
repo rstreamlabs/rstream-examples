@@ -1,0 +1,61 @@
+services:
+  rstream:
+    image: ${RSTREAM_IMAGE:-rstream/rstream:latest}
+    command: ["run", "--docker", "--watch"]
+    restart: unless-stopped
+    user: "0:0"
+    profiles:
+      - rstream
+    environment:
+      RSTREAM_AUTHENTICATION_TOKEN: ${RSTREAM_AUTHENTICATION_TOKEN:-}
+      RSTREAM_ENGINE: ${RSTREAM_ENGINE:-}
+    extra_hosts:
+      - "${RSTREAM_ENGINE_HOSTNAME:-rstream.local}:host-gateway"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - grafana
+  grafana:
+    image: ${GRAFANA_IMAGE:-grafana/grafana-oss:13.0.1-security-01}
+    restart: unless-stopped
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_METRICS_ENABLED: "true"
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me-rstream}
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    labels:
+      rstream.tunnel.grafana.forward: "3000"
+      rstream.tunnel.grafana.publish: "true"
+      rstream.tunnel.grafana.protocol: "http"
+      rstream.tunnel.grafana.host: "${RSTREAM_GRAFANA_HOSTNAME:-}"
+      rstream.tunnel.grafana.http.version: "http/1.1"
+      rstream.tunnel.grafana.http.auth.rstream: "${RSTREAM_HTTP_AUTH_RSTREAM:-false}"
+      rstream.tunnel.grafana.label.env: "homelab"
+      rstream.tunnel.grafana.label.service: "grafana"
+      rstream.tunnel.grafana.label.site: "${RSTREAM_SITE_LABEL:-home}"
+      rstream.tunnel.grafana.label.stack: "monitoring"
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-13000}:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+  prometheus:
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.11.3}
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-19090}:9090"
+    volumes:
+      - prometheus-data:/prometheus
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+volumes:
+  grafana-data:
+  prometheus-data:

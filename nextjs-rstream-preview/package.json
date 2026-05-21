@@ -1,0 +1,38 @@
+{
+  "name": "nextjs-rstream-preview",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "audit": "npm audit --omit=dev --audit-level=moderate",
+    "build": "next build",
+    "clean": "rm -rf .next .data .data-smoke tsconfig.tsbuildinfo",
+    "dev": "next dev",
+    "dev:tunnel": "tsx src/server/rstream-next-server.ts",
+    "format:check": "prettier --check .",
+    "format": "prettier --write .",
+    "smoke:local": "node scripts/smoke-local.mjs",
+    "start": "next start",
+    "start:tunnel": "NODE_ENV=production tsx src/server/rstream-next-server.ts",
+    "test": "npm run clean && npm run typecheck && npm run smoke:local",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run test && npm run build && npm run audit"
+  },
+  "dependencies": {
+    "@rstreamlabs/runtime": "^0.2.4",
+    "next": "^16.2.6",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  },
+  "overrides": {
+    "postcss": "^8.5.10"
+  },
+  "devDependencies": {
+    "@types/node": "25.9.1",
+    "@types/react": "19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "prettier": "^3.8.3",
+    "tsx": "^4.21.0",
+    "typescript": "6.0.3"
+  }
+}

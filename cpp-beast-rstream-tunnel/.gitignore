@@ -1,0 +1,4 @@
+build/
+out/
+CMakePresets.json
+CMakeUserPresets.json

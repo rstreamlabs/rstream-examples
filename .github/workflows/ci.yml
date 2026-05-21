@@ -8,6 +8,63 @@ on:
 permissions:
   contents: read
 jobs:
+  homelab-rstream:
+    name: Homelab rstream
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 24
+      - name: Test
+        working-directory: homelab-rstream
+        shell: bash
+        run: make test
+  nextjs-rstream-preview:
+    name: Next.js rstream preview
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_WEBHOOK_SECRET: ci-webhook-secret
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: nextjs-rstream-preview/package-lock.json
+      - name: Install dependencies
+        working-directory: nextjs-rstream-preview
+        shell: bash
+        run: npm ci
+      - name: Test
+        working-directory: nextjs-rstream-preview
+        shell: bash
+        run: npm run test
+      - name: Build
+        working-directory: nextjs-rstream-preview
+        shell: bash
+        run: npm run build
+      - name: Audit production dependencies
+        working-directory: nextjs-rstream-preview
+        shell: bash
+        run: npm audit --omit=dev --audit-level=moderate
+  private-postgres-access:
+    name: Private PostgreSQL access
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - name: Test
+        working-directory: private-postgres-access
+        shell: bash
+        run: |
+          trap 'make clean' EXIT
+          make test
   webrtc-video-platform:
     name: WebRTC video platform
     runs-on: ubuntu-latest
@@ -80,3 +137,26 @@ jobs:
         working-directory: webrtc-video-streaming
         shell: bash
         run: npm audit --omit=dev --audit-level=high
+  private-masque-egress-gateway:
+    name: Private MASQUE egress gateway
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version-file: private-masque-egress-gateway/go.mod
+          cache-dependency-path: private-masque-egress-gateway/go.sum
+      - name: Test
+        working-directory: private-masque-egress-gateway
+        shell: bash
+        run: make test
+      - name: Race test
+        working-directory: private-masque-egress-gateway
+        shell: bash
+        run: make test-race
+      - name: Build
+        working-directory: private-masque-egress-gateway
+        shell: bash
+        run: make build

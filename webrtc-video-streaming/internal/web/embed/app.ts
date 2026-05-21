@@ -274,7 +274,7 @@ async function loadInfo() {
     adaptiveStatus,
     state.info.adaptiveBackend === "off" ? "Off" : state.info.adaptiveBackend,
   );
-  log(`Public URL ready: ${publicURLText}`);
+  log(`Public URL: ${publicURLText}`);
 }
 
 async function loadTURNConfiguration(
