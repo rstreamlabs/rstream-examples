@@ -9,7 +9,7 @@ class CppBeastRstreamTunnel(ConanFile):
     exports_sources = "CMakeLists.txt", "src/*"
     requires = (
         "boost/[>=1.83 <2]",
-        "rstream/[>=1.8.1 <2]",
+        "rstream/[>=1.9.0 <2]",
     )
     default_options = {
         "rstream/*:build_bins": False,

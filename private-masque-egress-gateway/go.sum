@@ -45,8 +45,8 @@ github.com/quic-go/quic-go v0.59.0 h1:OLJkp1Mlm/aS7dpKgTc6cnpynnD2Xg7C1pwL6vy/SA
 github.com/quic-go/quic-go v0.59.0/go.mod h1:upnsH4Ju1YkqpLXC305eW3yDZ4NfnNbmQRCMWS58IKU=
 github.com/rogpeppe/go-internal v1.10.0 h1:TMyTOH3F/DB16zRVcYyreMH6GnZZrwQVAoYjRBZyWFQ=
 github.com/rogpeppe/go-internal v1.10.0/go.mod h1:UQnix2H7Ngw/k4C5ijL5+65zddjncjaFoBhdsK/akog=
-github.com/rstreamlabs/rstream-go v1.16.2 h1:ryw9Ph8BD1K2YHB1wZA1QP6ifpL7SfdaxrCWAfzWAuY=
-github.com/rstreamlabs/rstream-go v1.16.2/go.mod h1:HALocpR9XTGHIGaGlYKjmy8iAzo7Cl+RbvvEPLWXujQ=
+github.com/rstreamlabs/rstream-go v1.17.0 h1:xj6bLpyoX6KFQ5XTFvQx4J9vprF9dhtlQbs4X9AwCsk=
+github.com/rstreamlabs/rstream-go v1.17.0/go.mod h1:HALocpR9XTGHIGaGlYKjmy8iAzo7Cl+RbvvEPLWXujQ=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/thales-e-security/pool v0.0.2 h1:RAPs4q2EbWsTit6tpzuvTFlgFRJ3S8Evf5gtvVDbmPg=
