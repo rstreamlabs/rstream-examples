@@ -6,7 +6,7 @@ The application owns the device inventory, authentication, device secrets, produ
 
 This is the platform counterpart to `../webrtc-video-streaming`. The producer code is the same reference WebRTC streamer, but it runs in provisioning mode and receives all rstream material from this product backend.
 
-If you want a guided walkthrough of the architecture and the `@rstreamlabs/tunnels` integration, see the associated guide: [Build a Next.js WebRTC Video Platform with rstream](https://rstream.io/guides/integrate-webrtc-video-streaming-into-a-nextjs-platform-with-rstream).
+If you want a guided walkthrough of the architecture and the JavaScript SDK integration, see the associated guide: [Build a Next.js WebRTC Video Platform with rstream](https://rstream.io/guides/integrate-webrtc-video-streaming-into-a-nextjs-platform-with-rstream).
 
 ## Architecture
 
@@ -30,7 +30,8 @@ The dashboard uses `@rstreamlabs/react` to watch tunnel state in real time. The 
 - Next.js App Router
 - NextAuth with GitHub OAuth only
 - Prisma with PostgreSQL for the reference setup
-- `@rstreamlabs/tunnels` for the configured rstream client, tunnel inventory, TURN credentials, and fine-grained auth tokens
+- `@rstreamlabs/tunnels` for the configured Engine client, tunnel inventory, TURN credentials, and fine-grained auth tokens
+- `@rstreamlabs/rstream` for shared SDK contracts and schemas used by the app
 - `@rstreamlabs/react` for real-time tunnel state in the dashboard
 - Tailwind CSS with small shadcn-style UI primitives
 
@@ -72,7 +73,7 @@ The sample resolves the engine from `RSTREAM_PROJECT_ENDPOINT`. `RSTREAM_PROJECT
 
 Use a dedicated rstream project for this sample. Create an application token scoped to that project and store its client id and secret in the Next.js environment.
 
-The app token is used server-side only. It creates short-lived producer tokens, viewer tokens, TURN credentials, and dashboard watch tokens. Devices and browsers should never receive the application client secret.
+The app token is used server-side only. It creates short-lived producer tokens, viewer tokens, TURN credentials, and dashboard watch tokens. Devices and browsers should never receive the application client secret. Dashboard watch tokens are minted on demand because browser watch streams send them as `rstream.token` query values to the engine streaming endpoint.
 
 ### rstream Grant Requirements
 

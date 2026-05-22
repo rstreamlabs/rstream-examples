@@ -1,3 +1,4 @@
+import { turnCredentialsSchema } from "@rstreamlabs/rstream/turn"
 import { z } from "zod"
 
 export const deviceViewSchema = z.object({
@@ -25,12 +26,6 @@ export const listDevicesResponseSchema = z.object({
 export const createDeviceResponseSchema = z.object({
   device: deviceViewSchema,
   secret: z.string().min(1),
-})
-
-export const turnCredentialsSchema = z.object({
-  urls: z.array(z.string().min(1)),
-  username: z.string().min(1),
-  credential: z.string().min(1),
 })
 
 export const viewerPayloadSchema = z.object({

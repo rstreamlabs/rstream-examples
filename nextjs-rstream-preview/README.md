@@ -100,6 +100,7 @@ users reaching the published URL.
 `NODE_ENV=production`. Run `npm run build` first for a self-hosted Node process.
 
 If a deployed Next.js product needs to list tunnels, issue tokens, or supervise
-remote services through rstream APIs, use the rstream Control plane SDKs from
-that product backend. This sample focuses on serving the Next.js app itself
-through a data-plane tunnel.
+remote services through rstream APIs, use `@rstreamlabs/rstream` for hosted
+Control plane calls and `@rstreamlabs/tunnels` for Engine API calls from that
+product backend. This sample focuses on serving the Next.js app itself through a
+data-plane tunnel.

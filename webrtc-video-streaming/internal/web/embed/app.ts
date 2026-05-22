@@ -1,3 +1,4 @@
+import { turnCredentialsSchema } from "@rstreamlabs/rstream/turn";
 import { z } from "zod";
 
 type TURNPolicy = "auto" | "direct" | "relay";
@@ -28,12 +29,6 @@ const sessionStatsSchema = z.object({
   estimatedBitrateBps: z.number().int(),
   encoderTargetBitrateKbps: z.number().int(),
   lastAppliedBitrateKbps: z.number().int(),
-});
-
-const turnCredentialsSchema = z.object({
-  username: z.string(),
-  credential: z.string(),
-  urls: z.array(z.string()),
 });
 
 const signalMessageSchema = z.discriminatedUnion("type", [

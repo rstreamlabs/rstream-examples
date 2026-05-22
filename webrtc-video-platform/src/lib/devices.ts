@@ -7,7 +7,7 @@ import { rstreamConfigMissingMessage } from "@/lib/env"
 import { rstreamEnvResult } from "@/lib/env"
 import { type Device } from "@/prisma/generated/client"
 import { type DeviceView } from "@/lib/validations/device"
-import { type Tunnel } from "@rstreamlabs/tunnels"
+import { type Tunnel } from "@rstreamlabs/rstream/tunnel"
 import { USER_LABEL } from "@/lib/rstream-labels"
 import prisma from "@/lib/prisma"
 
