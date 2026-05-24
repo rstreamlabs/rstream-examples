@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -311,7 +312,7 @@ func sameOrigin(r *http.Request) bool {
 	if err != nil {
 		return false
 	}
-	return strings.EqualFold(parsed.Host, r.Host)
+	return sameOriginHost(parsed.Host, r.Host, parsed.Scheme)
 }
 
 func browserOrigin(r *http.Request) bool {
@@ -324,6 +325,58 @@ func browserOrigin(r *http.Request) bool {
 		return false
 	}
 	return parsed.Host != "" && (parsed.Scheme == "http" || parsed.Scheme == "https")
+}
+
+func sameOriginHost(originHost string, requestHost string, scheme string) bool {
+	normalizedOriginHost, ok := normalizeOriginHost(originHost, scheme)
+	if !ok {
+		return false
+	}
+	normalizedRequestHost, ok := normalizeOriginHost(requestHost, scheme)
+	if !ok {
+		return false
+	}
+	return normalizedOriginHost == normalizedRequestHost
+}
+
+func normalizeOriginHost(host string, scheme string) (string, bool) {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return "", false
+	}
+	hostname := host
+	port := ""
+	if strings.Contains(host, ":") {
+		splitHost, splitPort, err := net.SplitHostPort(host)
+		if err == nil {
+			hostname = splitHost
+			port = splitPort
+		} else if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+			hostname = strings.TrimPrefix(strings.TrimSuffix(host, "]"), "[")
+		} else {
+			return "", false
+		}
+	}
+	hostname = strings.TrimSpace(hostname)
+	if hostname == "" {
+		return "", false
+	}
+	hostname = strings.ToLower(hostname)
+	if port == "" || port == defaultPortForScheme(scheme) {
+		return hostname, true
+	}
+	return strings.ToLower(net.JoinHostPort(hostname, port)), true
+}
+
+func defaultPortForScheme(scheme string) string {
+	switch strings.ToLower(strings.TrimSpace(scheme)) {
+	case "http":
+		return "80"
+	case "https":
+		return "443"
+	default:
+		return ""
+	}
 }
 
 type wsWriter struct {

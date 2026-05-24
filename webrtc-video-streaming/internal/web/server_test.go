@@ -65,6 +65,10 @@ func TestSameOriginAllowsBrowserViewerOrigin(t *testing.T) {
 	if !sameOrigin(req) {
 		t.Fatal("expected same-origin websocket upgrade to be allowed")
 	}
+	req.Header.Set("Origin", "https://viewer.example:443")
+	if !sameOrigin(req) {
+		t.Fatal("expected same-origin websocket upgrade with default HTTPS port to be allowed")
+	}
 }
 
 func TestSameOriginRejectsCrossOriginViewerOrigin(t *testing.T) {
@@ -73,6 +77,10 @@ func TestSameOriginRejectsCrossOriginViewerOrigin(t *testing.T) {
 	req.Header.Set("Origin", "https://evil.example")
 	if sameOrigin(req) {
 		t.Fatal("expected cross-origin websocket upgrade to be rejected")
+	}
+	req.Header.Set("Origin", "https://viewer.example:444")
+	if sameOrigin(req) {
+		t.Fatal("expected same host with non-default origin port to be rejected")
 	}
 }
 
