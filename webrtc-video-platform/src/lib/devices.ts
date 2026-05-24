@@ -174,16 +174,18 @@ export async function createTunnelToken(
   // Producer tokens are scoped to one tunnel name and one device label.
   const token = await rstream.auth.createAuthToken({
     expires_in: env.DEVICE_TOKEN_TTL_SECONDS,
-    tunnelsGrants: {
-      scopes: {
-        tunnels: {
-          create: {
-            filters: {
-              name: { exact: device.tunnelName },
-              protocol: "http",
-              publish: true,
-              token_auth: true,
-              labels: labels(device),
+    resources: {
+      tunnels: {
+        scopes: {
+          tunnels: {
+            create: {
+              filters: {
+                name: { exact: device.tunnelName },
+                protocol: "http",
+                publish: true,
+                token_auth: true,
+                labels: labels(device),
+              },
             },
           },
         },
@@ -202,19 +204,21 @@ export async function createViewerToken(
   // Viewer tokens can only connect to the selected online tunnel WebRTC path.
   const token = await rstream.auth.createAuthToken({
     expires_in: env.VIEWER_TOKEN_TTL_SECONDS,
-    tunnelsGrants: {
-      scopes: {
-        tunnels: {
-          connect: {
-            filters: {
-              id: tunnel.id,
-              status: "online",
-              protocol: "http",
-              publish: true,
-              labels: labels(device),
-            },
-            params: {
-              path: { regex: "^/ws$" },
+    resources: {
+      tunnels: {
+        scopes: {
+          tunnels: {
+            connect: {
+              filters: {
+                id: tunnel.id,
+                status: "online",
+                protocol: "http",
+                publish: true,
+                labels: labels(device),
+              },
+              params: {
+                path: { regex: "^/ws$" },
+              },
             },
           },
         },
@@ -232,28 +236,30 @@ export async function createWatchToken(userId: string) {
   // that can create tunnels or connect to streams.
   const token = await rstream.auth.createAuthToken({
     expires_in: env.VIEWER_TOKEN_TTL_SECONDS,
-    tunnelsGrants: {
-      scopes: {
-        tunnels: {
-          list: {
-            filters: {
-              labels: {
-                app: APP_LABEL,
-                [USER_LABEL]: userId,
+    resources: {
+      tunnels: {
+        scopes: {
+          tunnels: {
+            list: {
+              filters: {
+                labels: {
+                  app: APP_LABEL,
+                  [USER_LABEL]: userId,
+                },
+                protocol: "http",
+                publish: true,
               },
-              protocol: "http",
-              publish: true,
-            },
-            select: {
-              id: true,
-              status: true,
-              name: true,
-              protocol: true,
-              publish: true,
-              labels: true,
-              host: true,
-              hostname: true,
-              client_id: true,
+              select: {
+                id: true,
+                status: true,
+                name: true,
+                protocol: true,
+                publish: true,
+                labels: true,
+                host: true,
+                hostname: true,
+                client_id: true,
+              },
             },
           },
         },

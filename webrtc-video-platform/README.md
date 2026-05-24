@@ -75,9 +75,9 @@ Use a dedicated rstream project for this sample. Create an application token sco
 
 The app token is used server-side only. It creates short-lived producer tokens, viewer tokens, TURN credentials, and dashboard watch tokens. Devices and browsers should never receive the application client secret. Dashboard watch tokens are minted on demand because browser watch streams send them as `rstream.token` query values to the engine streaming endpoint.
 
-### rstream Grant Requirements
+### rstream Resource Requirements
 
-The sample always mints short-lived tokens with tunnel grants. Producer tokens can only create the expected tunnel for one device, viewer tokens can only connect to the selected online tunnel on `/ws`, and dashboard watch tokens can only list the sample tunnels for the signed-in user.
+The sample always mints short-lived tokens with tunnel resources. Producer tokens can only create the expected tunnel for one device, viewer tokens can only connect to the selected online tunnel on `/ws`, and dashboard watch tokens can only list the sample tunnels for the signed-in user.
 
 Install dependencies, create the database, and start the app:
 
@@ -144,11 +144,11 @@ Set `CRON_SECRET` and `DEMO_CLEANUP_ENABLED="true"` only for disposable demo dep
 
 - Device secrets are product secrets and are stored hashed.
 - rstream application credentials stay on the Next.js server.
-- Producer tokens are short-lived and grant only tunnel creation for one device tunnel.
+- Producer tokens are short-lived and allow only tunnel creation for one device tunnel.
 - Producer TURN credentials are fetched from the product API when needed.
-- Viewer tokens are short-lived and grant only tunnel connection to `/ws`.
+- Viewer tokens are short-lived and allow only tunnel connection to `/ws`.
 - Dashboard watch tokens are short-lived and only list tunnels labelled for the signed-in user.
 - Device creation and TURN credential issuance are bounded to keep the public sample from being used as an unmetered relay minting endpoint.
-- The local producer viewer can stay enabled for operator workflows, but the product viewer token does not grant access to `/`.
+- The local producer viewer can stay enabled for operator workflows, but the product viewer token does not allow access to `/`.
 - Unscoped rstream tokens are intentionally not issued by this sample.
 - The demo cleanup cron is disabled by default, protected by `CRON_SECRET`, and should only be enabled for disposable demo databases.
