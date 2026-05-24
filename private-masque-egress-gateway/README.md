@@ -41,6 +41,20 @@ go run ./cmd/gateway \
 The process prints `READY <url>` when the published rstream endpoint is online.
 The same endpoint carries TCP `CONNECT` and UDP `CONNECT-UDP` traffic.
 
+## Run at boot
+
+For an always-on host, build the binary once and run it with the host process
+manager. The gateway host does not need Go installed if you build elsewhere and
+copy the binary over. A systemd service should read `PRIVATE_EGRESS_TOKEN`,
+`RSTREAM_CONFIG`, `RSTREAM_CONTEXT`, and the stable gateway hostname from a
+`0600` environment file, then start `private-masque-egress-gateway` with the same
+flags used during manual validation.
+
+Keep the generated `.mobileconfig` protected like a secret because it contains
+the gateway token. For a residential Internet egress gateway, leave
+`--allow-private-targets`, `--allow-loopback-targets`, and
+`--allow-link-local-targets` disabled.
+
 For local lab targets on `127.0.0.1`, add:
 
 ```bash
