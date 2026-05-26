@@ -6,7 +6,7 @@ require (
 	github.com/quic-go/connect-ip-go v0.1.0
 	github.com/quic-go/masque-go v0.3.0
 	github.com/quic-go/quic-go v0.59.0
-	github.com/rstreamlabs/rstream-go v1.17.1
+	github.com/rstreamlabs/rstream-go v1.18.0
 	github.com/yosida95/uritemplate/v3 v3.0.2
 	golang.org/x/net v0.53.0
 )
