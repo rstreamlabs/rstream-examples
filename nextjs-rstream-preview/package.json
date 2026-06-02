@@ -19,7 +19,7 @@
     "verify": "npm run test && npm run build && npm run audit"
   },
   "dependencies": {
-    "@rstreamlabs/runtime": "^0.2.8",
+    "@rstreamlabs/runtime": "^0.2.10",
     "next": "^16.2.6",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"
