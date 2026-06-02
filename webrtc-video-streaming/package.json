@@ -19,7 +19,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@rstreamlabs/rstream": "^3.0.0",
+    "@rstreamlabs/rstream": "^3.1.0",
     "zod": "^4.4.3"
   }
 }
