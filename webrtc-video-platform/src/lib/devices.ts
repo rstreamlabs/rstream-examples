@@ -1,8 +1,10 @@
 import { APP_LABEL } from "@/lib/rstream-labels"
-import { createHash, randomBytes, randomUUID } from "crypto"
+import { createHash } from "crypto"
 import { DEVICE_LABEL } from "@/lib/rstream-labels"
 import { getRstreamClient } from "@/lib/rstream"
 import { HTTPError } from "@/lib/error"
+import { randomBytes } from "crypto"
+import { randomUUID } from "crypto"
 import { rstreamConfigMissingMessage } from "@/lib/env"
 import { rstreamEnvResult } from "@/lib/env"
 import { type Device } from "@/prisma/generated/client"
@@ -72,25 +74,33 @@ export async function createDevice(userId: string, name: string) {
   if (duplicate) {
     throw new HTTPError(409, "A device with this name already exists.")
   }
-  let device: Device
-  try {
-    device = await prisma.device.create({
+  const device = await createDeviceRecord(userId, deviceName, id, secret)
+  return { device, secret }
+}
+
+function createDeviceRecord(
+  userId: string,
+  name: string,
+  id: string,
+  secret: string,
+) {
+  return prisma.device
+    .create({
       data: {
         id,
         userId,
-        name: deviceName,
+        name,
         secretHash: hashSecret(secret),
         secretPrefix: secret.slice(0, 12),
         tunnelName: `device-${id}`,
       },
     })
-  } catch (err) {
-    if (hasPrismaCode(err, "P2002")) {
-      throw new HTTPError(409, "A device with this name already exists.")
-    }
-    throw err
-  }
-  return { device, secret }
+    .catch((err: unknown) => {
+      if (hasPrismaCode(err, "P2002")) {
+        throw new HTTPError(409, "A device with this name already exists.")
+      }
+      throw err
+    })
 }
 
 function hasPrismaCode(err: unknown, code: string) {
@@ -166,12 +176,12 @@ export async function engine() {
   return env.RSTREAM_ENGINE ?? rstream.getEngine()
 }
 
+// Producer tokens are scoped to one tunnel name and one device label.
 export async function createTunnelToken(
   device: Pick<Device, "id" | "tunnelName" | "userId">,
 ) {
   const env = requireRstreamEnv()
   const rstream = getRstreamClient()
-  // Producer tokens are scoped to one tunnel name and one device label.
   const token = await rstream.auth.createAuthToken({
     expires_in: env.DEVICE_TOKEN_TTL_SECONDS,
     resources: {
@@ -195,13 +205,13 @@ export async function createTunnelToken(
   return token.token
 }
 
+// Viewer tokens can only connect to the selected online tunnel WebRTC path.
 export async function createViewerToken(
   device: Pick<Device, "id" | "userId">,
   tunnel: Tunnel,
 ) {
   const env = requireRstreamEnv()
   const rstream = getRstreamClient()
-  // Viewer tokens can only connect to the selected online tunnel WebRTC path.
   const token = await rstream.auth.createAuthToken({
     expires_in: env.VIEWER_TOKEN_TTL_SECONDS,
     resources: {
@@ -228,12 +238,10 @@ export async function createViewerToken(
   return token.token
 }
 
+// Watch tokens are short-lived because the browser sends them as query tokens.
 export async function createWatchToken(userId: string) {
   const env = requireRstreamEnv()
   const rstream = getRstreamClient()
-  // This token is sent in the WebSocket query string. Keep it short-lived and
-  // restricted to read-only tunnel listing; the engine rejects query tokens
-  // that can create tunnels or connect to streams.
   const token = await rstream.auth.createAuthToken({
     expires_in: env.VIEWER_TOKEN_TTL_SECONDS,
     resources: {

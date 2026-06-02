@@ -9,26 +9,26 @@ import { Button } from "@/components/ui/button"
 
 type CopyState = "idle" | "copied" | "failed"
 
-export function CopyPromptButton({
+export function CopyTextButton({
   className,
-  prompt,
-  label = "Copy setup prompt",
+  text,
+  label,
 }: {
   className?: string
-  prompt: string
-  label?: string
+  text: string
+  label: string
 }) {
   const [state, setState] = useState<CopyState>("idle")
   const onCopy = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(prompt)
+      await navigator.clipboard.writeText(text)
       setState("copied")
       window.setTimeout(() => setState("idle"), 1500)
     } catch {
       setState("failed")
       window.setTimeout(() => setState("idle"), 1500)
     }
-  }, [prompt])
+  }, [text])
   return (
     <Button
       type="button"
@@ -44,4 +44,16 @@ export function CopyPromptButton({
       {state === "failed" ? "Copy failed" : label}
     </Button>
   )
+}
+
+export function CopyPromptButton({
+  className,
+  prompt,
+  label = "Copy setup prompt",
+}: {
+  className?: string
+  prompt: string
+  label?: string
+}) {
+  return <CopyTextButton className={className} label={label} text={prompt} />
 }

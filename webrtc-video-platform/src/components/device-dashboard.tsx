@@ -1,37 +1,35 @@
 "use client"
 
+import { apiErrorSchema } from "@/lib/validations/device"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { CopyPromptButton } from "@/components/copy-prompt-button"
+import { CopyTextButton } from "@/components/copy-prompt-button"
+import { createDeviceParamsSchema } from "@/lib/validations/device"
+import { createDeviceResponseSchema } from "@/lib/validations/device"
+import { DEVICE_LABEL } from "@/lib/rstream-labels"
+import { Dialog } from "@/components/ui/dialog"
+import { DialogClose } from "@/components/ui/dialog"
+import { DialogContent } from "@/components/ui/dialog"
+import { DialogDescription } from "@/components/ui/dialog"
+import { DialogHeader } from "@/components/ui/dialog"
+import { DialogTitle } from "@/components/ui/dialog"
+import { DialogTrigger } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import { Plus } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Trash2 } from "lucide-react"
+import { type DeviceView } from "@/lib/validations/device"
 import { type FormEvent } from "react"
 import { type ReactNode } from "react"
 import { type Tunnel } from "@rstreamlabs/rstream/tunnel"
 import { type UseRstreamOptions } from "@rstreamlabs/react"
+import { type WatchPayload } from "@/lib/validations/device"
 import { useEffect } from "react"
 import { useMemo } from "react"
 import { useRstream } from "@rstreamlabs/react"
 import { useState } from "react"
-
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { CopyPromptButton } from "@/components/copy-prompt-button"
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Skeleton } from "@/components/ui/skeleton"
 import { VideoPlayer } from "@/components/video-player"
-import { DEVICE_LABEL } from "@/lib/rstream-labels"
-import { apiErrorSchema } from "@/lib/validations/device"
-import { createDeviceResponseSchema } from "@/lib/validations/device"
-import { createDeviceParamsSchema } from "@/lib/validations/device"
-import { type DeviceView } from "@/lib/validations/device"
-import { type WatchPayload } from "@/lib/validations/device"
 import { watchPayloadSchema } from "@/lib/validations/device"
 
 type DeviceWithStatus = DeviceView & {
@@ -287,9 +285,15 @@ function DeviceDialog({
                 <code>{command}</code>
               </pre>
             </div>
-            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <CopyTextButton
+                className="w-full sm:w-auto"
+                label="Copy instructions"
+                text={command}
+              />
               <CopyPromptButton
                 className="w-full sm:w-auto"
+                label="Copy prompt"
                 prompt={producerSetupPrompt({
                   device: created.device,
                   apiUrl,
@@ -570,7 +574,7 @@ function producerCommand(apiUrl: string, secret: string) {
   return [
     "git clone https://github.com/rstreamlabs/rstream-examples.git",
     "cd rstream-examples/webrtc-video-streaming",
-    "make build",
+    "make build-provisioning",
     `export API_URL=${shellQuote(apiUrl)}`,
     `export DEVICE_SECRET=${shellQuote(secret)}`,
     "./webrtc-video-streaming -config ./config.provisioning.h264.yaml",
@@ -601,9 +605,9 @@ function producerSetupPrompt({
     "",
     "On the device:",
     "1. Clone or update the repository.",
-    "2. Install Go, Node.js, pkg-config, and GStreamer as described in the README.",
+    "2. Install Go, a C compiler, pkg-config, and GStreamer development packages as described in the README. Node.js/npm are not required for this provisioning build.",
     "3. Run these commands from rstream-examples/webrtc-video-streaming:",
-    "make build",
+    "make build-provisioning",
     `export API_URL=${shellQuote(apiUrl)}`,
     secret
       ? `export DEVICE_SECRET=${shellQuote(secret)}`

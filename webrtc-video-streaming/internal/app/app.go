@@ -41,6 +41,9 @@ type tunnelManager interface {
 }
 
 func New(cfg config.Config) (*App, error) {
+	if cfg.Web.Viewer.Enabled && !web.EmbeddedViewerAvailable() {
+		return nil, errors.New("web.viewer.enabled is true, but this binary was built without the embedded viewer UI; rebuild with make build or set web.viewer.enabled: false")
+	}
 	logHub := logs.NewHub(256)
 	logger := logs.NewLogger(logHub, cfg.Logging.Verbose)
 	var provisioningClient *provisioning.Client

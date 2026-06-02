@@ -2,7 +2,6 @@ package web
 
 import (
 	"context"
-	"embed"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -18,9 +17,6 @@ import (
 	rtc "github.com/rstreamlabs/rstream-examples/webrtc-video-streaming/internal/webrtc"
 	"github.com/rstreamlabs/rstream-go"
 )
-
-//go:embed embed/index.html generated/*
-var assets embed.FS
 
 type Info struct {
 	LocalURL        string                  `json:"localURL"`
@@ -282,7 +278,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) serveAsset(w http.ResponseWriter, name, contentType string) {
-	body, err := assets.ReadFile(name)
+	body, err := readEmbeddedAsset(name)
 	if err != nil {
 		http.Error(w, "asset not found", http.StatusNotFound)
 		return

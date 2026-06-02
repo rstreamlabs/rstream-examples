@@ -25,14 +25,30 @@ rstream login
 rstream project use <project-endpoint> --default
 ```
 
-For local development you also need Go `1.26+`, Node.js `20+`, `pkg-config`, and a GStreamer installation that includes the elements required by the selected pipeline.
+For local development you need Go `1.26+`, a C compiler, `pkg-config`,
+and a GStreamer installation that includes the development files and the
+elements required by the selected pipeline. Node.js `20+` and npm are only
+required when building the embedded local viewer UI with `make build`,
+`make run`, or `make test`.
+
+When using the Next.js platform provisioning profile, the producer does not
+serve the embedded viewer UI. Use `make build-provisioning` for that mode; it
+skips npm entirely and builds the binary with `web.viewer.enabled: false`
+configs in mind.
 
 The H.264 profiles use `videotestsrc`, `videoconvert`, `x264enc`, `h264parse`, and `appsink`. The AV1 profiles use `av1enc` and `av1parse` on top of the same structure.
 
 ### macOS
 
 ```bash
-brew install go node pkg-config gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly
+brew install go pkg-config gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly
+```
+
+Install Node.js only if you want the producer binary to serve the embedded
+viewer UI:
+
+```bash
+brew install node
 ```
 
 ### Ubuntu / Debian
@@ -40,6 +56,7 @@ brew install go node pkg-config gstreamer gst-plugins-base gst-plugins-good gst-
 ```bash
 sudo apt update
 sudo apt install -y \
+  build-essential \
   golang \
   gstreamer1.0-plugins-bad \
   gstreamer1.0-plugins-base \
@@ -48,9 +65,14 @@ sudo apt install -y \
   gstreamer1.0-tools \
   libgstreamer-plugins-base1.0-dev \
   libgstreamer1.0-dev \
-  nodejs \
-  npm \
   pkg-config
+```
+
+Install Node.js and npm only if you want the producer binary to serve the
+embedded viewer UI:
+
+```bash
+sudo apt install -y nodejs npm
 ```
 
 ### Windows
@@ -166,6 +188,16 @@ tunnel:
 
 When `tunnel.provisioning.mode` is `remote`, local tunnel auth is disabled in the producer config because the product API issues the scoped tunnel creation token. The producer always requests a token-authenticated HTTP tunnel in that mode, and the short-lived token issued by the product API enforces the exact tunnel creation policy. TURN credentials stay separate: the producer asks the product API for fresh TURN credentials whenever the WebRTC path needs them.
 
+Build that provisioning binary without the embedded viewer UI:
+
+```bash
+make build-provisioning
+```
+
+That target is equivalent to `make build EMBEDDED_WEB=0`. If a binary built
+that way is started with `web.viewer.enabled: true`, startup fails with a clear
+configuration error because the viewer assets are intentionally absent.
+
 ### TURN and ICE
 
 `turn.ttl` controls the lifetime of TURN credentials minted by the local process. `webrtc.useTurn` controls whether the Go peer itself uses the managed `rstream` TURN service. The browser can still be forced into direct or relay-only mode from the viewer page, but the default path keeps both peers on the same TURN service when relay is required.
@@ -250,6 +282,13 @@ make build
 make run
 ```
 
+`make build` embeds the local viewer UI and therefore requires Node.js and npm.
+For the Next.js platform provisioning profile, use the no-viewer build:
+
+```bash
+make build-provisioning
+```
+
 For a local-only run:
 
 ```bash
@@ -279,6 +318,11 @@ The practical outcome is a standalone executable you can copy to a target machin
 That static toolchain is defined in `build-gstreamer-static-linux.sh`. If you change the reference pipelines and introduce new elements or plugins, update that script as well. Otherwise the local development setup may keep working while the static distribution build silently stops matching the pipeline you intend to run.
 
 ## Troubleshooting
+
+`make build`, `make build-provisioning`, and `make test` run a preflight check
+before compiling Go. If `pkg-config` or the GLib/GStreamer development files
+are missing, the build prints the exact missing pkg-config packages and points
+back to the install commands above.
 
 If the process fails with `failed to create the GStreamer pipeline`, one or more configured elements are missing. Install the required plugins or adapt `media.pipeline` to the elements available on the target machine.
 

@@ -28,16 +28,24 @@ type ViewerSessionOptions = {
   videoRef: RefObject<HTMLVideoElement | null>
 }
 
+// WebRTC callbacks need current mutable flags without triggering React renders.
+type ViewerSessionState = {
+  offerPending: boolean
+  reconnectTimer: number | null
+  restartTimer: number | null
+  stopped: boolean
+}
+
 const maxSessionReconnects = 5
 const maxPendingRemoteCandidates = 64
 const sessionReconnectBaseDelayMs = 1000
 const sessionReconnectJitterMs = 250
 const sessionReconnectMaxDelayMs = 15000
 
+// sessionRef guards against React Strict Mode remounts and stale callbacks.
 export function VideoPlayer({ deviceId }: { deviceId: string }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
-  // Guards against React Strict Mode remounts and stale WebRTC callbacks.
   const sessionRef = useRef(0)
   const [phase, setPhase] = useState<PlayerPhase>("connecting")
   const [error, setError] = useState<string | null>(null)
@@ -141,6 +149,7 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
   )
 }
 
+// Trickle ICE can race SDP exchange, so candidates may need short queues.
 async function startViewerSession({
   cleanupRef,
   deviceId,
@@ -167,13 +176,13 @@ async function startViewerSession({
     ],
   })
   const socket = new WebSocket(viewer.endpoints.ws)
-  let stopped = false
-  let offerPending = false
-  let restartTimer: number | null = null
-  let reconnectTimer: number | null = null
-  // Trickle ICE candidates may arrive before the SDP answer.
+  const sessionState: ViewerSessionState = {
+    offerPending: false,
+    reconnectTimer: null,
+    restartTimer: null,
+    stopped: false,
+  }
   const pendingRemoteCandidates: RTCIceCandidateInit[] = []
-  // setLocalDescription() may gather local candidates before the offer is sent.
   const pendingLocalCandidates: RTCIceCandidateInit[] = []
   const options = {
     cleanupRef,
@@ -185,13 +194,13 @@ async function startViewerSession({
     videoRef,
   }
   async function sendLocalOffer({ iceRestart = false } = {}) {
-    if (offerPending || !isCurrent()) {
+    if (sessionState.offerPending || !isCurrent()) {
       return
     }
     if (socket.readyState !== WebSocket.OPEN) {
       throw new Error("Signaling is not open")
     }
-    offerPending = true
+    sessionState.offerPending = true
     try {
       const offer = await peer.createOffer(
         iceRestart ? { iceRestart: true } : undefined,
@@ -205,7 +214,7 @@ async function startViewerSession({
       )
       flushLocalCandidates()
     } finally {
-      offerPending = false
+      sessionState.offerPending = false
     }
   }
   function sendLocalCandidate(candidate: RTCIceCandidateInit) {
@@ -229,7 +238,7 @@ async function startViewerSession({
   }
   function scheduleIceRestart() {
     if (
-      restartTimer ||
+      sessionState.restartTimer ||
       peer.signalingState !== "stable" ||
       socket.readyState !== WebSocket.OPEN ||
       !isCurrent()
@@ -237,8 +246,8 @@ async function startViewerSession({
       return
     }
     setPhase("reconnecting")
-    restartTimer = window.setTimeout(() => {
-      restartTimer = null
+    sessionState.restartTimer = window.setTimeout(() => {
+      sessionState.restartTimer = null
       if (!isCurrent()) {
         return
       }
@@ -246,7 +255,7 @@ async function startViewerSession({
     }, 500)
   }
   function scheduleSessionReconnect() {
-    if (stopped || reconnectTimer || !isCurrent()) {
+    if (sessionState.stopped || sessionState.reconnectTimer || !isCurrent()) {
       return
     }
     if (options.reconnectAttempt >= maxSessionReconnects) {
@@ -255,9 +264,9 @@ async function startViewerSession({
     }
     const nextAttempt = options.reconnectAttempt + 1
     setPhase("reconnecting")
-    reconnectTimer = window.setTimeout(() => {
-      reconnectTimer = null
-      if (stopped || !isCurrent()) {
+    sessionState.reconnectTimer = window.setTimeout(() => {
+      sessionState.reconnectTimer = null
+      if (sessionState.stopped || !isCurrent()) {
         return
       }
       void startViewerSession({
@@ -267,14 +276,14 @@ async function startViewerSession({
     }, sessionReconnectDelay(nextAttempt))
   }
   cleanupRef.current = () => {
-    stopped = true
-    if (restartTimer) {
-      window.clearTimeout(restartTimer)
-      restartTimer = null
+    sessionState.stopped = true
+    if (sessionState.restartTimer) {
+      window.clearTimeout(sessionState.restartTimer)
+      sessionState.restartTimer = null
     }
-    if (reconnectTimer) {
-      window.clearTimeout(reconnectTimer)
-      reconnectTimer = null
+    if (sessionState.reconnectTimer) {
+      window.clearTimeout(sessionState.reconnectTimer)
+      sessionState.reconnectTimer = null
     }
     socket.close()
     peer.close()
@@ -330,7 +339,7 @@ async function startViewerSession({
       return
     }
     const candidate = event.candidate.toJSON()
-    if (offerPending) {
+    if (sessionState.offerPending) {
       pendingLocalCandidates.push(candidate)
       return
     }
