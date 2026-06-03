@@ -19,6 +19,7 @@ function rstreamCredentials(env: RstreamEnv) {
 
 function createRstreamClient() {
   const env = rstreamEnv()
+  // The platform uses the Engine-scoped tunnels client for one project only.
   return new RstreamTunnelsClient({
     apiUrl: env.RSTREAM_API_URL ?? DEFAULT_RSTREAM_API_URL,
     credentials: rstreamCredentials(env),

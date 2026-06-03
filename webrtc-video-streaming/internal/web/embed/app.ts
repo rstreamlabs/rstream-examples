@@ -286,6 +286,7 @@ async function loadTURNConfiguration(
     );
     throw new Error(body.error || "Failed to load TURN credentials");
   }
+  // Parse the TURN payload with the shared SDK schema before handing it to WebRTC.
   const turn = turnCredentialsSchema.parse(await response.json());
   const configuration: RTCConfiguration = {
     iceServers: [

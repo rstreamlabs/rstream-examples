@@ -42,6 +42,7 @@ func (p *Provider) Credentials(ctx context.Context) (*rstream.TURNCredentials, e
 		return cloneCredentials(p.cached), nil
 	}
 	if p.provisioning != nil {
+		// Provisioned devices ask the platform for TURN credentials over HTTP.
 		credentials, err := p.provisioning.TURN(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to provision TURN credentials: %w", err)
@@ -50,6 +51,7 @@ func (p *Provider) Credentials(ctx context.Context) (*rstream.TURNCredentials, e
 		p.expires = provisioning.TURNExpires(credentials, now)
 		return cloneCredentials(p.cached), nil
 	}
+	// Local demos can mint rstream TURN credentials directly from SDK env config.
 	credentials, err := rsconfig.CreateTURNCredentialsFromEnv(ctx, p.options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create TURN credentials: %w", err)
@@ -63,6 +65,7 @@ func ICEConfig(credentials *rstream.TURNCredentials) webrtc.Configuration {
 	if credentials == nil {
 		return webrtc.Configuration{}
 	}
+	// Map the SDK TURN response to the WebRTC ICE server format.
 	return webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{

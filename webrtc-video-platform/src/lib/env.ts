@@ -85,6 +85,10 @@ export function demoCleanupEnabled(): boolean {
     .parse(process.env.DEMO_CLEANUP_ENABLED)
 }
 
+export function rstreamWebhookSigningSecret(): string | null {
+  return process.env.RSTREAM_WEBHOOK_SIGNING_SECRET?.trim() || null
+}
+
 export function requiredEnv(name: string): string {
   const value = process.env[name]?.trim()
   if (!value) {

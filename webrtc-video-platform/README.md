@@ -25,12 +25,14 @@ Browser viewers never receive the producer secret. When a signed viewer URL is n
 
 The dashboard uses `@rstreamlabs/react` to watch tunnel state in real time. The device list is still stored in PostgreSQL, but online/offline state is read from rstream tunnel state.
 
+The app also exposes `POST /api/rstream/webhook`. rstream signs lifecycle events for this endpoint, the app verifies them with the JavaScript SDK, and tunnel lifecycle events update the device presence timestamps from the labels attached to the short-lived producer token. `tunnel.created` records when the device came online, and `tunnel.deleted` records when it was last seen before going offline.
+
 ## Stack
 
 - Next.js App Router
 - NextAuth with GitHub OAuth only
 - Prisma with PostgreSQL for the reference setup
-- `@rstreamlabs/tunnels` for the configured Engine client, tunnel inventory, TURN credentials, and fine-grained auth tokens
+- `@rstreamlabs/tunnels` for the configured Engine client, tunnel inventory, TURN credentials, fine-grained auth tokens, and signed webhook verification
 - `@rstreamlabs/rstream` for shared SDK contracts and schemas used by the app
 - `@rstreamlabs/react` for real-time tunnel state in the dashboard
 - Tailwind CSS with small shadcn-style UI primitives
@@ -65,6 +67,7 @@ RSTREAM_CLIENT_ID="rstream-app-client-id"
 RSTREAM_CLIENT_SECRET="hex-encoded-rstream-app-client-secret"
 RSTREAM_PROJECT_ENDPOINT="rstream-project-endpoint"
 RSTREAM_PROJECT_ID=""
+RSTREAM_WEBHOOK_SIGNING_SECRET="whsec_..."
 ```
 
 The sample resolves the engine from `RSTREAM_PROJECT_ENDPOINT`. `RSTREAM_PROJECT_ID` is optional when an endpoint is configured; when present, it is used by the SDK as the default project scope for short-lived tunnel tokens.
@@ -74,6 +77,34 @@ The sample resolves the engine from `RSTREAM_PROJECT_ENDPOINT`. `RSTREAM_PROJECT
 Use a dedicated rstream project for this sample. Create an application token scoped to that project and store its client id and secret in the Next.js environment.
 
 The app token is used server-side only. It creates short-lived producer tokens, viewer tokens, TURN credentials, and dashboard watch tokens. Devices and browsers should never receive the application client secret. Dashboard watch tokens are minted on demand because browser watch streams send them as `rstream.token` query values to the engine streaming endpoint.
+
+Create a webhook destination for the same project:
+
+| Field            | Value                                                           |
+| ---------------- | --------------------------------------------------------------- |
+| Destination type | Webhook endpoint                                                |
+| Endpoint URL     | `https://your-platform.example.com/api/rstream/webhook`         |
+| Events           | `tunnel.created`, `tunnel.deleted`                              |
+| Signing secret   | Copy the generated secret into `RSTREAM_WEBHOOK_SIGNING_SECRET` |
+
+For local development, expose the Next.js app with any HTTPS tunnel and use the public `/api/rstream/webhook` URL as the endpoint URL. The route verifies the raw request body against `rstream-signature` before parsing the event.
+
+You can also drive the local receiver directly from the CLI while developing:
+
+```bash
+rstream events \
+  --webhook \
+  --webhook-secret "$RSTREAM_WEBHOOK_SIGNING_SECRET" \
+  --events tunnel.created,tunnel.deleted \
+  --tunnel-filter 'labels.app=webrtc-video-platform' \
+  --forward-to http://localhost:3000/api/rstream/webhook
+```
+
+Passing the same `RSTREAM_WEBHOOK_SIGNING_SECRET` to the CLI and the Next.js app
+keeps local signatures deterministic. When no `--webhook-secret` is passed, the
+CLI prints an ephemeral `whsec_...` value that can be used for a single receiver
+session. This mirrors the webhook request body and signed headers, but it does
+not create delivery history or retry after the CLI exits.
 
 ### rstream Resource Requirements
 
@@ -150,6 +181,7 @@ Set `CRON_SECRET` and `DEMO_CLEANUP_ENABLED="true"` only for disposable demo dep
 - Producer TURN credentials are fetched from the product API when needed.
 - Viewer tokens are short-lived and allow only tunnel connection to `/ws`.
 - Dashboard watch tokens are short-lived and only list tunnels labelled for the signed-in user.
+- The webhook endpoint accepts only signed rstream lifecycle events and only updates devices carrying this sample's `app` and `device` labels.
 - Device creation and TURN credential issuance are bounded to keep the public sample from being used as an unmetered relay minting endpoint.
 - The local producer viewer can stay enabled for operator workflows, but the product viewer token does not allow access to `/`.
 - Unscoped rstream tokens are intentionally not issued by this sample.

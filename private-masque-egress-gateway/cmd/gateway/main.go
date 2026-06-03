@@ -163,6 +163,7 @@ type runOptions struct {
 }
 
 func runRstream(ctx context.Context, handler http.Handler, opts runOptions) error {
+	// The Go SDK resolves the active rstream context used by this gateway.
 	client, err := rsconfig.NewClientFromEnv()
 	if err != nil {
 		return fmt.Errorf("load rstream configuration: %w", err)
@@ -191,6 +192,7 @@ func runRstream(ctx context.Context, handler http.Handler, opts runOptions) erro
 	if len(opts.labels) > 0 {
 		props.Labels = opts.labels
 	}
+	// HTTP/3 tunnel properties make the MASQUE server reachable through rstream.
 	tunnel, err := ctrl.CreateTunnel(ctx, props)
 	if err != nil {
 		return fmt.Errorf("create published HTTP/3 tunnel: %w", err)
@@ -212,6 +214,7 @@ func runRstream(ctx context.Context, handler http.Handler, opts runOptions) erro
 		}
 		opts.logger.Info("wrote Apple Relay profile", "path", opts.mobileconfigPath)
 	}
+	// The datagram tunnel is exposed as a PacketConn for quic-go.
 	packetConn := rstream.PacketConnFromPacketListener(datagramTunnel)
 	return serveH3(ctx, packetConn, handler)
 }

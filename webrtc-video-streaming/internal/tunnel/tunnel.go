@@ -74,6 +74,7 @@ func Open(ctx context.Context, cfg config.Config, logger *logs.Logger, opts Open
 			properties.Labels = labels
 		}
 	}
+	// Create one published HTTP tunnel for the embedded device web server.
 	rawTunnel, err := control.CreateTunnel(ctx, properties)
 	if err != nil {
 		_ = control.Close()
@@ -118,6 +119,7 @@ func newRstreamClient(opts OpenOptions, useQUIC bool) (*rstream.Client, error) {
 		if useQUIC {
 			options.Transport = &rstream.QUICTransport{}
 		}
+		// Provisioned devices receive an explicit engine URL and scoped token.
 		client, err := rstream.NewClient(options)
 		if err != nil {
 			return nil, fmt.Errorf("create rstream client from provisioned configuration: %w", err)
@@ -134,6 +136,7 @@ func newRstreamClient(opts OpenOptions, useQUIC bool) (*rstream.Client, error) {
 	if useQUIC {
 		resolution.Resolved.Transport = &rstream.QUICTransport{}
 	}
+	// Local demos reuse the resolved CLI context when provisioning is disabled.
 	client, err := rsconfig.NewClientFromResolved(resolution.Resolved)
 	if err != nil {
 		return nil, fmt.Errorf("create rstream client from local configuration: %w", err)

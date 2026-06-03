@@ -73,8 +73,10 @@ async function serveWithReconnect(): Promise<void> {
 }
 
 async function serveOnce(): Promise<void> {
+  // The runtime SDK reads the same local context as the CLI for this demo server.
   const ctrl = await Client.fromEnv().connect();
   try {
+    // Create one published HTTP tunnel and serve Next.js directly through it.
     const tunnel = await ctrl.createTunnel({
       hostname: config.tunnel.hostname,
       httpVersion: "http/1.1",
@@ -87,6 +89,7 @@ async function serveOnce(): Promise<void> {
     });
     try {
       console.log(`Public URL: ${await tunnel.forwardingAddress()}`);
+      // tunnel.serve adapts the rstream tunnel listener to the Node HTTP server.
       await tunnel.serve(server, { signal: shutdown.signal });
     } finally {
       await tunnel

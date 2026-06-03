@@ -7,6 +7,7 @@ export const deviceViewSchema = z.object({
   secretPrefix: z.string().min(1),
   tunnelName: z.string().min(1),
   online: z.boolean(),
+  onlineSince: z.string().nullable(),
   lastSeenAt: z.string().nullable(),
   createdAt: z.string(),
 })
@@ -32,6 +33,7 @@ export const viewerPayloadSchema = z.object({
   endpoints: z.object({
     ws: z.string().url(),
   }),
+  // Reuse the SDK TURN schema so the browser contract tracks rstream releases.
   turn: turnCredentialsSchema,
 })
 

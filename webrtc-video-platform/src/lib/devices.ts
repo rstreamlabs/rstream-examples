@@ -137,13 +137,6 @@ export async function requireDevice(request: Request) {
   return device
 }
 
-export async function touchDevice(deviceId: string) {
-  await prisma.device.update({
-    where: { id: deviceId },
-    data: { lastSeenAt: new Date() },
-  })
-}
-
 function tunnelEntry(tunnel: Tunnel): [string, Tunnel][] {
   const deviceId = tunnel.labels?.[DEVICE_LABEL]
   return deviceId ? [[deviceId, tunnel]] : []
@@ -165,6 +158,7 @@ export function toView(device: Device, online = false): DeviceView {
     secretPrefix: device.secretPrefix,
     tunnelName: device.tunnelName,
     online,
+    onlineSince: device.onlineSince?.toISOString() ?? null,
     lastSeenAt: device.lastSeenAt?.toISOString() ?? null,
     createdAt: device.createdAt.toISOString(),
   }
@@ -173,6 +167,7 @@ export function toView(device: Device, online = false): DeviceView {
 export async function engine() {
   const env = requireRstreamEnv()
   const rstream = getRstreamClient()
+  // Reuse the SDK engine resolver so device agents receive the project engine URL.
   return env.RSTREAM_ENGINE ?? rstream.getEngine()
 }
 
@@ -238,10 +233,10 @@ export async function createViewerToken(
   return token.token
 }
 
-// Watch tokens are short-lived because the browser sends them as query tokens.
 export async function createWatchToken(userId: string) {
   const env = requireRstreamEnv()
   const rstream = getRstreamClient()
+  // Watch tokens are short-lived because the browser sends them as query tokens.
   const token = await rstream.auth.createAuthToken({
     expires_in: env.VIEWER_TOKEN_TTL_SECONDS,
     resources: {
@@ -295,6 +290,7 @@ export async function onlineTunnel(
 ) {
   requireRstreamEnv()
   const rstream = getRstreamClient()
+  // Online state is read from rstream inventory and narrowed by stable labels.
   const activeTunnels = await rstream.tunnels.list({
     limit: 20,
     filters: {
@@ -311,6 +307,7 @@ export async function onlineTunnel(
 export async function onlineTunnels(userId: string) {
   requireRstreamEnv()
   const rstream = getRstreamClient()
+  // The dashboard lists only published HTTP tunnels owned by this application.
   return rstream.tunnels.list({
     limit: 100,
     filters: {
@@ -368,6 +365,7 @@ export async function turnPayload(deviceId: string) {
     maxTurnCredentialsPerWindow,
     turnCredentialWindowMs,
   )
+  // TURN credentials are minted on demand and expire quickly for each viewer.
   return rstream.turn.createCredentials({
     ttlSeconds: turnCredentialTTLSeconds,
   })

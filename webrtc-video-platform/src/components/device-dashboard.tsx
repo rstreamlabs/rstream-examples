@@ -170,6 +170,9 @@ function SelectedDeviceHeader({ device }: { device: DeviceWithStatus | null }) {
             <h2 className="break-words text-2xl font-semibold text-foreground">
               {device.name}
             </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {presenceLabel(device)}
+            </p>
           </div>
           <Badge
             className="shrink-0"
@@ -379,6 +382,9 @@ function DeviceRow({
           <p className="mt-1 truncate text-xs text-muted-foreground">
             {device.tunnelName}
           </p>
+          <p className="mt-1 truncate text-xs text-muted-foreground">
+            {presenceLabel(device)}
+          </p>
         </div>
         <Badge className="shrink-0" tone={device.online ? "online" : "offline"}>
           {device.online ? "Online" : "Offline"}
@@ -568,6 +574,35 @@ function sortDevices(devices: DeviceWithStatus[]) {
     }
     return left.name.localeCompare(right.name)
   })
+}
+
+function presenceLabel(device: DeviceWithStatus) {
+  if (device.online) {
+    return device.onlineSince
+      ? `Online since: ${formatUTCDateTime(device.onlineSince)}`
+      : "Online"
+  }
+  if (device.lastSeenAt) {
+    return `Last seen at: ${formatUTCDateTime(device.lastSeenAt)}`
+  }
+  return "Last seen at: never"
+}
+
+function formatUTCDateTime(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return "unknown"
+  }
+  const year = date.getUTCFullYear()
+  const month = padDatePart(date.getUTCMonth() + 1)
+  const day = padDatePart(date.getUTCDate())
+  const hour = padDatePart(date.getUTCHours())
+  const minute = padDatePart(date.getUTCMinutes())
+  return `${year}-${month}-${day} ${hour}:${minute} UTC`
+}
+
+function padDatePart(value: number) {
+  return value.toString().padStart(2, "0")
 }
 
 function producerCommand(apiUrl: string, secret: string) {
