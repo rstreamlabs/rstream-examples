@@ -8,7 +8,7 @@ require (
 	github.com/pion/interceptor v0.1.45
 	github.com/pion/logging v0.2.4
 	github.com/pion/webrtc/v4 v4.2.13
-	github.com/rstreamlabs/rstream-go v1.21.0
+	github.com/rstreamlabs/rstream-go v1.22.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 

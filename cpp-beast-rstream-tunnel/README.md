@@ -10,7 +10,7 @@ instances.
 ## Build
 
 The sample uses Conan 2 to resolve Boost and the rstream C++ SDK. Its
-`conanfile.py` requires `rstream/[>=1.10.0 <2]` and disables SDK utility
+`conanfile.py` requires `rstream/[>=1.11.1 <2]` and disables SDK utility
 binaries for this application build, so a source fallback builds the libraries
 used by the Beast server without also compiling the rstream CLI helpers.
 
