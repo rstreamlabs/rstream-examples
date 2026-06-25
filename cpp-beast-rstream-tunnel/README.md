@@ -7,6 +7,15 @@ It demonstrates the native C++ path where a process keeps its asynchronous HTTP
 server code and accepts inbound rstream streams as `rstream::io_rstrm::socket`
 instances.
 
+## How it works
+
+The process opens an authenticated control channel with the C++ SDK, creates a
+published HTTP tunnel under the selected project, and accepts inbound rstream
+streams. Each accepted stream satisfies the Asio stream concepts, so the same
+Beast session code that would run on a TCP socket reads and writes HTTP on the
+tunnel stream directly. There is no local listener and no reverse proxy; the
+only network activity is the outbound runtime session to the engine.
+
 ## Build
 
 The sample uses Conan 2 to resolve Boost and the rstream C++ SDK. Its
