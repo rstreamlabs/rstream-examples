@@ -1,0 +1,6 @@
+fastapi>=0.110,<1
+opencv-python>=4.9,<5
+rstreamlabs-rstream[asgi,api,realtime]>=0.2.0
+supervision>=0.26,<1
+trackers>=2.4,<3
+ultralytics>=8.2,<9

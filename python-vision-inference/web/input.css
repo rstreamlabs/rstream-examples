@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    @apply bg-[#f5f2e9] text-[#171512];
+  }
+
+  pre {
+    @apply m-0 font-mono;
+  }
+}
