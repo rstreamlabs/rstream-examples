@@ -1,0 +1,26 @@
+{
+  "name": "python-vision-inference-device",
+  "private": true,
+  "scripts": {
+    "build:css": "mkdir -p ./web/generated && tailwindcss -i ./web/input.css -o ./web/generated/app.css --minify",
+    "build:js": "mkdir -p ./web/generated && esbuild ./web/app.ts --bundle --format=esm --target=es2022 --minify --outfile=./web/generated/app.js",
+    "build": "npm run build:js && npm run build:css",
+    "check:ts": "tsc --noEmit",
+    "clean": "rm -rf ./web/generated",
+    "format:check": "prettier --check web/index.html web/input.css web/app.ts",
+    "format": "prettier --write web/index.html web/input.css web/app.ts",
+    "test": "npm run typecheck",
+    "typecheck": "npm run check:ts",
+    "verify": "npm run test && npm run build"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.2",
+    "esbuild": "^0.28.1",
+    "prettier": "^3.9.4",
+    "tailwindcss": "^4.3.2",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
+}

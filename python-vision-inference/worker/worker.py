@@ -22,6 +22,7 @@ import secrets
 import socket
 import ssl
 import subprocess
+import sys
 import time
 from contextlib import suppress
 from dataclasses import dataclass
@@ -32,7 +33,12 @@ import numpy as np
 from ultralytics import YOLO
 
 import rstream
-from protocol import read_message, send_message
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from shared.protocol import read_message, send_message
 
 SUPPORTED_CODECS = ("jpeg", "webp", "png")
 

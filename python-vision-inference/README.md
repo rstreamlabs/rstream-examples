@@ -60,13 +60,19 @@ overlay simply disappears.
 
 ## Install
 
-Both roles need Python 3.10+ and the same dependencies, ideally in a virtual
-environment.
+Both roles need Python 3.10+. Each role owns its own dependencies and Makefile:
+`worker/` installs the YOLO inference stack, while `device/` installs the
+viewer, capture, registry, and tracking stack.
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+make build
+```
+
+You can also prepare a single role directly:
+
+```bash
+make -C worker build
+make -C device build
 ```
 
 ## Run a worker
@@ -76,7 +82,9 @@ the rstream CLI (`rstream login`, then `rstream project use <endpoint>
 --default`).
 
 ```bash
-python worker.py
+make -C worker run
+# or, from this directory
+make run-worker ARGS="--device cpu"
 ```
 
 The first run downloads the YOLO weights. `--model`, `--imgsz`, and `--conf`
@@ -96,9 +104,9 @@ free Pexels license, 720p60), so the sample is reproducible without hardware
 and gives the model something dense to detect.
 
 ```bash
-python device.py --source 0        # first local camera
-python device.py                   # downloaded highway clip
-python device.py --source synthetic
+make -C device run ARGS="--source 0"          # first local camera
+make -C device run                            # downloaded highway clip
+make -C device run ARGS="--source synthetic"
 ```
 
 The device prints the viewer address. By default it derives a stable
@@ -137,9 +145,16 @@ The front end is TypeScript bundled with esbuild, and the stylesheet is
 generated with Tailwind:
 
 ```bash
+cd device
 npm install
 npm run build
 ```
 
-The generated files under `web/generated/` are committed, so the Node
-toolchain is only needed when editing the UI.
+The equivalent Makefile command is:
+
+```bash
+make -C device build
+```
+
+The generated files under `device/web/generated/` are ignored and rebuilt by
+the device Makefile.

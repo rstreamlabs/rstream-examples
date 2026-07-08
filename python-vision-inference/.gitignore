@@ -1,8 +1,9 @@
 .venv/
 __pycache__/
+**/__pycache__/
 node_modules/
 *.pt
 .cache/
 
 # build output
-web/generated/
+device/web/generated/

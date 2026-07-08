@@ -1,0 +1,8 @@
+fastapi>=0.139,<1
+numpy>=2.5,<3
+opencv-python>=5.0.0.93,<6
+rstreamlabs-rstream[asgi,api,realtime]>=0.2.0
+supervision>=0.29.1,<1
+# trackers 2.5.0 currently publishes only console-script metadata, not the
+# importable trackers package used by ByteTrackTracker.
+trackers>=2.4,<2.5

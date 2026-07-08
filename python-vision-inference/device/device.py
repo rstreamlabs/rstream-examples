@@ -27,6 +27,8 @@ import argparse
 import asyncio
 import hashlib
 import json
+import shutil
+import sys
 import time
 import urllib.request
 from collections import OrderedDict
@@ -41,7 +43,12 @@ from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from trackers import ByteTrackTracker
 
 import rstream
-from protocol import read_message, send_message
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from shared.protocol import read_message, send_message
 
 WEB_DIR = Path(__file__).parent / "web"
 WORKER_FILTERS = rstream.TunnelFilters(labels={"role": "inference"})
@@ -61,6 +68,8 @@ CODECS = {"jpeg": ".jpg", "webp": ".webp", "png": ".png"}
 SAMPLE_VIDEO_URL = (
     "https://videos.pexels.com/video-files/2103099/2103099-hd_1280_720_60fps.mp4"
 )
+SAMPLE_VIDEO_FILENAME = "highway-traffic-pexels-2103099.mp4"
+SAMPLE_VIDEO_HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 
 class LatencyEstimator:
@@ -218,16 +227,25 @@ def ensure_source(source: str) -> str:
         return source
     cache = Path(__file__).parent / ".cache"
     cache.mkdir(exist_ok=True)
-    target = cache / "highway-traffic.mp4"
+    target = cache / SAMPLE_VIDEO_FILENAME
     if target.exists():
         return str(target)
     try:
         print("Downloading the sample highway clip (Pexels, free license)…", flush=True)
-        urllib.request.urlretrieve(SAMPLE_VIDEO_URL, target)
+        _download_sample_video(target)
         return str(target)
     except OSError as error:
         print(f"Sample video unavailable ({error}); using the synthetic source.")
         return "synthetic"
+
+
+def _download_sample_video(target: Path) -> None:
+    request = urllib.request.Request(SAMPLE_VIDEO_URL, headers=SAMPLE_VIDEO_HEADERS)
+    partial = target.with_suffix(f"{target.suffix}.download")
+    with urllib.request.urlopen(request, timeout=60) as response:
+        with partial.open("wb") as output:
+            shutil.copyfileobj(response, output)
+    partial.replace(target)
 
 
 def _fit_display(frame: np.ndarray) -> np.ndarray:
