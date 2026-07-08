@@ -48,8 +48,11 @@ rstream reconciler as a Compose service:
 ```bash
 export RSTREAM_ENGINE="<engine-host>:443"
 export RSTREAM_AUTHENTICATION_TOKEN="<agent-token>"
-make run-docker
+make run
 ```
+
+`make run` is an alias for the full Docker profile with the rstream reconciler;
+`make start` runs only Grafana and Prometheus for local checks.
 
 This keeps tunnel configuration next to the container that owns the browser
 surface. It scales cleanly when a homelab host runs several services and a
@@ -72,7 +75,7 @@ before starting the stack:
 export RSTREAM_GRAFANA_HOSTNAME="<your-stable-domain>"
 export GRAFANA_ROOT_URL="https://<your-stable-domain>/"
 export GRAFANA_ADMIN_PASSWORD="$(openssl rand -base64 32)"
-make run-docker
+make run
 ```
 
 Recreate the Grafana container after changing `GRAFANA_ROOT_URL`.
@@ -87,7 +90,7 @@ project supports it:
 RSTREAM_ENGINE="<engine-host>:443" \
   RSTREAM_AUTHENTICATION_TOKEN="<agent-token>" \
   RSTREAM_HTTP_AUTH_RSTREAM=true \
-  make run-docker
+  make run
 ```
 
 If `RSTREAM_ENGINE` and `RSTREAM_AUTHENTICATION_TOKEN` are already exported,

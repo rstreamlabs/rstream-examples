@@ -155,7 +155,7 @@ func (s *Server) handleConnectUDP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	req, err := masque.ParseRequest(r, template)
+	req, err := masque.ParseProxyRequest(r, template)
 	if err != nil {
 		writeParseError(w, err)
 		s.Metrics.Inc("rstream_private_masque_requests_total", map[string]string{"protocol": "connect_udp", "outcome": "parse_error"})
@@ -239,7 +239,7 @@ func (s *Server) writePolicyOrDialError(w http.ResponseWriter, protocol, target 
 }
 
 func writeParseError(w http.ResponseWriter, err error) {
-	var udpErr *masque.RequestParseError
+	var udpErr *masque.ProxyRequestParseError
 	if errors.As(err, &udpErr) {
 		http.Error(w, udpErr.Error(), udpErr.HTTPStatus)
 		return

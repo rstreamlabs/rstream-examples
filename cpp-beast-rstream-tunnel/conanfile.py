@@ -8,10 +8,11 @@ class CppBeastRstreamTunnel(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
     exports_sources = "CMakeLists.txt", "src/*"
     requires = (
-        "boost/[>=1.83 <2]",
+        "boost/[>=1.91 <2]",
         "rstream/[>=1.11.1 <2]",
     )
     default_options = {
+        "boost/*:without_cobalt": True,
         "rstream/*:build_bins": False,
         "rstream/*:enable_testing": False,
         "rstream/*:with_maxminddb": False,

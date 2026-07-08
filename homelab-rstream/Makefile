@@ -1,7 +1,11 @@
 DOCKER_COMPOSE ?= docker compose
 NODE ?= node
 
-.PHONY: start wait verify config test smoke run-docker logs stop clean
+.PHONY: build run start wait verify config test smoke run-docker logs stop clean
+
+build: config
+
+run: run-docker
 
 start:
 	$(DOCKER_COMPOSE) up -d prometheus grafana

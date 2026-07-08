@@ -1,7 +1,7 @@
 services:
   rstream:
     image: ${RSTREAM_IMAGE:-rstream/rstream:latest}
-    command: ["run", "--docker", "--watch"]
+    command: ["run", "--docker", "--watch", "-v"]
     restart: unless-stopped
     user: "0:0"
     profiles:
@@ -16,7 +16,7 @@ services:
     depends_on:
       - grafana
   grafana:
-    image: ${GRAFANA_IMAGE:-grafana/grafana-oss:13.0.1-security-01}
+    image: ${GRAFANA_IMAGE:-grafana/grafana-oss:13.0.2}
     restart: unless-stopped
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: "false"
@@ -45,7 +45,7 @@ services:
     depends_on:
       - prometheus
   prometheus:
-    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.11.3}
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.13.0}
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus

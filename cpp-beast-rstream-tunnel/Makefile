@@ -11,9 +11,12 @@ BIN_DIR := $(OUT)/bin
 BINARY := $(BIN_DIR)/cpp_beast_rstream_tunnel
 SOURCES := $(shell find src -name '*.cpp' -o -name '*.h' -o -name '*.hpp') CMakeLists.txt conanfile.py
 
-.PHONY: build check-conan-remote clean verify
+.PHONY: build run check-conan-remote clean verify
 
 build: $(BINARY)
+
+run: build
+	$(BINARY) $(ARGS)
 
 check-conan-remote:
 	@conan remote list | grep -q "^$(CONAN_REMOTE_NAME): $(CONAN_REMOTE_URL)" || { echo "Missing Conan remote '$(CONAN_REMOTE_NAME)'."; echo "Run: conan remote add $(CONAN_REMOTE_NAME) $(CONAN_REMOTE_URL)"; exit 1; }

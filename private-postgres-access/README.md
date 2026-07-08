@@ -22,12 +22,13 @@ The local PostgreSQL container listens on `127.0.0.1:55432` and contains a small
 On the machine that can reach PostgreSQL:
 
 ```bash
-make server-tunnel
+make run
 ```
 
 This is equivalent to:
 
 ```bash
+make start
 rstream nc -L rstrm://staging-postgres -R 127.0.0.1:55432
 ```
 

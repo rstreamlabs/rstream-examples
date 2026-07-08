@@ -3,7 +3,12 @@ LOCAL_PORT ?= 55432
 CLIENT_PORT ?= 15432
 TUNNEL_NAME ?= staging-postgres
 
-.PHONY: start verify config wait test query server-tunnel client-port stop clean
+.PHONY: build run start verify config wait test query server-tunnel client-port stop clean
+
+build: config
+
+run: start wait
+	$(MAKE) server-tunnel
 
 start:
 	$(DOCKER_COMPOSE) up -d

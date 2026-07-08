@@ -55,7 +55,7 @@ Select a project or engine with the rstream CLI, then run the server.
 ```bash
 rstream login
 rstream project use <project-endpoint> --default
-./out/bin/cpp_beast_rstream_tunnel
+make run
 ```
 
 The process prints the forwarding address once the tunnel is created.
