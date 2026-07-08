@@ -1,7 +1,0 @@
-.git
-.gitignore
-.tmp
-dist
-node_modules
-out
-webrtc-video-streaming

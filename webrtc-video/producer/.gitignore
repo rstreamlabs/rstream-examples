@@ -1,0 +1,7 @@
+.tmp
+/webrtc-video-producer
+config.yaml
+dist
+internal/web/generated
+node_modules
+out

@@ -1,0 +1,55 @@
+server:
+  listen: 127.0.0.1:8080
+tunnel:
+  enabled: true
+  name: webrtc-video-producer
+  auth:
+    token: false
+    rstream: false
+  transport:
+    useQuic: true
+  reconnect:
+    enabled: true
+    interval: 5s
+turn:
+  ttl: 10m
+webrtc:
+  useTurn: true
+  maxViewers: 1
+  initialBitrateKbps: 5000
+  interceptors:
+    twcc: true
+    nack: true
+    rtx: true
+    flexFEC: false
+  adaptive:
+    enabled: true
+    backend: twcc-gcc
+    twccGCC:
+      minBitrateKbps: 1500
+      maxBitrateKbps: 8000
+      updateInterval: 1s
+      changeThresholdPct: 10
+      maxIncreasePct: 15
+      maxIncreaseStepKbps: 500
+  video:
+    mimeType: video/H264
+    clockRate: 90000
+    payloadType: 96
+    rtxPayloadType: 97
+    sdpFmtpLine: packetization-mode=1;profile-level-id=42e01f;level-asymmetry-allowed=1
+    streamID: rstream-webrtc-video-producer
+    trackID: video
+media:
+  mode: shared
+  sinkName: video
+  pipeline: >-
+    avfvideosrc device-index=0 !
+    videoconvert !
+    video/x-raw,width=1920,height=1080,framerate=30/1 !
+    x264enc name=encoder tune=zerolatency speed-preset=veryfast bitrate=5000 key-int-max=60 bframes=0 byte-stream=true aud=true !
+    h264parse config-interval=-1 !
+    video/x-h264,stream-format=byte-stream,alignment=au,profile=constrained-baseline !
+    appsink name=video emit-signals=true sync=false max-buffers=4 drop=true
+logging:
+  verbose: false

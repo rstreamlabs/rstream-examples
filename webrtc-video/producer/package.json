@@ -1,0 +1,30 @@
+{
+  "name": "webrtc-video-producer",
+  "private": true,
+  "scripts": {
+    "build:css": "mkdir -p ./internal/web/generated && tailwindcss -i ./internal/web/embed/input.css -o ./internal/web/generated/app.css --minify",
+    "build:js": "mkdir -p ./internal/web/generated && esbuild ./internal/web/embed/app.ts --bundle --format=esm --target=es2022 --minify --outfile=./internal/web/generated/app.js",
+    "build": "npm run build:js && npm run build:css",
+    "check:ts": "tsc --noEmit",
+    "clean": "rm -rf ./internal/web/generated",
+    "format:check:go": "test -z \"$(go run mvdan.cc/gofumpt@v0.9.2 -l ./cmd ./internal)\"",
+    "format:check": "npm run format:check:go && prettier --check README.md config*.yaml internal/web/embed/index.html internal/web/embed/input.css internal/web/embed/app.ts",
+    "format:go": "go run mvdan.cc/gofumpt@v0.9.2 -w ./cmd ./internal",
+    "format:web": "prettier --write README.md config*.yaml internal/web/embed/index.html internal/web/embed/input.css internal/web/embed/app.ts",
+    "format": "npm run format:go && npm run format:web",
+    "test": "npm run typecheck",
+    "typecheck": "npm run check:ts",
+    "verify": "npm run test && npm run build"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.2",
+    "esbuild": "^0.28.1",
+    "prettier": "^3.9.4",
+    "tailwindcss": "^4.3.2",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@rstreamlabs/rstream": "^3.4.0",
+    "zod": "^4.4.3"
+  }
+}

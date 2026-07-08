@@ -1,7 +1,0 @@
-.tmp
-/webrtc-video-streaming
-config.yaml
-dist
-internal/web/generated
-node_modules
-out

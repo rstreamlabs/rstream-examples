@@ -1,6 +1,0 @@
-.tmp
-dist
-internal/web/generated
-node_modules
-out
-webrtc-video-streaming

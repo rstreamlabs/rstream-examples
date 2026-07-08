@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>rstream WebRTC Video Streaming</title>
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+
+  <body class="text-[#171512]">
+    <div
+      class="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-8 sm:px-6 lg:px-10"
+    >
+      <header class="border-b border-[#171512]/15 pb-8">
+        <div class="flex h-9 items-center justify-between gap-6">
+          <a
+            href="https://rstream.io"
+            target="_blank"
+            rel="noreferrer"
+            class="inline-flex items-center text-[#171512]"
+            aria-label="rstream"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="300.73 230.04 142.51 26.92"
+              class="h-7 w-auto fill-current sm:h-8"
+            >
+              <path
+                d="M 300.727 256.601 L 304.127 256.601 L 304.127 245.081 C 304.127 241.001 307.047 238.201 310.967 238.201 C 311.687 238.201 312.447 238.321 313.247 238.521 L 313.247 235.441 C 312.287 235.201 311.367 235.081 310.567 235.081 C 307.807 235.081 305.607 236.281 304.127 238.561 L 304.127 235.401 L 300.727 235.401 Z"
+              />
+              <path
+                d="M 322.301 256.921 C 327.301 256.921 331.261 254.881 331.261 250.481 C 331.261 246.441 327.901 245.001 322.941 244.361 C 318.541 243.801 317.181 243.001 317.181 241.121 C 317.181 239.241 319.021 238.121 322.221 238.121 C 325.101 238.121 326.981 239.361 327.181 241.401 L 330.621 241.401 C 330.381 237.441 327.261 235.001 322.301 235.001 C 317.501 235.001 313.741 237.081 313.741 241.121 C 313.741 244.881 316.021 246.601 322.101 247.481 C 326.541 248.161 327.781 248.841 327.781 250.641 C 327.781 252.721 325.621 253.761 322.341 253.761 C 319.141 253.761 317.021 252.401 316.861 250.001 L 313.381 250.001 C 313.581 254.321 316.981 256.921 322.301 256.921 Z"
+              />
+              <path
+                d="M 342.361 256.721 C 343.081 256.721 343.961 256.681 344.801 256.601 L 344.801 253.441 C 344.081 253.521 343.361 253.561 342.761 253.561 C 339.801 253.561 338.681 252.361 338.681 249.561 L 338.681 238.241 L 344.521 238.241 L 344.521 235.401 L 338.681 235.401 L 338.681 230.041 L 335.281 230.401 L 335.281 235.401 L 330.841 235.401 L 330.841 238.241 L 335.281 238.241 L 335.281 249.961 C 335.281 254.601 337.521 256.721 342.361 256.721 Z"
+              />
+              <path
+                d="M 347.378 256.601 L 350.778 256.601 L 350.778 245.081 C 350.778 241.001 353.698 238.201 357.618 238.201 C 358.338 238.201 359.098 238.321 359.898 238.521 L 359.898 235.441 C 358.938 235.201 358.018 235.081 357.218 235.081 C 354.458 235.081 352.258 236.281 350.778 238.561 L 350.778 235.401 L 347.378 235.401 Z"
+              />
+              <path
+                d="M 370.557 256.961 C 375.437 256.961 379.357 254.401 380.837 250.241 L 377.157 250.241 C 375.997 252.481 373.517 253.761 370.557 253.761 C 366.557 253.761 363.677 251.081 363.237 247.161 L 381.477 247.161 C 381.877 239.801 377.197 235.041 370.557 235.041 C 364.237 235.041 359.677 239.601 359.677 246.001 C 359.677 252.401 364.237 256.961 370.557 256.961 Z M 363.317 244.241 C 363.997 240.601 366.797 238.241 370.557 238.241 C 374.357 238.241 377.197 240.761 377.917 244.241 Z"
+              />
+              <path
+                d="M 393.42 256.961 C 396.7 256.961 399.46 255.681 401.34 253.601 L 401.34 256.601 L 404.74 256.601 L 404.74 235.401 L 401.34 235.401 L 401.34 238.401 C 399.46 236.321 396.7 235.041 393.42 235.041 C 387.18 235.041 382.78 239.641 382.78 246.001 C 382.78 252.361 387.18 256.961 393.42 256.961 Z M 386.26 246.001 C 386.26 241.441 389.42 238.241 393.82 238.241 C 398.22 238.241 401.42 241.441 401.42 246.001 C 401.42 250.561 398.22 253.761 393.82 253.761 C 389.42 253.761 386.26 250.561 386.26 246.001 Z"
+              />
+              <path
+                d="M 409.358 256.601 L 412.758 256.601 L 412.758 244.841 C 412.758 240.801 415.278 238.161 419.158 238.161 C 422.758 238.161 424.598 240.481 424.598 244.881 L 424.598 256.601 L 427.998 256.601 L 427.998 244.841 C 427.998 240.801 430.518 238.161 434.398 238.161 C 437.998 238.161 439.838 240.481 439.838 244.881 L 439.838 256.601 L 443.238 256.601 L 443.238 244.841 C 443.238 238.561 440.238 235.081 434.798 235.081 C 431.558 235.081 428.718 236.561 426.838 239.161 C 425.478 236.481 422.998 235.081 419.558 235.081 C 416.838 235.081 414.398 236.241 412.758 238.361 L 412.758 235.401 L 409.358 235.401 Z"
+              />
+            </svg>
+          </a>
+        </div>
+        <div class="mt-10 max-w-4xl space-y-4">
+          <p class="text-xs font-medium uppercase text-[#6b665c]">
+            rstream tunnels · WebRTC · GStreamer
+          </p>
+          <h1
+            class="text-4xl font-semibold text-[#171512] sm:text-5xl lg:text-6xl"
+          >
+            Real-time video streaming using rstream tunnels.
+          </h1>
+          <p class="max-w-3xl text-base leading-8 text-[#4f4a43] sm:text-lg">
+            This example runs a local GStreamer pipeline, serves the viewer UI,
+            and exposes the whole flow through a single Go binary. WebRTC uses
+            the rstream STUN/TURN service.
+          </p>
+        </div>
+      </header>
+      <main class="flex flex-1 flex-col gap-8 py-8">
+        <section
+          class="rounded-lg border border-[#171512]/15 bg-[#f9f7ef]/80 p-4 sm:p-5"
+        >
+          <div
+            id="video-stage"
+            class="relative overflow-hidden rounded-md border border-[#171512]/20 bg-[#f5f2e9]"
+          >
+            <video
+              id="video"
+              class="aspect-video h-full w-full bg-[#f5f2e9] object-cover"
+              autoplay
+              muted
+              playsinline
+            ></video>
+            <div
+              id="video-overlay"
+              class="pointer-events-none absolute inset-0 flex items-center justify-center bg-[#f5f2e9]/80 px-6 text-center"
+            >
+              <p class="max-w-xs text-sm leading-6 text-[#4f4a43]">
+                Waiting for the WebRTC session to start
+              </p>
+            </div>
+          </div>
+          <div
+            class="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center"
+          >
+            <button
+              id="connect"
+              class="inline-flex w-full items-center justify-center rounded-md bg-[#171512] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#2b2925] sm:w-auto"
+            >
+              Start streaming
+            </button>
+            <button
+              id="disconnect"
+              class="inline-flex w-full items-center justify-center rounded-md border border-[#171512]/20 bg-transparent px-5 py-3 text-sm font-semibold text-[#171512] transition hover:border-[#171512]/40 sm:w-auto"
+              disabled
+            >
+              Stop streaming
+            </button>
+          </div>
+        </section>
+        <section
+          class="overflow-hidden rounded-lg border border-[#171512]/15 bg-[#f9f7ef]/75"
+        >
+          <div class="grid gap-0 md:grid-cols-2">
+            <div
+              class="border-b border-[#171512]/15 px-5 py-5 md:border-b-0 md:border-r"
+            >
+              <p class="text-xs font-medium uppercase text-[#6b665c]">
+                Public URL
+              </p>
+              <p
+                id="public-url"
+                class="mt-3 overflow-x-auto whitespace-nowrap text-sm font-medium text-[#171512]"
+              >
+                Starting…
+              </p>
+              <p class="mt-4 max-w-2xl text-sm leading-7 text-[#4f4a43]">
+                The browser page, the signaling socket, and the TURN bootstrap
+                endpoint all share the same origin.
+              </p>
+              <div class="mt-5 flex flex-wrap gap-2">
+                <span
+                  id="tunnel-auth"
+                  class="inline-flex rounded-md border border-[#171512]/15 bg-[#f5f2e9] px-3 py-1 text-xs text-[#171512]"
+                  >Auth: pending</span
+                >
+                <span
+                  id="peer-status"
+                  class="inline-flex rounded-md border border-[#171512]/15 bg-[#f5f2e9] px-3 py-1 text-xs text-[#171512]"
+                  >Peer: idle</span
+                >
+                <span
+                  id="ice-status"
+                  class="inline-flex rounded-md border border-[#171512]/15 bg-[#f5f2e9] px-3 py-1 text-xs text-[#171512]"
+                  >ICE: idle</span
+                >
+              </div>
+            </div>
+            <div class="px-5 py-5">
+              <p class="text-xs font-medium uppercase text-[#6b665c]">
+                Session
+              </p>
+              <dl class="mt-4 grid gap-3 text-sm text-[#171512]">
+                <div class="flex items-center justify-between gap-4">
+                  <dt class="text-[#6b665c]">Viewer</dt>
+                  <dd id="viewer-id" class="font-medium text-[#171512]">
+                    Pending
+                  </dd>
+                </div>
+                <div class="flex items-center justify-between gap-4">
+                  <dt class="text-[#6b665c]">Signaling</dt>
+                  <dd id="ws-status" class="font-medium text-[#171512]">
+                    Idle
+                  </dd>
+                </div>
+                <div class="flex items-center justify-between gap-4">
+                  <dt class="text-[#6b665c]">Playback</dt>
+                  <dd id="playback-status" class="font-medium text-[#171512]">
+                    Idle
+                  </dd>
+                </div>
+                <div class="flex items-center justify-between gap-4">
+                  <dt class="text-[#6b665c]">Codec</dt>
+                  <dd id="codec-status" class="font-medium text-[#171512]">
+                    -
+                  </dd>
+                </div>
+                <div class="flex items-center justify-between gap-4">
+                  <dt class="text-[#6b665c]">Recovery</dt>
+                  <dd id="recovery-status" class="font-medium text-[#171512]">
+                    -
+                  </dd>
+                </div>
+                <div class="flex items-center justify-between gap-4">
+                  <dt class="text-[#6b665c]">Adaptive</dt>
+                  <dd id="adaptive-status" class="font-medium text-[#171512]">
+                    Off
+                  </dd>
+                </div>
+                <div class="flex items-center justify-between gap-4">
+                  <dt class="text-[#6b665c]">TWCC target</dt>
+                  <dd
+                    id="twcc-target-status"
+                    class="font-medium text-[#171512]"
+                  >
+                    -
+                  </dd>
+                </div>
+                <div class="flex items-center justify-between gap-4">
+                  <dt class="text-[#6b665c]">Encoder target</dt>
+                  <dd
+                    id="encoder-target-status"
+                    class="font-medium text-[#171512]"
+                  >
+                    -
+                  </dd>
+                </div>
+                <div class="flex items-center justify-between gap-4">
+                  <dt class="text-[#6b665c]">Browser ICE path</dt>
+                  <dd>
+                    <select
+                      id="turn-policy"
+                      class="rounded-md border border-[#171512]/20 bg-[#f5f2e9] px-3 py-1 text-sm font-medium text-[#171512] outline-none transition"
+                    >
+                      <option value="auto">Auto</option>
+                      <option value="direct">Direct</option>
+                      <option value="relay">Relay only</option>
+                    </select>
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+          <div class="border-t border-[#171512]/15">
+            <div class="flex items-center justify-between gap-4 px-5 py-5">
+              <div>
+                <p class="text-xs font-medium uppercase text-[#6b665c]">
+                  Runtime log
+                </p>
+                <p class="mt-3 text-sm text-[#4f4a43]">
+                  Tunnel, signaling, ICE, and playback events.
+                </p>
+              </div>
+              <button
+                id="clear-log"
+                class="rounded-md border border-[#171512]/20 px-3 py-1 text-xs font-medium text-[#171512] transition hover:border-[#171512]/40"
+              >
+                Clear
+              </button>
+            </div>
+            <pre
+              id="log"
+              class="max-h-[28rem] overflow-auto border-t border-[#171512]/15 bg-[#f5f2e9]/70 p-5 text-xs leading-6 text-[#171512]"
+            >
+No events yet.</pre>
+          </div>
+        </section>
+      </main>
+      <footer
+        class="flex flex-col gap-3 border-t border-[#171512]/15 pt-5 text-sm text-[#6b665c] lg:flex-row lg:items-center lg:justify-between"
+      >
+        <div
+          class="flex min-w-0 flex-col gap-1 lg:flex-row lg:items-center lg:gap-5"
+        >
+          <p class="lg:whitespace-nowrap">Powered by rstream tunnels.</p>
+        </div>
+        <div
+          class="flex flex-col gap-1 lg:flex-row lg:items-center lg:gap-5 lg:whitespace-nowrap"
+        >
+          <a
+            href="https://github.com/rstreamlabs/rstream-examples/tree/main/webrtc-video/producer"
+            target="_blank"
+            rel="noreferrer"
+            class="font-medium text-[#171512] transition hover:text-[#4f4a43]"
+          >
+            Browse source code
+          </a>
+          <a
+            href="https://rstream.io/guides/build-device-to-browser-webrtc-streaming-with-rstream"
+            target="_blank"
+            rel="noreferrer"
+            class="font-medium text-[#171512] transition hover:text-[#4f4a43]"
+          >
+            Read the guide
+          </a>
+          <a
+            href="https://rstream.io"
+            target="_blank"
+            rel="noreferrer"
+            class="font-medium text-[#171512] transition hover:text-[#4f4a43]"
+          >
+            Visit rstream.io
+          </a>
+        </div>
+      </footer>
+    </div>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
