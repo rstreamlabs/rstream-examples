@@ -18,8 +18,8 @@
     "verify": "npm run test && npm run build && npm run audit"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "^3.0.5",
-    "@ai-sdk/react": "^4.0.18",
+    "@ai-sdk/openai-compatible": "^3.0.6",
+    "@ai-sdk/react": "^4.0.19",
     "@base-ui/react": "^1.6.0",
     "@radix-ui/react-use-controllable-state": "^1.2.3",
     "@rstreamlabs/react": "^1.10.2",
@@ -29,7 +29,7 @@
     "@streamdown/math": "^1.0.2",
     "@streamdown/mermaid": "^1.0.2",
     "@tavily/core": "^0.7.6",
-    "ai": "^7.0.17",
+    "ai": "^7.0.18",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

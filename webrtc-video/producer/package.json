@@ -21,7 +21,7 @@
     "esbuild": "^0.28.1",
     "prettier": "^3.9.4",
     "tailwindcss": "^4.3.2",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "dependencies": {
     "@rstreamlabs/rstream": "^3.4.0",

@@ -1,2 +1,1 @@
 ALTER TABLE "devices" ADD COLUMN "onlineSince" TIMESTAMP(3);
-ALTER TABLE "devices" ADD COLUMN "lastSeenAt" TIMESTAMP(3);
