@@ -90,24 +90,24 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: webrtc-video-platform/package-lock.json
+          cache-dependency-path: webrtc-video/platform/package-lock.json
       - name: Install dependencies
-        working-directory: webrtc-video-platform
+        working-directory: webrtc-video/platform
         shell: bash
         run: npm ci
       - name: Typecheck
-        working-directory: webrtc-video-platform
+        working-directory: webrtc-video/platform
         shell: bash
         run: npm run check-types
       - name: Build
-        working-directory: webrtc-video-platform
+        working-directory: webrtc-video/platform
         shell: bash
         run: npm run build
       - name: Audit production dependencies
-        working-directory: webrtc-video-platform
+        working-directory: webrtc-video/platform
         shell: bash
         run: npm audit --omit=dev --audit-level=high
-  webrtc-video-streaming:
+  webrtc-video-producer:
     name: WebRTC video streaming
     runs-on: ubuntu-latest
     steps:
@@ -116,13 +116,13 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
         with:
-          go-version-file: webrtc-video-streaming/go.mod
-          cache-dependency-path: webrtc-video-streaming/go.sum
+          go-version-file: webrtc-video/producer/go.mod
+          cache-dependency-path: webrtc-video/producer/go.sum
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: webrtc-video-streaming/package-lock.json
+          cache-dependency-path: webrtc-video/producer/package-lock.json
       - name: Install GStreamer dependencies
         shell: bash
         run: |
@@ -130,11 +130,11 @@ jobs:
           sudo apt update
           sudo apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev pkg-config
       - name: Test
-        working-directory: webrtc-video-streaming
+        working-directory: webrtc-video/producer
         shell: bash
         run: make test
       - name: Audit production dependencies
-        working-directory: webrtc-video-streaming
+        working-directory: webrtc-video/producer
         shell: bash
         run: npm audit --omit=dev --audit-level=high
   private-masque-egress-gateway:
