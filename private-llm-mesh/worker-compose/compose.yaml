@@ -1,0 +1,70 @@
+# private-llm-mesh worker — composed variant.
+#
+# Instead of the single Go binary (../worker), this joins the same mesh from
+# stock parts: Ollama serves an OpenAI-compatible API, and the rstream Docker
+# reconciler publishes it as a private, token-gated tunnel from container labels.
+# It carries the exact discovery labels the app filters on, so it appears in the
+# same pool and is routed to identically — no custom code.
+#
+# Ollama serves several models at once (loaded on demand), so one machine offers
+# a catalog rather than a single model. The app reads that catalog from the
+# worker's own /v1/models, so whatever you pull simply appears — no list to keep.
+#
+#   export RSTREAM_ENGINE="<engine-host>:443"
+#   export RSTREAM_AUTHENTICATION_TOKEN="<agent-token>"
+#   docker compose up -d
+#   docker compose exec ollama ollama pull qwen2.5:7b   # then any others you want
+
+services:
+  ollama:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    restart: unless-stopped
+    environment:
+      # Listen on all interfaces so the reconciler container can reach it; the
+      # port is never published to the host, so it stays private to the mesh.
+      OLLAMA_HOST: 0.0.0.0
+      # Context window. Match the standalone worker (8192) so multi-step tool
+      # turns do not overflow Ollama's 4096 default and get truncated mid-turn.
+      OLLAMA_CONTEXT_LENGTH: "${PLLM_CTX:-8192}"
+    volumes:
+      - ollama:/root/.ollama
+    labels:
+      rstream.tunnel.llm.forward: "11434"
+      rstream.tunnel.llm.publish: "true"
+      rstream.tunnel.llm.protocol: "http"
+      rstream.tunnel.llm.http.version: "http/1.1"
+      # Token authentication: the app mints a short-lived token scoped to this
+      # tunnel and the single chat path, exactly as for the standalone worker.
+      rstream.tunnel.llm.http.auth.token: "true"
+      # Discovery contract — the labels the app lists and routes on. The model
+      # list is NOT a label: the app reads it from the worker's own /v1/models,
+      # so whatever you `ollama pull` shows up in the picker automatically.
+      rstream.tunnel.llm.label.role: "llm"
+      rstream.tunnel.llm.label.app: "private-llm-mesh"
+      rstream.tunnel.llm.label.ctx: "${PLLM_CTX:-8192}"
+      rstream.tunnel.llm.label.engine: "ollama"
+      rstream.tunnel.llm.label.accelerator: "${PLLM_ACCEL:-cpu}"
+      rstream.tunnel.llm.label.host: "${PLLM_HOST:-ollama}"
+    # NVIDIA GPU: uncomment to offload (needs the NVIDIA Container Toolkit).
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - capabilities: [gpu]
+  rstream:
+    image: ${RSTREAM_IMAGE:-rstream/rstream:latest}
+    command: ["run", "--docker", "--watch", "-v"]
+    restart: unless-stopped
+    user: "0:0"
+    environment:
+      RSTREAM_AUTHENTICATION_TOKEN: ${RSTREAM_AUTHENTICATION_TOKEN:-}
+      RSTREAM_ENGINE: ${RSTREAM_ENGINE:-}
+    volumes:
+      # The reconciler inspects containers and watches Docker events. Treat the
+      # socket as privileged access to the Docker host; on hardened hosts put a
+      # restricted socket proxy in front of the daemon.
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - ollama
+volumes:
+  ollama:

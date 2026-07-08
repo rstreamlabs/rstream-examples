@@ -1,0 +1,5 @@
+# Build output
+/bin/
+
+# llama.cpp sources and static build, fetched by `make deps`
+/third_party/

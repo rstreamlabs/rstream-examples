@@ -1,0 +1,14 @@
+__pycache__/
+.DS_Store
+.venv/
+*.egg-info/
+*.pyc
+node_modules/
+
+# Working notes hold live credentials for Tier 1 — never commit.
+NOTES.md
+
+# Local env files (may hold credentials): worker-compose/.env, worker-gateway/.env, …
+.env
+.env.*
+!.env.example

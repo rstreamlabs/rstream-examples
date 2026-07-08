@@ -1,0 +1,5 @@
+.next
+node_modules
+components/ai-elements
+next-env.d.ts
+tsconfig.tsbuildinfo
