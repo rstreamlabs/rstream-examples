@@ -1,4 +1,4 @@
-# FastAPI rstream tunnel
+# Python FastAPI rstream tunnel
 
 This sample serves a FastAPI application through a published rstream HTTP
 tunnel using the Python SDK.
@@ -16,7 +16,13 @@ environment.
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install "rstreamlabs-rstream[asgi,api]" fastapi
+pip install -r requirements.txt
+```
+
+Or use the Makefile:
+
+```bash
+make build
 ```
 
 ## Run
@@ -26,7 +32,7 @@ Select a project with the rstream CLI, then run the server.
 ```bash
 rstream login
 rstream project use <project-endpoint> --default
-python main.py
+make run
 ```
 
 The process prints the forwarding address once the tunnel is created. Add
@@ -37,8 +43,14 @@ through an rstream dial.
 ## Dial the private tunnel
 
 With the server running in `--private` mode, the second script consumes the
-API over a raw rstream dial.
+API over a raw rstream dial. Run the server in one terminal:
 
 ```bash
-python dial_client.py --path /items/42
+make run-private
+```
+
+Then dial it from another:
+
+```bash
+make dial ARGS="--path /items/42"
 ```

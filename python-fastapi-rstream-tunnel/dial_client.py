@@ -16,7 +16,7 @@ import rstream
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--name", default="fastapi-demo", help="tunnel name")
+    parser.add_argument("--name", default="python-fastapi-demo", help="tunnel name")
     parser.add_argument("--path", default="/", help="request path")
     args = parser.parse_args()
     async with (

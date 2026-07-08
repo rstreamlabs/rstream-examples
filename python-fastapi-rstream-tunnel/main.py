@@ -18,12 +18,12 @@ from fastapi import FastAPI
 
 import rstream
 
-app = FastAPI(title="fastapi-rstream-tunnel")
+app = FastAPI(title="python-fastapi-rstream-tunnel")
 
 
 @app.get("/")
 async def root() -> dict[str, str]:
-    return {"service": "fastapi-rstream-tunnel", "status": "ok"}
+    return {"service": "python-fastapi-rstream-tunnel", "status": "ok"}
 
 
 @app.get("/items/{item_id}")
@@ -38,7 +38,7 @@ async def healthz() -> dict[str, str]:
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--name", default="fastapi-demo", help="tunnel name")
+    parser.add_argument("--name", default="python-fastapi-demo", help="tunnel name")
     parser.add_argument(
         "--private",
         action="store_true",
@@ -62,7 +62,7 @@ async def main() -> None:
             tunnel = await control.create_tunnel(
                 name=args.name,
                 publish=False,
-                labels={"app": "fastapi-demo"},
+                labels={"app": "python-fastapi-demo"},
             )
             print(f"Private tunnel ready: rstrm://{args.name}", flush=True)
         else:
@@ -72,7 +72,7 @@ async def main() -> None:
                 http_version="http/1.1",
                 publish=True,
                 auth=rstream.TunnelAuth(token=True) if args.token_auth else None,
-                labels={"app": "fastapi-demo"},
+                labels={"app": "python-fastapi-demo"},
             )
             print("Forwarding address:", tunnel.forwarding_address, flush=True)
         await rstream.asgi.serve(app, tunnel)

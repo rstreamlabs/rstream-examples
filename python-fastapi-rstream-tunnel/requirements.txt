@@ -1,0 +1,2 @@
+fastapi>=0.139,<1
+rstreamlabs-rstream[asgi,api]>=0.2.0
