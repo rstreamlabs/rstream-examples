@@ -22,7 +22,7 @@ Before running the example, install the `rstream` CLI, create a free `rstream` a
 
 ```bash
 rstream login
-rstream project use <project-endpoint> --default
+rstream project use <project-endpoint>
 ```
 
 For local development you need Go `1.26+`, a C compiler, `pkg-config`,
