@@ -229,8 +229,8 @@ function formatTunnelAuth(auth: SampleInfo["tunnelAuth"]): string {
 
 function setDisconnectedState() {
   disconnectButton.disabled = true;
-  connectButton.disabled = false;
-  turnPolicy.disabled = false;
+  connectButton.disabled = state.info === null;
+  turnPolicy.disabled = state.info === null;
   overlay.classList.remove("hidden");
 }
 
@@ -514,6 +514,10 @@ async function start() {
   if (state.peerConnection || state.webSocket) {
     return;
   }
+  if (!state.info) {
+    log("The sample status is not ready");
+    return;
+  }
   const sessionID = state.sessionID + 1;
   state.sessionID = sessionID;
   connectButton.disabled = true;
@@ -726,12 +730,16 @@ window.addEventListener("beforeunload", () => {
   stop();
 });
 
-loadInfo().catch((error: unknown) => {
-  if (error instanceof Error) {
-    log(error.message);
-    return;
-  }
-  log("Failed to load the sample");
-});
-
 resetLog();
+
+loadInfo()
+  .then(() => {
+    setDisconnectedState();
+  })
+  .catch((error: unknown) => {
+    if (error instanceof Error) {
+      log(error.message);
+      return;
+    }
+    log("Failed to load the sample");
+  });

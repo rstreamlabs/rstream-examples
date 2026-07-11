@@ -101,7 +101,7 @@ When the tunnel is ready, the process prints the public URL:
 info  Public URL: https://xxxxxxxx.t.<cluster-domain>
 ```
 
-Open that URL in a browser. The page loads from the tunnel origin, opens the signaling WebSocket on the same origin, requests TURN credentials from the local process, and starts playback once the WebRTC session is established.
+Open that URL in a browser and wait for the sample status to load. Select an ICE policy, then click `Start streaming`. The page opens the signaling WebSocket on the tunnel origin, requests TURN credentials from the local process, and attaches the remote video track once the WebRTC session is established. A working session shows `Peer: connected`, `ICE: connected` or `completed`, and `Playback: Playing`.
 
 The viewer page also includes an ICE path selector. `Auto` keeps the default behavior, `Direct` disables TURN on the browser side, and `Relay only` forces the browser to use TURN. That selector only affects the browser peer; it does not override `webrtc.useTurn` in the Go process.
 
