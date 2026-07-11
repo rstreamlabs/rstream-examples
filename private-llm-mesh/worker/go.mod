@@ -2,7 +2,7 @@ module github.com/rstreamlabs/rstream-examples/private-llm-mesh/worker
 
 go 1.26.3
 
-require github.com/rstreamlabs/rstream-go v1.23.0
+require github.com/rstreamlabs/rstream-go v1.24.0
 
 require (
 	github.com/ThalesGroup/crypto11 v1.6.2 // indirect
