@@ -7,7 +7,7 @@ tunnel:
     token: false
     rstream: false
   transport:
-    useQuic: true
+    mode: auto
   reconnect:
     enabled: true
     interval: 5s

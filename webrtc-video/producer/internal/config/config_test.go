@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -10,6 +11,24 @@ func TestDefaultConfigIsValid(t *testing.T) {
 	cfg := Default()
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected the default configuration to be valid, got %v", err)
+	}
+	if got := cfg.TunnelTransportMode(); got != "auto" {
+		t.Fatalf("default tunnel transport = %q, want auto", got)
+	}
+}
+
+func TestLoadLegacyTunnelTransport(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy.yaml")
+	data := []byte("tunnel:\n  transport:\n    useQuic: true\n")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write legacy config: %v", err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() legacy config error = %v", err)
+	}
+	if got := cfg.TunnelTransportMode(); got != "quic" {
+		t.Fatalf("legacy tunnel transport = %q, want quic", got)
 	}
 }
 

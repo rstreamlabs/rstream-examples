@@ -10,7 +10,7 @@ tunnel:
     token: false
     rstream: false
   transport:
-    useQuic: true
+    mode: auto
   provisioning:
     mode: remote
     endpoint: ${API_URL}

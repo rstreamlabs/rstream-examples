@@ -143,12 +143,12 @@ The configuration is split by responsibility:
 
 `tunnel.enabled` decides whether the process publishes the local server through `rstream` or stays local-only.
 
-`tunnel.transport.useQuic` controls the producer-to-rstream upstream session. The published tunnel remains a standard HTTP tunnel for the browser UI, signaling WebSocket, and API endpoints; this flag only changes how the Go producer connects to the rstream engine.
+`tunnel.transport.mode` controls the producer-to-rstream upstream session. The default `auto` mode prefers QUIC and falls back to TLS while opening the control channel, then keeps that choice for the client lifetime. The published tunnel remains a standard HTTP tunnel for the browser UI, signaling WebSocket, and API endpoints; this setting only changes how the Go producer connects to the rstream engine.
 
 ```yaml
 tunnel:
   transport:
-    useQuic: true
+    mode: auto
 ```
 
 `tunnel.auth.token` and `tunnel.auth.rstream` decide which edge authentication policies the tunnel enforces. The producer never builds a second public URL with an embedded token. It logs only the published tunnel URL returned by `rstream`.

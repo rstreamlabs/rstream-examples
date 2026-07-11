@@ -33,7 +33,7 @@ type OpenOptions struct {
 }
 
 func Open(ctx context.Context, cfg config.Config, logger *logs.Logger, opts OpenOptions) (*Manager, error) {
-	client, err := newRstreamClient(opts, cfg.Tunnel.Transport.UseQUIC)
+	client, err := newRstreamClient(opts, cfg.Tunnel.Transport)
 	if err != nil {
 		return nil, err
 	}
@@ -101,10 +101,10 @@ func Open(ctx context.Context, cfg config.Config, logger *logs.Logger, opts Open
 	}, nil
 }
 
-func newRstreamClient(opts OpenOptions, useQUIC bool) (*rstream.Client, error) {
+func newRstreamClient(opts OpenOptions, transportConfig config.TunnelTransportConfig) (*rstream.Client, error) {
 	engine := strings.TrimSpace(opts.Engine)
 	token := strings.TrimSpace(opts.Token)
-	useQUIC = useQUIC || rsconfig.ReadEnv().UseQUIC
+	transportMode := tunnelTransportMode(transportConfig)
 	if engine != "" || token != "" {
 		if engine == "" {
 			return nil, errors.New("rstream engine is required when a provisioned token is provided")
@@ -116,9 +116,11 @@ func newRstreamClient(opts OpenOptions, useQUIC bool) (*rstream.Client, error) {
 			Engine: engine,
 			Token:  token,
 		}
-		if useQUIC {
-			options.Transport = &rstream.QUICTransport{}
+		transport, err := rsconfig.FlattenTransportWithError(&rsconfig.TransportConfig{Mode: transportMode})
+		if err != nil {
+			return nil, fmt.Errorf("resolve tunnel transport: %w", err)
 		}
+		options.Transport = transport
 		// Provisioned devices receive an explicit engine URL and scoped token.
 		client, err := rstream.NewClient(options)
 		if err != nil {
@@ -127,14 +129,12 @@ func newRstreamClient(opts OpenOptions, useQUIC bool) (*rstream.Client, error) {
 		return client, nil
 	}
 	resolution, err := rsconfig.ResolveFromEnv(rsconfig.ClientEnvOptions{
-		RequireEngine: true,
-		RequireToken:  true,
+		RequireEngine:   true,
+		RequireToken:    true,
+		TunnelTransport: transportMode,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("resolve local rstream client configuration: %w", err)
-	}
-	if useQUIC {
-		resolution.Resolved.Transport = &rstream.QUICTransport{}
 	}
 	// Local demos reuse the resolved CLI context when provisioning is disabled.
 	client, err := rsconfig.NewClientFromResolved(resolution.Resolved)
@@ -142,6 +142,29 @@ func newRstreamClient(opts OpenOptions, useQUIC bool) (*rstream.Client, error) {
 		return nil, fmt.Errorf("create rstream client from local configuration: %w", err)
 	}
 	return client, nil
+}
+
+func tunnelTransportMode(cfg config.TunnelTransportConfig) string {
+	env := rsconfig.ReadEnv()
+	if env.TunnelTransport != "" {
+		return env.TunnelTransport
+	}
+	if env.UseQUIC != nil {
+		if *env.UseQUIC {
+			return "quic"
+		}
+		return "tls"
+	}
+	if mode := strings.TrimSpace(cfg.Mode); mode != "" {
+		return mode
+	}
+	if cfg.UseQUIC != nil {
+		if *cfg.UseQUIC {
+			return "quic"
+		}
+		return "tls"
+	}
+	return "auto"
 }
 
 func (m *Manager) Listener() net.Listener {

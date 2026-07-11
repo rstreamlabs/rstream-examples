@@ -88,7 +88,8 @@ type TunnelAuthConfig struct {
 }
 
 type TunnelTransportConfig struct {
-	UseQUIC bool `yaml:"useQuic"`
+	Mode    string `yaml:"mode"`
+	UseQUIC *bool  `yaml:"useQuic,omitempty"`
 }
 
 type TunnelReconnectConfig struct {
@@ -170,11 +171,9 @@ func Default() Config {
 			},
 		},
 		Tunnel: TunnelConfig{
-			Enabled: true,
-			Name:    DefaultTunnelName,
-			Transport: TunnelTransportConfig{
-				UseQUIC: true,
-			},
+			Enabled:   true,
+			Name:      DefaultTunnelName,
+			Transport: TunnelTransportConfig{},
 			Reconnect: TunnelReconnectConfig{
 				Enabled:  true,
 				Interval: DefaultReconnect,
@@ -292,6 +291,11 @@ func (c Config) Validate() error {
 	if _, err := c.TunnelReconnectInterval(); err != nil {
 		return err
 	}
+	switch c.TunnelTransportMode() {
+	case "auto", "tls", "quic":
+	default:
+		return fmt.Errorf("invalid tunnel transport mode %q", c.Tunnel.Transport.Mode)
+	}
 	if provisioningMode == TunnelProvisioningModeRemote && c.HasLocalTunnelAuthPolicy() {
 		return errors.New("tunnel auth is only configurable when tunnel provisioning mode is local")
 	}
@@ -382,6 +386,19 @@ func (c Config) Validate() error {
 
 func (c Config) HasLocalTunnelAuthPolicy() bool {
 	return c.Tunnel.Auth.Token || c.Tunnel.Auth.Rstream
+}
+
+func (c Config) TunnelTransportMode() string {
+	if mode := strings.ToLower(strings.TrimSpace(c.Tunnel.Transport.Mode)); mode != "" {
+		return mode
+	}
+	if c.Tunnel.Transport.UseQUIC != nil {
+		if *c.Tunnel.Transport.UseQUIC {
+			return "quic"
+		}
+		return "tls"
+	}
+	return "auto"
 }
 
 func (c Config) TunnelProvisioningMode() TunnelProvisioningMode {
