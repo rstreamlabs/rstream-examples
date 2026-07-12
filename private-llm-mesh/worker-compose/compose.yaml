@@ -2,7 +2,7 @@
 #
 # Instead of the single Go binary (../worker), this joins the same mesh from
 # stock parts: Ollama serves an OpenAI-compatible API, and the rstream Docker
-# reconciler publishes it as a private, token-gated tunnel from container labels.
+# reconciler publishes it as a token-gated tunnel from container labels.
 # It carries the exact discovery labels the app filters on, so it appears in the
 # same pool and is routed to identically — no custom code.
 #

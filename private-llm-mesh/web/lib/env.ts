@@ -28,15 +28,11 @@ const rstreamEnvSchema = z
     WATCH_TOKEN_TTL_SECONDS: seconds("120"),
   })
   .superRefine((env, ctx) => {
-    if (
-      !env.RSTREAM_PROJECT_ID &&
-      !env.RSTREAM_PROJECT_ENDPOINT &&
-      !env.RSTREAM_ENGINE
-    ) {
+    if (!env.RSTREAM_PROJECT_ID && !env.RSTREAM_PROJECT_ENDPOINT) {
       ctx.addIssue({
         code: "custom",
         message:
-          "Set RSTREAM_PROJECT_ID, RSTREAM_PROJECT_ENDPOINT, or RSTREAM_ENGINE.",
+          "Set RSTREAM_PROJECT_ID or RSTREAM_PROJECT_ENDPOINT to scope worker tokens.",
       });
     }
   });

@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/rstreamlabs/rstream-examples/private-llm-mesh/worker/internal/llm"
@@ -124,6 +125,14 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(req.Messages) == 0 {
 		writeError(w, http.StatusBadRequest, "messages is required")
+		return
+	}
+	if strings.TrimSpace(req.Model) == "" {
+		writeError(w, http.StatusBadRequest, "model is required")
+		return
+	}
+	if req.Model != s.modelID {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("model %q is not available", req.Model))
 		return
 	}
 	maxTokens := s.maxTokens

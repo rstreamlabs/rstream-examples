@@ -4,7 +4,8 @@ import { AddWorkerDialog } from "@/components/add-worker-dialog";
 import type { PoolWorker } from "@/lib/use-pool";
 import { cn } from "@/lib/utils";
 
-function loadLabel(load: number | null): string {
+function loadLabel(load: number | null, reachable: boolean): string {
+  if (!reachable) return "unreachable";
   if (load === null) return "online";
   if (load === 0) return "idle";
   return `${load} active`;
@@ -87,16 +88,14 @@ export function WorkerPool({
                           : "text-destructive",
                       )}
                     >
-                      {loadLabel(worker.load)}
+                      {loadLabel(worker.load, worker.reachable)}
                     </span>
                   </div>
                   <div className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
                     <Cpu className="size-3 shrink-0" />
                     <span className="truncate">
                       {worker.accelerator}
-                      {worker.engine !== "unknown"
-                        ? ` · ${worker.engine}`
-                        : ""}
+                      {worker.engine !== "unknown" ? ` · ${worker.engine}` : ""}
                       {worker.rtt !== null ? (
                         <span title="link round-trip latency, not generation speed">
                           {` · rtt ${worker.rtt} ms`}

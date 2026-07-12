@@ -8,6 +8,11 @@ import {
 import GithubProvider from "next-auth/providers/github";
 import { z } from "zod";
 
+import {
+  hasGithubAllowlist,
+  isGithubIdentityAllowed,
+  type GithubAllowlist,
+} from "./auth-policy";
 import { authEnv } from "./env";
 
 export interface AuthedUser {
@@ -23,18 +28,37 @@ const githubProfileSchema = z
   .object({ email: z.string().optional(), login: z.string().optional() })
   .partial();
 
+function githubAllowlist(): GithubAllowlist {
+  const env = authEnv();
+  return {
+    emails: env.ALLOWED_EMAILS,
+    domains: env.ALLOWED_EMAIL_DOMAINS,
+    logins: env.ALLOWED_GITHUB_LOGINS,
+  };
+}
+
 /** Enabled sign-in methods. */
 export function availableAuth(): { github: boolean; disabled: boolean } {
   const env = authEnv();
   return {
-    github: Boolean(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET),
+    github: Boolean(
+      env.GITHUB_CLIENT_ID &&
+      env.GITHUB_CLIENT_SECRET &&
+      hasGithubAllowlist(githubAllowlist()),
+    ),
     disabled: env.AUTH_DISABLED,
   };
 }
 
 function providers(): NextAuthOptions["providers"] {
   const env = authEnv();
-  if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET) return [];
+  if (
+    !env.GITHUB_CLIENT_ID ||
+    !env.GITHUB_CLIENT_SECRET ||
+    !hasGithubAllowlist(githubAllowlist())
+  ) {
+    return [];
+  }
   return [
     GithubProvider({
       clientId: env.GITHUB_CLIENT_ID,
@@ -45,21 +69,9 @@ function providers(): NextAuthOptions["providers"] {
 }
 
 function githubAllowed(profile: Profile | undefined): boolean {
-  const env = authEnv();
-  const open =
-    env.ALLOWED_EMAILS.length === 0 &&
-    env.ALLOWED_EMAIL_DOMAINS.length === 0 &&
-    env.ALLOWED_GITHUB_LOGINS.length === 0;
-  if (open) return true;
   const parsed = githubProfileSchema.safeParse(profile);
-  const email = (parsed.success ? parsed.data.email : "")?.toLowerCase() ?? "";
-  const login = (parsed.success ? parsed.data.login : "")?.toLowerCase() ?? "";
-  const domain = email.includes("@") ? email.split("@")[1] : "";
-  return (
-    (email !== "" && env.ALLOWED_EMAILS.includes(email)) ||
-    (domain !== "" && env.ALLOWED_EMAIL_DOMAINS.includes(domain)) ||
-    (login !== "" && env.ALLOWED_GITHUB_LOGINS.includes(login))
-  );
+  if (!parsed.success) return false;
+  return isGithubIdentityAllowed(parsed.data, githubAllowlist());
 }
 
 export const authOptions: NextAuthOptions = {

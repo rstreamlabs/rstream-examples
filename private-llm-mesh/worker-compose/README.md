@@ -2,7 +2,7 @@
 
 This joins the mesh from stock parts instead of the single Go binary in
 [`../worker`](../worker). Ollama serves an OpenAI-compatible API, and the rstream
-Docker reconciler publishes it as a private, token-gated tunnel derived from
+Docker reconciler publishes it as a token-gated tunnel derived from
 container labels. There is no custom code here: the labels carry the same
 discovery contract the app filters and routes on, so a composed worker appears in
 the same pool as a standalone one and is reached in exactly the same way.

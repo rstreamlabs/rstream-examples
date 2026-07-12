@@ -2,7 +2,7 @@
 
 private-llm-mesh is a chat application whose inference stays on machines you control. Open models run on your own hardware, whether a workstation, a laptop, or a GPU server, and a Next.js application reaches them over rstream. No machine needs a public address or an inbound port, and the weights never leave your infrastructure while the front end deploys to Vercel.
 
-Each worker is a single program you run on a machine that holds a model. It loads the model in-process, serves an OpenAI-compatible API, and registers a private tunnel that serves as its entry in the mesh. The application discovers the pool from the tunnel registry, routes each message to the nearest worker with the lightest load, runs the agent turn against it over rstream, and streams the response back to the browser. Adding capacity is a matter of starting another worker, which joins the pool as soon as it connects.
+Each worker is a single program you run on a machine that holds a model. It loads the model in-process, serves an OpenAI-compatible API, and creates a published, token-protected tunnel that serves as its entry in the mesh. The application discovers the pool from the tunnel registry, routes each message across the available workers, runs the agent turn against the selected worker over rstream, and streams the response back to the browser. Adding capacity is a matter of starting another worker, which joins the pool as soon as it connects.
 
 A companion guide walks through the architecture and the rstream integration in detail: [Build a Private LLM Mesh with rstream](https://rstream.io/guides/build-a-private-llm-mesh-with-rstream).
 
@@ -99,11 +99,11 @@ Authorization is least-privilege by construction. The token that reaches a worke
 
 Workers are reached from the server over a token-gated edge host, so no machine exposes an inbound port and only the outbound tunnel remains. If a policy forbids any public ingress to compute, the same SDK primitives keep workers fully private, dialed over rstream without a public edge host. Both postures keep authorization on the application and differ only in the worker's ingress shape; neither is inherently more secure than the other.
 
-Access to the application itself is gated separately by NextAuth, through GitHub single sign-on restricted by an organization, domain, or login allowlist, or disabled entirely for a local quickstart. The worker pool is global to the application, so it is the front door that this gates.
+Access to the application itself is gated separately by NextAuth, through GitHub single sign-on restricted by an email, domain, or login allowlist, or disabled entirely for a local quickstart. GitHub authentication fails closed when no allowlist is configured. The worker pool is global to the application, so it is the front door that this gates.
 
-## Self-hosting (Community Edition)
+## rstream deployment
 
-Nothing here depends on the managed rstream cloud. Point the application and the workers at a self-hosted engine by setting `RSTREAM_API_URL` for the application (and `RSTREAM_ENGINE` if you address the engine directly) and selecting the project with the CLI for the workers. The same control-plane and data-plane split then runs end to end on your own infrastructure.
+The sample uses a hosted rstream project. Its application credentials resolve the project, mint scoped worker and watch tokens, and reach the hosted rstream MCP. Model weights stay on the worker machines and inference runs there. Chat messages pass through the Next.js application and the encrypted rstream tunnel on their way to the selected worker.
 
 ## Deploy
 

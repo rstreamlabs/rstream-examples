@@ -86,6 +86,17 @@ func TestChatCompletionText(t *testing.T) {
 	}
 }
 
+func TestChatCompletionRejectsUnavailableModel(t *testing.T) {
+	srv := newServer(&llm.Result{Content: "Blue."}, "qwen")
+	req := httptest.NewRequest("POST", "/v1/chat/completions",
+		strings.NewReader(`{"model":"mistral","messages":[{"role":"user","content":"color?"}]}`))
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+	if w.Code != 404 || !strings.Contains(w.Body.String(), `model \"mistral\" is not available`) {
+		t.Fatalf("unexpected unavailable-model response: %d %s", w.Code, w.Body.String())
+	}
+}
+
 func TestModels(t *testing.T) {
 	srv := newServer(&llm.Result{}, "qwen2.5")
 	req := httptest.NewRequest("GET", "/v1/models", nil)

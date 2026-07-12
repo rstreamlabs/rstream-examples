@@ -114,7 +114,7 @@ export function usePool(): PoolState {
         engine: labels.engine ?? "unknown",
         load: m?.load ?? null,
         rtt: m?.rtt ?? null,
-        reachable: true,
+        reachable: m?.reachable ?? true,
       };
     });
   }, [rstream.tunnels, rstream.state, probed]);
