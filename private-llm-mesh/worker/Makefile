@@ -7,6 +7,7 @@
 APP := worker
 GO ?= go
 CMAKE ?= cmake
+UNAME_S ?= $(shell uname)
 CMD := ./cmd/$(APP)
 BIN := bin/$(APP)
 
@@ -31,10 +32,11 @@ CGO_LDFLAGS := \
 	-L$(abspath $(LLAMA_BUILD))/common \
 	-L$(abspath $(LLAMA_BUILD))/src \
 	-L$(abspath $(LLAMA_BUILD))/ggml/src \
-	-L$(abspath $(LLAMA_BUILD))/ggml/src/ggml-blas \
-	-lllama-common -lllama-common-base -lllama -lggml -lggml-cpu -lggml-blas -lggml-base -lc++
-ifeq ($(shell uname),Darwin)
-CGO_LDFLAGS += -framework Accelerate -framework Foundation -framework Metal -framework MetalKit
+	-lllama-common -lllama-common-base -lllama -lggml -lggml-cpu -lggml-base
+ifeq ($(UNAME_S),Darwin)
+CGO_LDFLAGS += -lc++ -framework Accelerate -framework Foundation -framework Metal -framework MetalKit
+else
+CGO_LDFLAGS += -lstdc++ -lgomp
 endif
 
 # Link extra GPU backend libs (Metal, CUDA…) when llama.cpp was built with them.
