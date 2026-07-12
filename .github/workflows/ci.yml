@@ -201,7 +201,7 @@ jobs:
       - name: Verify worker
         working-directory: private-llm-mesh/worker
         shell: bash
-        run: make verify
+        run: make verify LLAMA_BUILD_JOBS=2
       - name: Validate composed worker
         working-directory: private-llm-mesh/worker-compose
         shell: bash

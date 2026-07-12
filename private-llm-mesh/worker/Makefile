@@ -15,6 +15,8 @@ LLAMA_CPP_REF  ?= b9829
 LLAMA_CPP_DIR  ?= third_party/llama.cpp
 LLAMA_BUILD    := $(LLAMA_CPP_DIR)/build-static
 LLAMA_LIB      := $(LLAMA_BUILD)/common/libllama-common.a
+LLAMA_BUILD_JOBS ?=
+LLAMA_BUILD_PARALLEL := $(if $(strip $(LLAMA_BUILD_JOBS)),-j$(LLAMA_BUILD_JOBS),-j)
 
 # Acceleration is off by default for a portable CPU build. Override on the host,
 # e.g. LLAMA_CMAKE_FLAGS="-DGGML_METAL=ON" (macOS) or "-DGGML_CUDA=ON" (Linux).
@@ -68,7 +70,7 @@ $(LLAMA_LIB): | check-cmake check-c-compiler
 		-DBUILD_SHARED_LIBS=OFF -DGGML_CCACHE=OFF $(LLAMA_CMAKE_FLAGS) \
 		-DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF \
 		-DLLAMA_BUILD_TOOLS=OFF -DLLAMA_BUILD_SERVER=OFF
-	$(CMAKE) --build $(LLAMA_BUILD) --target llama-common -j
+	$(CMAKE) --build $(LLAMA_BUILD) --target llama-common $(LLAMA_BUILD_PARALLEL)
 
 ## build: compile the worker binary (builds deps first).
 build: check-go deps
