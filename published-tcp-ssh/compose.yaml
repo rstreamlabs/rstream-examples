@@ -1,0 +1,21 @@
+services:
+  ssh:
+    build:
+      context: ./ssh
+    restart: unless-stopped
+    secrets:
+      - authorized_key
+  rstream:
+    image: ${RSTREAM_IMAGE:-rstream/rstream:latest}
+    command: ["forward", "ssh:22", "--tcp", "--name", "ssh-demo"]
+    restart: unless-stopped
+    environment:
+      RSTREAM_AUTHENTICATION_TOKEN: "${RSTREAM_AUTHENTICATION_TOKEN:?set RSTREAM_AUTHENTICATION_TOKEN}"
+      RSTREAM_ENGINE: "${RSTREAM_ENGINE:?set RSTREAM_ENGINE}"
+    depends_on:
+      ssh:
+        condition: service_healthy
+
+secrets:
+  authorized_key:
+    file: "${SSH_PUBLIC_KEY_PATH:?set SSH_PUBLIC_KEY_PATH}"
