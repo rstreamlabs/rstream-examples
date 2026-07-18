@@ -74,8 +74,13 @@ async function probeWorker(host: string): Promise<Probe> {
     const response = await fetch(url, { signal: AbortSignal.timeout(2000) });
     rtt = Date.now() - start;
     if (!response.ok) return DOWN;
-    const parsed = modelsSchema.safeParse(await response.json().catch(() => ({})));
-    models = parsed.success && parsed.data.data ? parsed.data.data.map((m) => m.id) : [];
+    const parsed = modelsSchema.safeParse(
+      await response.json().catch(() => ({})),
+    );
+    models =
+      parsed.success && parsed.data.data
+        ? parsed.data.data.map((m) => m.id)
+        : [];
   } catch {
     return DOWN;
   }
@@ -85,8 +90,11 @@ async function probeWorker(host: string): Promise<Probe> {
     url.searchParams.set("rstream.token", token);
     const response = await fetch(url, { signal: AbortSignal.timeout(2000) });
     if (response.ok) {
-      const health = healthSchema.safeParse(await response.json().catch(() => ({})));
-      if (health.success && health.data.active !== undefined) load = health.data.active;
+      const health = healthSchema.safeParse(
+        await response.json().catch(() => ({})),
+      );
+      if (health.success && health.data.active !== undefined)
+        load = health.data.active;
     }
   } catch {
     // No mesh /healthz — neutral load.
