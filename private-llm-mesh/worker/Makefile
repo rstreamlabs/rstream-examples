@@ -18,6 +18,8 @@ LLAMA_BUILD    := $(LLAMA_CPP_DIR)/build-static
 LLAMA_LIB      := $(LLAMA_BUILD)/common/libllama-common.a
 LLAMA_BUILD_JOBS ?=
 LLAMA_BUILD_PARALLEL := $(if $(strip $(LLAMA_BUILD_JOBS)),-j$(LLAMA_BUILD_JOBS),-j)
+STATICCHECK_VERSION ?= v0.7.0
+GOVULNCHECK_VERSION ?= v1.1.4
 
 # Acceleration is off by default for a portable CPU build. Override on the host,
 # e.g. LLAMA_CMAKE_FLAGS="-DGGML_METAL=ON" (macOS) or "-DGGML_CUDA=ON" (Linux).
@@ -48,15 +50,15 @@ export CGO_ENABLED := 1
 export CGO_CXXFLAGS
 export CGO_LDFLAGS
 
-.PHONY: all build run test vet format check-format check verify clean distclean deps \
+.PHONY: all build run test test-race vet staticcheck vulncheck format check-format check verify clean distclean deps \
 	check-go check-cmake check-c-compiler
 
 all: build
 
 ## check: reproduce the CI gates locally (format, vet, test, build).
-check: check-format vet test build
+check: check-format vet test test-race build
 
-verify: check
+verify: check staticcheck vulncheck
 
 ## deps: clone (pinned) and build llama.cpp static libraries.
 deps: $(LLAMA_LIB)
@@ -86,9 +88,18 @@ run: build
 test: check-go deps
 	$(GO) test ./...
 
+test-race: check-go deps
+	$(GO) test -race ./...
+
 ## vet: run go vet (needs the cgo flags, so it depends on deps and the exported environment).
 vet: check-go deps
 	$(GO) vet ./...
+
+staticcheck: check-go deps
+	$(GO) run honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION) ./...
+
+vulncheck: check-go deps
+	$(GO) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 
 format: check-go
 	$(GO) fmt ./...
