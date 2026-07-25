@@ -17,14 +17,14 @@
     "verify": "npm run test && npm run build"
   },
   "devDependencies": {
-    "@tailwindcss/cli": "^4.3.2",
+    "@tailwindcss/cli": "^4.3.3",
     "esbuild": "^0.28.1",
-    "prettier": "^3.9.4",
-    "tailwindcss": "^4.3.2",
+    "prettier": "^3.9.6",
+    "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2"
   },
   "dependencies": {
-    "@rstreamlabs/rstream": "^3.6.0",
+    "@rstreamlabs/rstream": "^3.7.0",
     "zod": "^4.4.3"
   }
 }
