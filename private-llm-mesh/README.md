@@ -68,8 +68,8 @@ cd rstream-examples/private-llm-mesh/worker
 make build
 
 # 3. Run it. The model downloads on first run — pass an alias, a HF repo, or a
-#    local path (any tool-capable model: Mistral, Llama 3.1, Qwen2.5, …).
-make run ARGS="--model qwen2.5:7b"
+#    local path (any tool-capable model: Qwen3, gpt-oss, Llama 3.1, Mistral, …).
+make run ARGS="--model qwen3:4b"
 ```
 
 Set `--ctx` to the model's context window and `--model-id` to the name the application shows. On Apple Silicon or NVIDIA hardware, rebuild llama.cpp with acceleration using `make distclean && make deps LLAMA_CMAKE_FLAGS=-DGGML_METAL=ON` (or `-DGGML_CUDA=ON`). A single machine can run several workers for different models.

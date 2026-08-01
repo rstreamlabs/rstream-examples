@@ -13,8 +13,8 @@ rather than by any hand-rolled scraping.
 ```bash
 # Prerequisites: Go, CMake, a C/C++ compiler, and a selected rstream context
 #   (rstream login && rstream project use <project-endpoint>).
-make build                       # compiles llama.cpp (pinned) once, then the worker
-./bin/worker --model qwen2.5:7b  # downloads the model on first run, then serves
+make build                     # compiles llama.cpp (pinned) once, then the worker
+./bin/worker --model qwen3:4b  # downloads the model on first run, then serves
 ```
 
 The worker prints the public tunnel URL it is serving on. Point the app (or any
@@ -24,23 +24,35 @@ OpenAI client, through a scoped token) at that URL.
 
 `--model` accepts a local GGUF path, a short alias, or a Hugging Face repository:
 
-- a **local GGUF path** — `--model /models/Mistral-Nemo-Instruct-2407-Q4_K_M.gguf`
+- a **local GGUF path** — `--model /models/Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf`
 - an **alias** — one of the entries in the table below
-- a **Hugging Face repo** with optional quant — `bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M`
+- a **Hugging Face repo** with optional quant — `bartowski/Qwen_Qwen3-4B-Instruct-2507-GGUF:Q4_K_M`
 
 The aliases resolve to recognized, tool-capable instruct models, grouped by the
-hardware they suit. Tool selection is what matters for this mesh: Qwen2.5 and
-Mistral-Nemo call tools reliably, whereas Mistral 7B is noticeably weaker at it.
+hardware they suit. Tool selection is what matters for this mesh, so the aliases
+favour models that reliably emit a structured call rather than describing the
+command in prose.
 
 | Hardware | Model size | Aliases |
 | --- | --- | --- |
-| **Laptop** — Apple Silicon or a modern CPU, 16–32 GB | 3B–8B | `qwen2.5:7b`, `llama3.1`, `mistral:7b` |
-| **Homelab** — Mac mini or a small server, 32–64 GB | 12B–24B | `mistral`, `mistral-nemo`, `qwen2.5:14b`, `mistral-small` |
-| **GPU server** — NVIDIA, 24 GB or more of VRAM | 32B–70B | `qwen2.5:32b`, `qwen2.5:72b`, `llama3.3` |
+| **Laptop** — Apple Silicon or a modern CPU, 16–32 GB | 4B–8B | `qwen3:4b`, `qwen3:8b`, `llama3.1` |
+| **Homelab** — Mac mini or a small server, 32–64 GB | 14B–30B | `qwen3:14b`, `qwen3:30b`, `gpt-oss`, `mistral` |
+| **GPU server** — 24 GB or more of VRAM | 32B and beyond | `qwen3:32b`, `gpt-oss:120b`, `llama3.3` |
+
+Two properties are worth knowing when choosing. Qwen3 builds ending in `-2507`
+(`qwen3:4b`, `qwen3:30b`) are dedicated instruct models that answer directly,
+whereas the other Qwen3 sizes are hybrid reasoning models that emit a `<think>`
+block first: the application renders it as reasoning, but it costs noticeable
+latency on CPU. And `qwen3:30b` is a mixture-of-experts build — 30B of weights
+with roughly 3B active per token, so it runs far faster than its size suggests.
+
+The previous generation stays available for existing deployments: `qwen2.5`,
+`qwen2.5:7b`, `qwen2.5:14b`, `qwen2.5:32b`, `mistral:7b`, `mistral-nemo`,
+`mistral-small`, `llama3.2`.
 
 Non-local references are downloaded from Hugging Face and cached under the user
 cache directory, and subsequent runs reuse the cached file. With no `--model`,
-the worker pulls `qwen2.5:7b`.
+the worker pulls `qwen3:4b`.
 
 ## Endpoints
 
@@ -64,7 +76,7 @@ or the `--max-gen-time` deadline passes.
 
 | flag | env | default | meaning |
 | --- | --- | --- | --- |
-| `--model` | `PLLM_MODEL` | `qwen2.5:7b` | path, alias, or HF repo `owner/name[:quant]` |
+| `--model` | `PLLM_MODEL` | `qwen3:4b` | path, alias, or HF repo `owner/name[:quant]` |
 | `--model-id` | `PLLM_MODEL_ID` | derived | id advertised on `/v1/models` |
 | `--ctx` | `PLLM_CTX` | `8192` | context window |
 | `--max-tokens` | `PLLM_MAX_TOKENS` | `0` | default response cap; `0` = until EOS or the context limit (per-request overridable) |
@@ -81,12 +93,17 @@ or the `--max-gen-time` deadline passes.
 The default build is CPU-only for portability. Rebuild llama.cpp with GPU support
 on the host:
 
+On Apple Silicon the build already uses Metal, with the shaders embedded so the
+binary stays self-contained. Elsewhere the default is a portable CPU build; point
+it at a GPU backend on the host:
+
 ```bash
-make distclean
-make deps LLAMA_CMAKE_FLAGS=-DGGML_METAL=ON   # Apple Silicon
 make deps LLAMA_CMAKE_FLAGS=-DGGML_CUDA=ON    # NVIDIA
 make build
 ```
+
+Changing `LLAMA_CMAKE_FLAGS` (or `LLAMA_CPP_REF`) re-runs the llama.cpp build on
+its own, so there is no need to `make distclean` first.
 
 ## How it works
 

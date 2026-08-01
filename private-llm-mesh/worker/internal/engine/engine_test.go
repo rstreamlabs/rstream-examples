@@ -10,7 +10,7 @@ import (
 
 // These tests exercise the real embedded model. They run only when MODEL points
 // at a GGUF file, e.g.:
-//   MODEL=/path/to/qwen2.5-1.5b-instruct-q4_k_m.gguf make test
+//   MODEL=/path/to/Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf make test
 
 const toolsJSON = `[{"type":"function","function":{"name":"run_command",` +
 	`"description":"Run a shell command on a remote machine and return its output.",` +
