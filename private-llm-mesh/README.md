@@ -68,11 +68,11 @@ cd rstream-examples/private-llm-mesh/worker
 make build
 
 # 3. Run it. The model downloads on first run — pass an alias, a HF repo, or a
-#    local path (any tool-capable model: Mistral, Llama 3.1, Qwen2.5, …).
-make run ARGS="--model qwen2.5:7b"
+#    local path (any tool-capable model: Qwen3, gpt-oss, Llama 3.1, Mistral, …).
+make run ARGS="--model qwen3:4b"
 ```
 
-Set `--ctx` to the model's context window and `--model-id` to the name the application shows. On Apple Silicon or NVIDIA hardware, rebuild llama.cpp with acceleration using `make distclean && make deps LLAMA_CMAKE_FLAGS=-DGGML_METAL=ON` (or `-DGGML_CUDA=ON`). A single machine can run several workers for different models.
+Set `--ctx` to the model's context window and `--model-id` to the name the application shows. Apple Silicon builds use Metal automatically. Elsewhere the default is a portable CPU build; on NVIDIA hardware, use `make build LLAMA_CMAKE_FLAGS=-DGGML_CUDA=ON`. Changing the acceleration flags triggers the required llama.cpp rebuild, so no `make distclean` is needed. A single machine can run several workers for different models.
 
 The worker-pool panel includes an Add worker dialog that carries these exact steps, pre-filled with the project endpoint.
 
@@ -90,7 +90,7 @@ Both keep inference on your own hardware. Because the pool is defined only by la
 The worker embeds llama.cpp through a small cgo shim and serves the OpenAI API from llama.cpp's own `common_chat` layer, the same machinery `llama-server` uses. Tool-calling is grammar-driven and parsed in-process: the model either answers in text or emits a structured tool call, with no client-side `<tool_call>` scraping. The model runs in a single process, and nothing needs to bind a port for it.
 
 - **Models.** Any GGUF file works; point `--model` at it. The worker ships aliases for recognized, tool-capable models grouped by hardware tier (laptop, homelab, and GPU server), listed in the [worker README](worker/README.md#models).
-- **Acceleration.** CPU by default for portability; rebuild with `-DGGML_METAL=ON` (Apple Silicon) or `-DGGML_CUDA=ON` (NVIDIA) for GPU offload.
+- **Acceleration.** Metal is selected automatically on Apple Silicon. Elsewhere the default is a portable CPU build; set `LLAMA_CMAKE_FLAGS=-DGGML_CUDA=ON` for NVIDIA GPU offload.
 - **Context.** `--ctx` sets the window, and `--max-tokens` and `--temp` set generation defaults that a request can override.
 
 ## Security postures

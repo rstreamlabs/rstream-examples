@@ -18,37 +18,56 @@ import (
 )
 
 // DefaultRef is used when no model is requested.
-const DefaultRef = "qwen2.5:7b"
+const DefaultRef = "qwen3:4b"
 
 type source struct{ repo, quant string }
 
 // aliases map short names to a Hugging Face GGUF repository and quantization.
 // The set is deliberately small: recognized, tool-capable instruct models that
-// llama.cpp's common_chat can drive, spanning European (Mistral), Meta (Llama),
-// and Alibaba (Qwen) so the mesh is not tied to one vendor or region.
+// llama.cpp's common_chat can drive, spanning Alibaba (Qwen), OpenAI (gpt-oss),
+// Meta (Llama), and European (Mistral) weights so the mesh is not tied to one
+// vendor or region.
+//
+// Qwen3 models ending in -2507 are dedicated instruct builds: they answer
+// directly. The other Qwen3 sizes are hybrid reasoning models that emit a
+// <think> block first, which the app renders as reasoning but which costs
+// noticeable latency on CPU. Prefer an instruct build for interactive chat and a
+// reasoning build when answer quality matters more than time to first token.
 var aliases = map[string]source{
-	// Laptop-class: 3B–8B, runs on Apple Silicon or a modern CPU.
-	"qwen2.5":      {"Qwen/Qwen2.5-7B-Instruct-GGUF", "q4_k_m"},
-	"qwen2.5:7b":   {"Qwen/Qwen2.5-7B-Instruct-GGUF", "q4_k_m"},
-	"qwen2.5:3b":   {"Qwen/Qwen2.5-3B-Instruct-GGUF", "q4_k_m"},
-	"qwen2.5:1.5b": {"Qwen/Qwen2.5-1.5B-Instruct-GGUF", "q4_k_m"},
-	"qwen2.5:0.5b": {"Qwen/Qwen2.5-0.5B-Instruct-GGUF", "q4_k_m"},
-	"llama3.1":     {"bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", "Q4_K_M"},
-	"llama3.2":     {"bartowski/Llama-3.2-3B-Instruct-GGUF", "Q4_K_M"},
-	"mistral:7b":   {"bartowski/Mistral-7B-Instruct-v0.3-GGUF", "Q4_K_M"},
+	// Laptop-class: 4B–8B, runs on Apple Silicon or a modern CPU.
+	"qwen3":    {"bartowski/Qwen_Qwen3-4B-Instruct-2507-GGUF", "Q4_K_M"},
+	"qwen3:4b": {"bartowski/Qwen_Qwen3-4B-Instruct-2507-GGUF", "Q4_K_M"},
+	"qwen3:8b": {"Qwen/Qwen3-8B-GGUF", "Q4_K_M"},
+	"llama3.1": {"bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", "Q4_K_M"},
+	"llama3.2": {"bartowski/Llama-3.2-3B-Instruct-GGUF", "Q4_K_M"},
 
-	// Homelab-class: 12B–24B, a Mac mini or small server with more memory.
-	// `mistral` maps to Mistral-Nemo, which selects tools far more reliably than
-	// the 7B for this tool-driven mesh.
-	"mistral":       {"bartowski/Mistral-Nemo-Instruct-2407-GGUF", "Q4_K_M"},
+	// Homelab-class: 14B–30B, a Mac mini or small server with more memory.
+	// `qwen3:30b` is a mixture-of-experts build: 30B of weights but only about
+	// 3B active per token, so it runs far faster than its size suggests.
+	"qwen3:14b":   {"Qwen/Qwen3-14B-GGUF", "Q4_K_M"},
+	"qwen3:30b":   {"unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF", "Q4_K_M"},
+	"gpt-oss":     {"ggml-org/gpt-oss-20b-GGUF", "MXFP4"},
+	"gpt-oss:20b": {"ggml-org/gpt-oss-20b-GGUF", "MXFP4"},
+	"mistral":     {"bartowski/Mistral-Nemo-Instruct-2407-GGUF", "Q4_K_M"},
+
+	// GPU-class: 32B and beyond, a card with ample VRAM.
+	"qwen3:32b":    {"Qwen/Qwen3-32B-GGUF", "Q4_K_M"},
+	"gpt-oss:120b": {"ggml-org/gpt-oss-120b-GGUF", "MXFP4"},
+	"llama3.3":     {"bartowski/Llama-3.3-70B-Instruct-GGUF", "Q4_K_M"},
+
+	// Previous generation, kept so existing deployments keep resolving. The
+	// smallest sizes are also handy as fast fixtures for the engine tests.
+	"qwen2.5":       {"Qwen/Qwen2.5-7B-Instruct-GGUF", "q4_k_m"},
+	"qwen2.5:7b":    {"Qwen/Qwen2.5-7B-Instruct-GGUF", "q4_k_m"},
+	"qwen2.5:3b":    {"Qwen/Qwen2.5-3B-Instruct-GGUF", "q4_k_m"},
+	"qwen2.5:1.5b":  {"Qwen/Qwen2.5-1.5B-Instruct-GGUF", "q4_k_m"},
+	"qwen2.5:0.5b":  {"Qwen/Qwen2.5-0.5B-Instruct-GGUF", "q4_k_m"},
+	"qwen2.5:14b":   {"Qwen/Qwen2.5-14B-Instruct-GGUF", "q4_k_m"},
+	"qwen2.5:32b":   {"Qwen/Qwen2.5-32B-Instruct-GGUF", "q4_k_m"},
+	"qwen2.5:72b":   {"Qwen/Qwen2.5-72B-Instruct-GGUF", "q4_k_m"},
+	"mistral:7b":    {"bartowski/Mistral-7B-Instruct-v0.3-GGUF", "Q4_K_M"},
 	"mistral-nemo":  {"bartowski/Mistral-Nemo-Instruct-2407-GGUF", "Q4_K_M"},
 	"mistral-small": {"bartowski/Mistral-Small-24B-Instruct-2501-GGUF", "Q4_K_M"},
-	"qwen2.5:14b":   {"Qwen/Qwen2.5-14B-Instruct-GGUF", "q4_k_m"},
-
-	// GPU-class: 32B–70B, an NVIDIA card with ample VRAM.
-	"qwen2.5:32b": {"Qwen/Qwen2.5-32B-Instruct-GGUF", "q4_k_m"},
-	"qwen2.5:72b": {"Qwen/Qwen2.5-72B-Instruct-GGUF", "q4_k_m"},
-	"llama3.3":    {"bartowski/Llama-3.3-70B-Instruct-GGUF", "Q4_K_M"},
 }
 
 // Resolved is a model ready to load.
