@@ -90,9 +90,6 @@ or the `--max-gen-time` deadline passes.
 
 ## Acceleration
 
-The default build is CPU-only for portability. Rebuild llama.cpp with GPU support
-on the host:
-
 On Apple Silicon the build already uses Metal, with the shaders embedded so the
 binary stays self-contained. Elsewhere the default is a portable CPU build; point
 it at a GPU backend on the host:
