@@ -32,7 +32,7 @@ export function AddWorkerDialog({
     },
     {
       label: "Serve a model to the pool",
-      code: `./bin/worker --model qwen2.5:7b`,
+      code: `./bin/worker --model qwen3:4b`,
     },
   ];
   return (

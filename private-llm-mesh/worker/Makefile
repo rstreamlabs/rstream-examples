@@ -8,6 +8,7 @@ APP := worker
 GO ?= go
 CMAKE ?= cmake
 UNAME_S ?= $(shell uname)
+UNAME_M ?= $(shell uname -m)
 CMD := ./cmd/$(APP)
 BIN := bin/$(APP)
 
@@ -15,22 +16,37 @@ LLAMA_CPP_REPO ?= https://github.com/ggml-org/llama.cpp.git
 LLAMA_CPP_REF  ?= b9829
 LLAMA_CPP_DIR  ?= third_party/llama.cpp
 LLAMA_BUILD    := $(LLAMA_CPP_DIR)/build-static
-LLAMA_LIB      := $(LLAMA_BUILD)/common/libllama-common.a
 LLAMA_BUILD_JOBS ?=
 LLAMA_BUILD_PARALLEL := $(if $(strip $(LLAMA_BUILD_JOBS)),-j$(LLAMA_BUILD_JOBS),-j)
 STATICCHECK_VERSION ?= v0.7.0
 GOVULNCHECK_VERSION ?= v1.1.4
 
-# Acceleration is off by default for a portable CPU build. Override on the host,
-# e.g. LLAMA_CMAKE_FLAGS="-DGGML_METAL=ON" (macOS) or "-DGGML_CUDA=ON" (Linux).
+# Acceleration follows the host: Metal on Apple Silicon, where it is always
+# present and several times faster than CPU, and a portable CPU build elsewhere.
+# Override on the host, e.g. LLAMA_CMAKE_FLAGS="-DGGML_CUDA=ON" on an NVIDIA box.
+ifeq ($(UNAME_S)-$(UNAME_M),Darwin-arm64)
+# EMBED_LIBRARY compiles the Metal shaders into the library: without it the
+# worker looks for ggml-metal.metal next to the binary at run time and fails.
+LLAMA_CMAKE_FLAGS ?= -DGGML_METAL=ON -DGGML_METAL_EMBED_LIBRARY=ON
+else
 LLAMA_CMAKE_FLAGS ?= -DGGML_METAL=OFF -DGGML_ACCELERATE=OFF
+endif
+
+# The stamp encodes both the pinned ref and the build flags, so bumping the pin or
+# switching acceleration re-runs the checkout and rebuild instead of silently
+# reusing the tree already on disk.
+LLAMA_STAMP := $(LLAMA_BUILD)/.built-$(LLAMA_CPP_REF)-$(shell printf '%s' '$(LLAMA_CMAKE_FLAGS)' | cksum | cut -d' ' -f1)
 
 CGO_CXXFLAGS := -std=c++17 -O2 \
 	-I$(abspath $(LLAMA_CPP_DIR))/common \
 	-I$(abspath $(LLAMA_CPP_DIR))/include \
 	-I$(abspath $(LLAMA_CPP_DIR))/ggml/include \
 	-I$(abspath $(LLAMA_CPP_DIR))/vendor
-CGO_LDFLAGS := \
+# Deferred (=, not :=) so the backend discovery below is evaluated when a recipe
+# runs rather than when this file is parsed: on a clean tree the libraries do not
+# exist yet at parse time, and an immediate expansion would silently drop the GPU
+# backends from the link line.
+CGO_LDFLAGS = \
 	-L$(abspath $(LLAMA_BUILD))/common \
 	-L$(abspath $(LLAMA_BUILD))/src \
 	-L$(abspath $(LLAMA_BUILD))/ggml/src \
@@ -41,9 +57,8 @@ else
 CGO_LDFLAGS += -lstdc++ -lgomp
 endif
 
-# Link extra GPU backend libs (Metal, CUDA…) when llama.cpp was built with them.
-# Discovered after `make deps`, so the documented "deps then build" flow picks
-# them up without hardcoding a backend.
+# Link extra GPU backend libs (Metal, CUDA…) when llama.cpp was built with them,
+# discovered from the build tree so no backend is hardcoded here.
 CGO_LDFLAGS += $(addprefix -L,$(sort $(dir $(abspath $(wildcard $(LLAMA_BUILD)/ggml/src/*/libggml-*.a))))) $(patsubst lib%.a,-l%,$(notdir $(wildcard $(LLAMA_BUILD)/ggml/src/*/libggml-*.a)))
 
 export CGO_ENABLED := 1
@@ -61,13 +76,23 @@ check: check-format vet test test-race build
 verify: check staticcheck vulncheck
 
 ## deps: clone (pinned) and build llama.cpp static libraries.
-deps: $(LLAMA_LIB)
+deps: $(LLAMA_STAMP)
 
-$(LLAMA_LIB): | check-cmake check-c-compiler
+$(LLAMA_STAMP): | check-cmake check-c-compiler
 	@if [ ! -d "$(LLAMA_CPP_DIR)/.git" ]; then \
 		echo ">> cloning llama.cpp @ $(LLAMA_CPP_REF)"; \
-		git clone $(LLAMA_CPP_REPO) $(LLAMA_CPP_DIR) && \
+		git clone $(LLAMA_CPP_REPO) $(LLAMA_CPP_DIR); \
+	fi
+	@if [ "$$(git -C $(LLAMA_CPP_DIR) rev-parse --verify --quiet HEAD)" != \
+	      "$$(git -C $(LLAMA_CPP_DIR) rev-parse --verify --quiet '$(LLAMA_CPP_REF)^{commit}')" ]; then \
+		echo ">> checking out llama.cpp @ $(LLAMA_CPP_REF)"; \
+		git -C $(LLAMA_CPP_DIR) fetch --tags --quiet origin; \
 		git -C $(LLAMA_CPP_DIR) checkout --quiet $(LLAMA_CPP_REF); \
+	fi
+	@if [ -f "$(LLAMA_BUILD)/CMakeCache.txt" ] && \
+	    ! grep -qx "CMAKE_HOME_DIRECTORY:INTERNAL=$(abspath $(LLAMA_CPP_DIR))" "$(LLAMA_BUILD)/CMakeCache.txt"; then \
+		echo ">> stale CMake cache (checkout was moved); resetting the build tree"; \
+		rm -rf "$(LLAMA_BUILD)"; \
 	fi
 	@echo ">> building llama.cpp static libraries"
 	$(CMAKE) -S $(LLAMA_CPP_DIR) -B $(LLAMA_BUILD) \
@@ -75,6 +100,8 @@ $(LLAMA_LIB): | check-cmake check-c-compiler
 		-DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF \
 		-DLLAMA_BUILD_TOOLS=OFF -DLLAMA_BUILD_SERVER=OFF
 	$(CMAKE) --build $(LLAMA_BUILD) --target llama-common $(LLAMA_BUILD_PARALLEL)
+	@rm -f $(LLAMA_BUILD)/.built-*
+	@touch $@
 
 ## build: compile the worker binary (builds deps first).
 build: check-go deps
