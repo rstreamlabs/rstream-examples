@@ -97,6 +97,8 @@ func main() {
 	allowLoopback := flag.Bool("allow-loopback-targets", false, "allow egress to loopback targets")
 	allowLinkLocal := flag.Bool("allow-link-local-targets", false, "allow egress to link-local targets")
 	connectIPDiagnostic := flag.Bool("connect-ip-diagnostic", false, "enable CONNECT-IP diagnostic packet echo backend")
+	retry := flag.Bool("retry", true, "reconnect after transient rstream tunnel failures")
+	retryInterval := flag.Duration("retry-interval", 5*time.Second, "delay between rstream reconnection attempts")
 	mobileconfigPath := flag.String("write-mobileconfig", "", "write an Apple Relay .mobileconfig for the published endpoint")
 	verbose := flag.Bool("verbose", false, "enable debug logs")
 	flag.Var(&labels, "label", "rstream tunnel label as key=value; may be repeated")
@@ -140,6 +142,14 @@ func main() {
 	var err error
 	if *local {
 		err = runLocal(ctx, *listen, gateway, opts)
+	} else if *retry {
+		if *retryInterval <= 0 {
+			logger.Error("invalid retry interval", "retry_interval", *retryInterval)
+			os.Exit(2)
+		}
+		err = runRstreamRetryLoop(ctx, *retryInterval, logger, func() error {
+			return runRstream(ctx, gateway, opts)
+		})
 	} else {
 		err = runRstream(ctx, gateway, opts)
 	}
@@ -147,6 +157,41 @@ func main() {
 		logger.Error("gateway stopped", "error", err)
 		os.Exit(1)
 	}
+}
+
+func runRstreamRetryLoop(ctx context.Context, retryInterval time.Duration, logger *slog.Logger, runOnce func() error) error {
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		err := runOnce()
+		if err == nil || !retryableRstreamError(err) {
+			return err
+		}
+		logger.Warn("rstream tunnel disconnected; reconnecting", "error", err, "retry_in", retryInterval)
+		timer := time.NewTimer(retryInterval)
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			_ = timer.Stop()
+			return ctx.Err()
+		}
+	}
+}
+
+func retryableRstreamError(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	var engineErr *rstream.EngineError
+	if errors.As(err, &engineErr) {
+		if engineErr.Retryable() {
+			return true
+		}
+		return engineErr.Code == rstream.EngineErrorCodeInvalidRequest &&
+			strings.TrimSpace(engineErr.Message) == "Hostname is already in use."
+	}
+	return true
 }
 
 type runOptions struct {

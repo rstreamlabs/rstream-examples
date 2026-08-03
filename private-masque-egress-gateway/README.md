@@ -40,6 +40,11 @@ go run ./cmd/gateway \
 
 The process prints `READY <url>` when the published rstream endpoint is online.
 The same endpoint carries TCP `CONNECT` and UDP `CONNECT-UDP` traffic.
+Published mode reconnects automatically after transient rstream transport or
+engine failures. Configuration and authorization errors still fail immediately
+so that the process manager and monitoring can surface them. Use
+`--retry=false` for a one-shot process, or `--retry-interval` to change the
+default five-second delay.
 
 ## Run at boot
 
