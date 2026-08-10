@@ -8,7 +8,9 @@ class CppBeastRstreamTunnel(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
     exports_sources = "CMakeLists.txt", "src/*"
     requires = (
-        "boost/[>=1.91 <2]",
+        # Keep this aligned with the SDK's supported Conan range. Boost 1.90
+        # and 1.91 currently publish inconsistent Cobalt library metadata.
+        "boost/[>=1.81.0 <1.90.0]",
         "rstream/[>=1.12.0 <2]",
     )
     default_options = {

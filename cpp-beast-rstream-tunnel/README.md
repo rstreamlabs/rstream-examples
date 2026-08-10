@@ -21,7 +21,9 @@ only network activity is the outbound runtime session to the engine.
 The sample uses Conan 2 to resolve Boost and the rstream C++ SDK. Its
 `conanfile.py` requires `rstream/[>=1.12.0 <2]` and disables SDK utility
 binaries for this application build, so a source fallback builds the libraries
-used by the Beast server without also compiling the rstream CLI helpers.
+used by the Beast server without also compiling the rstream CLI helpers. Its
+Boost range matches the SDK's supported Conan range (`>=1.81.0 <1.90.0`);
+Boost 1.90 and 1.91 currently expose inconsistent Cobalt package metadata.
 
 ```bash
 conan profile detect --force
