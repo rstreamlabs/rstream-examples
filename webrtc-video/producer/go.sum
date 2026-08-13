@@ -1,9 +1,9 @@
-github.com/ThalesGroup/crypto11 v1.6.4 h1:ZB+x1nyhx9RgUF+gmTU+7xYzRfIIZYmP4/LaiSz0czo=
-github.com/ThalesGroup/crypto11 v1.6.4/go.mod h1:WtBZswQllhb+MKXZq23gS7be56D8sisUdqt3EGB/v2A=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dunglas/httpsfv v1.1.0 h1:Jw76nAyKWKZKFrpMMcL76y35tOpYHqQPzHQiwDvpe54=
 github.com/dunglas/httpsfv v1.1.0/go.mod h1:zID2mqw9mFsnt7YC3vYQ9/cjq30q41W+1AnDwH8TiMg=
+github.com/eclipse-keypont/crypto11 v1.6.5 h1:m5m6c1ttIYNsG4ZeuHcV1sBXk8KBday/HPYHFO17zGs=
+github.com/eclipse-keypont/crypto11 v1.6.5/go.mod h1:NIBgfiTuqvCyaktz22yE33PB4Aa0dU0M2Uf6QUTfDFk=
 github.com/go-gst/go-glib v1.4.0 h1:FB2uVfB0uqz7/M6EaDdWWlBZRQpvFAbWfL7drdw8lAE=
 github.com/go-gst/go-glib v1.4.0/go.mod h1:GUIpWmkxQ1/eL+FYSjKpLDyTZx6Vgd9nNXt8dA31d5M=
 github.com/go-gst/go-gst v1.4.0 h1:EikB43u4c3wc8d2RzlFRSfIGIXYzDy6Zls2vJqrG2BU=
@@ -74,8 +74,8 @@ github.com/quic-go/quic-go v0.60.0 h1:xcQioE8OM66UQLeUMHltK1CCcOu3JbVB4JAQdDQSB+
 github.com/quic-go/quic-go v0.60.0/go.mod h1:wpKpjmPpftl30sL6pFh7REVpjbcCVy4zt2vDyK1TuJk=
 github.com/rogpeppe/go-internal v1.15.0 h1:D0RCU5rMAp+SpgkiNdrjfJ+LX4J1M32V2NeCY7EJ6hc=
 github.com/rogpeppe/go-internal v1.15.0/go.mod h1:DrUVZyrJU+txYW5/1kwtXQSMFio52ZOxX7yM1VHvnxs=
-github.com/rstreamlabs/rstream-go v1.25.1 h1:QI2OhMTfJ0SMBVeTltkMlDWLZkkfShLif+pQPK2bLG4=
-github.com/rstreamlabs/rstream-go v1.25.1/go.mod h1:07a0kMtO2wZc9kraJ668nUOrB7ol9i9M4PqJO1F/oMA=
+github.com/rstreamlabs/rstream-go v1.27.0 h1:Xh82Y35v+TVzPYl6+lQrnCZ8StEyEpwjEdxV8tHnJYQ=
+github.com/rstreamlabs/rstream-go v1.27.0/go.mod h1:OkD70XDy96+rQV8WK9QU91uwTVLtXzFVWIySEOpCs+w=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/thales-e-security/pool v0.0.2 h1:RAPs4q2EbWsTit6tpzuvTFlgFRJ3S8Evf5gtvVDbmPg=

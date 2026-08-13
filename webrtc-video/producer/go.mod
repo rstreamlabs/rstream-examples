@@ -8,12 +8,12 @@ require (
 	github.com/pion/interceptor v0.1.47
 	github.com/pion/logging v0.2.4
 	github.com/pion/webrtc/v4 v4.2.17
-	github.com/rstreamlabs/rstream-go v1.25.1
+	github.com/rstreamlabs/rstream-go v1.27.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
-	github.com/ThalesGroup/crypto11 v1.6.4 // indirect
+	github.com/eclipse-keypont/crypto11 v1.6.5 // indirect
 	github.com/go-gst/go-glib v1.4.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/johnstarich/go/dns v0.2.5 // indirect
@@ -34,10 +34,8 @@ require (
 	github.com/pion/transport/v4 v4.0.2 // indirect
 	github.com/pion/turn/v5 v5.0.12 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/quic-go/masque-go v0.4.0 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.60.0 // indirect
-	github.com/rogpeppe/go-internal v1.15.0 // indirect
 	github.com/thales-e-security/pool v0.0.2 // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
