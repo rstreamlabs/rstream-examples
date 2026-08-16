@@ -101,6 +101,13 @@ injected loss, packet repair, and graceful process teardown. It retains a
 versioned manifest and compact results without making the interactive example
 harder to follow.
 
+The published [`156e96a` evidence pack](./qualification/evidence/156e96a/report.md)
+records a clean run across every profile: 300 decoded frames in all four
+reliable Go/C++ and FFmpeg/GStreamer combinations, 1,221/1,221 RTP packets and
+300/300 reference-identical frames in both datagram profiles, 300/300 frames
+after RTCP/NACK repair at 1% injected loss, and 300/300 frames through each RTSP
+bridge.
+
 ```bash
 make qualify
 ```

@@ -40,3 +40,8 @@ profile explicitly documents the network impairment and its acceptance
 threshold. RTCP repair is qualified separately because retransmission, rather
 than reliable transport head-of-line blocking, is normally preferable for
 interactive video.
+
+The compact results from clean release runs live in
+[`evidence/`](./evidence/). The evidence pack keeps the runtime manifests,
+analyzer outputs, acceptance thresholds, and charts; raw media and diagnostic
+logs remain local artifacts.

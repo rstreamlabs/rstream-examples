@@ -1,0 +1,37 @@
+{
+  "generatedAt": "2026-08-16T13:52:04.639785+00:00",
+  "git": {
+    "dirty": false,
+    "revision": "156e96a33b88ca8ca58068d22c9a8a5e9764bebf"
+  },
+  "host": "macOS-26.5-arm64-arm-64bit-Mach-O",
+  "media": {
+    "frames": 300,
+    "height": 240,
+    "pixelFormat": "yuv420p",
+    "width": 320
+  },
+  "scenario": "rtsp-media-matrix",
+  "tools": {
+    "cppNetcat": {
+      "name": "rstream-ncat",
+      "sha256": "e8aab7e10d49a524b896da4d785f7971a8a5d510576c9e0559250c253ef21015",
+      "version": "rstream-ncat 1.14.2"
+    },
+    "ffmpeg": {
+      "name": "ffmpeg",
+      "sha256": "dad4b30b36a1a999bfa4b6ffbde138bd17ee496c69e12eef638227dff2c6415c",
+      "version": "ffmpeg version 8.1.2 Copyright (c) 2000-2026 the FFmpeg developers"
+    },
+    "goNetcat": {
+      "name": "rstream",
+      "sha256": "3708bf31daecda4407764e7e4a0c9bd32848b992c61760e23a4d704914d02cea",
+      "version": "rstream version 1.28.1"
+    },
+    "gstreamer": {
+      "name": "gst-launch-1.0",
+      "sha256": "2a1407fc4e796845957416becc5c6d8e59159770e4cc0def6f3ce7f8e8699731",
+      "version": "gst-launch-1.0 version 1.28.6"
+    }
+  }
+}

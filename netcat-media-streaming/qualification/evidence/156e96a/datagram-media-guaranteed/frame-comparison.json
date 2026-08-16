@@ -1,0 +1,10 @@
+{
+  "alteredCandidateFrames": 0,
+  "candidateFrames": 300,
+  "identicalFramesInOrder": 300,
+  "identicalPercent": 100.0,
+  "minimumIdenticalPercent": 100.0,
+  "missingOrAlteredReferenceFrames": 0,
+  "passed": true,
+  "referenceFrames": 300
+}

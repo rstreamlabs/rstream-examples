@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="274" viewBox="0 0 900 274">
+<rect width="100%" height="100%" fill="#111827" rx="16"/>
+<text x="32" y="42" fill="#f9fafb" font-family="system-ui,sans-serif" font-size="24" font-weight="700">Reference-identical decoded frames</text>
+<text x="32" y="103" fill="#e5e7eb" font-family="system-ui,sans-serif" font-size="17">datagram-media-best-effort</text>
+<rect x="260" y="80" width="520" height="28" fill="#374151" rx="6"/>
+<rect x="260" y="80" width="520.00" height="28" fill="#22c55e" rx="6"/>
+<text x="792" y="101" fill="#f9fafb" font-family="ui-monospace,monospace" font-size="15">100.000%</text>
+<line x1="728.00" y1="75" x2="728.00" y2="113" stroke="#fbbf24" stroke-width="3"/>
+<text x="32" y="175" fill="#e5e7eb" font-family="system-ui,sans-serif" font-size="17">datagram-media-guaranteed</text>
+<rect x="260" y="152" width="520" height="28" fill="#374151" rx="6"/>
+<rect x="260" y="152" width="520.00" height="28" fill="#22c55e" rx="6"/>
+<text x="792" y="173" fill="#f9fafb" font-family="ui-monospace,monospace" font-size="15">100.000%</text>
+<line x1="780.00" y1="147" x2="780.00" y2="185" stroke="#fbbf24" stroke-width="3"/>
+</svg>
