@@ -853,8 +853,8 @@ function networkConditionDefinitions(manifest) {
 export function renderSVG(analysis, manifest) {
   const samples = analysis.samples;
   const width = 960;
-  const height = 580;
-  const margin = { top: 110, right: 28, bottom: 110, left: 78 };
+  const height = 630;
+  const margin = { top: 110, right: 28, bottom: 150, left: 78 };
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;
   const maximumTime = Math.max(
@@ -900,6 +900,7 @@ export function renderSVG(analysis, manifest) {
         sample.encoderTargetKbps,
         sample.twccTargetKbps,
         sample.receivedBitrateKbps,
+        sample.pacerTargetBitrateKbps,
       ])
       .filter(Number.isFinite),
     ...capacities.filter(Number.isFinite),
@@ -935,9 +936,10 @@ export function renderSVG(analysis, manifest) {
     return `<line x1="${margin.left}" y1="${round(ordinate)}" x2="${width - margin.right}" y2="${round(ordinate)}" stroke="#d1d5db"/><text x="${margin.left - 12}" y="${round(ordinate + 5)}" text-anchor="end" font-size="14" fill="#6b7280">${Math.round(value / 100) / 10} Mb/s</text>`;
   }).join("");
   const series = [
-    ["Encoder", "#2563eb", "encoderTargetKbps", ""],
-    ["TWCC", "#d97706", "twccTargetKbps", ""],
-    ["Received", "#059669", "receivedBitrateKbps", ""],
+    ["Encoder media", "#2563eb", "encoderTargetKbps", ""],
+    ["TWCC media", "#d97706", "twccTargetKbps", ""],
+    ["Received media", "#059669", "receivedBitrateKbps", ""],
+    ["Pacer wire", "#7c3aed", "pacerTargetBitrateKbps", ""],
   ];
   const lines = series
     .map(([label, color, field, dash], index) => {
@@ -948,8 +950,8 @@ export function renderSVG(analysis, manifest) {
             `${round(x(sample.elapsedMilliseconds))},${round(y(sample[field]))}`,
         )
         .join(" ");
-      const legendX = margin.left + index * 150;
-      return `<polyline fill="none" stroke="${color}" stroke-width="2.5" stroke-dasharray="${dash}" points="${points}"/><line x1="${legendX}" y1="${height - 28}" x2="${legendX + 28}" y2="${height - 28}" stroke="${color}" stroke-width="3"/><text x="${legendX + 36}" y="${height - 22}" font-size="16" fill="#111827">${label}</text>`;
+      const legendX = margin.left + index * 170;
+      return `<polyline fill="none" stroke="${color}" stroke-width="2.5" stroke-dasharray="${dash}" points="${points}"/><line x1="${legendX}" y1="${height - 36}" x2="${legendX + 24}" y2="${height - 36}" stroke="${color}" stroke-width="3"/><text x="${legendX + 31}" y="${height - 30}" font-size="14" fill="#111827">${label}</text>`;
     })
     .join("");
   const capacityPointList = [];
@@ -978,8 +980,8 @@ export function renderSVG(analysis, manifest) {
     );
   }
   const capacityPoints = capacityPointList.join(" ");
-  const capacityLegendX = margin.left + 3 * 150;
-  const capacityLine = `<polyline fill="none" stroke="#be185d" stroke-width="3" stroke-dasharray="8 6" points="${capacityPoints}"/><line x1="${capacityLegendX}" y1="${height - 28}" x2="${capacityLegendX + 28}" y2="${height - 28}" stroke="#be185d" stroke-width="3" stroke-dasharray="8 6"/><text x="${capacityLegendX + 36}" y="${height - 22}" font-size="16" fill="#111827">Configured capacity</text>`;
+  const capacityLegendX = margin.left + 4 * 170;
+  const capacityLine = `<polyline fill="none" stroke="#be185d" stroke-width="3" stroke-dasharray="8 6" points="${capacityPoints}"/><line x1="${capacityLegendX}" y1="${height - 36}" x2="${capacityLegendX + 24}" y2="${height - 36}" stroke="#be185d" stroke-width="3" stroke-dasharray="8 6"/><text x="${capacityLegendX + 31}" y="${height - 30}" font-size="14" fill="#111827">Link capacity</text>`;
   const constrainedSchedule =
     manifest.phases.find((phase) => phase.name === "constrained")?.shaping
       ?.schedule || [];
@@ -1007,7 +1009,7 @@ export function renderSVG(analysis, manifest) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title description" style="font-family:system-ui,sans-serif">
   <title id="title">Adaptive sender response to controlled link changes</title>
-  <desc id="description">Measured encoder, TWCC, and receive rates are plotted against the independently configured traffic-control schedule.</desc>
+  <desc id="description">Measured encoder, TWCC, receive, and pacer rates are plotted against the independently configured traffic-control schedule, separating media and wire budgets.</desc>
   <rect width="100%" height="100%" fill="#ffffff"/>
   <text x="${margin.left}" y="34" font-size="24" font-weight="600" fill="#111827">Adaptive sender response to controlled link changes</text>
   <text x="${margin.left}" y="62" font-size="14" fill="#4b5563">${escapeXML(subtitle)}</text>
@@ -1018,7 +1020,7 @@ export function renderSVG(analysis, manifest) {
   ${capacityLine}
   <line x1="${margin.left}" y1="${margin.top + plotHeight}" x2="${width - margin.right}" y2="${margin.top + plotHeight}" stroke="#111827"/>
   ${timeTicks}
-  <text x="${width / 2}" y="${height - 62}" text-anchor="middle" font-size="14" fill="#6b7280">Elapsed time · capacity line exists only while traffic control is active</text>
+  <text x="${width / 2}" y="${height - 82}" text-anchor="middle" font-size="14" fill="#6b7280">Media rates · encoder, TWCC, received · wire rates · pacer, configured capacity</text>
 </svg>
 `;
 }

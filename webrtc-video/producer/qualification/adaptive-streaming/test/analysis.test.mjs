@@ -580,6 +580,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
         packetsReceived,
         peerConnectionState: "connected",
         pacerSentRTX,
+        pacerTargetBitrateKbps: encoderTargetKbps,
         phase,
         playback: "Playing",
         remoteCandidateType: "relay",
@@ -624,9 +625,14 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
   assert.equal(result.passed, true, JSON.stringify(result.assertions, null, 2));
   const chart = renderSVG(result, manifest);
   assert.match(chart, /Adaptive sender response to controlled link changes/);
-  assert.match(chart, /Configured capacity/);
-  assert.match(chart, /y="518"[^>]*>Elapsed time/);
+  assert.match(chart, /Encoder media/);
+  assert.match(chart, /TWCC media/);
+  assert.match(chart, /Received media/);
+  assert.match(chart, /Pacer wire/);
+  assert.match(chart, /Link capacity/);
+  assert.match(chart, /y="548"[^>]*>Media rates/);
   assert.match(chart, /stroke="#be185d"[^>]+points="[^"]+"/);
+  assert.match(chart, /stroke="#7c3aed"[^>]+points="[^"]+"/);
   const networkConditions = renderNetworkConditionsSVG(result, manifest);
   assert.match(networkConditions, /Controlled network conditions/);
   assert.match(networkConditions, /Injected random loss/);
