@@ -42,9 +42,10 @@ The process prints `READY <url>` when the published rstream endpoint is online.
 The same endpoint carries TCP `CONNECT` and UDP `CONNECT-UDP` traffic.
 Published mode reconnects automatically after transient rstream transport or
 engine failures. Configuration and authorization errors still fail immediately
-so that the process manager and monitoring can surface them. Use
-`--retry=false` for a one-shot process, or `--retry-interval` to change the
-default five-second delay.
+so that the process manager and monitoring can surface them. Reconnection uses
+capped exponential backoff with jitter and coalesces repeated failures into one
+degraded-state log. Use `--retry=false` for a one-shot process, or
+`--retry-interval` to change the default five-second base delay.
 
 ## Run at boot
 
@@ -53,7 +54,8 @@ manager. The gateway host does not need Go installed if you build elsewhere and
 copy the binary over. A systemd service should read `PRIVATE_EGRESS_TOKEN`,
 `RSTREAM_CONFIG`, `RSTREAM_CONTEXT`, and the stable gateway hostname from a
 `0600` environment file, then start `private-masque-egress-gateway` with the same
-flags used during manual validation.
+flags used during manual validation. `RSTREAM_CONTEXT` must name a context in
+the deployed `RSTREAM_CONFIG`; validate that pair before enabling the service.
 
 Keep the generated `.mobileconfig` protected like a secret because it contains
 the gateway token. For a residential Internet egress gateway, leave

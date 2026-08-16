@@ -12,7 +12,7 @@
     "format": "prettier --write .",
     "lint": "eslint",
     "start": "next start",
-    "test:unit": "node --test 'lib/**/*.test.ts'",
+    "test:unit": "node --test 'lib/**/*.test.ts' 'scripts/**/*.test.mjs'",
     "test": "npm run lint && npm run typecheck && npm run test:unit",
     "typecheck": "tsc --noEmit",
     "verify": "npm run test && npm run build && npm run audit"

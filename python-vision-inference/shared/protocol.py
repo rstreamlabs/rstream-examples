@@ -24,6 +24,20 @@ from collections.abc import Mapping
 import rstream
 
 MAX_MESSAGE_SIZE = 16 * 1024 * 1024
+MAX_HEADER_SIZE = 4 * 1024 * 1024
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"non-finite JSON value {value!r} is not allowed")
+
+
+def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key {key!r} is not allowed")
+        result[key] = value
+    return result
 
 
 async def send_message(
@@ -31,7 +45,13 @@ async def send_message(
     header: Mapping[str, object],
     payload: bytes = b"",
 ) -> None:
-    header_bytes = json.dumps(header).encode()
+    header_bytes = json.dumps(
+        header,
+        allow_nan=False,
+        separators=(",", ":"),
+    ).encode()
+    if len(header_bytes) > MAX_HEADER_SIZE:
+        raise ValueError(f"message header too large: {len(header_bytes)} bytes")
     total = 4 + len(header_bytes) + len(payload)
     if total > MAX_MESSAGE_SIZE:
         raise ValueError(f"message too large: {total} bytes")
@@ -47,14 +67,34 @@ async def read_message(
     stream: rstream.RstreamStream,
 ) -> tuple[dict[str, object], bytes] | None:
     try:
-        total = int.from_bytes(await stream.readexactly(4), "big")
-        if total > MAX_MESSAGE_SIZE:
-            raise ValueError(f"message too large: {total} bytes")
+        prefix = await stream.readexactly(4)
+    except asyncio.IncompleteReadError as error:
+        if not error.partial:
+            return None
+        raise ValueError("truncated message length prefix") from error
+    total = int.from_bytes(prefix, "big")
+    if total < 4:
+        raise ValueError(f"message too small: {total} bytes")
+    if total > MAX_MESSAGE_SIZE:
+        raise ValueError(f"message too large: {total} bytes")
+    try:
         body = await stream.readexactly(total)
-    except asyncio.IncompleteReadError:
-        return None
+    except asyncio.IncompleteReadError as error:
+        raise ValueError(
+            f"truncated message body: expected {total} bytes, got {len(error.partial)}"
+        ) from error
     header_length = int.from_bytes(body[:4], "big")
-    header = json.loads(body[4 : 4 + header_length])
+    if header_length > MAX_HEADER_SIZE:
+        raise ValueError(f"message header too large: {header_length} bytes")
+    if header_length > total - 4:
+        raise ValueError(
+            f"header length {header_length} exceeds message body {total - 4}"
+        )
+    header = json.loads(
+        body[4 : 4 + header_length],
+        parse_constant=_reject_json_constant,
+        object_pairs_hook=_reject_duplicate_keys,
+    )
     if not isinstance(header, dict):
         raise ValueError("message header must be a JSON object")
     return header, body[4 + header_length :]

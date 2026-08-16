@@ -1,0 +1,42 @@
+{
+  "generatedAt": "2026-08-16T13:52:23.853499+00:00",
+  "passed": true,
+  "scenarios": [
+    {
+      "exitStatus": 0,
+      "name": "reliable-media-matrix",
+      "passed": true,
+      "summary": "PASS reliable media matrix: 4/4 scenarios passed"
+    },
+    {
+      "exitStatus": 0,
+      "name": "datagram-media",
+      "passed": true,
+      "summary": "PASS video quality identical_frames=300/300 identical=100.000% candidate_frames=300 altered_candidate_frames=0\nPASS RTP packets=1221/1221 delivery=100.000% missing=0 duplicates=0 out_of_order=0"
+    },
+    {
+      "exitStatus": 0,
+      "name": "datagram-media-guaranteed",
+      "passed": true,
+      "summary": "PASS video quality identical_frames=300/300 identical=100.000% candidate_frames=300 altered_candidate_frames=0\nPASS RTP packets=1221/1221 delivery=100.000% missing=0 duplicates=0 out_of_order=0"
+    },
+    {
+      "exitStatus": 0,
+      "name": "rtcp-repair",
+      "passed": true,
+      "summary": "PASS RTCP repair frames=300/300 delivery=100.0% feedback_bytes=13590 requests=258 found=258 loss=0.01"
+    },
+    {
+      "exitStatus": 0,
+      "name": "rtsp-media-matrix",
+      "passed": true,
+      "summary": "PASS RTSP media matrix: Go and C++ bridges decoded 300 frames"
+    },
+    {
+      "exitStatus": 0,
+      "name": "log-quality",
+      "passed": true,
+      "summary": "# Qualification log quality \u2014 PASS\n\n| Class | Count |\n| --- | ---: |\n| gstreamer_fd_teardown | 6 |\n| mpegts_latency_probe | 4 |\n| rtp_sender_running_time | 1 |\n| rtp_expired_nack | 4 |\n\nUnknown warning or error lines: 0.\nExceeded warning ceilings: 0."
+    }
+  ]
+}

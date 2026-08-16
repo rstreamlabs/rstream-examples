@@ -18,6 +18,7 @@ const workerSchema = z.object({
   accelerator: z.string().nullish(),
   model: z.string().nullish(),
   device: z.string().nullish(),
+  engine_region: z.string().nullish(),
 });
 
 type Worker = z.infer<typeof workerSchema>;
@@ -354,7 +355,10 @@ function workerMeta(worker: Worker): string {
     worker.accelerator && worker.device
       ? `${worker.accelerator} (${worker.device})`
       : worker.accelerator;
-  return [accelerator, worker.model]
+  const engineRegion = worker.engine_region
+    ? `rstream ${worker.engine_region}`
+    : null;
+  return [accelerator, worker.model, engineRegion]
     .filter((value): value is string => Boolean(value))
     .join(" · ");
 }
@@ -385,7 +389,13 @@ function renderWorkers(status: Status): void {
   const signature = JSON.stringify([
     status.worker ?? null,
     confirmedPinned,
-    status.workers.map((w) => [w.name, w.accelerator, w.model, w.device]),
+    status.workers.map((w) => [
+      w.name,
+      w.accelerator,
+      w.model,
+      w.device,
+      w.engine_region,
+    ]),
   ]);
   if (signature === workersSignature) {
     return; // nothing the pool view shows changed; keep the live buttons stable

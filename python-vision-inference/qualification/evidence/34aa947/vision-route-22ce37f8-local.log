@@ -1,0 +1,3 @@
+Worker ready: vision-route-22ce37f8-local (yolov8n.pt, imgsz=640, Apple M1 Max [cpu], rstream region=eu-west-3)
+device session opened
+device session closed

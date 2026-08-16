@@ -1,0 +1,12 @@
+{
+  "name": "rstream-webrtc-adaptive-qualification",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test ./test/*.test.mjs",
+    "check": "node --check ./collect.mjs && node --check ./compare.mjs && node --check ./sample-receiver-udp.mjs && node --check ./lib/analysis.mjs && node --check ./lib/comparison.mjs && npm test"
+  },
+  "devDependencies": {
+    "playwright-core": "1.62.1"
+  }
+}

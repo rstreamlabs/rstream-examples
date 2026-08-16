@@ -21,6 +21,8 @@ export async function GET(): Promise<Response> {
       accelerator: w.accelerator,
       engine: w.engine,
       load: Number.isFinite(w.load) ? w.load : null,
+      parallel: w.parallel,
+      waiting: Number.isFinite(w.waiting) ? w.waiting : null,
       rtt: Number.isFinite(w.rtt) ? Math.round(w.rtt) : null,
       reachable: w.reachable,
     })),

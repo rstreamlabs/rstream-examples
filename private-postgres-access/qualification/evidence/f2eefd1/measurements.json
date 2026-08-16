@@ -1,0 +1,92 @@
+{
+  "checks": [
+    {
+      "description": "PostgreSQL reports TLS for the tunneled session",
+      "name": "postgres-tls",
+      "passed": true
+    },
+    {
+      "description": "rollback leaves no row",
+      "name": "transaction-rollback",
+      "passed": true
+    },
+    {
+      "description": "commit leaves exactly one row",
+      "name": "transaction-commit",
+      "passed": true
+    },
+    {
+      "description": "bulk row count, bytes, and digest match",
+      "name": "bulk-copy",
+      "passed": true
+    },
+    {
+      "description": "verified bulk copy sustains at least 250 kB/s",
+      "name": "bulk-throughput",
+      "passed": true
+    },
+    {
+      "description": "pgbench throughput is at least 20 transactions/s",
+      "name": "concurrent-throughput",
+      "passed": true
+    },
+    {
+      "description": "pgbench average latency is at most 500 ms",
+      "name": "concurrent-latency",
+      "passed": true
+    },
+    {
+      "description": "pgbench p95 is at most 750 ms and maximum is at most 2000 ms",
+      "name": "concurrent-tail-latency",
+      "passed": true
+    },
+    {
+      "description": "long query cancellation completes within 5 s",
+      "name": "query-cancellation",
+      "passed": true
+    },
+    {
+      "description": "database recovers within 20 s",
+      "name": "database-recovery",
+      "passed": true
+    },
+    {
+      "description": "publisher recovers within 20 s",
+      "name": "publisher-recovery",
+      "passed": true
+    },
+    {
+      "description": "client listener recovers within 20 s",
+      "name": "client listener-recovery",
+      "passed": true
+    }
+  ],
+  "measurements": {
+    "bulk": {
+      "bytes": 5120000,
+      "bytesPerSecond": 897825.7,
+      "rows": 10000,
+      "seconds": 5.703,
+      "sha256": "4ca0bfd7b00b8a5717de31779ed5faf7a58f48eeaf4d34c4014d98f5e56b9764",
+      "verified": true
+    },
+    "cancellationSeconds": 0.251,
+    "committedRows": 1,
+    "establishmentSeconds": 2.301,
+    "load": {
+      "averageLatencyMS": 110.923,
+      "maximumLatencyMS": 382.4,
+      "p50LatencyMS": 91.85,
+      "p95LatencyMS": 123.009,
+      "p99LatencyMS": 382.102,
+      "transactionsPerSecond": 72.12194
+    },
+    "recoverySeconds": {
+      "client listener": 1.569,
+      "database": 1.008,
+      "publisher": 1.682
+    },
+    "rollbackRows": 0,
+    "tls": true
+  }
+}

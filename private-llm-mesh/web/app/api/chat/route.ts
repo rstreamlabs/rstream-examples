@@ -105,35 +105,43 @@ export async function POST(request: Request): Promise<Response> {
       { status: 503 },
     );
   }
-  const worker = createOpenAICompatible({
-    name: "private-llm-mesh",
-    baseURL: `${turn.url}/v1`,
-    apiKey: turn.token,
-  });
-  const result = streamText({
-    model: wrapLanguageModel({
-      model: worker(turn.model),
-      middleware: extractReasoningMiddleware({ tagName: "think" }),
-    }),
-    // The app's own prompt, then the MCP server's propagated instructions, so
-    // tool-usage guidance lives with the server (any MCP client benefits), not
-    // hardcoded here.
-    system: [
-      systemPrompt(new Date().toISOString().slice(0, 10)),
-      await mcpInstructions(),
-    ]
-      .filter(Boolean)
-      .join("\n\n"),
-    messages: await convertToModelMessages(messages),
-    tools: { ...webTools(toolBudget(turn.ctx)), ...(await mcpTools()) },
-    temperature: 0.7,
-    stopWhen: stepCountIs(5),
-    abortSignal: request.signal,
-  });
-  return result.toUIMessageStreamResponse<MeshUIMessage>({
-    originalMessages: messages,
-    messageMetadata: ({ part }) =>
-      part.type === "start" ? { worker: turn.worker } : undefined,
-    onError: (error) => workerError(error, turn.worker, model),
-  });
+  try {
+    const worker = createOpenAICompatible({
+      name: "private-llm-mesh",
+      baseURL: `${turn.url}/v1`,
+      apiKey: turn.token,
+    });
+    turn.markDispatched();
+    const result = streamText({
+      model: wrapLanguageModel({
+        model: worker(turn.model),
+        middleware: extractReasoningMiddleware({ tagName: "think" }),
+      }),
+      system: [
+        systemPrompt(new Date().toISOString().slice(0, 10)),
+        await mcpInstructions(),
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+      messages: await convertToModelMessages(messages),
+      tools: { ...webTools(toolBudget(turn.ctx)), ...(await mcpTools()) },
+      temperature: 0.7,
+      stopWhen: stepCountIs(5),
+      abortSignal: request.signal,
+      onAbort: () => turn.release(),
+    });
+    return result.toUIMessageStreamResponse<MeshUIMessage>({
+      originalMessages: messages,
+      messageMetadata: ({ part }) =>
+        part.type === "start" ? { worker: turn.worker } : undefined,
+      onError: (error) => {
+        turn.release();
+        return workerError(error, turn.worker, model);
+      },
+      onEnd: () => turn.release(),
+    });
+  } catch (error) {
+    turn.release();
+    throw error;
+  }
 }

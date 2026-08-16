@@ -2,5 +2,5 @@ fastapi>=0.140,<1
 numpy>=2.5,<3
 opencv-python>=5.0.0.93,<6
 rstreamlabs-rstream[asgi,api,realtime]>=0.4.0
-supervision>=0.29.1,<1
+supervision>=0.29.1,<0.30
 trackers>=2.5.0.post0,<3

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-15T04:58:34.739147+00:00",
+  "repository": {
+    "revision": "34aa947b7139fe58e6b9a4ea32dfb5100b61318e",
+    "dirty": false,
+    "diffSha256": "e0ab60e78b9480286d2b8779ce0b1172aab504f4ed644979376c897d71346d29"
+  },
+  "model": {
+    "name": "yolov8n.pt",
+    "bytes": 6549796,
+    "sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36"
+  },
+  "media": {
+    "name": "highway-traffic-pexels-2103099.mp4",
+    "bytes": 21966072,
+    "sha256": "9e18115c6dd7ec9fb41734d497c71effaa4f6184e7df5acaca4185a4f72f6794"
+  },
+  "host": {
+    "system": "Darwin",
+    "release": "25.5.0",
+    "machine": "arm64",
+    "python": "3.14.6"
+  },
+  "tools": {
+    "git": "git version 2.55.0",
+    "node": "v26.7.0",
+    "npm": "11.19.0"
+  },
+  "parameters": {
+    "runs": 50,
+    "concurrency": 16,
+    "stressRepetitions": 250,
+    "maxP95MS": 40.0,
+    "minThroughputFPS": 25.0,
+    "live": true,
+    "regionalRouting": true,
+    "localRegion": "eu-west-3",
+    "remoteRegion": "us-east-1",
+    "liveFrames": 20,
+    "transportRepetitions": 30,
+    "maxLiveP95MS": 750.0,
+    "maxFailoverMS": 2500.0,
+    "maxTransportOverheadP95MS": 750.0
+  }
+}

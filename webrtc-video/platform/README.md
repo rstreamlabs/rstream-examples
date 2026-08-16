@@ -67,11 +67,12 @@ RSTREAM_CLIENT_ID="rstream-app-client-id"
 RSTREAM_CLIENT_SECRET="hex-encoded-rstream-app-client-secret"
 RSTREAM_PROJECT_ENDPOINT="rstream-project-endpoint"
 RSTREAM_PROJECT_ID=""
+RSTREAM_TURN_KEYRING_BASE_URL=""
 RSTREAM_WEBHOOK_SIGNING_SECRET="whsec_..."
 WATCH_TOKEN_TTL_SECONDS="120"
 ```
 
-The sample resolves the engine from `RSTREAM_PROJECT_ENDPOINT`. `RSTREAM_PROJECT_ID` is optional when an endpoint is configured; when present, it is used by the SDK as the default project scope for short-lived tunnel tokens.
+The sample resolves the engine from `RSTREAM_PROJECT_ENDPOINT`. `RSTREAM_PROJECT_ID` is optional when an endpoint is configured; when present, it is used by the SDK as the default project scope for short-lived tunnel tokens. Application TURN credentials are derived locally from the public key published for the selected TURN realm. Leave `RSTREAM_TURN_KEYRING_BASE_URL` empty when that key is served by `RSTREAM_API_URL`; set it to a separate public HTTPS origin when an interactive access gateway protects the control-plane origin. The keyring request refuses redirects and validates the bounded DER key before using it.
 
 ### rstream Project Setup
 

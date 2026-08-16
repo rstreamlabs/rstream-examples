@@ -3,7 +3,7 @@ LOCAL_PORT ?= 55432
 CLIENT_PORT ?= 15432
 TUNNEL_NAME ?= staging-postgres
 
-.PHONY: build run start verify config wait test query server-tunnel client-port stop clean
+.PHONY: build run start verify config wait test query server-tunnel client-port qualify stop clean
 
 build: config
 
@@ -31,6 +31,9 @@ server-tunnel:
 
 client-port:
 	rstream nc -L 127.0.0.1:$(CLIENT_PORT) -R rstrm://$(TUNNEL_NAME)
+
+qualify:
+	python3 qualification/run.py --context "$${RSTREAM_CONTEXT:?set RSTREAM_CONTEXT to a non-production context}"
 
 stop:
 	$(DOCKER_COMPOSE) stop

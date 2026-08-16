@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="404" viewBox="0 0 900 404">
+<rect width="100%" height="100%" fill="#111827"/>
+<text x="24" y="38" fill="#f9fafb" font-family="sans-serif" font-size="22" font-weight="700">Qualification phase duration</text>
+<text x="24" y="88" fill="#d1d5db" font-family="sans-serif" font-size="14">sample-verify</text>
+<rect x="260" y="70" width="151.2" height="22" rx="4" fill="#22c55e"/>
+<text x="421.2" y="87" fill="#f9fafb" font-family="sans-serif" font-size="14">12.49 s</text>
+<text x="24" y="126" fill="#d1d5db" font-family="sans-serif" font-size="14">qualification-tests</text>
+<rect x="260" y="108" width="15.6" height="22" rx="4" fill="#22c55e"/>
+<text x="285.6" y="125" fill="#f9fafb" font-family="sans-serif" font-size="14">1.29 s</text>
+<text x="24" y="164" fill="#d1d5db" font-family="sans-serif" font-size="14">worker-cancellation-stress</text>
+<rect x="260" y="146" width="185.3" height="22" rx="4" fill="#22c55e"/>
+<text x="455.3" y="163" fill="#f9fafb" font-family="sans-serif" font-size="14">15.31 s</text>
+<text x="24" y="202" fill="#d1d5db" font-family="sans-serif" font-size="14">worker-real-model</text>
+<rect x="260" y="184" width="32.6" height="22" rx="4" fill="#22c55e"/>
+<text x="302.6" y="201" fill="#f9fafb" font-family="sans-serif" font-size="14">2.70 s</text>
+<text x="24" y="240" fill="#d1d5db" font-family="sans-serif" font-size="14">model-benchmark</text>
+<rect x="260" y="222" width="51.8" height="22" rx="4" fill="#22c55e"/>
+<text x="321.8" y="239" fill="#f9fafb" font-family="sans-serif" font-size="14">4.28 s</text>
+<text x="24" y="278" fill="#d1d5db" font-family="sans-serif" font-size="14">live-mesh</text>
+<rect x="260" y="260" width="163.2" height="22" rx="4" fill="#22c55e"/>
+<text x="433.2" y="277" fill="#f9fafb" font-family="sans-serif" font-size="14">13.48 s</text>
+<text x="24" y="316" fill="#d1d5db" font-family="sans-serif" font-size="14">transport-profile</text>
+<rect x="260" y="298" width="470.0" height="22" rx="4" fill="#22c55e"/>
+<text x="740.0" y="315" fill="#f9fafb" font-family="sans-serif" font-size="14">38.83 s</text>
+<text x="24" y="354" fill="#d1d5db" font-family="sans-serif" font-size="14">regional-routing</text>
+<rect x="260" y="336" width="307.2" height="22" rx="4" fill="#22c55e"/>
+<text x="577.2" y="353" fill="#f9fafb" font-family="sans-serif" font-size="14">25.38 s</text>
+</svg>

@@ -14,6 +14,7 @@ The repository currently includes the following examples:
 | `python-fastapi-rstream-tunnel` | A FastAPI application served directly through a published rstream HTTP tunnel with the Python SDK, including an edge token-auth mode and a private variant consumed over a raw rstream dial.                                                                  |
 | `homelab-rstream`               | A Docker-based homelab monitoring stack that publishes Grafana from Docker labels, keeps Prometheus private, and uses labels for inventory.                                                                                                                 |
 | `nextjs-rstream-preview`        | A standard Next.js App Router application with a signed webhook endpoint and an advanced SDK tunnel mode that serves a custom Next.js HTTP server directly through rstream while preserving the normal `next dev` and `next start` commands.                  |
+| `netcat-media-streaming`        | Minimal GStreamer and FFmpeg pipelines over `rstream nc`, with reliable MPEG-TS, low-latency RTP datagrams, bidirectional RTCP repair, Go/C++ interoperability, and reproducible media qualification.                                                       |
 | `private-llm-mesh`              | A private LLM mesh with a Next.js chat app, live tunnel discovery, scoped worker tokens, and Go workers that embed llama.cpp to serve local OpenAI-compatible models over rstream.                                                                           |
 | `private-masque-egress-gateway` | A private MASQUE egress gateway that publishes a rstream HTTP/3 endpoint and serves plain `CONNECT` for TCP plus `CONNECT-UDP` for UDP/QUIC, with conservative target policy, auth, metrics, and Apple Relay profile generation.                              |
 | `private-postgres-access`       | A private bytestream tunnel pattern for PostgreSQL, using `rstream nc` to connect local tools, migrations, or CI jobs to a database that stays inside a private network without a VPN.                                                                        |
@@ -22,6 +23,35 @@ The repository currently includes the following examples:
 | `webrtc-video`                  | A WebRTC scenario split into a Go `producer/` agent that runs on a device or homelab machine and a `platform/` Next.js application that provisions producers, authorizes viewers, and watches tunnel state.                                                |
 
 Each example directory contains its own README with the platform-specific setup, configuration profiles, build commands, and operational notes required by that example.
+
+## Examples and qualification packs
+
+Every example has two deliberately separate layers:
+
+- the main README and implementation are the shortest production-shaped path
+  to understand and run the use case;
+- an optional `qualification/` directory contains controlled failure scenarios,
+  load tests, benchmarks, analyzers, and reproducible evidence.
+
+You never need the qualification harness to try an example. Its extra tooling
+exists to answer harder questions: how a stream reacts to loss, whether routing
+remains fair under saturation, whether cancellation leaks work, or how quickly a
+service recovers after a dependency disappears. Keeping that machinery beside
+the implementation makes the claims inspectable without turning the quick start
+into a test laboratory.
+
+A qualification pack records the exact repository revision, relevant runtime
+and environment versions, test parameters, explicit acceptance thresholds, raw
+measurements, and a compact human-readable report. High-volume logs stay in CI
+artifacts; portable CSV or JSON summaries, their generator, and useful SVG
+charts may be versioned with the example. A passing result qualifies only the
+pinned code and environment recorded in its manifest, not every possible
+deployment.
+
+[`QUALIFICATION.md`](./QUALIFICATION.md) defines the common evidence contract,
+the review gate, and the minimum failure and performance scenarios for every
+use case. Individual packs keep their scenario-specific thresholds beside the
+sample they qualify.
 
 ## Integration postures
 
@@ -96,5 +126,6 @@ The examples in this repository follow a few simple rules:
 - keep the architecture close to a real deployment
 - prefer standard interfaces and idiomatic integrations
 - make packaging and deployment paths explicit when they matter
+- turn important performance and resilience claims into reproducible evidence
 
 In practice, that means an example may still be compact while handling the kinds of issues that appear quickly on real systems, such as disconnects, media-pipeline failures, or deployment on machines without a local toolchain.

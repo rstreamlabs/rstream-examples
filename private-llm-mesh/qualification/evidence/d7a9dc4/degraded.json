@@ -1,0 +1,179 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-16T14:15:11.590Z",
+  "parameters": {
+    "baseURL": "http://127.0.0.1:3100",
+    "model": "qualification-qwen",
+    "total": 20,
+    "concurrency": 4,
+    "timeoutMS": 360000,
+    "thresholds": {
+      "maxFailureRate": 0,
+      "minWorkers": 1,
+      "maxWorkerShare": 1,
+      "maxTTFTP95MS": 0,
+      "maxTotalP95MS": 0
+    }
+  },
+  "wallSeconds": 16.597617582999998,
+  "summary": {
+    "turns": 20,
+    "completed": 20,
+    "successful": 20,
+    "failed": 0,
+    "successRate": 1,
+    "turnsPerSecond": 1.204992216502498,
+    "ttftP50MS": 2978.917209,
+    "ttftP95MS": 3502.834916,
+    "totalP50MS": 2979.9524169999995,
+    "totalP95MS": 3503.8937079999996,
+    "workers": {
+      "qualification-worker-b": 20
+    },
+    "workerCount": 1,
+    "maxWorkerShare": 1
+  },
+  "violations": [],
+  "results": [
+    {
+      "index": 0,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 1819.259708,
+      "totalMS": 1846.099
+    },
+    {
+      "index": 1,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 3928.350417,
+      "totalMS": 3950.057792
+    },
+    {
+      "index": 2,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 2516.025208,
+      "totalMS": 2526.6022909999997
+    },
+    {
+      "index": 3,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 3204.648625,
+      "totalMS": 3224.460583
+    },
+    {
+      "index": 4,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 2782.6535000000003,
+      "totalMS": 2798.532792
+    },
+    {
+      "index": 5,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 2809.509375,
+      "totalMS": 2818.009375
+    },
+    {
+      "index": 6,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 2828.8992919999996,
+      "totalMS": 2829.898917
+    },
+    {
+      "index": 7,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 2802.8165420000005,
+      "totalMS": 2811.283542
+    },
+    {
+      "index": 8,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 2823.3528749999996,
+      "totalMS": 2830.3714999999993
+    },
+    {
+      "index": 9,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 2817.6598749999994,
+      "totalMS": 2820.231334
+    },
+    {
+      "index": 10,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 2791.271833999999,
+      "totalMS": 2807.6909589999996
+    },
+    {
+      "index": 11,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 2978.917209,
+      "totalMS": 2979.9524169999995
+    },
+    {
+      "index": 12,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 3154.0343329999996,
+      "totalMS": 3155.0085
+    },
+    {
+      "index": 13,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 3301.1605409999993,
+      "totalMS": 3310.675665999999
+    },
+    {
+      "index": 14,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 3502.834916,
+      "totalMS": 3503.8937079999996
+    },
+    {
+      "index": 15,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 3434.790666000001,
+      "totalMS": 3450.48725
+    },
+    {
+      "index": 16,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 3429.0445419999996,
+      "totalMS": 3442.0894580000004
+    },
+    {
+      "index": 17,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 3450.8976249999996,
+      "totalMS": 3454.2597079999996
+    },
+    {
+      "index": 18,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 3377.7987919999996,
+      "totalMS": 3380.661
+    },
+    {
+      "index": 19,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 3384.8518330000006,
+      "totalMS": 3392.8559999999998
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "device": "mps",
+  "accelerator": "Apple M1 Max",
+  "payloadBytes": 36083,
+  "codec": "jpeg",
+  "quality": 80,
+  "runs": 50,
+  "concurrency": 16,
+  "detectionCount": 15,
+  "labels": [
+    "bus",
+    "car",
+    "truck"
+  ],
+  "inferenceMS": {
+    "min": 7.51,
+    "mean": 10.129,
+    "p50": 9.547,
+    "p95": 14.237,
+    "max": 15.392
+  },
+  "sequentialWallSeconds": 1.059,
+  "sequentialThroughputFPS": 47.209,
+  "concurrentWallSeconds": 0.315,
+  "concurrentThroughputFPS": 50.824,
+  "violations": []
+}

@@ -1,5 +1,3 @@
-import { z } from "zod";
-
 import {
   APP_LABEL,
   getRstreamClient,
@@ -7,6 +5,11 @@ import {
   probeToken,
   ROLE_LABEL,
 } from "./rstream";
+import {
+  DOWN_WORKER_PROBE,
+  probeWorkerLiveness,
+  probeWorkerTransport,
+} from "./worker-probe.ts";
 
 export interface MeshWorker {
   name: string;
@@ -18,6 +21,10 @@ export interface MeshWorker {
   engine: string;
   ctx: number;
   load: number;
+  loadObservable: boolean;
+  observedAt: number;
+  parallel: number;
+  waiting: number;
   rtt: number;
   reachable: boolean;
 }
@@ -33,23 +40,9 @@ const state: DiscoveryState = {
   inflight: null,
 };
 
-const healthSchema = z.object({ active: z.number() }).partial();
-const modelsSchema = z
-  .object({ data: z.array(z.object({ id: z.string() })) })
-  .partial();
-
-interface Probe {
-  load: number;
-  rtt: number;
-  reachable: boolean;
-  models: string[];
-}
-
-const DOWN: Probe = {
-  load: Number.POSITIVE_INFINITY,
-  rtt: Number.POSITIVE_INFINITY,
-  reachable: false,
-  models: [],
+const workerProbeDependencies = {
+  fetch,
+  now: Date.now,
 };
 
 // Liveness, models, and load for one worker.
@@ -63,50 +56,19 @@ const DOWN: Probe = {
 // `/healthz` is our own worker's live in-flight count: a load enrichment, never a
 // routing gate. A stock server lacks it, so load stays neutral and the worker
 // still routes, ordered by RTT.
-async function probeWorker(host: string): Promise<Probe> {
-  const token = await probeToken();
-  let models: string[] = [];
-  let rtt: number;
-  try {
-    const url = new URL(`https://${host}/v1/models`);
-    url.searchParams.set("rstream.token", token);
-    const start = Date.now();
-    const response = await fetch(url, { signal: AbortSignal.timeout(2000) });
-    rtt = Date.now() - start;
-    if (!response.ok) return DOWN;
-    const parsed = modelsSchema.safeParse(
-      await response.json().catch(() => ({})),
-    );
-    models =
-      parsed.success && parsed.data.data
-        ? parsed.data.data.map((m) => m.id)
-        : [];
-  } catch {
-    return DOWN;
-  }
-  let load = 0;
-  try {
-    const url = new URL(`https://${host}/healthz`);
-    url.searchParams.set("rstream.token", token);
-    const response = await fetch(url, { signal: AbortSignal.timeout(2000) });
-    if (response.ok) {
-      const health = healthSchema.safeParse(
-        await response.json().catch(() => ({})),
-      );
-      if (health.success && health.data.active !== undefined)
-        load = health.data.active;
-    }
-  } catch {
-    // No mesh /healthz — neutral load.
-  }
-  return { load, rtt, reachable: true, models };
+async function probeWorker(host: string) {
+  return probeWorkerTransport(
+    host,
+    await probeToken(),
+    workerProbeDependencies,
+  );
 }
 
 /**
  * Fresh liveness probe used before committing a chat turn to a worker.
  */
 export async function isWorkerAlive(host: string): Promise<boolean> {
-  return (await probeWorker(host)).reachable;
+  return probeWorkerLiveness(host, await probeToken(), workerProbeDependencies);
 }
 
 async function refresh(): Promise<MeshWorker[]> {
@@ -121,7 +83,7 @@ async function refresh(): Promise<MeshWorker[]> {
     online.map(async (tunnel) => {
       const labels = tunnel.labels ?? {};
       const host = tunnel.host ?? tunnel.hostname ?? "";
-      const probe = host ? await probeWorker(host) : DOWN;
+      const probe = host ? await probeWorker(host) : DOWN_WORKER_PROBE;
       const labelModels = (labels.models ?? "").split(",").filter(Boolean);
       return {
         name: tunnel.name,
@@ -135,6 +97,10 @@ async function refresh(): Promise<MeshWorker[]> {
         engine: labels.engine ?? "unknown",
         ctx: Number(labels.ctx ?? 0),
         load: probe.load,
+        loadObservable: probe.loadObservable,
+        observedAt: probe.observedAt,
+        parallel: probe.parallel,
+        waiting: probe.waiting,
         rtt: probe.rtt,
         reachable: probe.reachable,
       } satisfies MeshWorker;

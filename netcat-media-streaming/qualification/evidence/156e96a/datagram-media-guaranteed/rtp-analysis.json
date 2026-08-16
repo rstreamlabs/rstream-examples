@@ -1,0 +1,23 @@
+{
+  "generatedAt": "2026-08-16T13:51:49.343740+00:00",
+  "passed": true,
+  "receiver": {
+    "deliveredSenderPackets": 1221,
+    "deliveryPercent": 100.0,
+    "duplicates": 0,
+    "malformedRtpPackets": 0,
+    "maxReorderDistancePackets": 0,
+    "missingSenderPackets": 0,
+    "outOfOrderArrivals": 0,
+    "timestampRegressions": 0,
+    "unexpectedPackets": 0,
+    "uniquePackets": 1221
+  },
+  "sender": {
+    "ssrc": 3879279623,
+    "uniquePackets": 1221
+  },
+  "thresholds": {
+    "minimumPacketDeliveryPercent": 100.0
+  }
+}

@@ -1,47 +1,126 @@
 import type { MeshWorker } from "./discovery";
 
-/**
- * Lower is better: the worker's in-flight load plus a sub-1 round-trip tiebreak
- * (RTT in milliseconds, capped at one second). Two workers at equal load are
- * separated by latency; latency never outweighs a full unit of load.
- */
-export function score(worker: Pick<MeshWorker, "load" | "rtt">): number {
-  return worker.load + Math.min(worker.rtt, 1000) / 1000;
+interface Reservation {
+  createdAt: number;
+  dispatchedAt: number | null;
 }
 
-/**
- * Workers that can serve `model` right now, best-scored first. A worker is
- * eligible when it is reachable, has a public host, advertises the model, and
- * is not in the exclusion set. A worker may advertise several models, so the
- * same worker can be eligible for different model requests.
- */
+const RESERVATION_TTL_MS = 10 * 60 * 1000;
+const reservations = new Map<string, Map<symbol, Reservation>>();
+
+export interface WorkerLease {
+  worker: MeshWorker;
+  markDispatched(): void;
+  release(): void;
+}
+
+export interface WorkerScore {
+  normalizedLoad: number;
+  roundTripMilliseconds: number;
+}
+
+function activeReservations(workerId: string, now: number): Reservation[] {
+  const current = reservations.get(workerId);
+  if (!current) return [];
+  for (const [id, reservation] of current) {
+    if (now - reservation.createdAt >= RESERVATION_TTL_MS) current.delete(id);
+  }
+  if (current.size === 0) reservations.delete(workerId);
+  return [...current.values()];
+}
+
+function normalizedLoad(worker: MeshWorker, now: number): number {
+  const parallel = Math.max(1, worker.parallel);
+  const local = activeReservations(worker.id, now);
+  const pending = local.filter(
+    (reservation) => reservation.dispatchedAt === null,
+  ).length;
+  const dispatched = local.length - pending;
+  const observed = worker.loadObservable ? worker.load + worker.waiting : 0;
+  return (pending + Math.max(observed, dispatched)) / parallel;
+}
+
+/** Lower load wins. RTT breaks only equal-load ties. */
+export function score(worker: MeshWorker, now = Date.now()): WorkerScore {
+  return {
+    normalizedLoad: normalizedLoad(worker, now),
+    roundTripMilliseconds: Math.max(0, worker.rtt),
+  };
+}
+
+function compareScores(left: WorkerScore, right: WorkerScore): number {
+  const loadDifference = left.normalizedLoad - right.normalizedLoad;
+  if (Math.abs(loadDifference) >= Number.EPSILON) return loadDifference;
+  return left.roundTripMilliseconds - right.roundTripMilliseconds;
+}
+
 export function eligibleWorkers(
   workers: MeshWorker[],
   model: string,
   exclude: Set<string>,
+  now = Date.now(),
 ): MeshWorker[] {
   return workers
     .filter(
-      (w) =>
-        w.reachable && w.host && w.models.includes(model) && !exclude.has(w.id),
+      (worker) =>
+        worker.reachable &&
+        worker.host &&
+        worker.models.includes(model) &&
+        !exclude.has(worker.id),
     )
-    .sort((a, b) => score(a) - score(b));
+    .sort((left, right) => compareScores(score(left, now), score(right, now)));
 }
 
 /**
- * Pick a worker for `model`, load-balancing across the two least-loaded
- * candidates so identical replicas share traffic instead of stampeding one
- * worker. Returns null when nothing can serve the model. `rand` is injectable
- * for deterministic tests and defaults to Math.random in production.
+ * Reserve the best eligible worker until the caller releases the lease. Local
+ * reservations close the discovery-cache feedback gap and prevent concurrent
+ * requests from stampeding the same worker. The random source only breaks
+ * genuinely equal scores.
  */
-export function pickWorker(
+export function reserveWorker(
   workers: MeshWorker[],
   model: string,
   exclude: Set<string>,
   rand: () => number = Math.random,
-): MeshWorker | null {
-  const candidates = eligibleWorkers(workers, model, exclude);
+  now: () => number = Date.now,
+): WorkerLease | null {
+  const reservedAt = now();
+  const candidates = eligibleWorkers(workers, model, exclude, reservedAt);
   if (candidates.length === 0) return null;
-  const top = candidates.slice(0, 2);
-  return top[Math.floor(rand() * top.length)] ?? null;
+  const bestScore = score(candidates[0], reservedAt);
+  const tied = candidates.filter(
+    (worker) => compareScores(score(worker, reservedAt), bestScore) === 0,
+  );
+  const worker = tied[Math.floor(rand() * tied.length)] ?? candidates[0];
+  const reservationId = Symbol(worker.id);
+  const workerReservations = reservations.get(worker.id) ?? new Map();
+  workerReservations.set(reservationId, {
+    createdAt: reservedAt,
+    dispatchedAt: null,
+  });
+  reservations.set(worker.id, workerReservations);
+  let released = false;
+  return {
+    worker,
+    markDispatched() {
+      if (released) return;
+      const reservation = reservations.get(worker.id)?.get(reservationId);
+      if (reservation?.dispatchedAt === null) reservation.dispatchedAt = now();
+    },
+    release() {
+      if (released) return;
+      released = true;
+      const current = reservations.get(worker.id);
+      current?.delete(reservationId);
+      if (current?.size === 0) reservations.delete(worker.id);
+    },
+  };
+}
+
+export function reservationCount(workerId: string, now = Date.now()): number {
+  return activeReservations(workerId, now).length;
+}
+
+export function resetReservationsForTest(): void {
+  reservations.clear();
 }

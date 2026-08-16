@@ -32,6 +32,7 @@ const rstreamEnvSchema = z
     RSTREAM_PROJECT_ENDPOINT: optionalStringSchema,
     RSTREAM_API_URL: optionalUrlSchema,
     RSTREAM_ENGINE: optionalStringSchema,
+    RSTREAM_TURN_KEYRING_BASE_URL: optionalUrlSchema,
     DEVICE_TOKEN_TTL_SECONDS: secondsSchema("300"),
     VIEWER_TOKEN_TTL_SECONDS: secondsSchema("120"),
     WATCH_TOKEN_TTL_SECONDS: secondsSchema("120"),

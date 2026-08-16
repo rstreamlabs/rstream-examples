@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "decodedFrames": 300,
+  "expectedFrames": 300,
+  "minimumFrames": 300,
+  "deliveryPercent": 100.0,
+  "uniqueFrames": 300,
+  "consecutiveDuplicates": 0,
+  "decodedBytes": 34560000
+}

@@ -2,7 +2,10 @@ package turn
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,6 +22,7 @@ type Provider struct {
 	mu           sync.Mutex
 	cached       *rstream.TURNCredentials
 	expires      time.Time
+	transports   map[string]struct{}
 }
 
 func NewProvider(cfg config.Config, provisioningClient *provisioning.Client) (*Provider, error) {
@@ -26,11 +30,20 @@ func NewProvider(cfg config.Config, provisioningClient *provisioning.Client) (*P
 	if err != nil {
 		return nil, err
 	}
+	transports, err := cfg.TURNTransports()
+	if err != nil {
+		return nil, err
+	}
+	allowed := make(map[string]struct{}, len(transports))
+	for _, transport := range transports {
+		allowed[transport] = struct{}{}
+	}
 	return &Provider{
 		provisioning: provisioningClient,
 		options: rsconfig.TURNCredentialsEnvOptions{
 			TTL: ttl,
 		},
+		transports: allowed,
 	}, nil
 }
 
@@ -47,7 +60,10 @@ func (p *Provider) Credentials(ctx context.Context) (*rstream.TURNCredentials, e
 		if err != nil {
 			return nil, fmt.Errorf("failed to provision TURN credentials: %w", err)
 		}
-		p.cached = credentials
+		p.cached, err = filterCredentials(credentials, p.transports)
+		if err != nil {
+			return nil, err
+		}
 		p.expires = provisioning.TURNExpires(credentials, now)
 		return cloneCredentials(p.cached), nil
 	}
@@ -56,9 +72,77 @@ func (p *Provider) Credentials(ctx context.Context) (*rstream.TURNCredentials, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to create TURN credentials: %w", err)
 	}
-	p.cached = credentials
+	p.cached, err = filterCredentials(credentials, p.transports)
+	if err != nil {
+		return nil, err
+	}
 	p.expires = credentialsExpires(credentials, now)
 	return cloneCredentials(p.cached), nil
+}
+
+func filterCredentials(credentials *rstream.TURNCredentials, allowed map[string]struct{}) (*rstream.TURNCredentials, error) {
+	filtered := cloneCredentials(credentials)
+	if filtered == nil {
+		return nil, errors.New("TURN credentials are missing")
+	}
+	filtered.URLs = filtered.URLs[:0]
+	for _, rawURL := range credentials.URLs {
+		transport, err := classifyTURNTransport(rawURL)
+		if err != nil {
+			return nil, err
+		}
+		_, restricted := allowed[transport]
+		if len(allowed) == 0 || restricted {
+			filtered.URLs = append(filtered.URLs, rawURL)
+		}
+	}
+	if len(filtered.URLs) == 0 {
+		return nil, errors.New("TURN credentials did not contain an allowed transport")
+	}
+	return filtered, nil
+}
+
+// URLsByTransport indexes validated credential URLs by their physical client
+// transport. The returned URLs never contain the username or credential.
+func URLsByTransport(credentials *rstream.TURNCredentials) (map[string]string, error) {
+	urls := make(map[string]string)
+	if credentials == nil {
+		return urls, nil
+	}
+	for _, rawURL := range credentials.URLs {
+		transport, err := classifyTURNTransport(rawURL)
+		if err != nil {
+			return nil, err
+		}
+		if _, exists := urls[transport]; !exists {
+			urls[transport] = rawURL
+		}
+	}
+	return urls, nil
+}
+
+func classifyTURNTransport(rawURL string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return "", fmt.Errorf("parse TURN URL: %w", err)
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if strings.TrimSpace(parsed.Opaque) == "" && strings.TrimSpace(parsed.Hostname()) == "" {
+		return "", fmt.Errorf("unsupported TURN URL %q", rawURL)
+	}
+	transport := strings.ToLower(parsed.Query().Get("transport"))
+	switch {
+	case scheme == "turn" && transport == "udp":
+		return "udp", nil
+	case scheme == "turn" && transport == "tcp":
+		return "tcp", nil
+	case scheme == "turns" && transport == "udp":
+		return "dtls", nil
+	case scheme == "turns" && transport == "tcp":
+		return "tls", nil
+	default:
+		return "", fmt.Errorf("unsupported TURN URL %q", rawURL)
+	}
 }
 
 func ICEConfig(credentials *rstream.TURNCredentials) webrtc.Configuration {

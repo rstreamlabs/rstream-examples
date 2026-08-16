@@ -1,0 +1,50 @@
+{
+  "aggregate": {
+    "max_ms": 1260.2335829869844,
+    "mean_ms": 465.70650377107086,
+    "p95_ms": 765.8995419624262
+  },
+  "binary_sha256": "8ec2a52a725f48cc869616de8cc356145c540b862ea728ea62a79c4f6e225b84",
+  "budgets": {
+    "max_ms": 5000.0,
+    "p95_ms": 2000.0
+  },
+  "campaign_count": 5,
+  "campaigns": [
+    {
+      "max_ms": 523.0042919865809,
+      "mean_ms": 411.8259133883839,
+      "p95_ms": 464.84120801324025
+    },
+    {
+      "max_ms": 492.12700000498444,
+      "mean_ms": 416.1881614836602,
+      "p95_ms": 453.33041599951684
+    },
+    {
+      "max_ms": 531.7906669806689,
+      "mean_ms": 428.4831256718462,
+      "p95_ms": 513.3825000375509
+    },
+    {
+      "max_ms": 621.7129579745233,
+      "mean_ms": 445.49806247050583,
+      "p95_ms": 563.3823749958538
+    },
+    {
+      "max_ms": 1260.2335829869844,
+      "mean_ms": 626.5372558409581,
+      "p95_ms": 1257.5023749959655
+    }
+  ],
+  "concurrency": 16,
+  "cooldown_seconds": 3.0,
+  "dirty": false,
+  "environment": "staging",
+  "generated_at": "2026-08-15T05:53:28.852118+00:00",
+  "request_count": 320,
+  "requests_per_campaign": 64,
+  "revision": "7500baa49debd6ab47b8591b7af92fa1b31f49f4",
+  "schema_version": 1,
+  "verdict": "PASS"
+}

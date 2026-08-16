@@ -29,6 +29,25 @@ const sessionStatsSchema = z.object({
   estimatedBitrateBps: z.number().int(),
   encoderTargetBitrateKbps: z.number().int(),
   lastAppliedBitrateKbps: z.number().int(),
+  adaptiveBitrateUpdates: z.number().int().nonnegative().optional(),
+  adaptiveBitrateFailures: z.number().int().nonnegative().optional(),
+  recoveryKeyFrameRequests: z.number().int().nonnegative().optional(),
+  recoveryKeyFrameCoalesced: z.number().int().nonnegative().optional(),
+  recoveryKeyFrameFailures: z.number().int().nonnegative().optional(),
+  rtcpKeyFrameRequests: z.number().int().nonnegative().optional(),
+  rtcpMalformedFeedback: z.number().int().nonnegative().optional(),
+  bandwidth: z
+    .object({
+      lossTargetBitrateBps: z.number().int(),
+      delayTargetBitrateBps: z.number().int(),
+      averageLoss: z.number(),
+      delayMeasurementMs: z.number(),
+      delayEstimateMs: z.number(),
+      delayThresholdMs: z.number(),
+      usage: z.string(),
+      state: z.string(),
+    })
+    .optional(),
 });
 
 const signalMessageSchema = z.discriminatedUnion("type", [

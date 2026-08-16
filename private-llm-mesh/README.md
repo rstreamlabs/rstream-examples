@@ -16,6 +16,26 @@ When a message arrives (`POST /api/chat`), the application authenticates the req
 
 Discovery and presence come from the tunnel registry. The pool panel uses `@rstreamlabs/react` to watch tunnel state from the browser in real time, so a worker that joins or leaves appears at once without polling. Each worker is then probed on its OpenAI `/v1/models` endpoint for liveness, its current model list, and round-trip time, with in-flight load read from an optional `/healthz`; every answer is tagged with the machine that produced it.
 
+The universal model probe and optional load probe run concurrently. Immediately
+before dispatch, the application performs only the universal model request, so
+the optional load extension never adds a second sequential network round trip to
+the time to first token.
+
+Routing compares workers in this order:
+
+1. normalized active and waiting work, divided by the worker's parallel capacity;
+2. round-trip time, only when the normalized load is equal;
+3. a random choice, only when both values are equal.
+
+This means a nearby busy worker cannot beat an idle remote worker merely because
+it is closer. A process-local lease reserves the selected capacity until the
+turn ends, which closes the two-second discovery-cache feedback gap for
+concurrent requests handled by the same application instance. Equal-score
+randomization spreads requests from independent application instances, while
+the worker's bounded admission queue is the final fleet-wide overload boundary.
+The application therefore remains stateless and does not require Redis just for
+routing.
+
 Reaching a worker is a server-to-worker call over a short-lived, narrowly scoped tunnel token. The same primitive lets the agent open a shell on one of the user's machines through the rstream MCP, with no change to the connectivity or authorization model.
 
 ## Stack
@@ -108,3 +128,19 @@ The sample uses a hosted rstream project. Its application credentials resolve th
 ## Deploy
 
 The application is stateless. Client credentials and the authentication configuration are the only server state, so it deploys to Vercel as it stands, and chat history lives in the browser session with no database to provision. Set the same environment variables in the Vercel project, point the GitHub OAuth callback at the deployed URL, and the workers connect as soon as they start.
+
+## Qualification
+
+The quickstart above remains the normal usage path. The optional
+[`qualification/`](qualification) pack separately exercises capacity-aware
+routing, bounded queueing, cancellation, concurrent shutdown, a real GGUF model,
+race safety, stream integrity, and—when pointed at a running app—the complete
+rstream mesh. It emits raw JSON and logs plus Markdown and SVG evidence pinned
+to the tested revision and model hash.
+
+The published [`d7a9dc4` evidence pack](qualification/evidence/d7a9dc4/report.md)
+records 60/60 successful concurrent turns across two real Qwen3 workers with an
+exact 30/30 distribution. A controlled degraded run completed 20/20 turns on
+the surviving worker, and the recovery run completed 20/20 with the restored
+pool split 10/10. The same revision passes the real-model race, bounded
+admission, cancellation, shutdown, routing, web, and dependency gates.

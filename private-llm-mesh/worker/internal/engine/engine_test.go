@@ -4,8 +4,12 @@ import (
 	"context"
 	"errors"
 	"os"
+	"runtime"
 	"sync"
 	"testing"
+	"time"
+
+	"github.com/rstreamlabs/rstream-examples/private-llm-mesh/worker/internal/llm"
 )
 
 // These tests exercise the real embedded model. They run only when MODEL points
@@ -100,5 +104,116 @@ func TestChatCancel(t *testing.T) {
 	_, err := e.Chat(ctx, `[{"role":"user","content":"Tell me a very long story."}]`, "", 512, 0, nil)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("want context.Canceled, got %v", err)
+	}
+}
+
+func TestChatCancelDuringGeneration(t *testing.T) {
+	e := loadEngine(t, 1)
+	defer e.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	var once sync.Once
+	started := time.Now()
+	_, err := e.Chat(ctx, `[{"role":"user","content":"Write a detailed thousand-word story."}]`, "", 2048, 0, func(string) {
+		once.Do(cancel)
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("want context.Canceled, got %v", err)
+	}
+	if time.Since(started) > 10*time.Second {
+		t.Fatalf("cancellation took %s, want at most 10s", time.Since(started))
+	}
+}
+
+func TestCloseCancelsActiveGenerationBeforeFreeingModel(t *testing.T) {
+	e := loadEngine(t, 1)
+	started := make(chan struct{})
+	result := make(chan error, 1)
+	var once sync.Once
+	go func() {
+		_, err := e.Chat(context.Background(), `[{"role":"user","content":"Write a detailed thousand-word story."}]`, "", 2048, 0, func(string) {
+			once.Do(func() { close(started) })
+		})
+		result <- err
+	}()
+	select {
+	case <-started:
+	case <-time.After(30 * time.Second):
+		t.Fatal("generation did not emit its first token")
+	}
+	closed := make(chan struct{})
+	go func() {
+		e.Close()
+		close(closed)
+	}()
+	select {
+	case err := <-result:
+		if !errors.Is(err, llm.ErrClosed) {
+			t.Fatalf("Chat() error = %v, want ErrClosed", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("active generation did not stop during Close")
+	}
+	select {
+	case <-closed:
+	case <-time.After(10 * time.Second):
+		t.Fatal("Close() did not release the model after generation stopped")
+	}
+}
+
+func TestChatAdmissionRemainsBoundedUnderSaturation(t *testing.T) {
+	model := os.Getenv("MODEL")
+	if model == "" {
+		t.Skip("set MODEL=/path/to/gguf to run engine tests")
+	}
+	e, err := LoadWithOptions(model, 4096, Options{Parallel: 1, MaxQueue: 1})
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	defer e.Close()
+	firstCtx, cancelFirst := context.WithCancel(context.Background())
+	defer cancelFirst()
+	secondCtx, cancelSecond := context.WithCancel(context.Background())
+	defer cancelSecond()
+	firstStarted := make(chan struct{})
+	firstDone := make(chan error, 1)
+	var once sync.Once
+	go func() {
+		_, err := e.Chat(firstCtx, `[{"role":"user","content":"Write a detailed thousand-word story."}]`, "", 2048, 0, func(string) {
+			once.Do(func() { close(firstStarted) })
+		})
+		firstDone <- err
+	}()
+	select {
+	case <-firstStarted:
+	case <-time.After(30 * time.Second):
+		t.Fatal("first generation did not start")
+	}
+	secondDone := make(chan error, 1)
+	go func() {
+		_, err := e.Chat(secondCtx, `[{"role":"user","content":"Reply with ok."}]`, "", 16, 0, nil)
+		secondDone <- err
+	}()
+	deadline := time.Now().Add(time.Second)
+	for e.Stats().Waiting != 1 && time.Now().Before(deadline) {
+		runtime.Gosched()
+	}
+	if stats := e.Stats(); stats.InFlight != 1 || stats.Waiting != 1 {
+		t.Fatalf("saturated stats = %+v, want one active and one waiting", stats)
+	}
+	_, err = e.Chat(context.Background(), `[]`, "", 1, 0, nil)
+	if !errors.Is(err, llm.ErrAtCapacity) {
+		t.Fatalf("overflow Chat() error = %v, want ErrAtCapacity", err)
+	}
+	cancelFirst()
+	cancelSecond()
+	for name, done := range map[string]<-chan error{"first": firstDone, "second": secondDone} {
+		select {
+		case err := <-done:
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("%s Chat() error = %v, want context.Canceled", name, err)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatalf("%s Chat() did not stop after cancellation", name)
+		}
 	}
 }

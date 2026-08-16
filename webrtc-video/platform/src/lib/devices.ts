@@ -359,7 +359,7 @@ export async function tunnelPayload(device: Device) {
 }
 
 export async function turnPayload(deviceId: string) {
-  requireRstreamEnv()
+  const env = requireRstreamEnv()
   const rstream = getRstreamClient()
   requireMemoryQuota(
     `turn:${deviceId}`,
@@ -368,6 +368,7 @@ export async function turnPayload(deviceId: string) {
   )
   // TURN credentials are minted on demand and expire quickly for each viewer.
   return rstream.turn.createCredentials({
+    keyringBaseUrl: env.RSTREAM_TURN_KEYRING_BASE_URL,
     ttlSeconds: turnCredentialTTLSeconds,
   })
 }

@@ -49,6 +49,7 @@ type gstreamerEncoderController struct {
 	factory           string
 	bitrateProperty   string
 	targetBitrateKbps int
+	keyFrameRequests  uint
 	mu                sync.Mutex
 }
 
@@ -329,7 +330,6 @@ func (s *GStreamerSource) fail(err error) {
 func (s *GStreamerSource) stopPipeline() error {
 	done := make(chan error, 1)
 	go func() {
-		_ = s.pipeline.SendEvent(gst.NewEOSEvent())
 		done <- s.pipeline.BlockSetState(gst.StateNull)
 	}()
 	select {
@@ -487,6 +487,39 @@ func (c *gstreamerEncoderController) SetTargetBitrateKbps(value int) error {
 		c.name,
 		c.factory,
 		value,
+	)
+	return nil
+}
+
+func (c *gstreamerEncoderController) RequestKeyFrame() error {
+	c.mu.Lock()
+	count := c.keyFrameRequests
+	c.keyFrameRequests++
+	c.mu.Unlock()
+	structure := gst.NewStructure("GstForceKeyUnit")
+	for name, value := range map[string]any{
+		"all-headers":  true,
+		"count":        count,
+		"running-time": uint64(gst.ClockTimeNone),
+	} {
+		if err := structure.SetValue(name, value); err != nil {
+			structure.Free()
+			return fmt.Errorf("failed to create force-key-unit field %s: %w", name, err)
+		}
+	}
+	event := gst.NewCustomEvent(gst.EventTypeCustomUpstream, structure)
+	if !c.element.SendEvent(event) {
+		return fmt.Errorf(
+			"GStreamer encoder %s (%s) rejected a force-key-unit event",
+			c.name,
+			c.factory,
+		)
+	}
+	c.logger.Debug(
+		"GStreamer encoder %s (%s) accepted force-key-unit request %d",
+		c.name,
+		c.factory,
+		count,
 	)
 	return nil
 }

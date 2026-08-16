@@ -3,7 +3,15 @@
 // lets the HTTP layer be built and tested without linking llama.cpp.
 package llm
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+var (
+	ErrAtCapacity = errors.New("worker is at capacity")
+	ErrClosed     = errors.New("worker engine is closed")
+)
 
 // ToolCall is one structured tool invocation parsed from the model output.
 type ToolCall struct {

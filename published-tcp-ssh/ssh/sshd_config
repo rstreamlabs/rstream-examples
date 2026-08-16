@@ -4,4 +4,3 @@ PasswordAuthentication no
 PermitEmptyPasswords no
 PermitRootLogin no
 PubkeyAuthentication yes
-UsePAM no

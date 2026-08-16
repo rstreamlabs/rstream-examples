@@ -1,14 +1,34 @@
-# WebRTC video
+# Adaptive real-time WebRTC video
 
-This sample groups the WebRTC reference implementation around its two roles:
+This reference implementation covers the path from a remote video source to a
+browser-facing product. The device adapts its encoder to live congestion,
+bounds sender queues, repairs recent packet loss, and keeps the WebRTC session
+recoverable as network paths change. rstream publishes signaling through an
+outbound tunnel and supplies managed STUN/TURN connectivity; media remains a
+standard WebRTC session between the device and viewer.
 
-- `producer/`: Go agent that runs on a device or homelab machine, captures video, creates the rstream tunnel, and serves the WebRTC session.
-- `platform/`: Next.js product application that provisions producer tunnels, authorizes viewers, and watches tunnel state.
+![Adaptive 1080p30 response under controlled congestion](./producer/qualification/evidence/6706cfd/direct-flexfec/adaptive-bitrate.svg)
 
-The root Makefile targets the agent role, so `make build`, `make run`,
-`make test`, `make verify`, and `make clean` delegate to `producer/`.
+The [published qualification pack](./producer/qualification/evidence/6706cfd/report.md)
+ties direct, rstream relay, and QUIC/ICE mobility results to one clean source
+revision. It includes the measured time series, every acceptance assertion,
+and the complete reports behind the graph.
 
-Use the platform directly with npm:
+The implementation is split by responsibility:
+
+- [`producer/`](./producer/) is the Go device agent. It captures with
+  GStreamer, serves signaling and diagnostics, controls Pion WebRTC, and owns
+  the adaptive media loop.
+- [`platform/`](./platform/) is the Next.js product layer. It provisions
+  devices, issues scoped producer and viewer access, and exposes live tunnel
+  state without proxying the media session.
+
+The root Makefile targets the device role, so `make build`, `make run`,
+`make test`, `make verify`, and `make clean` delegate to `producer/`. The
+[producer README](./producer/README.md) starts with the standalone path and
+continues through the congestion, repair, mobility, and qualification model.
+
+Run the platform directly with npm:
 
 ```bash
 cd platform

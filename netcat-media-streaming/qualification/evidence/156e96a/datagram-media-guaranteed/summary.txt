@@ -1,0 +1,2 @@
+PASS video quality identical_frames=300/300 identical=100.000% candidate_frames=300 altered_candidate_frames=0
+PASS RTP packets=1221/1221 delivery=100.000% missing=0 duplicates=0 out_of_order=0

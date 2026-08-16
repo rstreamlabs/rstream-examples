@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-16T14:15:54.082Z",
+  "parameters": {
+    "baseURL": "http://127.0.0.1:3100",
+    "model": "qualification-qwen",
+    "total": 20,
+    "concurrency": 4,
+    "timeoutMS": 360000,
+    "thresholds": {
+      "maxFailureRate": 0,
+      "minWorkers": 2,
+      "maxWorkerShare": 0.75,
+      "maxTTFTP95MS": 0,
+      "maxTotalP95MS": 0
+    }
+  },
+  "wallSeconds": 16.912139583000002,
+  "summary": {
+    "turns": 20,
+    "completed": 20,
+    "successful": 20,
+    "failed": 0,
+    "successRate": 1,
+    "turnsPerSecond": 1.1825824817638035,
+    "ttftP50MS": 3047.3514159999995,
+    "ttftP95MS": 4010.1095,
+    "totalP50MS": 3067.3468329999996,
+    "totalP95MS": 4011.4857079999997,
+    "workers": {
+      "qualification-worker-b": 10,
+      "qualification-worker-a": 10
+    },
+    "workerCount": 2,
+    "maxWorkerShare": 0.5
+  },
+  "violations": [],
+  "results": [
+    {
+      "index": 0,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 4010.1095,
+      "totalMS": 4011.4857079999997
+    },
+    {
+      "index": 1,
+      "ok": true,
+      "worker": "qualification-worker-a",
+      "ttftMS": 2691.7814160000003,
+      "totalMS": 2717.135541
+    },
+    {
+      "index": 2,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 2608.643792,
+      "totalMS": 2610.039542
+    },
+    {
+      "index": 3,
+      "ok": true,
+      "worker": "qualification-worker-a",
+      "ttftMS": 4062.012167,
+      "totalMS": 4068.9391669999995
+    },
+    {
+      "index": 4,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 2748.171959,
+      "totalMS": 2775.4067090000003
+    },
+    {
+      "index": 5,
+      "ok": true,
+      "worker": "qualification-worker-a",
+      "ttftMS": 2691.893458,
+      "totalMS": 2722.5518749999997
+    },
+    {
+      "index": 6,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 2800.1433749999997,
+      "totalMS": 2801.058
+    },
+    {
+      "index": 7,
+      "ok": true,
+      "worker": "qualification-worker-a",
+      "ttftMS": 2731.168291,
+      "totalMS": 2749.6954159999996
+    },
+    {
+      "index": 8,
+      "ok": true,
+      "worker": "qualification-worker-a",
+      "ttftMS": 2792.638333,
+      "totalMS": 2823.891708
+    },
+    {
+      "index": 9,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 2679.090916,
+      "totalMS": 2705.5077499999998
+    },
+    {
+      "index": 10,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 3047.3514159999995,
+      "totalMS": 3067.3468329999996
+    },
+    {
+      "index": 11,
+      "ok": true,
+      "worker": "qualification-worker-a",
+      "ttftMS": 3033.063916,
+      "totalMS": 3060.0154580000008
+    },
+    {
+      "index": 12,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 3447.0938339999993,
+      "totalMS": 3447.9515420000007
+    },
+    {
+      "index": 13,
+      "ok": true,
+      "worker": "qualification-worker-a",
+      "ttftMS": 3510.3269579999996,
+      "totalMS": 3557.793208000001
+    },
+    {
+      "index": 14,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 3441.473582999999,
+      "totalMS": 3459.1754999999994
+    },
+    {
+      "index": 15,
+      "ok": true,
+      "worker": "qualification-worker-a",
+      "ttftMS": 3583.7635409999984,
+      "totalMS": 3609.2489579999983
+    },
+    {
+      "index": 16,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 3500.9272919999985,
+      "totalMS": 3528.770375
+    },
+    {
+      "index": 17,
+      "ok": true,
+      "worker": "qualification-worker-a",
+      "ttftMS": 3391.753999999999,
+      "totalMS": 3421.9763329999987
+    },
+    {
+      "index": 18,
+      "ok": true,
+      "worker": "qualification-worker-b",
+      "ttftMS": 3472.288125000001,
+      "totalMS": 3493.844916
+    },
+    {
+      "index": 19,
+      "ok": true,
+      "worker": "qualification-worker-a",
+      "ttftMS": 3389.8979999999992,
+      "totalMS": 3410.4453749999975
+    }
+  ]
+}
