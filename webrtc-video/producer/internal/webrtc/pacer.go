@@ -54,17 +54,15 @@ func newMinimumBitratePacerWithProtection(
 
 func pacingFactorForProtection(
 	mediaPacingFactor float64,
-	protection flexFECProtection,
+	_ flexFECProtection,
 ) float64 {
+	// wireBitrate already adds the sustained repair budget. Reducing the
+	// pacing factor by the same ratio would count that overhead twice and can
+	// leave a protected stream with no burst headroom at all.
 	if math.IsNaN(mediaPacingFactor) || math.IsInf(mediaPacingFactor, 0) || mediaPacingFactor < 1 {
 		mediaPacingFactor = 1
 	}
-	if !protection.enabled() {
-		return mediaPacingFactor
-	}
-	protectedWireFactor := (float64(protection.mediaPackets) +
-		float64(protection.repairPackets)) / float64(protection.mediaPackets)
-	return math.Max(1, mediaPacingFactor/protectedWireFactor)
+	return mediaPacingFactor
 }
 
 func wrapMinimumBitratePacer(delegate gcc.Pacer, minimumBitrate int) *minimumBitratePacer {

@@ -102,7 +102,7 @@ func TestMinimumBitratePacerUsesRealTimePacingHeadroom(t *testing.T) {
 	}
 }
 
-func TestMinimumBitratePacerSharesMediaHeadroomWithFlexFEC(t *testing.T) {
+func TestMinimumBitratePacerPreservesBurstHeadroomWithFlexFEC(t *testing.T) {
 	tests := []struct {
 		name              string
 		mediaPacingFactor float64
@@ -114,19 +114,19 @@ func TestMinimumBitratePacerSharesMediaHeadroomWithFlexFEC(t *testing.T) {
 			name:              "two repairs per five media packets",
 			mediaPacingFactor: 1.5,
 			protection:        flexFECProtection{mediaPackets: 5, repairPackets: 2},
-			want:              15.0 / 14.0,
+			want:              1.5,
 		},
 		{
 			name:              "two repairs per four media packets",
 			mediaPacingFactor: 1.5,
 			protection:        flexFECProtection{mediaPackets: 4, repairPackets: 2},
-			want:              1,
+			want:              1.5,
 		},
 		{
 			name:              "repair overhead above media headroom",
 			mediaPacingFactor: 1.5,
 			protection:        flexFECProtection{mediaPackets: 3, repairPackets: 2},
-			want:              1,
+			want:              1.5,
 		},
 		{
 			name:              "invalid protection",
@@ -173,11 +173,11 @@ func TestMinimumBitratePacerBoundsProtectedWireEnvelope(t *testing.T) {
 			t.Fatalf("pacing envelope for media target %d = %v, want %d", mediaTarget, stats["pacerPacingBitrateBps"], pacingTarget)
 		}
 	}
-	assertPacerEnvelope(2_200_000, 3_300_000, 3_300_000)
+	assertPacerEnvelope(2_200_000, 3_300_000, 4_950_000)
 	pacer.SetTargetBitrate(3_000_000)
-	assertPacerEnvelope(3_000_000, 4_500_000, 4_500_000)
+	assertPacerEnvelope(3_000_000, 4_500_000, 6_750_000)
 	pacer.SetTargetBitrate(100_000)
-	assertPacerEnvelope(500_000, 750_000, 750_000)
+	assertPacerEnvelope(500_000, 750_000, 1_125_000)
 }
 
 func TestMinimumBitratePacerPreservesUnusedHeadroomWithLighterFlexFEC(t *testing.T) {
@@ -196,8 +196,8 @@ func TestMinimumBitratePacerPreservesUnusedHeadroomWithLighterFlexFEC(t *testing
 	if got := stats["pacerTargetBitrateBps"]; got != 7_000_000 {
 		t.Fatalf("protected wire target = %v, want 7000000", got)
 	}
-	if got := stats["pacerPacingBitrateBps"]; got != 7_500_000 {
-		t.Fatalf("pacing envelope = %v, want 7500000", got)
+	if got := stats["pacerPacingBitrateBps"]; got != 10_500_000 {
+		t.Fatalf("pacing envelope = %v, want 10500000", got)
 	}
 }
 

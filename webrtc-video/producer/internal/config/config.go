@@ -560,16 +560,7 @@ func (c Config) FlexFECRepairPackets() uint32 {
 }
 
 func (c Config) MaxSafeAdaptiveDecreaseThresholdPct() int {
-	protectedWireFactor := 1.0
-	if c.WebRTC.Interceptors.FlexFEC {
-		mediaPackets := float64(c.FlexFECMediaPackets())
-		repairPackets := float64(c.FlexFECRepairPackets())
-		if mediaPackets > 0 && repairPackets > 0 {
-			protectedWireFactor = (mediaPackets + repairPackets) / mediaPackets
-		}
-	}
-	pacingEnvelopeFactor := math.Max(RealTimePacingFactor, protectedWireFactor)
-	availableFraction := 1 - protectedWireFactor/pacingEnvelopeFactor
+	availableFraction := 1 - 1/RealTimePacingFactor
 	if availableFraction <= 0 {
 		return 0
 	}

@@ -253,7 +253,7 @@ func TestAdaptiveBackendRejectsInvalidChangeThresholds(t *testing.T) {
 	}
 }
 
-func TestMaximumSafeAdaptiveDecreaseThresholdTracksRepairOverhead(t *testing.T) {
+func TestMaximumSafeAdaptiveDecreaseThresholdPreservesBurstHeadroom(t *testing.T) {
 	for _, testCase := range []struct {
 		name          string
 		flexFEC       bool
@@ -262,10 +262,10 @@ func TestMaximumSafeAdaptiveDecreaseThresholdTracksRepairOverhead(t *testing.T) 
 		want          int
 	}{
 		{name: "without proactive repair", want: 33},
-		{name: "one repair per five media packets", flexFEC: true, mediaPackets: 5, repairPackets: 1, want: 20},
-		{name: "two repairs per five media packets", flexFEC: true, mediaPackets: 5, repairPackets: 2, want: 6},
-		{name: "two repairs per four media packets", flexFEC: true, mediaPackets: 4, repairPackets: 2, want: 0},
-		{name: "repair exceeds pacing headroom", flexFEC: true, mediaPackets: 4, repairPackets: 3, want: 0},
+		{name: "one repair per five media packets", flexFEC: true, mediaPackets: 5, repairPackets: 1, want: 33},
+		{name: "two repairs per five media packets", flexFEC: true, mediaPackets: 5, repairPackets: 2, want: 33},
+		{name: "two repairs per four media packets", flexFEC: true, mediaPackets: 4, repairPackets: 2, want: 33},
+		{name: "repair exceeds media headroom", flexFEC: true, mediaPackets: 4, repairPackets: 3, want: 33},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			cfg := Default()
@@ -279,7 +279,7 @@ func TestMaximumSafeAdaptiveDecreaseThresholdTracksRepairOverhead(t *testing.T) 
 	}
 }
 
-func TestAdaptiveBackendRejectsDecreaseThresholdAbovePacingHeadroom(t *testing.T) {
+func TestAdaptiveBackendRejectsDecreaseThresholdAboveBurstHeadroom(t *testing.T) {
 	cfg := Default()
 	cfg.Media.Mode = MediaModePerViewer
 	cfg.WebRTC.Adaptive.Enabled = true
@@ -287,11 +287,11 @@ func TestAdaptiveBackendRejectsDecreaseThresholdAbovePacingHeadroom(t *testing.T
 	cfg.WebRTC.Interceptors.FlexFEC = true
 	cfg.WebRTC.Interceptors.FlexFECMediaPackets = 4
 	cfg.WebRTC.Interceptors.FlexFECRepairPackets = 2
-	cfg.WebRTC.Adaptive.TWCCGCC.DecreaseThresholdPct = 5
-	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "must be at most 0") {
+	cfg.WebRTC.Adaptive.TWCCGCC.DecreaseThresholdPct = 34
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "must be at most 33") {
 		t.Fatalf("expected pacing-headroom validation error, got %v", err)
 	}
-	cfg.WebRTC.Adaptive.TWCCGCC.DecreaseThresholdPct = 0
+	cfg.WebRTC.Adaptive.TWCCGCC.DecreaseThresholdPct = 33
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected immediate decreases to fit the pacing envelope, got %v", err)
 	}
