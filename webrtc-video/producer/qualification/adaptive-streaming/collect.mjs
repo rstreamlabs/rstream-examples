@@ -45,6 +45,7 @@ await mkdir(outputDirectory, { recursive: true });
 const samplesPath = `${outputDirectory}/samples.jsonl`;
 const readyPath = `${outputDirectory}/collector-ready.json`;
 const browserPath = `${outputDirectory}/browser.json`;
+const signalingPath = `${outputDirectory}/signaling-events.json`;
 const failurePath = `${outputDirectory}/collector-failure.json`;
 let browser;
 let page;
@@ -66,16 +67,64 @@ try {
     const NativeRTCPeerConnection = window.RTCPeerConnection;
     const NativeWebSocket = window.WebSocket;
     const peers = [];
+    const sockets = [];
+    const telemetry = {
+      events: [],
+      iceRestartOffers: 0,
+      lastOfferUfrag: "",
+      localCandidatesSent: 0,
+      offersSent: 0,
+      remoteCandidatesReceived: 0,
+      webSocketCloseCount: 0,
+      webSocketOpenCount: 0,
+    };
+    const record = (kind, fields = {}) => {
+      telemetry.events.push({
+        elapsedMilliseconds: Math.round(performance.now()),
+        kind,
+        ...fields,
+      });
+    };
     class QualificationRTCPeerConnection extends NativeRTCPeerConnection {
       constructor(configuration, constraints) {
         super(configuration, constraints);
         peers.push(this);
+        const peerID = peers.length;
+        Object.defineProperty(this, "__rstreamQualificationID", {
+          configurable: false,
+          enumerable: false,
+          value: peerID,
+          writable: false,
+        });
+        record("peer-created", { peerID });
+        for (const [eventName, stateName] of [
+          ["connectionstatechange", "connectionState"],
+          ["iceconnectionstatechange", "iceConnectionState"],
+          ["icegatheringstatechange", "iceGatheringState"],
+          ["signalingstatechange", "signalingState"],
+        ]) {
+          this.addEventListener(eventName, () => {
+            record(eventName, { peerID, state: this[stateName] });
+          });
+        }
       }
     }
     Object.defineProperty(window, "__rstreamQualificationPeers", {
       configurable: false,
       enumerable: false,
       value: peers,
+      writable: false,
+    });
+    Object.defineProperty(window, "__rstreamQualificationSockets", {
+      configurable: false,
+      enumerable: false,
+      value: sockets,
+      writable: false,
+    });
+    Object.defineProperty(window, "__rstreamQualificationTelemetry", {
+      configurable: false,
+      enumerable: false,
+      value: telemetry,
       writable: false,
     });
     Object.defineProperty(window, "__rstreamQualificationSessionStats", {
@@ -87,6 +136,27 @@ try {
     class QualificationWebSocket extends NativeWebSocket {
       constructor(...args) {
         super(...args);
+        sockets.push(this);
+        const socketID = sockets.length;
+        Object.defineProperty(this, "__rstreamQualificationID", {
+          configurable: false,
+          enumerable: false,
+          value: socketID,
+          writable: false,
+        });
+        record("websocket-created", { socketID });
+        this.addEventListener("open", () => {
+          telemetry.webSocketOpenCount += 1;
+          record("websocket-open", { socketID });
+        });
+        this.addEventListener("close", (event) => {
+          telemetry.webSocketCloseCount += 1;
+          record("websocket-close", {
+            code: event.code,
+            clean: event.wasClean,
+            socketID,
+          });
+        });
         this.addEventListener("message", (event) => {
           if (typeof event.data !== "string") {
             return;
@@ -95,11 +165,44 @@ try {
             const message = JSON.parse(event.data);
             if (message?.type === "session.stats" && message.stats) {
               window.__rstreamQualificationSessionStats.latest = message.stats;
+            } else if (message?.type === "webrtc.candidate") {
+              telemetry.remoteCandidatesReceived += 1;
             }
           } catch {
             // Non-JSON application frames are irrelevant to this collector.
           }
         });
+      }
+
+      send(data) {
+        if (typeof data === "string") {
+          try {
+            const message = JSON.parse(data);
+            if (message?.type === "webrtc.offer") {
+              telemetry.offersSent += 1;
+              const ufrag = /^a=ice-ufrag:(.+)$/m.exec(message.sdp || "")?.[1];
+              if (
+                ufrag &&
+                telemetry.lastOfferUfrag &&
+                ufrag !== telemetry.lastOfferUfrag
+              ) {
+                telemetry.iceRestartOffers += 1;
+              }
+              if (ufrag) {
+                telemetry.lastOfferUfrag = ufrag;
+              }
+              record("offer-sent", {
+                iceGeneration: telemetry.iceRestartOffers + 1,
+                socketID: this.__rstreamQualificationID,
+              });
+            } else if (message?.type === "webrtc.candidate") {
+              telemetry.localCandidatesSent += 1;
+            }
+          } catch {
+            // Non-JSON application frames are irrelevant to this collector.
+          }
+        }
+        super.send(data);
       }
     }
     window.RTCPeerConnection = QualificationRTCPeerConnection;
@@ -273,6 +376,10 @@ try {
   throw normalized;
 } finally {
   if (page) {
+    await writeJSONAtomic(
+      signalingPath,
+      await collectSignalingMetadata(page),
+    ).catch(() => {});
     await page.click("#disconnect").catch(() => {});
   }
   if (browser) {
@@ -333,6 +440,13 @@ async function collectSample(activePage) {
       .getReceivers()
       .find((receiver) => receiver.track?.kind === "video");
     const sessionStats = window.__rstreamQualificationSessionStats?.latest;
+    const telemetry = window.__rstreamQualificationTelemetry || {};
+    const sockets = window.__rstreamQualificationSockets || [];
+    const socket =
+      [...sockets]
+        .reverse()
+        .find((candidate) => candidate.readyState === WebSocket.OPEN) ||
+      sockets.at(-1);
     const bandwidth = sessionStats?.bandwidth;
     const text = (selector) =>
       document.querySelector(selector)?.textContent?.trim() || "";
@@ -407,7 +521,6 @@ async function collectSample(activePage) {
       pacerSentPrimary: bandwidth?.pacerSentPrimary || 0,
       pacerSentRepair: bandwidth?.pacerSentRepair || 0,
       pacerSentRTX: bandwidth?.pacerSentRTX || 0,
-      pacerSentFEC: bandwidth?.pacerSentFEC || 0,
       adaptiveBitrateUpdates: sessionStats?.adaptiveBitrateUpdates || 0,
       adaptiveBitrateFailures: sessionStats?.adaptiveBitrateFailures || 0,
       staleBitrateCallbacks: bandwidth?.staleBitrateCallbacks || 0,
@@ -417,6 +530,8 @@ async function collectSample(activePage) {
       twccReportedLost: bandwidth?.twccReportedLost || 0,
       twccReportedStatuses: bandwidth?.twccReportedStatuses || 0,
       peerConnectionState: peer.connectionState,
+      peerConnectionID: peer.__rstreamQualificationID || 0,
+      peerConnectionsCreated: peers.length,
       iceConnectionState: peer.iceConnectionState,
       iceGatheringState: peer.iceGatheringState,
       pliCount: inbound?.pliCount || 0,
@@ -441,6 +556,15 @@ async function collectSample(activePage) {
       remoteCandidatePort: remoteCandidate?.port || 0,
       remoteCandidateProtocol: remoteCandidate?.protocol || "",
       remoteCandidateType: remoteCandidate?.candidateType || "",
+      iceRestartOffers: telemetry.iceRestartOffers || 0,
+      localCandidatesSent: telemetry.localCandidatesSent || 0,
+      offersSent: telemetry.offersSent || 0,
+      remoteCandidatesReceived: telemetry.remoteCandidatesReceived || 0,
+      webSocketCloseCount: telemetry.webSocketCloseCount || 0,
+      webSocketID: socket?.__rstreamQualificationID || 0,
+      webSocketOpenCount: telemetry.webSocketOpenCount || 0,
+      webSocketsCreated: sockets.length,
+      webSocketState: socket?.readyState ?? WebSocket.CLOSED,
       recoveryKeyFrameRequests: sessionStats?.recoveryKeyFrameRequests || 0,
       recoveryKeyFrameCoalesced: sessionStats?.recoveryKeyFrameCoalesced || 0,
       recoveryKeyFrameFailures: sessionStats?.recoveryKeyFrameFailures || 0,
@@ -467,6 +591,24 @@ async function collectSample(activePage) {
       const amount = Number.parseFloat(match[1]);
       return match[2].toLowerCase() === "mbps" ? amount * 1000 : amount;
     }
+  });
+}
+
+async function collectSignalingMetadata(activePage) {
+  return activePage.evaluate(() => {
+    const telemetry = window.__rstreamQualificationTelemetry || {};
+    return {
+      events: telemetry.events || [],
+      iceRestartOffers: telemetry.iceRestartOffers || 0,
+      localCandidatesSent: telemetry.localCandidatesSent || 0,
+      offersSent: telemetry.offersSent || 0,
+      peerConnectionsCreated:
+        window.__rstreamQualificationPeers?.length || 0,
+      remoteCandidatesReceived: telemetry.remoteCandidatesReceived || 0,
+      webSocketCloseCount: telemetry.webSocketCloseCount || 0,
+      webSocketOpenCount: telemetry.webSocketOpenCount || 0,
+      webSocketsCreated: window.__rstreamQualificationSockets?.length || 0,
+    };
   });
 }
 

@@ -43,6 +43,8 @@ function argumentsFor(evidenceDirectory) {
     script,
     "--evidence-directory",
     evidenceDirectory,
+    "--network-interface",
+    "eth7",
     "--address-family",
     "4",
     "--destination-address",
@@ -123,7 +125,7 @@ test("runs one in-namespace impairment schedule and retains every snapshot", asy
   assert.match(tcLog, /match ip dport 3478 0xffff/);
   assert.match(tcLog, /netem limit 256 rate 4000kbit/);
   assert.match(tcLog, /delay 120ms 30ms distribution normal loss random 2%/);
-  assert.match(tcLog, /qdisc del dev eth0 root/);
+  assert.match(tcLog, /qdisc del dev eth7 root/);
 });
 
 test("rejects malformed input before touching traffic control", async (t) => {
@@ -164,9 +166,9 @@ test("removes a partial qdisc when traffic-control setup fails", async (t) => {
   });
   assert.equal(result.status, 42);
   const tcLog = await readFile(runtime.tcLog, "utf8");
-  assert.match(tcLog, /qdisc add dev eth0 root/);
-  assert.match(tcLog, /filter add dev eth0/);
-  assert.match(tcLog, /qdisc del dev eth0 root/);
+  assert.match(tcLog, /qdisc add dev eth7 root/);
+  assert.match(tcLog, /filter add dev eth7/);
+  assert.match(tcLog, /qdisc del dev eth7 root/);
 });
 
 test("fails early and removes shaping when the selected flow carries no packets", async (t) => {
@@ -188,7 +190,7 @@ test("fails early and removes shaping when the selected flow carries no packets"
   assert.match(result.stderr, /target carried no packets/);
   assert.match(
     await readFile(runtime.tcLog, "utf8"),
-    /qdisc del dev eth0 root/,
+    /qdisc del dev eth7 root/,
   );
 });
 
@@ -224,6 +226,6 @@ test("removes shaping when the scheduler is interrupted", async (t) => {
   assert.deepEqual(result, { code: 143, signal: null }, stderr);
   assert.match(
     await readFile(runtime.tcLog, "utf8"),
-    /qdisc del dev eth0 root/,
+    /qdisc del dev eth7 root/,
   );
 });

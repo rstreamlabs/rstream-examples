@@ -6,6 +6,7 @@ import {
   renderMarkdown,
   renderSVG,
   summarizeHostCPU,
+  summarizeNetworkMobility,
   summarizeSetup,
 } from "../lib/analysis.mjs";
 
@@ -22,6 +23,88 @@ test("separates image builds from service establishment", () => {
   ]);
   assert.equal(setup.connectionMilliseconds, 5250);
   assert.equal(setup.milestones[1].sincePreviousMilliseconds, 60_000);
+});
+
+test("summarizes one bounded Trickle ICE mobility event", () => {
+  const samples = [
+    {
+      elapsedMilliseconds: 10_000,
+      localCandidateAddress: "192.0.2.10",
+      localCandidatePort: 50_000,
+      localCandidateProtocol: "udp",
+      peerConnectionState: "connected",
+      peerConnectionsCreated: 1,
+      phase: "baseline",
+      playback: "Playing",
+      remoteCandidateAddress: "192.0.2.20",
+      remoteCandidatePort: 60_000,
+      remoteCandidateProtocol: "udp",
+      remoteCandidatesReceived: 2,
+      webSocketCloseCount: 0,
+      webSocketsCreated: 1,
+    },
+    {
+      elapsedMilliseconds: 11_000,
+      peerConnectionState: "disconnected",
+      peerConnectionsCreated: 1,
+      phase: "mobility",
+      playback: "Buffering",
+      remoteCandidatesReceived: 2,
+      webSocketCloseCount: 0,
+      webSocketsCreated: 1,
+    },
+    {
+      elapsedMilliseconds: 14_000,
+      iceRestartOffers: 1,
+      localCandidateAddress: "192.0.2.11",
+      localCandidatePort: 50_001,
+      localCandidateProtocol: "udp",
+      peerConnectionState: "connected",
+      peerConnectionsCreated: 1,
+      phase: "mobility",
+      playback: "Playing",
+      remoteCandidateAddress: "192.0.2.21",
+      remoteCandidatePort: 60_001,
+      remoteCandidateProtocol: "udp",
+      remoteCandidatesReceived: 3,
+      webSocketCloseCount: 0,
+      webSocketsCreated: 1,
+    },
+  ];
+  assert.deepEqual(summarizeNetworkMobility(samples), {
+    available: true,
+    candidatePairSwitches: 1,
+    iceRestartOffers: 1,
+    maximumUnavailableMilliseconds: 3000,
+    peerConnectionsCreated: 1,
+    trickledRemoteCandidates: 1,
+    webSocketCloses: 0,
+    webSocketsCreated: 1,
+  });
+});
+
+test("reports an unfinished mobility outage instead of hiding it", () => {
+  const mobility = summarizeNetworkMobility([
+    {
+      elapsedMilliseconds: 1000,
+      peerConnectionState: "connected",
+      phase: "mobility",
+      playback: "Playing",
+    },
+    {
+      elapsedMilliseconds: 3000,
+      peerConnectionState: "disconnected",
+      phase: "mobility",
+      playback: "Buffering",
+    },
+    {
+      elapsedMilliseconds: 9000,
+      peerConnectionState: "disconnected",
+      phase: "mobility",
+      playback: "Buffering",
+    },
+  ]);
+  assert.equal(mobility.maximumUnavailableMilliseconds, 6000);
 });
 
 test("attributes host CPU execution and hypervisor steal time by phase", () => {
@@ -443,6 +526,42 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
   );
   assert.equal(result.trafficControl.impairedDropRatio, 40 / 2040);
   assert.equal(result.candidatePairSwitches, 1);
+  const ceilingResult = analyze(samples, {
+    ...manifest,
+    video: {
+      ...manifest.video,
+      adaptive: {
+        initialBitrateKbps: 4000,
+        minimumBitrateKbps: 2000,
+        maximumBitrateKbps: 5500,
+        changeThresholdPct: 10,
+      },
+    },
+  });
+  assert.equal(
+    ceilingResult.assertions.find(
+      (assertion) => assertion.name === "healthy-link-quality-ceiling",
+    ).passed,
+    true,
+  );
+  const cappedResult = analyze(samples, {
+    ...manifest,
+    video: {
+      ...manifest.video,
+      adaptive: {
+        initialBitrateKbps: 4000,
+        minimumBitrateKbps: 2000,
+        maximumBitrateKbps: 6000,
+        changeThresholdPct: 10,
+      },
+    },
+  });
+  assert.equal(
+    cappedResult.assertions.find(
+      (assertion) => assertion.name === "healthy-link-quality-ceiling",
+    ).passed,
+    false,
+  );
   assert.equal(result.phases.impaired.averageQP, 25);
   assert.ok(
     Math.abs(result.phases.impaired.averageDecodeMilliseconds - 3) < 0.0001,

@@ -12,6 +12,8 @@ container_name="rstream-adaptive-${timestamp}-$$"
 container_name="${container_name//[^a-z0-9_.-]/-}"
 browser_container_name="${container_name}-browser"
 network_name="${container_name}-network"
+producer_primary_network="${container_name}-producer-primary"
+producer_secondary_network="${container_name}-producer-secondary"
 producer_runtime_volume="${container_name}-runtime"
 producer_seed_container="${container_name}-seed"
 revision="$(git -C "${repository_directory}" rev-parse HEAD)"
@@ -30,6 +32,8 @@ traffic_control_pid=""
 container_started=0
 browser_container_started=0
 network_created=0
+producer_primary_network_created=0
+producer_secondary_network_created=0
 producer_runtime_volume_created=0
 producer_seed_container_created=0
 encoder_evidence_captured=0
@@ -50,6 +54,8 @@ baseline_seconds="${RSTREAM_QUALIFICATION_BASELINE_SECONDS:-25}"
 constrained_seconds="${RSTREAM_QUALIFICATION_CONSTRAINED_SECONDS:-45}"
 impaired_seconds="${RSTREAM_QUALIFICATION_IMPAIRED_SECONDS:-35}"
 recovery_seconds="${RSTREAM_QUALIFICATION_RECOVERY_SECONDS:-45}"
+mobility_seconds="${RSTREAM_QUALIFICATION_MOBILITY_SECONDS:-30}"
+mobility_mode="${RSTREAM_QUALIFICATION_MOBILITY:-off}"
 transition_step_seconds="${RSTREAM_QUALIFICATION_TRANSITION_STEP_SECONDS:-5}"
 capacity_kbps="${RSTREAM_QUALIFICATION_CAPACITY_KBPS:-4000}"
 queue_limit_packets="${RSTREAM_QUALIFICATION_QUEUE_LIMIT_PACKETS:-256}"
@@ -224,6 +230,12 @@ cleanup() {
   if ((network_created == 1)); then
     docker network rm "${network_name}" >/dev/null 2>&1
   fi
+  if ((producer_primary_network_created == 1)); then
+    producer_docker network rm "${producer_primary_network}" >/dev/null 2>&1
+  fi
+  if ((producer_secondary_network_created == 1)); then
+    producer_docker network rm "${producer_secondary_network}" >/dev/null 2>&1
+  fi
   if [[ -d "${runtime_directory}" ]]; then
     find "${runtime_directory}" -depth -delete
   fi
@@ -282,9 +294,23 @@ run_phase() {
 }
 
 start_traffic_control() {
+  local -a route_arguments=()
+  local network_interface=""
+  if [[ "${media_destination_family}" == "6" ]]; then
+    route_arguments=(-6)
+  fi
+  network_interface="$(producer_docker exec "${container_name}" \
+    ip "${route_arguments[@]}" route get "${media_destination_address}" | \
+    sed -nE 's/.* dev ([^ ]+).*/\1/p' | head -1)"
+  if ! [[ "${network_interface}" =~ ^[a-zA-Z0-9_.:@-]+$ ]]; then
+    printf 'failed to resolve the active interface for %s\n' \
+      "${media_destination_address}" >&2
+    exit 1
+  fi
   producer_docker exec --interactive --user 0 "${container_name}" \
     sh -s -- \
     --evidence-directory /tmp/rstream-network-evidence \
+    --network-interface "${network_interface}" \
     --address-family "${media_destination_family}" \
     --destination-address "${media_destination_address}" \
     --destination-port "${media_destination_port}" \
@@ -612,12 +638,27 @@ for duration in \
   "${constrained_seconds}" \
   "${impaired_seconds}" \
   "${recovery_seconds}" \
+  "${mobility_seconds}" \
   "${transition_step_seconds}"; do
   if ! positive_integer "${duration}"; then
     printf 'qualification phase durations must be positive integers, got %s\n' "${duration}" >&2
     exit 1
   fi
 done
+case "${mobility_mode}" in
+off)
+  ;;
+producer)
+  if [[ "${path_kind}" != "relay" ]]; then
+    printf 'producer mobility qualification requires the relay path\n' >&2
+    exit 1
+  fi
+  ;;
+*)
+  printf 'RSTREAM_QUALIFICATION_MOBILITY must be off or producer\n' >&2
+  exit 1
+  ;;
+esac
 warmup_seconds=$((10#${warmup_seconds}))
 baseline_seconds=$((10#${baseline_seconds}))
 constrained_seconds=$((10#${constrained_seconds}))
@@ -694,6 +735,28 @@ else
 fi
 record_setup_milestone runtime-prepared
 
+effective_config_path="${runtime_directory}/${path_kind}-config.yaml"
+initial_bitrate_kbps="$(sed -nE 's/^[[:space:]]*initialBitrateKbps:[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' "${effective_config_path}")"
+minimum_bitrate_kbps="$(sed -nE 's/^[[:space:]]*minBitrateKbps:[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' "${effective_config_path}")"
+maximum_bitrate_kbps="$(sed -nE 's/^[[:space:]]*maxBitrateKbps:[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' "${effective_config_path}")"
+change_threshold_pct="$(sed -nE 's/^[[:space:]]*changeThresholdPct:[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' "${effective_config_path}")"
+for adaptive_value in \
+  "${initial_bitrate_kbps}" \
+  "${minimum_bitrate_kbps}" \
+  "${maximum_bitrate_kbps}" \
+  "${change_threshold_pct}"; do
+  if ! [[ "${adaptive_value}" =~ ^[0-9]+$ ]]; then
+    printf 'qualification runtime is missing one adaptive bitrate bound in %s\n' \
+      "${effective_config_path}" >&2
+    exit 1
+  fi
+done
+if ((minimum_bitrate_kbps <= 0 || initial_bitrate_kbps < minimum_bitrate_kbps || maximum_bitrate_kbps < initial_bitrate_kbps || change_threshold_pct > 50)); then
+  printf 'qualification runtime has an invalid adaptive bitrate envelope in %s\n' \
+    "${effective_config_path}" >&2
+  exit 1
+fi
+
 printf 'Building qualification producer image %s\n' "${image_tag}"
 record_setup_milestone producer-build-started
 pull_arguments=()
@@ -765,6 +828,8 @@ jq -n \
   --argjson constrained "${constrained_seconds}" \
   --argjson impaired "${impaired_seconds}" \
   --argjson recovery "${recovery_seconds}" \
+  --argjson mobility_seconds "${mobility_seconds}" \
+  --arg mobility_mode "${mobility_mode}" \
   --argjson transition_step "${transition_step_seconds}" \
   --argjson capacity "${capacity_kbps}" \
   --argjson queue_limit "${queue_limit_packets}" \
@@ -772,6 +837,10 @@ jq -n \
   --argjson capacity_step_two "${capacity_step_two_kbps}" \
   --argjson capacity_step_three "${capacity_step_three_kbps}" \
   --argjson playout_delay_hint "${playout_delay_hint_seconds}" \
+  --argjson initial_bitrate "${initial_bitrate_kbps}" \
+  --argjson minimum_bitrate "${minimum_bitrate_kbps}" \
+  --argjson maximum_bitrate "${maximum_bitrate_kbps}" \
+  --argjson change_threshold "${change_threshold_pct}" \
   '{
     generatedAt: $generated_at,
     git: {revision: $revision, producerTree: $producer_tree, dirty: $dirty},
@@ -805,15 +874,30 @@ jq -n \
       width: 1920,
       height: 1080,
       framesPerSecond: 30,
-      playoutDelayHintSeconds: $playout_delay_hint
+      playoutDelayHintSeconds: $playout_delay_hint,
+      adaptive: {
+        initialBitrateKbps: $initial_bitrate,
+        minimumBitrateKbps: $minimum_bitrate,
+        maximumBitrateKbps: $maximum_bitrate,
+        changeThresholdPct: $change_threshold
+      }
     },
-    phases: [
+    networkMobility: (if $mobility_mode == "producer" then {
+      subject: "producer",
+      change: "network-interface-and-source-address",
+      expectedSignalingTransport: "rstream-quic",
+      durationSeconds: $mobility_seconds
+    } else null end),
+    phases: ([
       {name: "warmup", durationSeconds: $warmup, shaping: null},
-      {name: "baseline", durationSeconds: $baseline, shaping: null},
+      {name: "baseline", durationSeconds: $baseline, shaping: null}
+    ] + (if $mobility_mode == "producer" then [
+      {name: "mobility", durationSeconds: $mobility_seconds, shaping: null}
+    ] else [] end) + [
       {name: "constrained", durationSeconds: $constrained, shaping: {discipline: "selective-prio+netem", scope: (if $path_kind == "relay" then "producer-turn-transport" else "peer-webrtc-transport-address" end), capacityKbps: $capacity, queueLimitPackets: $queue_limit, loss: "0%", schedule: [{durationSeconds: $transition_step, capacityKbps: $capacity_step_one, delay: "40ms", jitter: "10ms"}, {durationSeconds: $transition_step, capacityKbps: $capacity_step_two, delay: "50ms", jitter: "10ms"}, {durationSeconds: $transition_step, capacityKbps: $capacity_step_three, delay: "65ms", jitter: "15ms"}, {durationSeconds: ($constrained - 3 * $transition_step), capacityKbps: $capacity, delay: "80ms", jitter: "20ms"}]}},
       {name: "impaired", durationSeconds: $impaired, shaping: {discipline: "selective-prio+netem", scope: (if $path_kind == "relay" then "producer-turn-transport" else "peer-webrtc-transport-address" end), capacityKbps: $capacity, queueLimitPackets: $queue_limit, delay: "120ms", jitter: "30ms", loss: "2%"}},
       {name: "recovery", durationSeconds: $recovery, shaping: null}
-    ]
+    ])
   }' >"${output_directory}/manifest.json"
 
 printf 'Building the isolated qualification browser\n'
@@ -862,6 +946,15 @@ if [[ -n "${pion_log_debug}" ]]; then
   producer_arguments+=(--env "PION_LOG_DEBUG=${pion_log_debug}")
 fi
 if [[ "${path_kind}" == "relay" ]]; then
+  if [[ "${mobility_mode}" == "producer" ]]; then
+    producer_docker network create --driver bridge \
+      "${producer_primary_network}" >/dev/null
+    producer_primary_network_created=1
+    producer_docker network create --driver bridge \
+      "${producer_secondary_network}" >/dev/null
+    producer_secondary_network_created=1
+    producer_arguments+=(--network "${producer_primary_network}")
+  fi
   if producer_is_remote; then
     producer_docker volume create "${producer_runtime_volume}" >/dev/null
     producer_runtime_volume_created=1
@@ -1076,6 +1169,35 @@ mv "${manifest_temporary}" "${output_directory}/manifest.json"
 
 run_phase warmup "${warmup_seconds}" '{}'
 run_phase baseline "${baseline_seconds}" '{}'
+if [[ "${mobility_mode}" == "producer" ]]; then
+  write_phase mobility \
+    '{"subject":"producer","change":"network-interface-and-source-address"}'
+  producer_before_address="$(producer_docker inspect --format \
+    "{{with index .NetworkSettings.Networks \"${producer_primary_network}\"}}{{.IPAddress}}{{end}}" \
+    "${container_name}")"
+  producer_docker network connect \
+    "${producer_secondary_network}" "${container_name}"
+  producer_docker network disconnect \
+    "${producer_primary_network}" "${container_name}"
+  producer_after_address="$(producer_docker inspect --format \
+    "{{with index .NetworkSettings.Networks \"${producer_secondary_network}\"}}{{.IPAddress}}{{end}}" \
+    "${container_name}")"
+  if [[ -z "${producer_before_address}" || \
+    -z "${producer_after_address}" || \
+    "${producer_before_address}" == "${producer_after_address}" ]]; then
+    printf 'producer mobility did not establish a distinct source address\n' >&2
+    exit 1
+  fi
+  manifest_temporary="${output_directory}/manifest.json.tmp"
+  jq --arg before_address "${producer_before_address}" \
+    --arg after_address "${producer_after_address}" \
+    '.networkMobility.beforeAddress = $before_address |
+      .networkMobility.afterAddress = $after_address |
+      .networkMobility.addressChanged = ($before_address != $after_address)' \
+    "${output_directory}/manifest.json" >"${manifest_temporary}"
+  mv "${manifest_temporary}" "${output_directory}/manifest.json"
+  hold_phase mobility "${mobility_seconds}"
+fi
 start_traffic_control
 wait_for_traffic_control_event constrained-started 15
 write_phase constrained \

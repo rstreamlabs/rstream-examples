@@ -326,3 +326,32 @@ test("captures scheduler evidence from both media hosts", async () => {
   );
   assert.doesNotMatch(runScript, /--arg host_cpu/);
 });
+
+test("switches the producer interface only in an explicit relay mobility run", async () => {
+  const runScript = await readFile(
+    fileURLToPath(new URL("../run.sh", import.meta.url)),
+    "utf8",
+  );
+  assert.match(runScript, /RSTREAM_QUALIFICATION_MOBILITY:-off/);
+  assert.match(
+    runScript,
+    /producer mobility qualification requires the relay path/,
+  );
+  assert.match(
+    runScript,
+    /producer_docker network connect \\\n+    "\$\{producer_secondary_network\}" "\$\{container_name\}"/,
+  );
+  assert.match(
+    runScript,
+    /producer_docker network disconnect \\\n+    "\$\{producer_primary_network\}" "\$\{container_name\}"/,
+  );
+  const baseline = runScript.lastIndexOf(
+    'run_phase baseline "${baseline_seconds}"',
+  );
+  const mobility = runScript.lastIndexOf("write_phase mobility");
+  const trafficControl = runScript.lastIndexOf("start_traffic_control");
+  assert.ok(
+    baseline >= 0 && baseline < mobility && mobility < trafficControl,
+    "mobility must follow the healthy baseline and precede impairment",
+  );
+});

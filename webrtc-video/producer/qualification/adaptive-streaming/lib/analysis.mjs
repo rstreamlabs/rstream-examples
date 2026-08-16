@@ -35,6 +35,7 @@ export function analyze(
 ) {
   const enriched = enrichSamples(samples);
   const phaseOrder = manifest.phases.map((phase) => phase.name);
+  const steadyPhaseOrder = phaseOrder.filter((name) => name !== "mobility");
   const qualificationPhaseOrder = phaseOrder.filter(
     (name) => name !== "warmup",
   );
@@ -64,6 +65,7 @@ export function analyze(
     phaseOrder,
   );
   const candidatePairSwitches = countCandidatePairSwitches(enriched);
+  const networkMobility = summarizeNetworkMobility(enriched);
   const icePolicy = manifest.networkPath?.icePolicy || "relay";
   const constrainedMediaCapacityKbps = mediaCapacityKbps(
     constrained?.capacityKbps || 0,
@@ -135,6 +137,12 @@ export function analyze(
   assert(
     assertions,
     enriched.every((sample) => {
+      if (
+        sample.phase === "mobility" &&
+        sample.peerConnectionState !== "connected"
+      ) {
+        return true;
+      }
       const usesRelay =
         sample.localCandidateType === "relay" ||
         sample.remoteCandidateType === "relay";
@@ -147,16 +155,60 @@ export function analyze(
   );
   assert(
     assertions,
-    phaseOrder.every((name) => summaries[name]?.connectedRatio >= 0.98),
+    steadyPhaseOrder.every(
+      (name) => summaries[name]?.connectedRatio >= 0.98,
+    ),
     "session-continuity",
     "peer connection and playback remain healthy for at least 98% of samples",
   );
+  if (manifest.networkMobility) {
+    assert(
+      assertions,
+      manifest.networkMobility.addressChanged === true,
+      "mobility-source-address",
+      "the producer moves to a distinct source address during the controlled interface switch",
+    );
+    assert(
+      assertions,
+      networkMobility.candidatePairSwitches >= 1 &&
+        networkMobility.trickledRemoteCandidates >= 1,
+      "trickle-ice-mobility",
+      "the producer trickles at least one fresh candidate and WebRTC selects a new candidate pair after the interface switch",
+    );
+    assert(
+      assertions,
+      networkMobility.peerConnectionsCreated === 1 &&
+        networkMobility.webSocketsCreated === 1 &&
+        networkMobility.webSocketCloses === 0,
+      "quic-signaling-mobility",
+      "the original WebRTC peer and signaling WebSocket survive the producer network change over the rstream QUIC upstream",
+    );
+    assert(
+      assertions,
+      networkMobility.maximumUnavailableMilliseconds <= 15_000,
+      "mobility-recovery",
+      "video playback remains continuous or recovers within 15 seconds of the producer interface switch",
+    );
+  }
   assert(
     assertions,
     baseline?.medianReceivedBitrateKbps >= 1000,
     "baseline-throughput",
     "baseline median receive throughput is at least 1 Mbps",
   );
+  if (Number.isFinite(manifest.video?.adaptive?.maximumBitrateKbps)) {
+    const maximumBitrateKbps = manifest.video.adaptive.maximumBitrateKbps;
+    const changeThresholdPct =
+      manifest.video.adaptive.changeThresholdPct || 0;
+    const healthyLinkTargetKbps =
+      (maximumBitrateKbps * (100 - changeThresholdPct)) / 100;
+    assert(
+      assertions,
+      (baseline?.medianEncoderTargetKbps || 0) >= healthyLinkTargetKbps,
+      "healthy-link-quality-ceiling",
+      `baseline median encoder target reaches the ${maximumBitrateKbps} kbps adaptive ceiling within its ${changeThresholdPct}% control hysteresis`,
+    );
+  }
   const reductionThreshold = (baseline?.medianEncoderTargetKbps || 0) * 0.8;
   assert(
     assertions,
@@ -204,7 +256,9 @@ export function analyze(
   );
   assert(
     assertions,
-    phaseOrder.every((name) => summaries[name]?.decoderActiveRatio >= 0.95),
+    steadyPhaseOrder.every(
+      (name) => summaries[name]?.decoderActiveRatio >= 0.95,
+    ),
     "decoder-activity",
     "decoded-frame progress is visible in at least 95% of sample intervals",
   );
@@ -584,6 +638,7 @@ export function analyze(
     samples: enriched,
     setup,
     hostCPU,
+    networkMobility,
     trafficControl: trafficControlSummary,
   };
 }
@@ -850,13 +905,30 @@ Measured service establishment: ${formatDuration(analysis.setup.connectionMillis
 
 `
     : "";
+  const mobilitySection = manifest.networkMobility
+    ? `## Producer network mobility
+
+The qualification moves the running producer between two isolated network
+interfaces with distinct source addresses. The same browser page, WebRTC peer,
+and signaling WebSocket must remain in place while Trickle ICE publishes the
+new path. This separates transport mobility from a hidden page reload or a new
+viewer session.
+
+Candidate-pair switches: ${analysis.networkMobility.candidatePairSwitches}. Fresh remote candidates: ${analysis.networkMobility.trickledRemoteCandidates}. ICE restart offers: ${analysis.networkMobility.iceRestartOffers}. Longest playback interruption: ${formatDuration(analysis.networkMobility.maximumUnavailableMilliseconds)}.
+
+The event timeline is recorded in \`signaling-events.json\`.
+
+`
+    : "";
   return `# Adaptive streaming qualification — ${status}
 
 Generated at ${manifest.generatedAt} from repository revision \`${manifest.git.revision}\`${manifest.git.dirty ? " with uncommitted changes" : ""}.
 
 ![Adaptive bitrate response](./adaptive-bitrate.svg)
 
-${setupSection}## Phase summary
+${Number.isFinite(manifest.video?.adaptive?.maximumBitrateKbps) ? `The media controller starts at ${manifest.video.adaptive.initialBitrateKbps} kbps and operates from ${manifest.video.adaptive.minimumBitrateKbps} through ${manifest.video.adaptive.maximumBitrateKbps} kbps. Its ${manifest.video.adaptive.changeThresholdPct}% hysteresis keeps a healthy-link target stable once it is close to the configured ceiling.` : ""}
+
+${setupSection}${mobilitySection}## Phase summary
 
 | Phase | Samples | Connected | Received kbps (median) | Link use | TWCC kbps (median) | Encoder kbps (median) | Decoded fps | Avg QP | Decode ms/frame | Frozen | NACK | RTX packets | FEC packets | Max RTT ms |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -1041,7 +1113,18 @@ export async function writeArtifacts(outputDirectory, analysis, manifest) {
     "jitterBufferEmittedCount",
     "jitterBufferTargetDelaySeconds",
     "peerConnectionState",
+    "peerConnectionID",
+    "peerConnectionsCreated",
     "iceConnectionState",
+    "iceRestartOffers",
+    "offersSent",
+    "localCandidatesSent",
+    "remoteCandidatesReceived",
+    "webSocketID",
+    "webSocketOpenCount",
+    "webSocketCloseCount",
+    "webSocketsCreated",
+    "webSocketState",
     "localCandidateType",
     "localCandidateAddress",
     "localCandidatePort",
@@ -1089,6 +1172,80 @@ function countCandidatePairSwitches(samples) {
     previous = current;
   }
   return switches;
+}
+
+export function summarizeNetworkMobility(samples) {
+  const mobility = samples.filter((sample) => sample.phase === "mobility");
+  if (mobility.length === 0) {
+    return {
+      available: false,
+      candidatePairSwitches: 0,
+      iceRestartOffers: 0,
+      maximumUnavailableMilliseconds: 0,
+      peerConnectionsCreated: 0,
+      trickledRemoteCandidates: 0,
+      webSocketCloses: 0,
+      webSocketsCreated: 0,
+    };
+  }
+  const previous = [...samples]
+    .reverse()
+    .find(
+      (sample) =>
+        sample.phase !== "mobility" &&
+        sample.elapsedMilliseconds < mobility[0].elapsedMilliseconds,
+    );
+  const pathSamples = previous ? [previous, ...mobility] : mobility;
+  let unavailableSince = null;
+  let maximumUnavailableMilliseconds = 0;
+  for (const sample of mobility) {
+    const available =
+      sample.peerConnectionState === "connected" &&
+      sample.playback === "Playing";
+    if (!available && unavailableSince === null) {
+      unavailableSince = sample.elapsedMilliseconds;
+    } else if (available && unavailableSince !== null) {
+      maximumUnavailableMilliseconds = Math.max(
+        maximumUnavailableMilliseconds,
+        sample.elapsedMilliseconds - unavailableSince,
+      );
+      unavailableSince = null;
+    }
+  }
+  if (unavailableSince !== null) {
+    maximumUnavailableMilliseconds = Math.max(
+      maximumUnavailableMilliseconds,
+      mobility.at(-1).elapsedMilliseconds - unavailableSince,
+    );
+  }
+  const first = previous || mobility[0];
+  const last = mobility.at(-1);
+  return {
+    available: true,
+    candidatePairSwitches: countCandidatePairSwitches(pathSamples),
+    iceRestartOffers: Math.max(
+      0,
+      (last.iceRestartOffers || 0) - (first.iceRestartOffers || 0),
+    ),
+    maximumUnavailableMilliseconds,
+    peerConnectionsCreated: Math.max(
+      0,
+      ...mobility.map((sample) => sample.peerConnectionsCreated || 0),
+    ),
+    trickledRemoteCandidates: Math.max(
+      0,
+      (last.remoteCandidatesReceived || 0) -
+        (first.remoteCandidatesReceived || 0),
+    ),
+    webSocketCloses: Math.max(
+      0,
+      (last.webSocketCloseCount || 0) - (first.webSocketCloseCount || 0),
+    ),
+    webSocketsCreated: Math.max(
+      0,
+      ...mobility.map((sample) => sample.webSocketsCreated || 0),
+    ),
+  };
 }
 
 export function summarizeReceiverUDP(samples, phaseOrder) {

@@ -5,6 +5,7 @@ set -eu
 tc_command="${RSTREAM_TC_COMMAND:-tc}"
 sleep_command="${RSTREAM_SLEEP_COMMAND:-sleep}"
 evidence_directory=""
+network_interface=""
 address_family=""
 destination_address=""
 destination_port=""
@@ -23,6 +24,7 @@ shaping_initialized=0
 usage() {
   printf '%s\n' \
     'usage: traffic-control.sh --evidence-directory PATH --address-family 4|6' \
+    '  --network-interface INTERFACE' \
     '  --destination-address ADDRESS --destination-port PORT' \
     '  --transport-protocol udp|tcp --match-destination-port true|false' \
     '  --queue-limit-packets COUNT --capacity-step-one-kbps KBPS' \
@@ -44,6 +46,11 @@ while [ "$#" -gt 0 ]; do
   --evidence-directory)
     require_value "$@"
     evidence_directory="$2"
+    shift 2
+    ;;
+  --network-interface)
+    require_value "$@"
+    network_interface="$2"
     shift 2
     ;;
   --address-family)
@@ -127,11 +134,18 @@ positive_integer() {
   esac
 }
 
-if [ -z "${evidence_directory}" ] || [ -z "${destination_address}" ]; then
-  printf 'evidence directory and destination address are required\n' >&2
+if [ -z "${evidence_directory}" ] || [ -z "${destination_address}" ] || \
+  [ -z "${network_interface}" ]; then
+  printf 'evidence directory, network interface, and destination address are required\n' >&2
   usage
   exit 2
 fi
+case "${network_interface}" in
+*[!a-zA-Z0-9_.:@-]*)
+  printf 'network interface contains unsupported characters\n' >&2
+  exit 2
+  ;;
+esac
 case "${address_family}" in
 4 | 6)
   ;;
@@ -182,7 +196,7 @@ fi
 
 clear_shaping() {
   if [ "${shaping_initialized}" -eq 1 ]; then
-    "${tc_command}" qdisc del dev eth0 root >/dev/null 2>&1 || true
+    "${tc_command}" qdisc del dev "${network_interface}" root >/dev/null 2>&1 || true
     shaping_initialized=0
   fi
 }
@@ -212,13 +226,13 @@ apply_shaping() {
   action=change
   initializing=0
   if [ "${shaping_initialized}" -eq 0 ]; then
-    "${tc_command}" qdisc add dev eth0 root handle 1: prio bands 2 \
+    "${tc_command}" qdisc add dev "${network_interface}" root handle 1: prio bands 2 \
       priomap 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
     shaping_initialized=1
     initializing=1
     action=add
   fi
-  "${tc_command}" qdisc "${action}" dev eth0 parent 1:2 handle 20: netem \
+  "${tc_command}" qdisc "${action}" dev "${network_interface}" parent 1:2 handle 20: netem \
     limit "${queue_limit_packets}" rate "${rate_kbps}kbit" \
     delay "${delay}" "${jitter}" distribution normal loss random "${loss}"
   if [ "${initializing}" -eq 0 ]; then
@@ -226,22 +240,22 @@ apply_shaping() {
   fi
   if [ "${address_family}" = 4 ]; then
     if [ "${match_destination_port}" = true ]; then
-      "${tc_command}" filter add dev eth0 protocol ip parent 1: prio 1 u32 \
+      "${tc_command}" filter add dev "${network_interface}" protocol ip parent 1: prio 1 u32 \
         match ip protocol "${protocol_number}" 0xff \
         match ip dst "${destination_address}/32" \
         match ip dport "${destination_port}" 0xffff flowid 1:2
     else
-      "${tc_command}" filter add dev eth0 protocol ip parent 1: prio 1 u32 \
+      "${tc_command}" filter add dev "${network_interface}" protocol ip parent 1: prio 1 u32 \
         match ip protocol "${protocol_number}" 0xff \
         match ip dst "${destination_address}/32" flowid 1:2
     fi
   elif [ "${match_destination_port}" = true ]; then
-    "${tc_command}" filter add dev eth0 protocol ipv6 parent 1: prio 1 u32 \
+    "${tc_command}" filter add dev "${network_interface}" protocol ipv6 parent 1: prio 1 u32 \
       match ip6 dst "${destination_address}/128" \
       match ip6 protocol "${protocol_number}" 0xff \
       match ip6 dport "${destination_port}" 0xffff flowid 1:2
   else
-    "${tc_command}" filter add dev eth0 protocol ipv6 parent 1: prio 1 u32 \
+    "${tc_command}" filter add dev "${network_interface}" protocol ipv6 parent 1: prio 1 u32 \
       match ip6 dst "${destination_address}/128" \
       match ip6 protocol "${protocol_number}" 0xff flowid 1:2
   fi
@@ -251,8 +265,8 @@ capture() {
   name="$1"
   qdisc_temporary="${evidence_directory}/qdisc-${name}.json.tmp"
   filter_temporary="${evidence_directory}/filter-${name}.json.tmp"
-  "${tc_command}" -s -j qdisc show dev eth0 >"${qdisc_temporary}"
-  "${tc_command}" -s -j filter show dev eth0 parent 1: >"${filter_temporary}"
+  "${tc_command}" -s -j qdisc show dev "${network_interface}" >"${qdisc_temporary}"
+  "${tc_command}" -s -j filter show dev "${network_interface}" parent 1: >"${filter_temporary}"
   mv "${qdisc_temporary}" "${evidence_directory}/qdisc-${name}.json"
   mv "${filter_temporary}" "${evidence_directory}/filter-${name}.json"
 }
