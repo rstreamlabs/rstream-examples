@@ -1,0 +1,84 @@
+{
+  "manifest": {
+    "schemaVersion": 1,
+    "generatedAt": "2026-08-16T14:12:07.939664+00:00",
+    "repository": {
+      "revision": "d7a9dc47ee3474ed4594dbd818e758ed7e02e7a1",
+      "dirty": false,
+      "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "model": {
+      "name": "Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+      "bytes": 2497280736,
+      "sha256": "2fde00ce69dd4899c70d020845e2638353015bba0fdf161b3eb965f2bca4464e"
+    },
+    "host": {
+      "system": "Darwin",
+      "release": "25.5.0",
+      "machine": "arm64",
+      "python": "3.14.6"
+    },
+    "tools": {
+      "go": "go version go1.26.6 darwin/arm64",
+      "node": "v26.7.0",
+      "npm": "11.19.0",
+      "cmake": "cmake version 4.4.2"
+    },
+    "live": true,
+    "parameters": {
+      "turns": 60,
+      "concurrency": 8,
+      "minWorkers": 2,
+      "maxWorkerShare": 0.65,
+      "maxFailureRate": 0.0,
+      "maxTTFTP95MS": 0,
+      "maxTotalP95MS": 0
+    }
+  },
+  "commands": [
+    {
+      "name": "web-verify",
+      "exitCode": 0,
+      "timedOut": false,
+      "wallSeconds": 16.877,
+      "log": "web-verify.log"
+    },
+    {
+      "name": "worker-verify",
+      "exitCode": 0,
+      "timedOut": false,
+      "wallSeconds": 4.258,
+      "log": "worker-verify.log"
+    },
+    {
+      "name": "worker-lifecycle-stress",
+      "exitCode": 0,
+      "timedOut": false,
+      "wallSeconds": 4.636,
+      "log": "worker-lifecycle-stress.log"
+    },
+    {
+      "name": "worker-real-model",
+      "exitCode": 0,
+      "timedOut": false,
+      "wallSeconds": 15.666,
+      "log": "worker-real-model.log"
+    },
+    {
+      "name": "worker-real-model-race",
+      "exitCode": 0,
+      "timedOut": false,
+      "wallSeconds": 16.618,
+      "log": "worker-real-model-race.log"
+    },
+    {
+      "name": "live-mesh",
+      "exitCode": 0,
+      "timedOut": false,
+      "wallSeconds": 55.818,
+      "log": "live-mesh.log"
+    }
+  ],
+  "liveEvidence": "live.json",
+  "secretScanFindings": 0
+}

@@ -137,3 +137,10 @@ routing, bounded queueing, cancellation, concurrent shutdown, a real GGUF model,
 race safety, stream integrity, and—when pointed at a running app—the complete
 rstream mesh. It emits raw JSON and logs plus Markdown and SVG evidence pinned
 to the tested revision and model hash.
+
+The published [`d7a9dc4` evidence pack](qualification/evidence/d7a9dc4/report.md)
+records 60/60 successful concurrent turns across two real Qwen3 workers with an
+exact 30/30 distribution. A controlled degraded run completed 20/20 turns on
+the surviving worker, and the recovery run completed 20/20 with the restored
+pool split 10/10. The same revision passes the real-model race, bounded
+admission, cancellation, shutdown, routing, web, and dependency gates.

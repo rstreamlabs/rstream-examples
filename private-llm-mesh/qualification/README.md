@@ -75,3 +75,7 @@ versions, parameters, and thresholds.
 
 A report from a dirty worktree is diagnostic only. Commit-worthy evidence must
 be rerun on the clean revision it claims to qualify.
+
+Compact results from clean runs live in [`evidence/`](evidence). They retain the
+model hash, runtime manifest, thresholds, aggregate turn data, and charts while
+keeping prompts, model output, credentials, and raw process logs local.
