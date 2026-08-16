@@ -1,0 +1,181 @@
+name: Video qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      path:
+        description: WebRTC path under test
+        required: true
+        default: relay
+        type: choice
+        options:
+          - relay
+          - direct
+      protection:
+        description: Packet-repair profile
+        required: true
+        default: nack-rtx-flexfec
+        type: choice
+        options:
+          - nack-rtx-flexfec
+          - nack-rtx
+      playout_delay_hint_seconds:
+        description: Chromium receiver playout-delay hint
+        required: true
+        default: "0.2"
+        type: string
+      flexfec_media_packets:
+        description: Media packets per FlexFEC protection group
+        required: true
+        default: "4"
+        type: string
+      flexfec_repair_packets:
+        description: FlexFEC repair packets per protection group
+        required: true
+        default: "2"
+        type: string
+      mobility:
+        description: Exercise producer-side network migration
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: video-qualification-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    name: ${{ inputs.path }} ${{ inputs.protection }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      RSTREAM_QUALIFICATION_API_URL: ${{ vars.RSTREAM_QUALIFICATION_API_URL }}
+      RSTREAM_QUALIFICATION_ENGINE: ${{ vars.RSTREAM_QUALIFICATION_ENGINE }}
+      RSTREAM_QUALIFICATION_PROJECT_ENDPOINT: ${{ vars.RSTREAM_QUALIFICATION_PROJECT_ENDPOINT }}
+    steps:
+      - name: Check out the tested revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: webrtc-video/producer/go.mod
+          cache-dependency-path: webrtc-video/producer/go.sum
+
+      - name: Validate qualification inputs
+        shell: bash
+        env:
+          RSTREAM_AUTHENTICATION_TOKEN: ${{ secrets.RSTREAM_QUALIFICATION_TOKEN }}
+        run: |
+          set -euo pipefail
+          for name in \
+            RSTREAM_AUTHENTICATION_TOKEN \
+            RSTREAM_QUALIFICATION_API_URL \
+            RSTREAM_QUALIFICATION_ENGINE \
+            RSTREAM_QUALIFICATION_PROJECT_ENDPOINT; do
+            if [[ -z "${!name:-}" ]]; then
+              printf 'Missing required qualification setting: %s\n' "$name" >&2
+              exit 1
+            fi
+          done
+          docker info >/dev/null
+
+      - name: Prepare the credential-isolated runtime
+        id: runtime
+        working-directory: webrtc-video/producer/qualification/adaptive-streaming
+        shell: bash
+        env:
+          INPUT_FLEXFEC_MEDIA_PACKETS: ${{ inputs.flexfec_media_packets }}
+          INPUT_FLEXFEC_REPAIR_PACKETS: ${{ inputs.flexfec_repair_packets }}
+          INPUT_MOBILITY: ${{ inputs.mobility }}
+          INPUT_PATH: ${{ inputs.path }}
+          INPUT_PROTECTION: ${{ inputs.protection }}
+          RSTREAM_AUTHENTICATION_TOKEN: ${{ secrets.RSTREAM_QUALIFICATION_TOKEN }}
+        run: |
+          set -euo pipefail
+          config_directory="$(mktemp -d)"
+          runtime_directory="$(mktemp -d)"
+          output_directory="${RUNNER_TEMP}/video-qualification"
+          mkdir -p "$output_directory"
+          chmod 700 "$config_directory" "$runtime_directory" "$output_directory"
+          cat >"${config_directory}/config.yaml" <<EOF
+          version: 1
+          defaults:
+            context:
+              name: qualification
+          contexts:
+            - name: qualification
+              apiUrl: ${RSTREAM_QUALIFICATION_API_URL}
+              engine: ${RSTREAM_QUALIFICATION_ENGINE}
+              projectEndpoint: ${RSTREAM_QUALIFICATION_PROJECT_ENDPOINT}
+          EOF
+          mobility=off
+          if [[ "$INPUT_MOBILITY" == "true" ]]; then
+            mobility=producer
+          fi
+          if [[ "$INPUT_PATH" != "relay" && "$mobility" != "off" ]]; then
+            printf 'Producer mobility requires the relay path.\n' >&2
+            exit 1
+          fi
+          producer_turn_policy=disabled
+          if [[ "$INPUT_PATH" == "relay" ]]; then
+            producer_turn_policy=relay
+          fi
+          prepare_arguments=(
+            --context qualification
+            --output-directory "$runtime_directory"
+            --producer-config ../../config.test-pattern.h264.twcc-gcc-flexfec.yaml
+            --producer-turn-policy "$producer_turn_policy"
+            --turn-transport udp
+          )
+          if [[ "$INPUT_PROTECTION" == "nack-rtx-flexfec" ]]; then
+            prepare_arguments+=(
+              --flex-fec
+              --flex-fec-media-packets "$INPUT_FLEXFEC_MEDIA_PACKETS"
+              --flex-fec-repair-packets "$INPUT_FLEXFEC_REPAIR_PACKETS"
+            )
+          fi
+          RSTREAM_CONFIG="${config_directory}/config.yaml" \
+            go run ./cmd/prepare-context "${prepare_arguments[@]}"
+          {
+            printf 'runtime_directory=%s\n' "$runtime_directory"
+            printf 'output_directory=%s\n' "$output_directory"
+            printf 'mobility=%s\n' "$mobility"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Run the qualification
+        id: qualification
+        continue-on-error: true
+        working-directory: webrtc-video/producer/qualification/adaptive-streaming
+        shell: bash
+        env:
+          RSTREAM_QUALIFICATION_PATH: ${{ inputs.path }}
+          RSTREAM_QUALIFICATION_PROTECTION: ${{ inputs.protection }}
+          RSTREAM_QUALIFICATION_PLAYOUT_DELAY_HINT_SECONDS: ${{ inputs.playout_delay_hint_seconds }}
+          RSTREAM_QUALIFICATION_FLEXFEC_MEDIA_PACKETS: ${{ inputs.flexfec_media_packets }}
+          RSTREAM_QUALIFICATION_FLEXFEC_REPAIR_PACKETS: ${{ inputs.flexfec_repair_packets }}
+          RSTREAM_QUALIFICATION_MOBILITY: ${{ steps.runtime.outputs.mobility }}
+          RSTREAM_QUALIFICATION_PREPARED_RUNTIME_DIRECTORY: ${{ steps.runtime.outputs.runtime_directory }}
+        run: ./run.sh "${{ steps.runtime.outputs.output_directory }}"
+
+      - name: Upload the complete evidence bundle
+        if: always() && steps.runtime.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: video-${{ inputs.path }}-${{ inputs.protection }}-${{ github.run_id }}
+          path: ${{ steps.runtime.outputs.output_directory }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce the qualification verdict
+        if: always()
+        shell: bash
+        run: |
+          if [[ "${{ steps.qualification.outcome }}" != "success" ]]; then
+            printf 'Video qualification failed; inspect the uploaded evidence bundle.\n' >&2
+            exit 1
+          fi
