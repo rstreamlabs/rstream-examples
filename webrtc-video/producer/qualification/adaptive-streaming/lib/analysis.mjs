@@ -7,6 +7,9 @@ import {
   renderTransportEvidenceSVG,
 } from "./evidence-svg.mjs";
 
+const maximumQualificationSampleGapMilliseconds = 2500;
+const minimumSustainedRecoveryMilliseconds = 10_000;
+
 export function enrichSamples(samples) {
   let previous = null;
   return samples.map((sample) => {
@@ -379,6 +382,12 @@ export function analyze(
     "at-least",
     recoveryCapacityRestoredAfterMilliseconds,
   );
+  const sustainedRecoveryMilliseconds = longestEncoderTargetDuration(
+    enriched,
+    "recovery",
+    recoveryThreshold,
+    recoveryCapacityRestoredAfterMilliseconds,
+  );
   assert(
     assertions,
     !congestionResponseRequired ||
@@ -391,10 +400,10 @@ export function analyze(
   assert(
     assertions,
     !congestionResponseRequired ||
-      (recovery?.endingEncoderTargetKbps || 0) >= recoveryThreshold,
+      sustainedRecoveryMilliseconds >= minimumSustainedRecoveryMilliseconds,
     "sustained-recovery",
     congestionResponseRequired
-      ? "the recovery phase ends at or above 80% of the baseline encoder target"
+      ? "the encoder sustains at least 80% of its baseline target for 10 seconds after capacity is restored"
       : "no sustained recovery target is required when the capacity phase did not reduce the encoder by 20%",
   );
   assert(
@@ -718,6 +727,7 @@ export function analyze(
     healthyLinkTargetRatio,
     responseDelayMilliseconds: responseDelay,
     recoveryDelayMilliseconds: recoveryDelay,
+    sustainedRecoveryMilliseconds,
     staleBitrateCallbacks: Math.max(
       0,
       ...enriched.map((sample) => sample.staleBitrateCallbacks || 0),
@@ -905,10 +915,6 @@ export function renderMarkdown(analysis, manifest) {
     baseline?.medianReceivedBitrateKbps > 0
       ? recovery.medianReceivedBitrateKbps / baseline.medianReceivedBitrateKbps
       : null;
-  const endingRecoveryRatio =
-    baseline?.medianEncoderTargetKbps > 0
-      ? recovery.endingEncoderTargetKbps / baseline.medianEncoderTargetKbps
-      : null;
   const capacityIsolation =
     conditioning?.endingEncoderTargetKbps > 0 &&
     baseline?.medianEncoderTargetKbps > 0
@@ -970,10 +976,10 @@ export function renderMarkdown(analysis, manifest) {
     [
       "Rate recovery",
       analysis.congestionResponseRequired
-        ? `${formatDuration(analysis.recoveryDelayMilliseconds)}; ending target ${formatNumber(endingRecoveryRatio * 100, 1)}% of baseline; received throughput ${formatNumber(receiveRecoveryRatio * 100, 1)}% of baseline`
+        ? `${formatDuration(analysis.recoveryDelayMilliseconds)} to threshold; sustained for ${formatDuration(analysis.sustainedRecoveryMilliseconds)}; received throughput ${formatNumber(receiveRecoveryRatio * 100, 1)}% of baseline`
         : "not required; capacity phase did not reduce the target",
       analysis.congestionResponseRequired
-        ? "target reaches and ends at least 80% within 35 s; median throughput at least 60% of baseline"
+        ? "target reaches 80% within 35 s, sustains it for 10 s, and median throughput reaches at least 60% of baseline"
         : "not applicable",
     ],
     [
@@ -2319,6 +2325,42 @@ function timeToEncoderTarget(
         : sample.encoderTargetKbps >= target),
   );
   return match ? match.elapsedMilliseconds - event : null;
+}
+
+function longestEncoderTargetDuration(
+  samples,
+  phase,
+  target,
+  offsetMilliseconds = 0,
+) {
+  const phaseSamples = samples.filter((sample) => sample.phase === phase);
+  if (phaseSamples.length === 0 || !Number.isFinite(target) || target <= 0) {
+    return 0;
+  }
+  const event = phaseSamples[0].elapsedMilliseconds + offsetMilliseconds;
+  let longest = 0;
+  let start = null;
+  let previous = null;
+  for (const sample of phaseSamples) {
+    if (sample.elapsedMilliseconds < event) {
+      continue;
+    }
+    const gap = previous === null ? 0 : sample.elapsedMilliseconds - previous;
+    if (
+      sample.encoderTargetKbps < target ||
+      gap > maximumQualificationSampleGapMilliseconds
+    ) {
+      start = null;
+    }
+    if (sample.encoderTargetKbps >= target) {
+      if (start === null) {
+        start = sample.elapsedMilliseconds;
+      }
+      longest = Math.max(longest, sample.elapsedMilliseconds - start);
+    }
+    previous = sample.elapsedMilliseconds;
+  }
+  return longest;
 }
 
 function counterIncrease(samples, field, phases) {

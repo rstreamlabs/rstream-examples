@@ -781,6 +781,46 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     ).passed,
     false,
   );
+  let lateRecoveryIndex = 0;
+  const lateNetworkDegradation = analyze(
+    samples.map((sample) => {
+      if (sample.phase !== "recovery") {
+        return sample;
+      }
+      lateRecoveryIndex += 1;
+      return {
+        ...sample,
+        encoderTargetKbps: lateRecoveryIndex <= 12 ? 4000 : 3000,
+      };
+    }),
+    manifest,
+  );
+  assert.equal(
+    lateNetworkDegradation.assertions.find(
+      (assertion) => assertion.name === "sustained-recovery",
+    ).passed,
+    true,
+  );
+  let transientRecoveryIndex = 0;
+  const transientRecoverySpike = analyze(
+    samples.map((sample) => {
+      if (sample.phase !== "recovery") {
+        return sample;
+      }
+      transientRecoveryIndex += 1;
+      return {
+        ...sample,
+        encoderTargetKbps: transientRecoveryIndex === 10 ? 4000 : 3000,
+      };
+    }),
+    manifest,
+  );
+  assert.equal(
+    transientRecoverySpike.assertions.find(
+      (assertion) => assertion.name === "sustained-recovery",
+    ).passed,
+    false,
+  );
 
   const receiverSamples = samples.map((sample, index) => ({
     datagramsReceived: index * 100,
