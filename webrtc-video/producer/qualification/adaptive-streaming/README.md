@@ -41,14 +41,14 @@ also records shorter runtime pauses that aggregate CPU counters cannot expose,
 including pauses of a local container VM.
 
 The impairment schedule runs as one process inside the producer network
-namespace. It first holds a 16 Mbit/s profile with no added delay, jitter, or
+namespace. It first holds a 32 Mbit/s profile with no added delay, jitter, or
 random loss long enough for the controller to settle after qdisc activation.
 The capacity experiment then changes only the rate while the path steps through
-12, 8, and 4 Mbit/s. Additional delay, jitter, and loss begin in a separate
+16, 12, 8, and 4 Mbit/s. Additional delay, jitter, and loss begin in a separate
 phase.
 
 Recovery follows the same discipline. It first removes loss, delay, and jitter
-while capacity remains at 4 Mbit/s, then raises capacity to 16 Mbit/s. The
+while capacity remains at 4 Mbit/s, then raises capacity to 32 Mbit/s. The
 measured response time starts at that second event.
 After the recovery measurement, a zero-delay, zero-loss drain profile with
 capacity 20 times the encoder ceiling empties the qdisc before teardown.
@@ -69,14 +69,14 @@ rate directly verifiable.
 
 The link moves through six measured phases:
 
-| Phase        | Media path                                               |
-| ------------ | -------------------------------------------------------- |
-| warmup       | unshaped reference                                      |
-| baseline     | unshaped quality ceiling                                |
-| conditioning | 30 s at 16 Mbit/s; no delay, jitter, or random loss     |
-| constrained  | 12, 8, then 4 Mbit/s; no delay, jitter, or random loss   |
-| impaired     | 4 Mbit/s; 120 ms delay; 30 ms jitter; 2% random loss    |
-| recovery     | 4 then 16 Mbit/s; no delay, jitter, or random loss       |
+| Phase        | Media path                                                 |
+| ------------ | ---------------------------------------------------------- |
+| warmup       | unshaped reference                                         |
+| baseline     | unshaped quality ceiling                                   |
+| conditioning | 30 s at 32 Mbit/s; no delay, jitter, or random loss        |
+| constrained  | 16, 12, 8, then 4 Mbit/s; no delay, jitter, or random loss |
+| impaired     | 4 Mbit/s; 120 ms delay; 30 ms jitter; 2% random loss       |
+| recovery     | 4 then 32 Mbit/s; no delay, jitter, or random loss         |
 
 For a direct run, the Linux traffic-control filter applies to outbound UDP on
 the isolated producer-to-browser address. It deliberately does not pin the
@@ -126,8 +126,9 @@ The harness supports two path kinds:
 It also supports two protection profiles:
 
 - `nack-rtx` uses reactive NACK feedback and RTX retransmissions.
-- `nack-rtx-flexfec` adds proactive FlexFEC-03 protection at two repair packets
-  per four media packets.
+- `nack-rtx-flexfec` adds proactive FlexFEC-03 protection. Its default is one
+  repair packet per five media packets; ratio overrides support explicit stress
+  comparisons.
 
 ### Symmetric relay qualification
 
@@ -141,10 +142,10 @@ ICE outcome.
 
 FlexFEC is not free capacity. GCC estimates the media rate acknowledged through
 TWCC, and the pacer converts that target into a wire budget that includes the
-configured repair ratio. With the reference `2/4` profile, a 1.5 Mbit/s wire
+configured repair ratio. With the reference `1/5` profile, a 1.2 Mbit/s wire
 budget provides 1 Mbit/s to media before RTP, UDP, IP, and occasional RTX
 overhead. At the qualified 4 Mbit/s wire point the theoretical media share is
-about 2.67 Mbit/s; the 2 Mbit/s encoder floor leaves measured room for
+about 3.33 Mbit/s; the 2 Mbit/s encoder floor leaves measured room for
 packetization, paced repair, and transient overshoot. Chromium does not
 acknowledge the FlexFEC stream through TWCC, so those packets remain outside
 GCC's loss and received-rate calculations while the pacer still accounts for
@@ -152,10 +153,11 @@ their wire cost.
 
 The sender uses one real-time envelope for media bursts and repair. It takes
 the larger of the protected wire target and 1.5 times the media target; it does
-not multiply the FlexFEC overhead by another 1.5. For the reference `2/4`
-profile those values are equal. Every recorded sample carries both the
-protected target and the effective pacing envelope, and the qualification
-fails if their relationship diverges from the configured protection ratio.
+not multiply the FlexFEC overhead by another 1.5. The default `1/5` profile
+leaves headroom for packetization and RTX, while the `2/4` stress profile uses
+the complete 1.5× allowance. Every recorded sample carries both the protected
+target and the effective pacing envelope, and the qualification fails if their
+relationship diverges from the configured protection ratio.
 
 Pion's delay and loss estimators remain the primary congestion controller. A
 bounded feedback-loss guard closes one coordination gap between them: two
@@ -170,19 +172,15 @@ every reduction and recovery.
 
 Encoder hysteresis cannot spend the same headroom twice. Startup validation
 therefore derives the largest safe decrease threshold from the selected repair
-ratio and the shared pacing envelope. The reference `2/4` profile uses immediate
-decreases because its repair traffic consumes the full 1.5x envelope. A lighter
-`2/5` profile leaves a six-percent safe threshold; a five-percent setting
-absorbs estimator noise without allowing the encoder to overdrive the pacer.
+ratio and the shared pacing envelope. The qualified profiles use immediate
+decreases; the `2/4` stress ratio consumes the complete 1.5× allowance, while
+the default `1/5` ratio retains margin for packetization and reactive repair.
 
-Pion distributes the protected media packets across the repair packets with an
-interleaved XOR map. The two repairs in the reference profile therefore cover
-two independent two-packet groups; they do not recover any arbitrary pair of
-losses in the four-packet window. The shorter groups were selected after an
-immediate A/B run under the same 2% loss profile reduced NACK and RTX activity
-by about 10% and frozen time by about 40% compared with `2/5`. The complete
-matrix still has to pass because a single favorable run is evidence for the
-choice, not its release verdict.
+Pion distributes protected media packets across independent XOR groups when a
+profile uses several repair packets. In the `2/4` stress profile, each repair
+covers one two-packet group; the pair does not recover any arbitrary two losses
+in the complete four-packet window. This topology is recorded with the ratio so
+the stress result cannot be misread as a generic two-loss guarantee.
 
 Packet repair and playback buffering solve different parts of continuity.
 NACK/RTX and FlexFEC recover missing media; the receiver jitter buffer absorbs
@@ -191,8 +189,8 @@ The runner can set Chromium's minimum receiver hint with
 `RSTREAM_QUALIFICATION_PLAYOUT_DELAY_HINT_SECONDS`. It records both the
 configured hint and the receiver's effective target delay. The target must stay
 below 250 ms, so a smooth result cannot be obtained by hiding several seconds
-of latency in the player. The release default is zero until repeated direct and
-relay evidence establishes a better operating point.
+of latency in the player. The qualification profile requests 200 ms and still
+requires the measured target to remain below 250 ms.
 
 ## Run one scenario
 
@@ -328,17 +326,16 @@ the end-to-end TURN evidence.
 `comparison.md` is the human report, `comparison.json` is the automation
 verdict, and `comparison.svg` is the compact visual suitable for the guide.
 
-The default 4 Mbit/s wire capacity is the qualified operating point for this
-specific 1080p30 H.264 profile with NACK, RTX, and optional `2/4` FlexFEC. The
-encoder has a 2 Mbit/s media floor: lower targets kept frames flowing but drove
-x264 to QP 49–51, which is not acceptable evidence of healthy video. A 3
-Mbit/s wire test then overloaded the steady qdisc once repair traffic was
-included, while 3.5 Mbit/s remained marginal on frozen time. The 4 Mbit/s point
-is the first tested budget that preserved quantization, bounded freezes, and
-the independent loss budget in both direct and relay diagnostics. Production
-H.264 examples use the same 2 Mbit/s quality floor. Override the test capacity
-with `RSTREAM_QUALIFICATION_CAPACITY_KBPS`; the manifest records it and the
-matrix rejects runs that do not use one identical profile.
+The matrix uses one 4 Mbit/s wire bottleneck for the default `1/5` profile and
+the explicit `2/4` stress comparison. The encoder has a 2 Mbit/s media floor:
+lower targets kept frames flowing but drove x264 to QP 49–51, which is not
+acceptable evidence of healthy video. Four Mbit/s leaves the default profile
+room for packetization and RTX while still forcing a measurable downshift, and
+it gives the stress ratio a deliberately tighter repair budget. This is the
+qualified test point, not a universal minimum for every camera or link.
+Production H.264 examples use the same 2 Mbit/s quality floor. Override the
+test capacity with `RSTREAM_QUALIFICATION_CAPACITY_KBPS`; the manifest records
+it and the matrix rejects runs that do not use one identical profile.
 
 ## Read one result
 
