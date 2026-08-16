@@ -148,7 +148,7 @@ func TestMinimumBitratePacerPreservesBurstHeadroomWithFlexFEC(t *testing.T) {
 	}
 }
 
-func TestMinimumBitratePacerBoundsProtectedWireEnvelope(t *testing.T) {
+func TestMinimumBitratePacerBoundsProtectedMediaEnvelope(t *testing.T) {
 	protection := flexFECProtection{mediaPackets: 4, repairPackets: 2}
 	pacer := newMinimumBitratePacerWithProtection(2_200_000, 500_000, protection)
 	t.Cleanup(func() {
@@ -174,9 +174,9 @@ func TestMinimumBitratePacerBoundsProtectedWireEnvelope(t *testing.T) {
 		}
 	}
 	assertPacerEnvelope(2_200_000, 3_300_000, 4_950_000)
-	pacer.SetTargetBitrate(3_000_000)
+	pacer.SetMediaTargetBitrate(3_000_000)
 	assertPacerEnvelope(3_000_000, 4_500_000, 6_750_000)
-	pacer.SetTargetBitrate(100_000)
+	pacer.SetMediaTargetBitrate(100_000)
 	assertPacerEnvelope(500_000, 750_000, 1_125_000)
 }
 
@@ -239,7 +239,7 @@ func TestTokenBucketPacerReportsOneAtomicPacingEnvelope(t *testing.T) {
 	}
 }
 
-func TestMinimumBitratePacerMapsMediaTargetToProtectedWireBudget(t *testing.T) {
+func TestMinimumBitratePacerAcceptsGCCWireBudgetWithoutDoubleCounting(t *testing.T) {
 	delegate := &recordingPacer{}
 	pacer := wrapMinimumBitratePacerWithProtection(
 		delegate,
@@ -248,6 +248,28 @@ func TestMinimumBitratePacerMapsMediaTargetToProtectedWireBudget(t *testing.T) {
 	)
 	pacer.SetTargetBitrate(5_000_000)
 	pacer.SetTargetBitrate(1_000_000)
+	delegate.mu.Lock()
+	defer delegate.mu.Unlock()
+	if len(delegate.bitrates) != 2 {
+		t.Fatalf("delegated bitrate updates = %d, want 2", len(delegate.bitrates))
+	}
+	if delegate.bitrates[0] != 5_000_000 {
+		t.Fatalf("GCC wire target = %d, want 5000000", delegate.bitrates[0])
+	}
+	if delegate.bitrates[1] != 2_800_000 {
+		t.Fatalf("GCC wire floor = %d, want 2800000", delegate.bitrates[1])
+	}
+}
+
+func TestMinimumBitratePacerMapsLocalMediaTargetToProtectedWireBudget(t *testing.T) {
+	delegate := &recordingPacer{}
+	pacer := wrapMinimumBitratePacerWithProtection(
+		delegate,
+		2_000_000,
+		flexFECProtection{mediaPackets: 5, repairPackets: 2},
+	)
+	pacer.SetMediaTargetBitrate(5_000_000)
+	pacer.SetMediaTargetBitrate(1_000_000)
 	delegate.mu.Lock()
 	defer delegate.mu.Unlock()
 	if len(delegate.bitrates) != 2 {

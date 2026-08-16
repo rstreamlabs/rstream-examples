@@ -48,7 +48,7 @@ func (e *associatedStreamBandwidthEstimator) WriteRTCP(
 		target, changed := e.lossGuard.observe(
 			observation.reported,
 			observation.lost,
-			e.effectiveMediaBitrate(e.SendSideBWE.GetTargetBitrate()),
+			e.effectiveMediaBitrate(mediaBitrate(e.SendSideBWE.GetTargetBitrate(), e.protection)),
 		)
 		if changed {
 			e.deliverEffectiveBitrate(target)

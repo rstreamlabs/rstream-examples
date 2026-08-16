@@ -143,6 +143,18 @@ func (p *minimumBitratePacer) setTransportCCExtension(
 }
 
 func (p *minimumBitratePacer) SetTargetBitrate(bitrate int) {
+	// GCC estimates the complete paced traffic envelope. Forward that wire
+	// budget unchanged so repair traffic is not counted a second time.
+	minimumWireBitrate := wireBitrate(p.minimumBitrate, p.protection)
+	if bitrate < minimumWireBitrate {
+		bitrate = minimumWireBitrate
+	}
+	p.delegate.SetTargetBitrate(bitrate)
+}
+
+func (p *minimumBitratePacer) SetMediaTargetBitrate(bitrate int) {
+	// Local controls, including the media floor and loss guard, operate on
+	// encoder bitrate. Reserve the configured repair share before pacing it.
 	if bitrate < p.minimumBitrate {
 		bitrate = p.minimumBitrate
 	}

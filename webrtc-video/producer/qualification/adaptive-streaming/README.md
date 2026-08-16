@@ -140,24 +140,22 @@ exact flow being impaired. Transport fallback has its own qualification path;
 the video comparison measures one selected route rather than an opportunistic
 ICE outcome.
 
-FlexFEC is not free capacity. GCC estimates the media rate acknowledged through
-TWCC, and the pacer converts that target into a wire budget that includes the
-configured repair ratio. With the reference `1/5` profile, a 1.2 Mbit/s wire
-budget provides 1 Mbit/s to media before RTP, UDP, IP, and occasional RTX
-overhead. At the qualified 4 Mbit/s wire point the theoretical media share is
-about 3.33 Mbit/s; the 2 Mbit/s encoder floor leaves measured room for
-packetization, paced repair, and transient overshoot. Chromium does not
-acknowledge the FlexFEC stream through TWCC, so those packets remain outside
-GCC's loss and received-rate calculations while the pacer still accounts for
-their wire cost.
+FlexFEC is not free capacity. GCC controls the complete paced wire budget, and
+the producer derives the encoder's media share after reserving the configured
+repair ratio. With the reference `1/5` profile, a 1.2 Mbit/s wire budget
+provides 1 Mbit/s to media before RTP, UDP, IP, and occasional RTX overhead. At
+the qualified 4 Mbit/s wire point the theoretical media share is about 3.33
+Mbit/s; the 2 Mbit/s encoder floor leaves measured room for packetization,
+reactive repair, and transient overshoot. Chromium does not acknowledge the
+FlexFEC stream through TWCC, so those packets remain outside GCC's loss and
+received-rate calculations while remaining inside its capacity budget.
 
-The sender uses one real-time envelope for media bursts and repair. It takes
-the larger of the protected wire target and 1.5 times the media target; it does
-not multiply the FlexFEC overhead by another 1.5. The default `1/5` profile
-leaves headroom for packetization and RTX, while the `2/4` stress profile uses
-the complete 1.5× allowance. Every recorded sample carries both the protected
-target and the effective pacing envelope, and the qualification fails if their
-relationship diverges from the configured protection ratio.
+The sender uses one real-time envelope for media bursts and repair. Its
+sustained target is GCC's complete wire budget; the token bucket permits short
+bursts at 1.5 times that rate without changing the long-term allowance. Every
+recorded sample carries the media target, wire target, and pacing envelope, and
+the qualification fails if their relationship diverges from the configured
+protection ratio.
 
 Pion's delay and loss estimators remain the primary congestion controller. A
 bounded feedback-loss guard closes one coordination gap between them: two
