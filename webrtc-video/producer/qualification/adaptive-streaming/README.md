@@ -73,7 +73,7 @@ The link moves through six measured phases:
 | ------------ | -------------------------------------------------------- |
 | warmup       | unshaped reference                                      |
 | baseline     | unshaped quality ceiling                                |
-| conditioning | 16 Mbit/s; no delay, jitter, or random loss             |
+| conditioning | 30 s at 16 Mbit/s; no delay, jitter, or random loss     |
 | constrained  | 12, 8, then 4 Mbit/s; no delay, jitter, or random loss   |
 | impaired     | 4 Mbit/s; 120 ms delay; 30 ms jitter; 2% random loss    |
 | recovery     | 4 then 16 Mbit/s; no delay, jitter, or random loss       |
