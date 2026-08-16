@@ -107,7 +107,7 @@ func TestControllerAppliesDecreasesWithoutWaitingForItsTicker(t *testing.T) {
 	controller.UpdateEstimatedBitrate(2_000_000)
 	select {
 	case target := <-encoder.updates:
-		t.Fatalf("encoder increase %d bypassed the periodic ramp limiter", target)
+		t.Fatalf("encoder increase %d bypassed the periodic update interval", target)
 	case <-time.After(25 * time.Millisecond):
 	}
 }
@@ -227,11 +227,11 @@ func TestControllerBlocksPeriodicIncreaseUntilMeasuredLossRecovers(t *testing.T)
 	lossBits.Store(math.Float64bits(0))
 	select {
 	case target := <-encoder.updates:
-		if target != 2300 {
-			t.Fatalf("post-recovery target = %d, want 2300", target)
+		if target != 3000 {
+			t.Fatalf("post-recovery target = %d, want 3000", target)
 		}
 	case <-time.After(8 * interval):
-		t.Fatal("encoder did not resume its bounded ramp after loss recovery")
+		t.Fatal("encoder did not resume estimator-driven adaptation after loss recovery")
 	}
 	select {
 	case <-recoveryKeyFrames:

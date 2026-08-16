@@ -163,8 +163,6 @@ type WebRTCTWCCGCCBackendConfig struct {
 	UpdateInterval        string  `yaml:"updateInterval"`
 	ChangeThresholdPct    int     `yaml:"changeThresholdPct"`
 	DecreaseThresholdPct  int     `yaml:"decreaseThresholdPct"`
-	MaxIncreasePct        int     `yaml:"maxIncreasePct"`
-	MaxIncreaseStepKbps   int     `yaml:"maxIncreaseStepKbps"`
 	MaxIncreaseLossPct    float64 `yaml:"maxIncreaseLossPct"`
 	IncreaseHoldAfterLoss string  `yaml:"increaseHoldAfterLoss"`
 }
@@ -237,8 +235,6 @@ func Default() Config {
 					UpdateInterval:        "1s",
 					ChangeThresholdPct:    10,
 					DecreaseThresholdPct:  5,
-					MaxIncreasePct:        15,
-					MaxIncreaseStepKbps:   500,
 					MaxIncreaseLossPct:    1,
 					IncreaseHoldAfterLoss: DefaultIncreaseHoldAfterLoss,
 				},
@@ -430,13 +426,6 @@ func (c Config) Validate() error {
 				"webrtc adaptive twccGCC decreaseThresholdPct must be at most %d with the configured pacing and FlexFEC ratio",
 				maximumDecreaseThreshold,
 			)
-		}
-		if c.WebRTC.Adaptive.TWCCGCC.MaxIncreasePct <= 0 ||
-			c.WebRTC.Adaptive.TWCCGCC.MaxIncreasePct > 100 {
-			return errors.New("webrtc adaptive twccGCC maxIncreasePct must be greater than 0 and at most 100")
-		}
-		if c.WebRTC.Adaptive.TWCCGCC.MaxIncreaseStepKbps <= 0 {
-			return errors.New("webrtc adaptive twccGCC maxIncreaseStepKbps must be greater than 0")
 		}
 		if math.IsNaN(c.WebRTC.Adaptive.TWCCGCC.MaxIncreaseLossPct) ||
 			math.IsInf(c.WebRTC.Adaptive.TWCCGCC.MaxIncreaseLossPct, 0) ||

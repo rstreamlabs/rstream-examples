@@ -320,30 +320,28 @@ frame drops, actual packet residence time, prospective sustained-rate backlog,
 the key-frame reserve, and packet-level rejections are exposed in the session
 diagnostics and qualification report.
 
-The pacing envelope reserves up to 1.5× GCC's media target for encoded-frame
-bursts and packet repair. FlexFEC consumes that same allowance. With the
-reference `2/4` ratio, the protected wire target is already 1.5× the media
-target, so the pacer does not apply a second multiplier. Lighter protection
-leaves the unused share available to packetization and occasional RTX; a
-larger repair ratio makes the protected wire target the floor. This shared
-budget drains ordinary bursts without turning repair into persistent local
-congestion. The 225 ms admission ceiling and complete-access-unit gate keep
-the allowance from becoming unbounded buffering.
+The pacing envelope derives its sustained wire target from GCC's media target
+and the configured FlexFEC ratio, then reserves 1.5× that wire rate for normal
+encoded-frame bursts and prompt packet repair. The burst allowance is distinct
+from the sustained repair budget: counting the FlexFEC overhead twice would
+remove the headroom needed to packetize a protected key frame. The 225 ms
+admission ceiling and complete-access-unit gate keep the allowance from
+becoming unbounded buffering.
 
 Material target decreases are applied to the encoder immediately when fresh
 feedback requires them. Callback bursts are coalesced to the newest value, and
 the controller re-reads GCC's current target before every periodic decision so
-an out-of-order callback can never apply a stale increase. Increases remain
-limited by `updateInterval` and bounded steps. The first increase after a
-measured-loss hold requests one coalesced recovery key frame, shortening the
-time to a fresh decodable image without adding a key frame to every healthy
-ramp step. This keeps the encoder aligned with an urgent pacer reduction
-without letting optimistic feedback repeatedly reconfigure it or produce an
-abrupt quality spike. New access units continue to use the sustained target for
-admission. Already packetized units keep their RTP sequence continuity and
-drain only at the current GCC budget; the report records the estimator-induced
-backlog separately from actual packet residence time so a target decrease
-cannot hide bufferbloat behind a derived queue value.
+an out-of-order callback can never apply a stale increase. Increases follow
+GCC's own bounded estimate at `updateInterval`; a second encoder ramp would
+make the sender application-limited and deprive GCC of the traffic needed to
+confirm recovered capacity. The first increase after a measured-loss hold
+requests one coalesced recovery key frame, shortening the time to a fresh
+decodable image without adding one to every healthy increase. New access units
+continue to use the sustained target for admission. Already packetized units
+keep their RTP sequence continuity and drain only at the current GCC budget;
+the report records the estimator-induced backlog separately from actual packet
+residence time so a target decrease cannot hide bufferbloat behind a derived
+queue value.
 
 Transport-wide sequence numbers are assigned at actual pacer egress, after the
 bounded repair-priority scheduler has chosen the next packet. Assigning them
@@ -374,7 +372,6 @@ The main settings are:
 - `webrtc.adaptive.twccGCC.minBitrateKbps` and `maxBitrateKbps`, which define the allowed range (500–8000 kbit/s is supported; the 1080p30 H.264 examples keep a quality-protecting 2000 kbit/s floor)
 - `webrtc.adaptive.twccGCC.updateInterval`, which sets how often bitrate changes may be applied
 - `webrtc.adaptive.twccGCC.changeThresholdPct` and `decreaseThresholdPct`, which keep small estimator fluctuations from reconfiguring the encoder while preserving the available pacing headroom; startup validation rejects a decrease threshold that the configured FlexFEC ratio cannot safely absorb
-- `webrtc.adaptive.twccGCC.maxIncreasePct` and `maxIncreaseStepKbps`, which bound each progressive recovery step
 - `webrtc.adaptive.twccGCC.maxIncreaseLossPct`, which prevents a delayed estimator increase from raising the encoder target while measured packet loss is still above the configured recovery threshold
 
 #### Reference operating envelope
@@ -393,11 +390,10 @@ the result, so the measured trade-offs remain tied to an exact implementation.
 | Encoder VBV            |                                                       250 ms | Bounds the encoder-side rate reservoir while retaining enough room for normal frame-size variation. It is one component of latency, not a promise that end-to-end delay is 250 ms.                                                                                                                                                                                                       |
 | Initial encoder target |                                                     5 Mbit/s | Starts 1080p with useful quality before TWCC has accumulated enough feedback. A high startup target can briefly overshoot a smaller access link, which is why the pacer still enforces the current wire budget.                                                                                                                                                                          |
 | Adaptive range         |                                                   2–8 Mbit/s | The 2 Mbit/s floor protects fixed 1080p quality observed through x264 QP; the ceiling bounds CPU and link demand. Operating below the floor calls for a source ladder, not a hidden quality collapse.                                                                                                                                                                                    |
-| Update hysteresis      |                      2 s, 10% increases, immediate decreases | Filters optimistic estimator noise while keeping the encoder aligned with the protected-wire pacing budget. Decreases bypass the periodic increase gate; increases remain progressive.                                                                                                                                                                                                   |
-| Increase limit         |                           15%, at most 500 kbit/s per update | Makes recovery progressive and observable instead of creating a large optimistic burst after congestion clears.                                                                                                                                                                                                                                                                          |
+| Update hysteresis      |                      2 s, 10% increases, immediate decreases | Filters estimator noise while keeping the encoder aligned with the capacity granted by GCC. Decreases bypass the periodic update gate; increases follow GCC after the loss-recovery hold.                                                                                                                                                                                                 |
 | Pacing and admission   | Shared 1.5x media envelope, 225 ms sustained-backlog ceiling | Media, proactive repair, and retransmissions share one pacing allowance. The admission ceiling preserves 150 ms of scheduling margin under the measured 375 ms packet-residence budget. Over-budget access units are rejected whole before RTP packetization.                                                                                                                            |
 | Repair scheduling      |        One repair packet per scheduling burst; 225 ms expiry | Gives RTX a prompt opportunity without starving current media, and discards a repair packet once its playback value is lower than the latency it would add.                                                                                                                                                                                                                              |
-| FlexFEC                |                    Two repair packets per four media packets | Adds 50% as many proactive repair packets as media packets to protect lossy, higher-RTT paths where reactive RTX often arrives after the playout window. Leave it disabled when measured NACK/RTX recovery is sufficient or the link cannot afford the overhead.                                                                                                                         |
+| FlexFEC                |                     One repair packet per five media packets | Adds moderate proactive protection for lossy, higher-RTT paths where reactive RTX can arrive after the playout window. Stronger ratios remain explicit stress profiles; leave FlexFEC disabled when measured NACK/RTX recovery is sufficient or the link cannot afford the overhead.                                                                                                    |
 
 With the 1080p30 H.264 reference settings, the sender starts at `5 Mbps` and may
 adapt within the `2–8 Mbps` range. Qualification showed that allowing the fixed
