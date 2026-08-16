@@ -156,7 +156,7 @@ export function analyze(
           ) && summaries[name].averageJitterBufferDelayMilliseconds <= 300,
       ),
       "playout-effective-latency-budget",
-      "receiver effective buffered delay evidence covers every phase and remains at or below 300 ms",
+      "receiver effective buffered delay evidence covers every phase and its phase average remains at or below 300 ms",
     );
   }
   assert(
@@ -855,8 +855,8 @@ function networkConditionDefinitions(manifest) {
 export function renderSVG(analysis, manifest) {
   const samples = analysis.samples;
   const width = 960;
-  const height = 540;
-  const margin = { top: 110, right: 28, bottom: 78, left: 78 };
+  const height = 580;
+  const margin = { top: 110, right: 28, bottom: 110, left: 78 };
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;
   const maximumTime = Math.max(
@@ -1020,7 +1020,7 @@ export function renderSVG(analysis, manifest) {
   ${capacityLine}
   <line x1="${margin.left}" y1="${margin.top + plotHeight}" x2="${width - margin.right}" y2="${margin.top + plotHeight}" stroke="#111827"/>
   ${timeTicks}
-  <text x="${width / 2}" y="${height - 50}" text-anchor="middle" font-size="15" fill="#6b7280">Elapsed time · capacity line exists only while traffic control is active</text>
+  <text x="${width / 2}" y="${height - 62}" text-anchor="middle" font-size="14" fill="#6b7280">Elapsed time · capacity line exists only while traffic control is active</text>
 </svg>
 `;
 }
@@ -1128,7 +1128,7 @@ export function renderMarkdown(analysis, manifest) {
     [
       "Latency under impairment",
       `${formatNumber(impaired.maximumRTTMilliseconds, 0)} ms max RTT; ${formatNumber(impaired.averageJitterBufferDelayMilliseconds, 1)} ms effective playout buffer`,
-      "at most 600 ms RTT; at most 300 ms buffer",
+      "at most 600 ms RTT; at most 300 ms phase-average buffer",
     ],
     [
       "Visual quality under impairment",
@@ -1237,7 +1237,7 @@ ${receiverHostCPURows}
 
 The receiver uses a bounded jitter buffer to absorb packet timing variation and
 leave time for repair. Both columns come from cumulative WebRTC receiver
-counters. The configured minimum hint is ${formatNumber(manifest.video.playoutDelayHintSeconds * 1000, 0)} ms. Qualification caps the requested target at 250 ms and the effective buffered delay at 300 ms.
+counters. The configured minimum hint is ${formatNumber(manifest.video.playoutDelayHintSeconds * 1000, 0)} ms. Qualification caps the requested target at 250 ms and each phase's average effective buffered delay at 300 ms. The synchronized transport figure retains per-sample values so shorter excursions remain visible.
 
 | Phase | Average buffered delay ms/frame | Average target delay ms/frame |
 | --- | ---: | ---: |
