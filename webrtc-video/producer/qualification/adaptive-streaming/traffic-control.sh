@@ -20,7 +20,7 @@ transition_step_seconds=""
 constrained_steady_seconds=""
 impaired_seconds=""
 recovery_capacity_kbps=""
-recovery_seconds=""
+recovery_drain_seconds=""
 shaping_initialized=0
 
 usage() {
@@ -33,7 +33,7 @@ usage() {
     '  --capacity-step-two-kbps KBPS --capacity-step-three-kbps KBPS' \
     '  --capacity-kbps KBPS --transition-step-seconds SECONDS' \
     '  --constrained-steady-seconds SECONDS --impaired-seconds SECONDS' \
-    '  --recovery-capacity-kbps KBPS --recovery-seconds SECONDS' >&2
+    '  --recovery-capacity-kbps KBPS --recovery-drain-seconds SECONDS' >&2
 }
 
 require_value() {
@@ -126,9 +126,9 @@ while [ "$#" -gt 0 ]; do
     recovery_capacity_kbps="$2"
     shift 2
     ;;
-  --recovery-seconds)
+  --recovery-drain-seconds)
     require_value "$@"
-    recovery_seconds="$2"
+    recovery_drain_seconds="$2"
     shift 2
     ;;
   *)
@@ -198,7 +198,7 @@ for value in \
   "${constrained_steady_seconds}" \
   "${impaired_seconds}" \
   "${recovery_capacity_kbps}" \
-  "${recovery_seconds}"; do
+  "${recovery_drain_seconds}"; do
   if ! positive_integer "${value}"; then
     printf 'numeric traffic-control arguments must be positive integers\n' >&2
     exit 2
@@ -336,8 +336,10 @@ emit impaired-started
 "${sleep_command}" "${impaired_seconds}"
 capture impaired
 apply_shaping "${recovery_capacity_kbps}" 0ms 0ms 0%
-capture recovery-start
+capture recovery-drain-start
+emit recovery-drain-started
+"${sleep_command}" "${recovery_drain_seconds}"
+capture recovery-drain
+require_shaped_traffic recovery-drain
+clear_shaping
 emit recovery-started
-"${sleep_command}" "${recovery_seconds}"
-capture recovery
-require_shaped_traffic recovery

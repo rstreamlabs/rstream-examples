@@ -54,6 +54,7 @@ baseline_seconds="${RSTREAM_QUALIFICATION_BASELINE_SECONDS:-25}"
 constrained_seconds="${RSTREAM_QUALIFICATION_CONSTRAINED_SECONDS:-45}"
 impaired_seconds="${RSTREAM_QUALIFICATION_IMPAIRED_SECONDS:-35}"
 recovery_seconds="${RSTREAM_QUALIFICATION_RECOVERY_SECONDS:-45}"
+recovery_drain_seconds="${RSTREAM_QUALIFICATION_RECOVERY_DRAIN_SECONDS:-1}"
 mobility_seconds="${RSTREAM_QUALIFICATION_MOBILITY_SECONDS:-30}"
 mobility_mode="${RSTREAM_QUALIFICATION_MOBILITY:-off}"
 transition_step_seconds="${RSTREAM_QUALIFICATION_TRANSITION_STEP_SECONDS:-5}"
@@ -325,7 +326,7 @@ start_traffic_control() {
     --constrained-steady-seconds "${constrained_steady_seconds}" \
     --impaired-seconds "${impaired_seconds}" \
     --recovery-capacity-kbps "${recovery_capacity_kbps}" \
-    --recovery-seconds "${recovery_seconds}" \
+    --recovery-drain-seconds "${recovery_drain_seconds}" \
     <"${script_directory}/traffic-control.sh" \
     >"${output_directory}/traffic-control-events.log" \
     2>"${output_directory}/traffic-control.log" &
@@ -437,10 +438,10 @@ capture_network_evidence() {
     filter-constrained-steady.json \
     filter-impaired-start.json \
     filter-impaired.json \
-    qdisc-recovery-start.json \
-    qdisc-recovery.json \
-    filter-recovery-start.json \
-    filter-recovery.json; do
+    qdisc-recovery-drain-start.json \
+    qdisc-recovery-drain.json \
+    filter-recovery-drain-start.json \
+    filter-recovery-drain.json; do
     if [[ ! -s "${output_directory}/${expected}" ]]; then
       printf 'traffic-control evidence is missing or empty: %s\n' \
         "${expected}" >&2
@@ -644,6 +645,7 @@ for duration in \
   "${constrained_seconds}" \
   "${impaired_seconds}" \
   "${recovery_seconds}" \
+  "${recovery_drain_seconds}" \
   "${mobility_seconds}" \
   "${transition_step_seconds}"; do
   if ! positive_integer "${duration}"; then
@@ -670,6 +672,7 @@ baseline_seconds=$((10#${baseline_seconds}))
 constrained_seconds=$((10#${constrained_seconds}))
 impaired_seconds=$((10#${impaired_seconds}))
 recovery_seconds=$((10#${recovery_seconds}))
+recovery_drain_seconds=$((10#${recovery_drain_seconds}))
 transition_step_seconds=$((10#${transition_step_seconds}))
 if ! positive_integer "${capacity_kbps}"; then
   printf 'RSTREAM_QUALIFICATION_CAPACITY_KBPS must be an integer of at least 600, got %s\n' \
@@ -843,7 +846,6 @@ jq -n \
   --argjson capacity_step_one "${capacity_step_one_kbps}" \
   --argjson capacity_step_two "${capacity_step_two_kbps}" \
   --argjson capacity_step_three "${capacity_step_three_kbps}" \
-  --argjson recovery_capacity "${recovery_capacity_kbps}" \
   --argjson playout_delay_hint "${playout_delay_hint_seconds}" \
   --argjson initial_bitrate "${initial_bitrate_kbps}" \
   --argjson minimum_bitrate "${minimum_bitrate_kbps}" \
@@ -904,7 +906,7 @@ jq -n \
     ] else [] end) + [
       {name: "constrained", durationSeconds: $constrained, shaping: {discipline: "selective-prio+netem", scope: (if $path_kind == "relay" then "producer-turn-transport" else "peer-webrtc-transport-address" end), capacityKbps: $capacity, queueLimitPackets: $queue_limit, loss: "0%", schedule: [{durationSeconds: $transition_step, capacityKbps: $capacity_step_one, delay: "40ms", jitter: "10ms"}, {durationSeconds: $transition_step, capacityKbps: $capacity_step_two, delay: "50ms", jitter: "10ms"}, {durationSeconds: $transition_step, capacityKbps: $capacity_step_three, delay: "65ms", jitter: "15ms"}, {durationSeconds: ($constrained - 3 * $transition_step), capacityKbps: $capacity, delay: "80ms", jitter: "20ms"}]}},
       {name: "impaired", durationSeconds: $impaired, shaping: {discipline: "selective-prio+netem", scope: (if $path_kind == "relay" then "producer-turn-transport" else "peer-webrtc-transport-address" end), capacityKbps: $capacity, queueLimitPackets: $queue_limit, delay: "120ms", jitter: "30ms", loss: "2%"}},
-      {name: "recovery", durationSeconds: $recovery, shaping: {discipline: "selective-prio+netem", scope: (if $path_kind == "relay" then "producer-turn-transport" else "peer-webrtc-transport-address" end), capacityKbps: $recovery_capacity, queueLimitPackets: $queue_limit, delay: "0ms", jitter: "0ms", loss: "0%", purpose: "drain in-flight impaired packets before traffic-control teardown"}}
+      {name: "recovery", durationSeconds: $recovery, shaping: null}
     ])
   }' >"${output_directory}/manifest.json"
 
@@ -1157,6 +1159,8 @@ jq --slurpfile browser "${output_directory}/browser.json" \
   --argjson match_destination_port "${match_destination_port}" \
   --arg impairment_scope "${impairment_scope}" \
   --argjson impairment_target "${impairment_target}" \
+  --argjson recovery_capacity "${recovery_capacity_kbps}" \
+  --argjson recovery_drain_seconds "${recovery_drain_seconds}" \
   '.webrtc = {
     codecs: $browser[0].peerConnection.codecs,
     flexFECNegotiated: $browser[0].peerConnection.flexFECNegotiated,
@@ -1172,7 +1176,14 @@ jq --slurpfile browser "${output_directory}/browser.json" \
       port: $media_destination_port,
       protocol: $media_destination_protocol
     },
-    matchDestinationPort: $match_destination_port
+    matchDestinationPort: $match_destination_port,
+    recoveryDrain: {
+      capacityKbps: $recovery_capacity,
+      delay: "0ms",
+      durationSeconds: $recovery_drain_seconds,
+      jitter: "0ms",
+      loss: "0%"
+    }
   }' "${output_directory}/manifest.json" >"${manifest_temporary}"
 mv "${manifest_temporary}" "${output_directory}/manifest.json"
 
@@ -1214,11 +1225,11 @@ write_phase constrained \
 wait_for_traffic_control_event impaired-started $((constrained_seconds + 15))
 write_phase impaired \
   "$(jq -cn --argjson capacity "${capacity_kbps}" --argjson queue_limit "${queue_limit_packets}" --arg scope "${impairment_scope}" '{capacityKbps: $capacity, delay: "120ms", jitter: "30ms", loss: "2%", queueLimitPackets: $queue_limit, scope: $scope}')"
-wait_for_traffic_control_event recovery-started $((impaired_seconds + 15))
-write_phase recovery \
-  "$(jq -cn --argjson capacity "${recovery_capacity_kbps}" --argjson queue_limit "${queue_limit_packets}" --arg scope "${impairment_scope}" '{capacityKbps: $capacity, delay: "0ms", jitter: "0ms", loss: "0%", queueLimitPackets: $queue_limit, scope: $scope, purpose: "drain in-flight impaired packets before traffic-control teardown"}')"
-hold_phase recovery "${recovery_seconds}"
+wait_for_traffic_control_event recovery-started \
+  $((impaired_seconds + recovery_drain_seconds + 15))
+write_phase recovery '{}'
 wait_for_traffic_control
+hold_phase recovery "${recovery_seconds}"
 # The collector exits as soon as it observes the complete phase. Stop the
 # namespace sampler first so Docker cannot terminate it while its container is
 # exiting and turn a successful qualification into an unanalysed status 137.

@@ -912,7 +912,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
         },
       ],
     },
-    recovery: {
+    recoveryDrain: {
       start: [{ kind: "netem", drops: 20, packets: 2_000, qlen: 100 }],
       end: [{ kind: "netem", drops: 21, packets: 3_000, qlen: 1 }],
     },

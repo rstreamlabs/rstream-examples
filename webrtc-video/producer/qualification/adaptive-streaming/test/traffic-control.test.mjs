@@ -73,8 +73,8 @@ function argumentsFor(evidenceDirectory) {
     "35",
     "--recovery-capacity-kbps",
     "100000",
-    "--recovery-seconds",
-    "45",
+    "--recovery-drain-seconds",
+    "1",
   ];
 }
 
@@ -96,11 +96,12 @@ test("runs one in-namespace impairment schedule and retains every snapshot", asy
   assert.deepEqual(result.stdout.trim().split("\n"), [
     "constrained-started",
     "impaired-started",
+    "recovery-drain-started",
     "recovery-started",
   ]);
   assert.deepEqual(
     (await readFile(runtime.sleepLog, "utf8")).trim().split("\n"),
-    ["5", "5", "5", "30", "35", "45"],
+    ["5", "5", "5", "30", "35", "1"],
   );
   const names = [
     "constrained-step-1-start",
@@ -113,8 +114,8 @@ test("runs one in-namespace impairment schedule and retains every snapshot", asy
     "constrained-steady",
     "impaired-start",
     "impaired",
-    "recovery-start",
-    "recovery",
+    "recovery-drain-start",
+    "recovery-drain",
   ];
   for (const name of names) {
     assert.deepEqual(
