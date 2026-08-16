@@ -941,7 +941,15 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     },
     recoveryDrain: {
       start: [{ kind: "netem", drops: 20, packets: 2_000, qlen: 100 }],
-      end: [{ kind: "netem", drops: 21, packets: 3_000, qlen: 1 }],
+      end: [
+        {
+          kind: "netem",
+          drops: 20,
+          packets: 3_000,
+          qlen: 32,
+          options: { limit: 256 },
+        },
+      ],
     },
   });
   assert.equal(
@@ -949,6 +957,41 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
       (assertion) => assertion.name === "traffic-control-recovery-drain",
     ).passed,
     false,
+  );
+  const boundedActiveRecoveryQueue = analyze(samples, manifest, {
+    constrained: {
+      start: [{ kind: "netem", drops: 0, packets: 0 }],
+      end: [{ kind: "netem", drops: 0, packets: 1_000 }],
+    },
+    impaired: {
+      start: [{ kind: "netem", drops: 0, packets: 1_000 }],
+      end: [
+        {
+          kind: "netem",
+          drops: 20,
+          packets: 2_000,
+          options: { "loss-random": { loss: 0.02 } },
+        },
+      ],
+    },
+    recoveryDrain: {
+      start: [{ kind: "netem", drops: 20, packets: 2_000, qlen: 8 }],
+      end: [
+        {
+          kind: "netem",
+          drops: 20,
+          packets: 3_000,
+          qlen: 3,
+          options: { limit: 256 },
+        },
+      ],
+    },
+  });
+  assert.equal(
+    boundedActiveRecoveryQueue.assertions.find(
+      (assertion) => assertion.name === "traffic-control-recovery-drain",
+    ).passed,
+    true,
   );
 
   const boundedWithAdmissionDrops = analyze(
