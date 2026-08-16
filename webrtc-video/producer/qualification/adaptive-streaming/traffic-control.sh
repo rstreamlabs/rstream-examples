@@ -19,6 +19,8 @@ capacity_kbps=""
 transition_step_seconds=""
 constrained_steady_seconds=""
 impaired_seconds=""
+recovery_capacity_kbps=""
+recovery_seconds=""
 shaping_initialized=0
 
 usage() {
@@ -30,7 +32,8 @@ usage() {
     '  --queue-limit-packets COUNT --capacity-step-one-kbps KBPS' \
     '  --capacity-step-two-kbps KBPS --capacity-step-three-kbps KBPS' \
     '  --capacity-kbps KBPS --transition-step-seconds SECONDS' \
-    '  --constrained-steady-seconds SECONDS --impaired-seconds SECONDS' >&2
+    '  --constrained-steady-seconds SECONDS --impaired-seconds SECONDS' \
+    '  --recovery-capacity-kbps KBPS --recovery-seconds SECONDS' >&2
 }
 
 require_value() {
@@ -118,6 +121,16 @@ while [ "$#" -gt 0 ]; do
     impaired_seconds="$2"
     shift 2
     ;;
+  --recovery-capacity-kbps)
+    require_value "$@"
+    recovery_capacity_kbps="$2"
+    shift 2
+    ;;
+  --recovery-seconds)
+    require_value "$@"
+    recovery_seconds="$2"
+    shift 2
+    ;;
   *)
     printf 'unknown argument: %s\n' "$1" >&2
     usage
@@ -183,7 +196,9 @@ for value in \
   "${capacity_kbps}" \
   "${transition_step_seconds}" \
   "${constrained_steady_seconds}" \
-  "${impaired_seconds}"; do
+  "${impaired_seconds}" \
+  "${recovery_capacity_kbps}" \
+  "${recovery_seconds}"; do
   if ! positive_integer "${value}"; then
     printf 'numeric traffic-control arguments must be positive integers\n' >&2
     exit 2
@@ -232,9 +247,13 @@ apply_shaping() {
     initializing=1
     action=add
   fi
+  set -- delay "${delay}"
+  if [ "${jitter}" != 0ms ]; then
+    set -- "$@" "${jitter}" distribution normal
+  fi
   "${tc_command}" qdisc "${action}" dev "${network_interface}" parent 1:2 handle 20: netem \
     limit "${queue_limit_packets}" rate "${rate_kbps}kbit" \
-    delay "${delay}" "${jitter}" distribution normal loss random "${loss}"
+    "$@" loss random "${loss}"
   if [ "${initializing}" -eq 0 ]; then
     return
   fi
@@ -316,5 +335,9 @@ capture impaired-start
 emit impaired-started
 "${sleep_command}" "${impaired_seconds}"
 capture impaired
-clear_shaping
+apply_shaping "${recovery_capacity_kbps}" 0ms 0ms 0%
+capture recovery-start
 emit recovery-started
+"${sleep_command}" "${recovery_seconds}"
+capture recovery
+require_shaped_traffic recovery

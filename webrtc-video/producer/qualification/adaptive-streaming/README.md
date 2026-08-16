@@ -44,10 +44,14 @@ including pauses of a local container VM.
 
 The impairment schedule runs as one process inside the producer network
 namespace. It applies each capacity step, captures the matching qdisc counters,
-and removes shaping before emitting the recovery event. Docker API latency is
-therefore outside the measured phase durations, including when the producer
-runs on a separate daemon. An interruption removes the qdisc before the
-container is cleaned up.
+then transitions to a zero-delay, zero-loss recovery profile whose capacity is
+20 times the configured encoder ceiling. This profile drains packets already
+held by the impaired qdisc before traffic control is removed at the end of the
+measurement. Deleting a populated qdisc would create an artificial loss burst
+and misclassify teardown as transport recovery. Docker API latency remains
+outside the measured phase durations, including when the producer runs on a
+separate daemon. An interruption removes the qdisc before the container is
+cleaned up.
 
 Queued media always follows GCC's current pacing budget, including immediately
 after a target decrease. New access units that exceed the 225 ms admission
@@ -66,7 +70,7 @@ The link moves through five phases:
 | baseline    | unshaped reference                                       |
 | constrained | 16, 12, 8, then 4 Mbit/s; 40–80 ms delay; no random loss |
 | impaired    | 4 Mbit/s; 120 ms delay; 30 ms jitter; 2% random loss     |
-| recovery    | shaping removed                                          |
+| recovery    | 20× encoder ceiling; 0 ms delay; 0% loss; queue drain     |
 
 For a direct run, the Linux traffic-control filter applies to outbound UDP on
 the isolated producer-to-browser address. It deliberately does not pin the
@@ -99,7 +103,8 @@ filter counters so the configured profile is verified rather than assumed.
 Each interval records counters immediately after the qdisc change and again at
 its end. The analyzer therefore remains correct whether Linux preserves or
 resets counters on `tc qdisc change`, and computes loss as
-`drops / (forwarded packets + drops)`.
+`drops / (forwarded packets + drops)`. Recovery passes only when this healthy
+profile carries media, adds no qdisc drops, and ends with an empty queue.
 
 ## Paths and protection profiles
 

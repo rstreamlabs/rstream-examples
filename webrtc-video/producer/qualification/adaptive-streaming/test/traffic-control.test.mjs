@@ -71,6 +71,10 @@ function argumentsFor(evidenceDirectory) {
     "30",
     "--impaired-seconds",
     "35",
+    "--recovery-capacity-kbps",
+    "100000",
+    "--recovery-seconds",
+    "45",
   ];
 }
 
@@ -96,7 +100,7 @@ test("runs one in-namespace impairment schedule and retains every snapshot", asy
   ]);
   assert.deepEqual(
     (await readFile(runtime.sleepLog, "utf8")).trim().split("\n"),
-    ["5", "5", "5", "30", "35"],
+    ["5", "5", "5", "30", "35", "45"],
   );
   const names = [
     "constrained-step-1-start",
@@ -109,6 +113,8 @@ test("runs one in-namespace impairment schedule and retains every snapshot", asy
     "constrained-steady",
     "impaired-start",
     "impaired",
+    "recovery-start",
+    "recovery",
   ];
   for (const name of names) {
     assert.deepEqual(
@@ -125,6 +131,8 @@ test("runs one in-namespace impairment schedule and retains every snapshot", asy
   assert.match(tcLog, /match ip dport 3478 0xffff/);
   assert.match(tcLog, /netem limit 256 rate 4000kbit/);
   assert.match(tcLog, /delay 120ms 30ms distribution normal loss random 2%/);
+  assert.match(tcLog, /netem limit 256 rate 100000kbit/);
+  assert.match(tcLog, /delay 0ms loss random 0%/);
   assert.match(tcLog, /qdisc del dev eth7 root/);
 });
 

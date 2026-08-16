@@ -85,7 +85,7 @@ test("stops namespace samplers before completing the collector", async () => {
     fileURLToPath(new URL("../run.sh", import.meta.url)),
     "utf8",
   );
-  const recovery = runScript.lastIndexOf("write_phase recovery '{}'");
+  const recovery = runScript.lastIndexOf("write_phase recovery");
   const stopSamplers = runScript.lastIndexOf("stop_udp_samplers");
   const complete = runScript.lastIndexOf("write_phase complete '{}'");
   const waitCollector = runScript.lastIndexOf('wait "${collector_pid}"');
@@ -132,6 +132,15 @@ test("runs impairment timing inside the producer namespace", async () => {
   assert.match(
     runScript,
     /wait_for_traffic_control_event recovery-started \$\(\(impaired_seconds \+ 15\)\)/,
+  );
+  assert.match(
+    runScript,
+    /--recovery-capacity-kbps "\$\{recovery_capacity_kbps\}"/,
+  );
+  assert.match(runScript, /--recovery-seconds "\$\{recovery_seconds\}"/);
+  assert.match(
+    runScript,
+    /hold_phase recovery "\$\{recovery_seconds\}"\s+wait_for_traffic_control/,
   );
   assert.match(runScript, /capture_network_evidence/);
   assert.match(

@@ -896,6 +896,34 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
   );
   assert.equal(resetQdiscCounters.trafficControl.impairedDropRatio, 0.02);
 
+  const incompleteRecoveryDrain = analyze(samples, manifest, {
+    constrained: {
+      start: [{ kind: "netem", drops: 0, packets: 0 }],
+      end: [{ kind: "netem", drops: 0, packets: 1_000 }],
+    },
+    impaired: {
+      start: [{ kind: "netem", drops: 0, packets: 1_000 }],
+      end: [
+        {
+          kind: "netem",
+          drops: 20,
+          packets: 2_000,
+          options: { "loss-random": { loss: 0.02 } },
+        },
+      ],
+    },
+    recovery: {
+      start: [{ kind: "netem", drops: 20, packets: 2_000, qlen: 100 }],
+      end: [{ kind: "netem", drops: 21, packets: 3_000, qlen: 1 }],
+    },
+  });
+  assert.equal(
+    incompleteRecoveryDrain.assertions.find(
+      (assertion) => assertion.name === "traffic-control-recovery-drain",
+    ).passed,
+    false,
+  );
+
   const boundedWithAdmissionDrops = analyze(
     samples.map((sample, index) => ({
       ...sample,
