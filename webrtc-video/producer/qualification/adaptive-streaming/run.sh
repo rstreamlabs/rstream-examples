@@ -771,6 +771,7 @@ initial_bitrate_kbps="$(sed -nE 's/^[[:space:]]*initialBitrateKbps:[[:space:]]*(
 minimum_bitrate_kbps="$(sed -nE 's/^[[:space:]]*minBitrateKbps:[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' "${effective_config_path}")"
 maximum_bitrate_kbps="$(sed -nE 's/^[[:space:]]*maxBitrateKbps:[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' "${effective_config_path}")"
 change_threshold_pct="$(sed -nE 's/^[[:space:]]*changeThresholdPct:[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' "${effective_config_path}")"
+max_increase_loss_pct="$(sed -nE 's/^[[:space:]]*maxIncreaseLossPct:[[:space:]]*([0-9]+([.][0-9]+)?)[[:space:]]*$/\1/p' "${effective_config_path}")"
 for adaptive_value in \
   "${initial_bitrate_kbps}" \
   "${minimum_bitrate_kbps}" \
@@ -782,6 +783,11 @@ for adaptive_value in \
     exit 1
   fi
 done
+if ! [[ "${max_increase_loss_pct}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+  printf 'qualification runtime is missing maxIncreaseLossPct in %s\n' \
+    "${effective_config_path}" >&2
+  exit 1
+fi
 if ((minimum_bitrate_kbps <= 0 || initial_bitrate_kbps < minimum_bitrate_kbps || maximum_bitrate_kbps < initial_bitrate_kbps || change_threshold_pct > 50)); then
   printf 'qualification runtime has an invalid adaptive bitrate envelope in %s\n' \
     "${effective_config_path}" >&2
@@ -880,6 +886,7 @@ jq -n \
   --argjson minimum_bitrate "${minimum_bitrate_kbps}" \
   --argjson maximum_bitrate "${maximum_bitrate_kbps}" \
   --argjson change_threshold "${change_threshold_pct}" \
+  --arg max_increase_loss "${max_increase_loss_pct}" \
   '{
     generatedAt: $generated_at,
     git: {revision: $revision, producerTree: $producer_tree, dirty: $dirty},
@@ -918,7 +925,8 @@ jq -n \
         initialBitrateKbps: $initial_bitrate,
         minimumBitrateKbps: $minimum_bitrate,
         maximumBitrateKbps: $maximum_bitrate,
-        changeThresholdPct: $change_threshold
+        changeThresholdPct: $change_threshold,
+        maxIncreaseLossPct: ($max_increase_loss | tonumber)
       }
     },
     networkMobility: (if $mobility_mode == "producer" then {

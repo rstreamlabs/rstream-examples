@@ -475,6 +475,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
         jitterBufferDelaySeconds,
         jitterBufferEmittedCount,
         jitterBufferTargetDelaySeconds,
+        lossAverage: phase === "impaired" ? 0.02 : 0,
         localCandidateType: "relay",
         localCandidatePort: elapsedMilliseconds < 50_000 ? 50_000 : 50_001,
         localCandidateProtocol: "udp",
@@ -568,6 +569,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
         minimumBitrateKbps: 2000,
         maximumBitrateKbps: 5500,
         changeThresholdPct: 10,
+        maxIncreaseLossPct: 1,
       },
     },
   });
@@ -587,6 +589,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
         minimumBitrateKbps: 2000,
         maximumBitrateKbps: 6000,
         changeThresholdPct: 10,
+        maxIncreaseLossPct: 1,
       },
     },
   });
@@ -607,6 +610,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
         minimumBitrateKbps: 2000,
         maximumBitrateKbps: 8000,
         changeThresholdPct: 10,
+        maxIncreaseLossPct: 1,
       },
     },
   });

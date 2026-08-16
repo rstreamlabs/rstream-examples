@@ -269,10 +269,13 @@ export function analyze(
   );
   assert(
     assertions,
-    (impaired?.maximumEncoderTargetKbps || Infinity) <=
-      (impaired?.startingEncoderTargetKbps || 0) * 1.05,
+    targetDoesNotIncreaseAfterObservedLoss(
+      enriched,
+      "impaired",
+      (manifest.video?.adaptive?.maxIncreaseLossPct ?? 1) / 100,
+    ),
     "continued-pressure",
-    "the encoder does not increase its target after additional loss starts",
+    "the encoder does not increase its target after measured loss exceeds the configured recovery threshold",
   );
   assert(
     assertions,
@@ -2325,6 +2328,40 @@ function timeToEncoderTarget(
         : sample.encoderTargetKbps >= target),
   );
   return match ? match.elapsedMilliseconds - event : null;
+}
+
+function targetDoesNotIncreaseAfterObservedLoss(
+  samples,
+  phase,
+  maximumIncreaseLoss,
+) {
+  if (
+    !Number.isFinite(maximumIncreaseLoss) ||
+    maximumIncreaseLoss < 0 ||
+    maximumIncreaseLoss > 1
+  ) {
+    return false;
+  }
+  const phaseSamples = samples.filter((sample) => sample.phase === phase);
+  const observedAt = phaseSamples.findIndex(
+    (sample) =>
+      Number.isFinite(sample.lossAverage) &&
+      sample.lossAverage > maximumIncreaseLoss,
+  );
+  if (observedAt < 0) {
+    return false;
+  }
+  const targetAtObservation = phaseSamples[observedAt].encoderTargetKbps;
+  if (!Number.isFinite(targetAtObservation) || targetAtObservation <= 0) {
+    return false;
+  }
+  return phaseSamples
+    .slice(observedAt)
+    .every(
+      (sample) =>
+        Number.isFinite(sample.encoderTargetKbps) &&
+        sample.encoderTargetKbps <= targetAtObservation * 1.05,
+    );
 }
 
 function longestEncoderTargetDuration(
