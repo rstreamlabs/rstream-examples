@@ -7,6 +7,13 @@ recoverable as network paths change. rstream publishes signaling through an
 outbound tunnel and supplies managed STUN/TURN connectivity; media remains a
 standard WebRTC session between the device and viewer.
 
+![Adaptive 1080p30 response under controlled congestion](./producer/qualification/evidence/6706cfd/direct-flexfec/adaptive-bitrate.svg)
+
+The [published qualification pack](./producer/qualification/evidence/6706cfd/report.md)
+ties direct, rstream relay, and QUIC/ICE mobility results to one clean source
+revision. It includes the measured time series, every acceptance assertion,
+and the complete reports behind the graph.
+
 The implementation is split by responsibility:
 
 - [`producer/`](./producer/) is the Go device agent. It captures with

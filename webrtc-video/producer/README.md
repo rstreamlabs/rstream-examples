@@ -8,7 +8,8 @@ The process model is intentionally simple. One Go binary serves the viewer page 
 
 Treat this repository as a reference base rather than a fixed product. The profiles and build scripts are meant to be adapted to the capture device, encoder, authentication mode, and operational constraints of the deployment you actually want to run.
 
-If you want a guided walkthrough of the architecture and the `rstream-go` integration, see the associated guide: [Build Device-to-Browser Video Streaming with WebRTC and rstream](https://rstream.io/guides/build-device-to-browser-webrtc-streaming-with-rstream).
+For a guided walkthrough of the architecture and the `rstream-go` integration,
+see [Build Adaptive Real-Time Video Streaming with WebRTC and rstream](https://rstream.io/guides/build-device-to-browser-webrtc-streaming-with-rstream).
 
 ## Integration paths
 
@@ -420,6 +421,19 @@ a legitimate candidate-pair switch cannot escape later impairment phases. A
 single `qualification/adaptive-streaming/run.sh` invocation remains useful
 while debugging one path/profile combination. The normal quick start does not
 require Docker or the qualification tooling.
+
+![Measured direct-path bitrate response](./qualification/evidence/6706cfd/direct-flexfec/adaptive-bitrate.svg)
+
+The [reference evidence pack](./qualification/evidence/6706cfd/report.md) keeps
+the selected direct, rstream relay, and producer-mobility runs from revision
+`6706cfd`. The direct path reached a 7.5 Mbit/s encoder target on the healthy
+link, adapted to 2 Mbit/s under the controlled 4 Mbit/s/120 ms/2% loss profile,
+then recovered to 5.5 Mbit/s with 30 fps and no measured freeze. The relay run
+kept 1080p near 30 fps and remained inside the 10% impaired-freeze budget. The
+mobility run changed the producer interface and source address, trickled a new
+candidate over QUIC signaling, switched the selected ICE pair, and recovered
+playback in 1.006 seconds without replacing the peer connection or closing the
+signaling WebSocket.
 
 The comparison does not equate frame delivery with visual quality. The pinned
 qualification encoder reports its per-frame H.264 quantization parameter (QP),
