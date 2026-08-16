@@ -10,7 +10,7 @@ require (
 	github.com/pion/rtcp v1.2.17
 	github.com/pion/rtp v1.10.5
 	github.com/pion/webrtc/v4 v4.2.17
-	github.com/rstreamlabs/rstream-go v1.28.1
+	github.com/rstreamlabs/rstream-go v1.28.2
 	gopkg.in/yaml.v3 v3.0.1
 )
 
