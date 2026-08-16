@@ -371,7 +371,7 @@ export function analyze(
       `decoded video remains ${manifest.video.width}x${manifest.video.height} in every phase`,
     );
   }
-  const recoveryThreshold = (constrained?.medianEncoderTargetKbps || 0) * 1.2;
+  const recoveryThreshold = (baseline?.medianEncoderTargetKbps || 0) * 0.8;
   const recoveryCapacityRestoredAfterMilliseconds =
     (manifest.phases.find((phase) => phase.name === "recovery")?.shaping
       ?.schedule?.[0]?.durationSeconds || 0) * 1000;
@@ -388,17 +388,26 @@ export function analyze(
       (recoveryDelay !== null && recoveryDelay <= 35_000),
     "recovery-time",
     congestionResponseRequired
-      ? "encoder target rises by at least 20% within 35 seconds of the capacity-restoration step"
+      ? "encoder target returns to at least 80% of its baseline within 35 seconds of the capacity-restoration step"
       : "no recovery ramp is required because the capacity phase did not require a 20% reduction",
   );
   assert(
     assertions,
     !congestionResponseRequired ||
+      (recovery?.endingEncoderTargetKbps || 0) >= recoveryThreshold,
+    "sustained-recovery",
+    congestionResponseRequired
+      ? "the recovery phase ends at or above 80% of the baseline encoder target"
+      : "no sustained recovery target is required when the capacity phase did not reduce the encoder by 20%",
+  );
+  assert(
+    assertions,
+    !congestionResponseRequired ||
       (recovery?.medianReceivedBitrateKbps || 0) >=
-        (impaired?.medianReceivedBitrateKbps || Infinity) * 1.15,
+        (baseline?.medianReceivedBitrateKbps || Infinity) * 0.6,
     "throughput-recovery",
     congestionResponseRequired
-      ? "median receive throughput rises by at least 15% after recovery"
+      ? "recovery median receive throughput returns to at least 60% of baseline"
       : "no throughput increase is required when the capacity phase did not reduce the encoder by 20%",
   );
   assert(
@@ -885,8 +894,11 @@ export function renderMarkdown(analysis, manifest) {
   const rateReduction = baseline?.medianEncoderTargetKbps > 0
     ? 1 - constrained.medianEncoderTargetKbps / baseline.medianEncoderTargetKbps
     : null;
-  const receiveRecovery = impaired?.medianReceivedBitrateKbps > 0
-    ? recovery.medianReceivedBitrateKbps / impaired.medianReceivedBitrateKbps - 1
+  const receiveRecoveryRatio = baseline?.medianReceivedBitrateKbps > 0
+    ? recovery.medianReceivedBitrateKbps / baseline.medianReceivedBitrateKbps
+    : null;
+  const endingRecoveryRatio = baseline?.medianEncoderTargetKbps > 0
+    ? recovery.endingEncoderTargetKbps / baseline.medianEncoderTargetKbps
     : null;
   const capacityIsolation =
     conditioning?.endingEncoderTargetKbps > 0 &&
@@ -946,10 +958,10 @@ export function renderMarkdown(analysis, manifest) {
     [
       "Rate recovery",
       analysis.congestionResponseRequired
-        ? `${formatDuration(analysis.recoveryDelayMilliseconds)}; received throughput ${receiveRecovery >= 0 ? "+" : ""}${formatNumber(receiveRecovery * 100, 1)}%`
+        ? `${formatDuration(analysis.recoveryDelayMilliseconds)}; ending target ${formatNumber(endingRecoveryRatio * 100, 1)}% of baseline; received throughput ${formatNumber(receiveRecoveryRatio * 100, 1)}% of baseline`
         : "not required; capacity phase did not reduce the target",
       analysis.congestionResponseRequired
-        ? "target within 35 s; throughput at least +15%"
+        ? "target reaches and ends at least 80% within 35 s; median throughput at least 60% of baseline"
         : "not applicable",
     ],
     [

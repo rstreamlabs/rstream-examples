@@ -57,6 +57,8 @@ function argumentsFor(evidenceDirectory) {
     "true",
     "--queue-limit-packets",
     "256",
+    "--conditioning-capacity-kbps",
+    "32000",
     "--capacity-step-one-kbps",
     "16000",
     "--capacity-step-two-kbps",
@@ -143,6 +145,8 @@ test("runs one in-namespace impairment schedule and retains every snapshot", asy
   assert.match(tcLog, /match ip dst 192\.0\.2\.10\/32/);
   assert.match(tcLog, /match ip dport 3478 0xffff/);
   assert.match(tcLog, /netem limit 256 rate 4000kbit/);
+  assert.match(tcLog, /rate 32000kbit delay 0ms loss random 0%/);
+  assert.match(tcLog, /rate 16000kbit delay 0ms loss random 0%/);
   assert.match(tcLog, /rate 12000kbit delay 0ms loss random 0%/);
   assert.match(tcLog, /rate 8000kbit delay 0ms loss random 0%/);
   assert.match(tcLog, /delay 120ms 30ms distribution normal loss random 2%/);

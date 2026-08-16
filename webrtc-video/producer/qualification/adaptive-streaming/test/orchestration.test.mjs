@@ -143,6 +143,10 @@ test("runs impairment timing inside the producer namespace", async () => {
   );
   assert.match(
     runScript,
+    /--conditioning-capacity-kbps "\$\{conditioning_capacity_kbps\}"/,
+  );
+  assert.match(
+    runScript,
     /--recovery-capacity-kbps "\$\{recovery_capacity_kbps\}"/,
   );
   assert.match(

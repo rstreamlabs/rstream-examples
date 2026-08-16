@@ -319,6 +319,7 @@ start_traffic_control() {
     --transport-protocol "${media_destination_protocol}" \
     --match-destination-port "${match_destination_port}" \
     --queue-limit-packets "${queue_limit_packets}" \
+    --conditioning-capacity-kbps "${conditioning_capacity_kbps}" \
     --capacity-step-one-kbps "${capacity_step_one_kbps}" \
     --capacity-step-two-kbps "${capacity_step_two_kbps}" \
     --capacity-step-three-kbps "${capacity_step_three_kbps}" \
@@ -787,6 +788,11 @@ if ((minimum_bitrate_kbps <= 0 || initial_bitrate_kbps < minimum_bitrate_kbps ||
   exit 1
 fi
 recovery_capacity_kbps=$((maximum_bitrate_kbps * 20))
+conditioning_capacity_kbps=$((maximum_bitrate_kbps * 4))
+minimum_conditioning_capacity_kbps=$((capacity_step_one_kbps * 2))
+if ((conditioning_capacity_kbps < minimum_conditioning_capacity_kbps)); then
+  conditioning_capacity_kbps="${minimum_conditioning_capacity_kbps}"
+fi
 
 printf 'Building qualification producer image %s\n' "${image_tag}"
 record_setup_milestone producer-build-started
@@ -864,6 +870,7 @@ jq -n \
   --argjson transition_step "${transition_step_seconds}" \
   --argjson conditioning "${conditioning_seconds}" \
   --argjson capacity "${capacity_kbps}" \
+  --argjson conditioning_capacity "${conditioning_capacity_kbps}" \
   --argjson queue_limit "${queue_limit_packets}" \
   --argjson capacity_step_one "${capacity_step_one_kbps}" \
   --argjson capacity_step_two "${capacity_step_two_kbps}" \
@@ -926,10 +933,10 @@ jq -n \
     ] + (if $mobility_mode == "producer" then [
       {name: "mobility", durationSeconds: $mobility_seconds, shaping: null}
     ] else [] end) + [
-      {name: "conditioning", durationSeconds: $conditioning, shaping: {discipline: "selective-prio+netem", scope: (if $path_kind == "relay" then "producer-turn-transport" else "peer-webrtc-transport-address" end), capacityKbps: $capacity_step_one, queueLimitPackets: $queue_limit, delay: "0ms", jitter: "0ms", loss: "0%", purpose: "settle traffic-control activation before the capacity experiment"}},
-      {name: "constrained", durationSeconds: $constrained, shaping: {discipline: "selective-prio+netem", scope: (if $path_kind == "relay" then "producer-turn-transport" else "peer-webrtc-transport-address" end), capacityKbps: $capacity, queueLimitPackets: $queue_limit, loss: "0%", schedule: [{durationSeconds: $transition_step, capacityKbps: $capacity_step_two, delay: "0ms", jitter: "0ms"}, {durationSeconds: $transition_step, capacityKbps: $capacity_step_three, delay: "0ms", jitter: "0ms"}, {durationSeconds: ($constrained - 2 * $transition_step), capacityKbps: $capacity, delay: "0ms", jitter: "0ms"}]}},
+      {name: "conditioning", durationSeconds: $conditioning, shaping: {discipline: "selective-prio+netem", scope: (if $path_kind == "relay" then "producer-turn-transport" else "peer-webrtc-transport-address" end), capacityKbps: $conditioning_capacity, queueLimitPackets: $queue_limit, delay: "0ms", jitter: "0ms", loss: "0%", purpose: "settle traffic-control activation without constraining the reference stream"}},
+      {name: "constrained", durationSeconds: $constrained, shaping: {discipline: "selective-prio+netem", scope: (if $path_kind == "relay" then "producer-turn-transport" else "peer-webrtc-transport-address" end), capacityKbps: $capacity, queueLimitPackets: $queue_limit, loss: "0%", schedule: [{durationSeconds: $transition_step, capacityKbps: $capacity_step_one, delay: "0ms", jitter: "0ms"}, {durationSeconds: $transition_step, capacityKbps: $capacity_step_two, delay: "0ms", jitter: "0ms"}, {durationSeconds: $transition_step, capacityKbps: $capacity_step_three, delay: "0ms", jitter: "0ms"}, {durationSeconds: ($constrained - 3 * $transition_step), capacityKbps: $capacity, delay: "0ms", jitter: "0ms"}]}},
       {name: "impaired", durationSeconds: $impaired, shaping: {discipline: "selective-prio+netem", scope: (if $path_kind == "relay" then "producer-turn-transport" else "peer-webrtc-transport-address" end), capacityKbps: $capacity, queueLimitPackets: $queue_limit, delay: "120ms", jitter: "30ms", loss: "2%"}},
-      {name: "recovery", durationSeconds: $recovery, shaping: {discipline: "selective-prio+netem", scope: (if $path_kind == "relay" then "producer-turn-transport" else "peer-webrtc-transport-address" end), capacityKbps: $capacity_step_one, queueLimitPackets: $queue_limit, loss: "0%", schedule: [{durationSeconds: $transition_step, capacityKbps: $capacity, delay: "0ms", jitter: "0ms"}, {durationSeconds: ($recovery - $transition_step), capacityKbps: $capacity_step_one, delay: "0ms", jitter: "0ms"}]}}
+      {name: "recovery", durationSeconds: $recovery, shaping: {discipline: "selective-prio+netem", scope: (if $path_kind == "relay" then "producer-turn-transport" else "peer-webrtc-transport-address" end), capacityKbps: $conditioning_capacity, queueLimitPackets: $queue_limit, loss: "0%", schedule: [{durationSeconds: $transition_step, capacityKbps: $capacity, delay: "0ms", jitter: "0ms"}, {durationSeconds: ($recovery - $transition_step), capacityKbps: $conditioning_capacity, delay: "0ms", jitter: "0ms"}]}}
     ])
   }' >"${output_directory}/manifest.json"
 
@@ -1244,17 +1251,17 @@ fi
 start_traffic_control
 wait_for_traffic_control_event conditioning-started 15
 write_phase conditioning \
-  "$(jq -cn --argjson capacity "${capacity_step_one_kbps}" --argjson queue_limit "${queue_limit_packets}" --arg scope "${impairment_scope}" '{capacityKbps: $capacity, delay: "0ms", jitter: "0ms", loss: "0%", queueLimitPackets: $queue_limit, scope: $scope, purpose: "settle traffic-control activation before the capacity experiment"}')"
+  "$(jq -cn --argjson capacity "${conditioning_capacity_kbps}" --argjson queue_limit "${queue_limit_packets}" --arg scope "${impairment_scope}" '{capacityKbps: $capacity, delay: "0ms", jitter: "0ms", loss: "0%", queueLimitPackets: $queue_limit, scope: $scope, purpose: "settle traffic-control activation without constraining the reference stream"}')"
 hold_phase conditioning "${conditioning_seconds}"
 wait_for_traffic_control_event constrained-started 15
 write_phase constrained \
-  "$(jq -cn --argjson two "${capacity_step_two_kbps}" --argjson three "${capacity_step_three_kbps}" --argjson steady "${capacity_kbps}" --argjson step "${transition_step_seconds}" --argjson duration "${constrained_seconds}" --argjson queue_limit "${queue_limit_packets}" --arg scope "${impairment_scope}" '{schedule: [{durationSeconds: $step, capacityKbps: $two, delay: "0ms", jitter: "0ms"}, {durationSeconds: $step, capacityKbps: $three, delay: "0ms", jitter: "0ms"}, {durationSeconds: ($duration - 2 * $step), capacityKbps: $steady, delay: "0ms", jitter: "0ms"}], loss: "0%", queueLimitPackets: $queue_limit, scope: $scope}')"
+  "$(jq -cn --argjson one "${capacity_step_one_kbps}" --argjson two "${capacity_step_two_kbps}" --argjson three "${capacity_step_three_kbps}" --argjson steady "${capacity_kbps}" --argjson step "${transition_step_seconds}" --argjson duration "${constrained_seconds}" --argjson queue_limit "${queue_limit_packets}" --arg scope "${impairment_scope}" '{schedule: [{durationSeconds: $step, capacityKbps: $one, delay: "0ms", jitter: "0ms"}, {durationSeconds: $step, capacityKbps: $two, delay: "0ms", jitter: "0ms"}, {durationSeconds: $step, capacityKbps: $three, delay: "0ms", jitter: "0ms"}, {durationSeconds: ($duration - 3 * $step), capacityKbps: $steady, delay: "0ms", jitter: "0ms"}], loss: "0%", queueLimitPackets: $queue_limit, scope: $scope}')"
 wait_for_traffic_control_event impaired-started $((constrained_seconds + 15))
 write_phase impaired \
   "$(jq -cn --argjson capacity "${capacity_kbps}" --argjson queue_limit "${queue_limit_packets}" --arg scope "${impairment_scope}" '{capacityKbps: $capacity, delay: "120ms", jitter: "30ms", loss: "2%", queueLimitPackets: $queue_limit, scope: $scope}')"
 wait_for_traffic_control_event recovery-started $((impaired_seconds + 15))
 write_phase recovery \
-  "$(jq -cn --argjson constrained "${capacity_kbps}" --argjson restored "${capacity_step_one_kbps}" --argjson step "${transition_step_seconds}" --argjson duration "${recovery_seconds}" --argjson queue_limit "${queue_limit_packets}" --arg scope "${impairment_scope}" '{schedule: [{durationSeconds: $step, capacityKbps: $constrained, delay: "0ms", jitter: "0ms"}, {durationSeconds: ($duration - $step), capacityKbps: $restored, delay: "0ms", jitter: "0ms"}], loss: "0%", queueLimitPackets: $queue_limit, scope: $scope}')"
+  "$(jq -cn --argjson constrained "${capacity_kbps}" --argjson restored "${conditioning_capacity_kbps}" --argjson step "${transition_step_seconds}" --argjson duration "${recovery_seconds}" --argjson queue_limit "${queue_limit_packets}" --arg scope "${impairment_scope}" '{schedule: [{durationSeconds: $step, capacityKbps: $constrained, delay: "0ms", jitter: "0ms"}, {durationSeconds: ($duration - $step), capacityKbps: $restored, delay: "0ms", jitter: "0ms"}], loss: "0%", queueLimitPackets: $queue_limit, scope: $scope}')"
 hold_phase recovery "${recovery_seconds}"
 wait_for_traffic_control_event recovery-drain-started 15
 write_phase drain '{"purpose":"drain shaped packets before qdisc teardown"}'

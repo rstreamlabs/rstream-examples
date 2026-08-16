@@ -740,7 +740,40 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     recoveryFromLossResult.assertions.find(
       (assertion) => assertion.name === "throughput-recovery",
     ).passed,
+    false,
+  );
+  let recoveredBytes = 0;
+  const recoveredStream = samples.map((sample) => {
+    const receivedKbps = {
+      warmup: 4200,
+      baseline: 4000,
+      constrained: 3000,
+      impaired: 1500,
+      recovery: 3000,
+    }[sample.phase];
+    recoveredBytes += (receivedKbps * 1000) / 8;
+    return { ...sample, bytesReceived: recoveredBytes };
+  });
+  const recoveredStreamResult = analyze(recoveredStream, manifest);
+  assert.equal(
+    recoveredStreamResult.assertions.find(
+      (assertion) => assertion.name === "throughput-recovery",
+    ).passed,
     true,
+  );
+  const incompleteRateRecovery = analyze(
+    samples.map((sample) => ({
+      ...sample,
+      encoderTargetKbps:
+        sample.phase === "recovery" ? 3000 : sample.encoderTargetKbps,
+    })),
+    manifest,
+  );
+  assert.equal(
+    incompleteRateRecovery.assertions.find(
+      (assertion) => assertion.name === "sustained-recovery",
+    ).passed,
+    false,
   );
 
   const receiverSamples = samples.map((sample, index) => ({

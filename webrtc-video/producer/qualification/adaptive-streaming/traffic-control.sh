@@ -12,6 +12,7 @@ destination_port=""
 transport_protocol=""
 match_destination_port=""
 queue_limit_packets=""
+conditioning_capacity_kbps=""
 capacity_step_one_kbps=""
 capacity_step_two_kbps=""
 capacity_step_three_kbps=""
@@ -31,7 +32,8 @@ usage() {
     '  --network-interface INTERFACE' \
     '  --destination-address ADDRESS --destination-port PORT' \
     '  --transport-protocol udp|tcp --match-destination-port true|false' \
-    '  --queue-limit-packets COUNT --capacity-step-one-kbps KBPS' \
+    '  --queue-limit-packets COUNT --conditioning-capacity-kbps KBPS' \
+    '  --capacity-step-one-kbps KBPS' \
     '  --capacity-step-two-kbps KBPS --capacity-step-three-kbps KBPS' \
     '  --capacity-kbps KBPS --transition-step-seconds SECONDS' \
     '  --conditioning-seconds SECONDS --constrained-steady-seconds SECONDS' \
@@ -87,6 +89,11 @@ while [ "$#" -gt 0 ]; do
   --queue-limit-packets)
     require_value "$@"
     queue_limit_packets="$2"
+    shift 2
+    ;;
+  --conditioning-capacity-kbps)
+    require_value "$@"
+    conditioning_capacity_kbps="$2"
     shift 2
     ;;
   --capacity-step-one-kbps)
@@ -203,6 +210,7 @@ esac
 for value in \
   "${destination_port}" \
   "${queue_limit_packets}" \
+  "${conditioning_capacity_kbps}" \
   "${capacity_step_one_kbps}" \
   "${capacity_step_two_kbps}" \
   "${capacity_step_three_kbps}" \
@@ -327,27 +335,28 @@ emit() {
 }
 
 mkdir -p "${evidence_directory}"
-apply_shaping "${capacity_step_one_kbps}" 0ms 0ms 0%
+apply_shaping "${conditioning_capacity_kbps}" 0ms 0ms 0%
 capture conditioning-start
 emit conditioning-started
 "${sleep_command}" "${conditioning_seconds}"
 capture conditioning
 require_shaped_traffic conditioning
 
-apply_shaping "${capacity_step_two_kbps}" 0ms 0ms 0%
+apply_shaping "${capacity_step_one_kbps}" 0ms 0ms 0%
 capture constrained-step-1-start
 emit constrained-started
 "${sleep_command}" "${transition_step_seconds}"
 capture constrained-step-1
 require_shaped_traffic constrained-step-1
-apply_shaping "${capacity_step_three_kbps}" 0ms 0ms 0%
+apply_shaping "${capacity_step_two_kbps}" 0ms 0ms 0%
 capture constrained-step-2-start
 "${sleep_command}" "${transition_step_seconds}"
 capture constrained-step-2
-apply_shaping "${capacity_kbps}" 0ms 0ms 0%
+apply_shaping "${capacity_step_three_kbps}" 0ms 0ms 0%
 capture constrained-step-3-start
 "${sleep_command}" "${transition_step_seconds}"
 capture constrained-step-3
+apply_shaping "${capacity_kbps}" 0ms 0ms 0%
 capture constrained-steady-start
 "${sleep_command}" "${constrained_steady_seconds}"
 capture constrained-steady
@@ -362,7 +371,7 @@ capture recovery-settle-start
 emit recovery-started
 "${sleep_command}" "${transition_step_seconds}"
 capture recovery-settle
-apply_shaping "${capacity_step_one_kbps}" 0ms 0ms 0%
+apply_shaping "${conditioning_capacity_kbps}" 0ms 0ms 0%
 capture recovery-capacity-start
 "${sleep_command}" "$((recovery_seconds - transition_step_seconds))"
 capture recovery-capacity
