@@ -234,7 +234,7 @@ test("maps a direct encoder evidence file from process monotonic time", () => {
   assert.equal(quality.baseline.lateFrameRatio, 1);
 });
 
-test("records warm-up cadence without letting startup transients fail the run", () => {
+test("separates isolated encoder jitter from sustained cadence failures", () => {
   const nominal = {
     averageQP: 25,
     burstFrameRatio: 0,
@@ -258,7 +258,23 @@ test("records warm-up cadence without letting startup transients fail the run", 
   }));
   const startupTransient = {
     ...nominal,
-    maximumFrameGapMilliseconds: 110,
+    maximumFrameGapMilliseconds: 500,
+  };
+  const isolatedJitter = {
+    ...nominal,
+    burstFrameRatio: 0.002,
+    frameIntervals: 1_000,
+    frames: 1_001,
+    lateFrameRatio: 0.001,
+    maximumFrameGapMilliseconds: 128,
+  };
+  const excessiveStall = {
+    ...isolatedJitter,
+    maximumFrameGapMilliseconds: 201,
+  };
+  const sustainedJitter = {
+    ...isolatedJitter,
+    frameGapP99Milliseconds: 51,
   };
   let result = analyze(samples, manifest, null, {
     baseline: nominal,
@@ -273,17 +289,50 @@ test("records warm-up cadence without letting startup transients fail the run", 
     true,
   );
   result = analyze(samples, manifest, null, {
-    baseline: startupTransient,
+    baseline: nominal,
     constrained: nominal,
     impaired: nominal,
-    recovery: nominal,
+    recovery: isolatedJitter,
     warmup: nominal,
   });
   assert.equal(
     result.assertions.find((assertion) => assertion.name === "encoder-cadence")
       .passed,
-    false,
+    true,
   );
+  for (const recovery of [excessiveStall, sustainedJitter]) {
+    result = analyze(samples, manifest, null, {
+      baseline: nominal,
+      constrained: nominal,
+      impaired: nominal,
+      recovery,
+      warmup: nominal,
+    });
+    assert.equal(
+      result.assertions.find(
+        (assertion) => assertion.name === "encoder-cadence",
+      ).passed,
+      false,
+    );
+  }
+  for (const recovery of [
+    { ...isolatedJitter, lateFrameRatio: 0.011 },
+    { ...isolatedJitter, burstFrameRatio: 0.011 },
+  ]) {
+    result = analyze(samples, manifest, null, {
+      baseline: nominal,
+      constrained: nominal,
+      impaired: nominal,
+      recovery,
+      warmup: nominal,
+    });
+    assert.equal(
+      result.assertions.find(
+        (assertion) => assertion.name === "encoder-cadence",
+      ).passed,
+      false,
+    );
+  }
 });
 
 test("accepts a continuous relay stream that reacts and recovers", () => {

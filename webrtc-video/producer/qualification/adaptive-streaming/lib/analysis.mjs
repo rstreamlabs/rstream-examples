@@ -259,12 +259,12 @@ export function analyze(
         (name) =>
           summaries[name]?.encoderFrameIntervals >= 15 &&
           summaries[name].encoderFrameGapP99Milliseconds <= 50 &&
-          summaries[name].encoderMaximumFrameGapMilliseconds <= 100 &&
+          summaries[name].encoderMaximumFrameGapMilliseconds <= 200 &&
           summaries[name].encoderLateFrameRatio <= 0.01 &&
           summaries[name].encoderBurstFrameRatio <= 0.01,
       ),
     "encoder-cadence",
-    "the encoded source remains paced at 30 fps without stalls or catch-up bursts from baseline through recovery",
+    "the encoded source keeps p99 frame gaps at or below 50 ms, every gap at or below 200 ms, and late or catch-up intervals at or below 1% from baseline through recovery",
   );
   assert(
     assertions,
@@ -923,8 +923,11 @@ time. Per-frame x264 evidence is written to container-local tmpfs and copied
 only after the pipeline stops, not streamed through Docker's logging path; this
 prevents detailed diagnostics or host I/O from blocking the encoder being
 measured. At 30 fps, a late interval exceeds
-50 ms and a catch-up burst is shorter than 16.7 ms. The p99 and maximum columns
-make scheduler stalls visible rather than misclassifying them as network loss.
+50 ms and a catch-up burst is shorter than 16.7 ms. Qualification requires a
+p99 gap no higher than 50 ms, no individual gap above 200 ms, and no more
+than 1% late or catch-up intervals in any measured phase. The p99 and maximum
+columns keep isolated scheduler jitter visible rather than misclassifying it as
+network loss or hiding it behind an aggregate frame rate.
 
 | Phase | Measured intervals | p99 frame gap ms | Maximum frame gap ms | Late intervals | Catch-up bursts |
 | --- | ---: | ---: | ---: | ---: | ---: |

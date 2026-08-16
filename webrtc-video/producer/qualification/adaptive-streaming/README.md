@@ -309,6 +309,8 @@ The acceptance checks reject, among other cases:
   effective buffered delay above 300 ms;
 - missing quality telemetry, excessive H.264 quantization, or a resolution
   change hidden behind a healthy frame count;
+- encoder cadence with a p99 gap above 50 ms, any gap above 200 ms, or more
+  than 1% late or catch-up intervals in a measured phase;
 - an encoder that does not react/recover when the constrained budget requires
   adaptation;
 - a negotiated repair mechanism that sends no repair packets under loss;
