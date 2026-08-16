@@ -93,6 +93,19 @@ test("aligns link changes to observed collector timestamps", () => {
   );
   assert.equal(timeline.changes[4].capacityKbps, 4000);
   assert.equal(timeline.changes[5].lossPercent, 2);
+  const chart = renderNetworkConditionsSVG(
+    { networkConditions: timeline, passed: true, samples },
+    manifest,
+  );
+  assert.match(
+    chart,
+    /Applied capacity · 32 → 16 → 12 → 8\.0 → 4\.0 → 32 Mb\/s/,
+  );
+  assert.match(
+    chart,
+    /Impaired interval · 120 ms one-way delay · 30 ms jitter · 2\.0% random loss/,
+  );
+  assert.match(chart, />0 s<\/text>/);
   assert.equal(
     alignNetworkConditions(events.slice(0, -1), samples, manifest).available,
     false,

@@ -24,7 +24,8 @@ export function renderNetworkConditionsSVG(analysis, manifest) {
   const top = 145;
   const height = 88;
   const gap = 28;
-  let body = phaseBackgrounds(
+  let body = networkConditionSummary(c);
+  body += phaseBackgrounds(
     c,
     top,
     specs.length * height + (specs.length - 1) * gap,
@@ -34,20 +35,15 @@ export function renderNetworkConditionsSVG(analysis, manifest) {
     const max = Math.max(floor, finiteMaximum(values, floor));
     const y = yScale(yTop, height, max);
     body += panelFrame(c, yTop, height, label, unit);
+    body += panelScale(c, yTop, height, max, unit);
     const field = ["capacityKbps", "delayMs", "jitterMs", "lossPercent"][index];
     const points = c.analysis.networkConditions?.available
       ? timelineStepPoints(c, field, y, field === "capacityKbps" ? 1000 : 1)
       : stepPoints(c, values, y);
     body += `<polyline fill="none" stroke="${color}" stroke-width="3" points="${points}"/>`;
-    body += c.analysis.networkConditions?.available
-      ? timelineChangeLabels(
-          c,
-          field,
-          y,
-          unit,
-          field === "capacityKbps" ? 1000 : 1,
-        )
-      : changeLabels(c, values, y, unit);
+    if (!c.analysis.networkConditions?.available) {
+      body += changeLabels(c, values, y, unit);
+    }
   });
   return documentSVG(
     c,
@@ -56,6 +52,24 @@ export function renderNetworkConditionsSVG(analysis, manifest) {
     body,
     "All inputs share the same elapsed-time axis. Empty spans are unshaped.",
   );
+}
+
+function networkConditionSummary(c) {
+  if (!c.analysis.networkConditions?.available) return "";
+  const changes = c.analysis.networkConditions.changes;
+  const capacities = consecutiveUnique(
+    changes.flatMap((change) =>
+      Number.isFinite(change.capacityKbps) ? [change.capacityKbps / 1000] : [],
+    ),
+  );
+  const impaired = changes.find((change) => change.name === "impaired-started");
+  const capacityText = capacities
+    .map((value) => format(value, value < 10 ? 1 : 0))
+    .join(" → ");
+  const impairmentText = impaired
+    ? `${format(impaired.delayMs, 0)} ms one-way delay · ${format(impaired.jitterMs, 0)} ms jitter · ${format(impaired.lossPercent, 1)}% random loss`
+    : "No impaired interval recorded";
+  return `<text x="${c.left}" y="70" font-size="15" font-weight="600" fill="#111827">Applied capacity · ${xml(capacityText)} Mb/s</text><text x="${c.left}" y="94" font-size="14" fill="#475569">Impaired interval · ${xml(impairmentText)}</text>`;
 }
 
 export function renderPlaybackQualitySVG(analysis, manifest) {
@@ -299,6 +313,16 @@ function panelFrame(c, top, height, label, unit) {
   return `<line x1="${c.left}" y1="${top + height}" x2="${c.width - c.right}" y2="${top + height}" stroke="#cbd5e1"/><text x="${c.left - 12}" y="${top + 18}" text-anchor="end" font-size="14" font-weight="600" fill="#111827">${xml(label)}</text><text x="${c.left - 12}" y="${top + 38}" text-anchor="end" font-size="13" fill="#64748b">${xml(unit)}</text>`;
 }
 
+function panelScale(c, top, height, maximum, unit) {
+  return [1, 0.5, 0]
+    .map((ratio) => {
+      const y = round(top + height * (1 - ratio));
+      const value = maximum * ratio;
+      return `<line x1="${c.left}" y1="${y}" x2="${c.width - c.right}" y2="${y}" stroke="#e2e8f0" stroke-width="1"/><text x="${c.width - c.right - 5}" y="${y - 4}" text-anchor="end" font-size="12" fill="#64748b">${format(value, value < 10 && value !== 0 ? 1 : 0)} ${xml(unit)}</text>`;
+    })
+    .join("");
+}
+
 function yScale(top, height, maximum) {
   const max = Math.max(0.0001, maximum);
   return (value) =>
@@ -367,20 +391,6 @@ function timelineStepPoints(c, field, y, divisor) {
   return points.join(" ");
 }
 
-function timelineChangeLabels(c, field, y, unit, divisor) {
-  let previous = null;
-  return c.analysis.networkConditions.changes
-    .map((change) => {
-      const raw = change[field];
-      if (!Number.isFinite(raw)) return "";
-      const value = raw / divisor;
-      if (value === previous) return "";
-      previous = value;
-      return `<text x="${round(c.x(change.elapsedMilliseconds) + 5)}" y="${round(y(value) - 6)}" font-size="13" font-weight="600" fill="#111827">${format(value, value < 10 ? 1 : 0)} ${xml(unit)}</text>`;
-    })
-    .join("");
-}
-
 function changeLabels(c, values, y, unit) {
   let previous = null;
   return values
@@ -390,6 +400,12 @@ function changeLabels(c, values, y, unit) {
       return `<text x="${round(c.x(c.samples[index].elapsedMilliseconds) + 5)}" y="${round(y(value) - 6)}" font-size="13" font-weight="600" fill="#111827">${format(value, value < 10 ? 1 : 0)} ${xml(unit)}</text>`;
     })
     .join("");
+}
+
+function consecutiveUnique(values) {
+  return values.filter(
+    (value, index) => index === 0 || value !== values[index - 1],
+  );
 }
 
 function threshold(c, y, label, color) {
