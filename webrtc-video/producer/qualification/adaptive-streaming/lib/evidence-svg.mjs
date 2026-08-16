@@ -171,7 +171,7 @@ export function renderTransportEvidenceSVG(analysis, manifest) {
   body += line(c, pacer, latencyY, "#d97706");
   body += line(c, playout, latencyY, "#059669");
   body += line(c, playoutTarget, latencyY, "#7c3aed");
-  body += legend(c.left + 10, latencyTop + 25, [
+  body += legend(c.left + 10, 86, [
     ["RTT", "#2563eb"],
     ["Pacer queue", "#d97706"],
     ["Effective buffer", "#059669"],
