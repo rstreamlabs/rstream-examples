@@ -19,6 +19,38 @@ func TestDefaultConfigIsValid(t *testing.T) {
 	if got := cfg.TunnelTransportMode(); got != "auto" {
 		t.Fatalf("default tunnel transport = %q, want auto", got)
 	}
+	if cfg.Metrics.Enabled {
+		t.Fatal("metrics must be disabled by default")
+	}
+	if cfg.Metrics.Listen != DefaultMetricsListen {
+		t.Fatalf("default metrics listen = %q, want %q", cfg.Metrics.Listen, DefaultMetricsListen)
+	}
+}
+
+func TestMetricsListenValidation(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		listen string
+	}{
+		{name: "empty", listen: ""},
+		{name: "missing port", listen: "127.0.0.1"},
+		{name: "invalid port", listen: "127.0.0.1:not-a-port"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			cfg := Default()
+			cfg.Metrics.Enabled = true
+			cfg.Metrics.Listen = testCase.listen
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("expected invalid metrics listener to fail validation")
+			}
+		})
+	}
+	cfg := Default()
+	cfg.Metrics.Enabled = true
+	cfg.Metrics.Listen = "127.0.0.1:0"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("valid metrics listener: %v", err)
+	}
 }
 
 func TestLoadLegacyTunnelTransport(t *testing.T) {

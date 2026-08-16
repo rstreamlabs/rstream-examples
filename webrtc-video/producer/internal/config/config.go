@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,6 +51,7 @@ const (
 
 const (
 	DefaultServerListen          = "127.0.0.1:8080"
+	DefaultMetricsListen         = "127.0.0.1:9090"
 	DefaultTunnelName            = "webrtc-video-producer"
 	DefaultTURNTTL               = "10m"
 	DefaultProvisioningTimeout   = "10s"
@@ -65,6 +68,7 @@ const (
 
 type Config struct {
 	Server  ServerConfig  `yaml:"server"`
+	Metrics MetricsConfig `yaml:"metrics"`
 	Web     WebConfig     `yaml:"web"`
 	Tunnel  TunnelConfig  `yaml:"tunnel"`
 	TURN    TURNConfig    `yaml:"turn"`
@@ -75,6 +79,11 @@ type Config struct {
 
 type ServerConfig struct {
 	Listen string `yaml:"listen"`
+}
+
+type MetricsConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Listen  string `yaml:"listen"`
 }
 
 type WebConfig struct {
@@ -182,6 +191,9 @@ func Default() Config {
 		Server: ServerConfig{
 			Listen: DefaultServerListen,
 		},
+		Metrics: MetricsConfig{
+			Listen: DefaultMetricsListen,
+		},
 		Web: WebConfig{
 			Viewer: WebViewerConfig{
 				Enabled: true,
@@ -274,6 +286,19 @@ func Load(path string) (Config, error) {
 func (c Config) Validate() error {
 	if strings.TrimSpace(c.Server.Listen) == "" {
 		return errors.New("server listen address is required")
+	}
+	if c.Metrics.Enabled {
+		metricsListen := strings.TrimSpace(c.Metrics.Listen)
+		if metricsListen == "" {
+			return errors.New("metrics listen address is required when metrics are enabled")
+		}
+		_, port, err := net.SplitHostPort(metricsListen)
+		if err != nil {
+			return fmt.Errorf("invalid metrics listen address %q: %w", c.Metrics.Listen, err)
+		}
+		if _, err := strconv.ParseUint(port, 10, 16); err != nil {
+			return fmt.Errorf("invalid metrics listen port %q", port)
+		}
 	}
 	if strings.TrimSpace(c.Media.Pipeline) == "" {
 		return errors.New("media pipeline is required")
