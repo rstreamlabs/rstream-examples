@@ -53,6 +53,7 @@ func TestControllerReportsEncoderReconfigurationFailure(t *testing.T) {
 		time.Hour,
 		nil,
 		nil,
+		nil,
 	)
 	controller.Start()
 	t.Cleanup(controller.Close)
@@ -84,6 +85,7 @@ func TestControllerAppliesDecreasesWithoutWaitingForItsTicker(t *testing.T) {
 		encoder,
 		newTestTWCCGCCBackend(t, cfg),
 		time.Hour,
+		nil,
 		nil,
 		nil,
 	)
@@ -122,6 +124,7 @@ func TestControllerAppliesSuccessiveMaterialDecreasesImmediately(t *testing.T) {
 		encoder,
 		newTestTWCCGCCBackend(t, cfg),
 		interval,
+		nil,
 		nil,
 		nil,
 	)
@@ -177,6 +180,7 @@ func TestControllerRefreshesEstimateBeforePeriodicIncrease(t *testing.T) {
 		interval,
 		func() int { return int(estimate.Load()) },
 		nil,
+		nil,
 	)
 	controller.Start()
 	t.Cleanup(controller.Close)
@@ -202,6 +206,7 @@ func TestControllerBlocksPeriodicIncreaseUntilMeasuredLossRecovers(t *testing.T)
 	}
 	cfg := config.Default()
 	cfg.WebRTC.Adaptive.TWCCGCC.IncreaseHoldAfterLoss = "40ms"
+	recoveryKeyFrames := make(chan struct{}, 1)
 	controller := NewController(
 		logs.NewLogger(logs.NewHub(16), false),
 		encoder,
@@ -209,6 +214,7 @@ func TestControllerBlocksPeriodicIncreaseUntilMeasuredLossRecovers(t *testing.T)
 		interval,
 		func() int { return 3_000_000 },
 		func() float64 { return math.Float64frombits(lossBits.Load()) },
+		func() { recoveryKeyFrames <- struct{}{} },
 	)
 	controller.Start()
 	t.Cleanup(controller.Close)
@@ -226,5 +232,15 @@ func TestControllerBlocksPeriodicIncreaseUntilMeasuredLossRecovers(t *testing.T)
 		}
 	case <-time.After(8 * interval):
 		t.Fatal("encoder did not resume its bounded ramp after loss recovery")
+	}
+	select {
+	case <-recoveryKeyFrames:
+	case <-time.After(time.Second):
+		t.Fatal("post-loss bitrate recovery did not request a key frame")
+	}
+	select {
+	case <-recoveryKeyFrames:
+		t.Fatal("one loss episode requested more than one recovery key frame")
+	case <-time.After(25 * time.Millisecond):
 	}
 }

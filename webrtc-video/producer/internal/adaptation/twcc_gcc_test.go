@@ -141,6 +141,33 @@ func TestTWCCGCCBackendHoldsIncreasesAfterLossSubsides(t *testing.T) {
 	if !ok || decision.TargetBitrateKbps != 2300 {
 		t.Fatalf("post-hold decision = %+v, %v, want a 2300 kbit/s increase", decision, ok)
 	}
+	if !decision.RequestRecoveryKeyFrame {
+		t.Fatal("first post-loss increase did not request a recovery key frame")
+	}
+	decision, ok = backend.Decide(Observation{
+		EstimatedBitrateBps:      4_000_000,
+		EncoderTargetBitrateKbps: 2300,
+	})
+	if !ok {
+		t.Fatal("expected the recovery ramp to continue")
+	}
+	if decision.RequestRecoveryKeyFrame {
+		t.Fatal("one loss episode requested more than one recovery key frame")
+	}
+}
+
+func TestTWCCGCCBackendDoesNotRequestKeyFrameForHealthyRamp(t *testing.T) {
+	backend := newTestTWCCGCCBackend(t, config.Default())
+	decision, ok := backend.Decide(Observation{
+		EstimatedBitrateBps:      3_000_000,
+		EncoderTargetBitrateKbps: 2000,
+	})
+	if !ok {
+		t.Fatal("expected a healthy bitrate increase")
+	}
+	if decision.RequestRecoveryKeyFrame {
+		t.Fatal("a healthy bitrate ramp requested an unnecessary key frame")
+	}
 }
 
 func TestTWCCGCCBackendStillReducesDuringIncreaseHold(t *testing.T) {

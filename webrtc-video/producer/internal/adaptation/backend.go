@@ -28,7 +28,8 @@ type Observation struct {
 }
 
 type Decision struct {
-	TargetBitrateKbps int
+	TargetBitrateKbps       int
+	RequestRecoveryKeyFrame bool
 }
 
 type Backend interface {
@@ -37,20 +38,21 @@ type Backend interface {
 }
 
 type Controller struct {
-	logger         *logs.Logger
-	encoder        media.EncoderController
-	backend        Backend
-	interval       time.Duration
-	estimateSource func() int
-	lossSource     func() float64
-	latestEstimate atomic.Int64
-	updates        chan struct{}
-	close          chan struct{}
-	done           chan struct{}
-	start          sync.Once
-	stop           sync.Once
-	mu             sync.RWMutex
-	snapshot       Snapshot
+	logger                  *logs.Logger
+	encoder                 media.EncoderController
+	backend                 Backend
+	interval                time.Duration
+	estimateSource          func() int
+	lossSource              func() float64
+	requestRecoveryKeyFrame func()
+	latestEstimate          atomic.Int64
+	updates                 chan struct{}
+	close                   chan struct{}
+	done                    chan struct{}
+	start                   sync.Once
+	stop                    sync.Once
+	mu                      sync.RWMutex
+	snapshot                Snapshot
 }
 
 func NewController(
@@ -60,18 +62,20 @@ func NewController(
 	interval time.Duration,
 	estimateSource func() int,
 	lossSource func() float64,
+	requestRecoveryKeyFrame func(),
 ) *Controller {
 	info := encoder.Info()
 	return &Controller{
-		logger:         logger,
-		encoder:        encoder,
-		backend:        backend,
-		interval:       interval,
-		estimateSource: estimateSource,
-		lossSource:     lossSource,
-		updates:        make(chan struct{}, 1),
-		close:          make(chan struct{}),
-		done:           make(chan struct{}),
+		logger:                  logger,
+		encoder:                 encoder,
+		backend:                 backend,
+		interval:                interval,
+		estimateSource:          estimateSource,
+		lossSource:              lossSource,
+		requestRecoveryKeyFrame: requestRecoveryKeyFrame,
+		updates:                 make(chan struct{}, 1),
+		close:                   make(chan struct{}),
+		done:                    make(chan struct{}),
 		snapshot: Snapshot{
 			Backend:                  backend.Name(),
 			Active:                   true,
@@ -188,6 +192,9 @@ func (c *Controller) applyEstimate(estimate int, allowIncrease bool) bool {
 			snapshot.FailedUpdates++
 		})
 		return true
+	}
+	if decision.RequestRecoveryKeyFrame && c.requestRecoveryKeyFrame != nil {
+		c.requestRecoveryKeyFrame()
 	}
 	c.logger.Debug("Adaptive bitrate applied: %d kbit/s", decision.TargetBitrateKbps)
 	c.updateSnapshot(func(snapshot *Snapshot) {

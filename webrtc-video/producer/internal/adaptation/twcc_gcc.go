@@ -9,17 +9,18 @@ import (
 )
 
 type TWCCGCCBackend struct {
-	minBitrateKbps        int
-	maxBitrateKbps        int
-	changeThresholdPct    int
-	decreaseThresholdPct  int
-	maxIncreasePct        int
-	maxIncreaseStepKbps   int
-	maxIncreaseLoss       float64
-	increaseHoldAfterLoss time.Duration
-	now                   func() time.Time
-	mu                    sync.Mutex
-	increaseBlockedUntil  time.Time
+	minBitrateKbps          int
+	maxBitrateKbps          int
+	changeThresholdPct      int
+	decreaseThresholdPct    int
+	maxIncreasePct          int
+	maxIncreaseStepKbps     int
+	maxIncreaseLoss         float64
+	increaseHoldAfterLoss   time.Duration
+	now                     func() time.Time
+	mu                      sync.Mutex
+	increaseBlockedUntil    time.Time
+	recoveryKeyFramePending bool
 }
 
 func NewTWCCGCCBackend(cfg config.Config) (*TWCCGCCBackend, error) {
@@ -53,21 +54,30 @@ func (b *TWCCGCCBackend) Decide(observation Observation) (Decision, bool) {
 		current = b.maxBitrateKbps
 	}
 	target := clampKbps(observation.EstimatedBitrateBps/1000, b.minBitrateKbps, b.maxBitrateKbps)
-	increaseAllowed := b.allowsIncrease(observation.AverageLoss)
 	if target < current {
+		b.updateIncreaseState(observation.AverageLoss, false)
 		if withinThreshold(current, target, b.decreaseThresholdPct) {
 			return Decision{}, false
 		}
 		return Decision{TargetBitrateKbps: target}, true
 	}
-	if target == current || !increaseAllowed {
+	if target == current {
+		b.updateIncreaseState(observation.AverageLoss, false)
 		return Decision{}, false
 	}
 	if withinThreshold(current, target, b.changeThresholdPct) {
+		b.updateIncreaseState(observation.AverageLoss, false)
+		return Decision{}, false
+	}
+	increaseAllowed, requestRecoveryKeyFrame := b.updateIncreaseState(
+		observation.AverageLoss,
+		true,
+	)
+	if !increaseAllowed {
 		return Decision{}, false
 	}
 	if target-current <= b.maxIncreaseStepKbps {
-		return Decision{TargetBitrateKbps: target}, true
+		return Decision{TargetBitrateKbps: target, RequestRecoveryKeyFrame: requestRecoveryKeyFrame}, true
 	}
 	step := current * b.maxIncreasePct / 100
 	if step > b.maxIncreaseStepKbps {
@@ -83,22 +93,37 @@ func (b *TWCCGCCBackend) Decide(observation Observation) (Decision, bool) {
 	if next == current {
 		return Decision{}, false
 	}
-	return Decision{TargetBitrateKbps: clampKbps(next, b.minBitrateKbps, b.maxBitrateKbps)}, true
+	return Decision{
+		TargetBitrateKbps:       clampKbps(next, b.minBitrateKbps, b.maxBitrateKbps),
+		RequestRecoveryKeyFrame: requestRecoveryKeyFrame,
+	}, true
 }
 
-func (b *TWCCGCCBackend) allowsIncrease(averageLoss float64) bool {
+func (b *TWCCGCCBackend) updateIncreaseState(
+	averageLoss float64,
+	consumeRecovery bool,
+) (bool, bool) {
 	now := b.now()
 	lossIsHigh := math.IsNaN(averageLoss) || math.IsInf(averageLoss, 0) ||
 		averageLoss < 0 || averageLoss > b.maxIncreaseLoss
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if lossIsHigh {
+		b.recoveryKeyFramePending = true
 		blockedUntil := now.Add(b.increaseHoldAfterLoss)
 		if blockedUntil.After(b.increaseBlockedUntil) {
 			b.increaseBlockedUntil = blockedUntil
 		}
+		return false, false
 	}
-	return !lossIsHigh && !now.Before(b.increaseBlockedUntil)
+	if now.Before(b.increaseBlockedUntil) {
+		return false, false
+	}
+	requestRecoveryKeyFrame := consumeRecovery && b.recoveryKeyFramePending
+	if requestRecoveryKeyFrame {
+		b.recoveryKeyFramePending = false
+	}
+	return true, requestRecoveryKeyFrame
 }
 
 func clampKbps(value, minValue, maxValue int) int {

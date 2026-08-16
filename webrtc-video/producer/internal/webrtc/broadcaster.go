@@ -338,7 +338,11 @@ func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) 
 			session.scheduleNetworkRecovery("ICE " + state.String())
 		}
 	})
-	if adaptiveController, ok := b.newAdaptiveController(encoderController, estimator); ok {
+	if adaptiveController, ok := b.newAdaptiveController(
+		encoderController,
+		estimator,
+		session.requestKeyFrame,
+	); ok {
 		session.adaptive = adaptiveController
 		snapshot := adaptiveController.Snapshot()
 		session.updateStats(func(stats *SessionStats) {
@@ -1052,6 +1056,7 @@ func sourceEncoderController(source media.Source) (media.EncoderController, bool
 func (b *Broadcaster) newAdaptiveController(
 	encoder media.EncoderController,
 	estimator bandwidthEstimator,
+	requestRecoveryKeyFrame func(),
 ) (*adaptation.Controller, bool) {
 	if encoder == nil || estimator == nil {
 		return nil, false
@@ -1074,6 +1079,7 @@ func (b *Broadcaster) newAdaptiveController(
 			loss, _ := estimator.GetStats()["averageLoss"].(float64)
 			return loss
 		},
+		requestRecoveryKeyFrame,
 	), true
 }
 

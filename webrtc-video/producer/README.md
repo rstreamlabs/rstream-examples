@@ -333,13 +333,16 @@ Material target decreases are applied to the encoder immediately when fresh
 feedback requires them. Callback bursts are coalesced to the newest value, and
 the controller re-reads GCC's current target before every periodic decision so
 an out-of-order callback can never apply a stale increase. Increases remain
-limited by `updateInterval` and bounded steps. This keeps the encoder aligned
-with an urgent pacer reduction without letting optimistic feedback repeatedly
-reconfigure it or produce an abrupt quality spike. New access units continue to
-use the sustained target for admission. Already packetized units keep their RTP
-sequence continuity and drain only at the current GCC budget; the report
-records the estimator-induced backlog separately from actual packet residence
-time so a target decrease cannot hide bufferbloat behind a derived queue value.
+limited by `updateInterval` and bounded steps. The first increase after a
+measured-loss hold requests one coalesced recovery key frame, shortening the
+time to a fresh decodable image without adding a key frame to every healthy
+ramp step. This keeps the encoder aligned with an urgent pacer reduction
+without letting optimistic feedback repeatedly reconfigure it or produce an
+abrupt quality spike. New access units continue to use the sustained target for
+admission. Already packetized units keep their RTP sequence continuity and
+drain only at the current GCC budget; the report records the estimator-induced
+backlog separately from actual packet residence time so a target decrease
+cannot hide bufferbloat behind a derived queue value.
 
 Transport-wide sequence numbers are assigned at actual pacer egress, after the
 bounded repair-priority scheduler has chosen the next packet. Assigning them
