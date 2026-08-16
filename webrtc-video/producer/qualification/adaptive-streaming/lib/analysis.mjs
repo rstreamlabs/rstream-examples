@@ -163,9 +163,7 @@ export function analyze(
   );
   assert(
     assertions,
-    steadyPhaseOrder.every(
-      (name) => summaries[name]?.connectedRatio >= 0.98,
-    ),
+    steadyPhaseOrder.every((name) => summaries[name]?.connectedRatio >= 0.98),
     "session-continuity",
     "peer connection and playback remain healthy for at least 98% of samples",
   );
@@ -186,7 +184,7 @@ export function analyze(
     assert(
       assertions,
       manifest.networkMobility.signalingTransport === "quic" &&
-      networkMobility.peerConnectionsCreated === 1 &&
+        networkMobility.peerConnectionsCreated === 1 &&
         networkMobility.webSocketsCreated === 1 &&
         networkMobility.webSocketCloses === 0,
       "quic-signaling-mobility",
@@ -219,8 +217,7 @@ export function analyze(
     Number.isFinite(manifest.video?.adaptive?.maximumBitrateKbps)
   ) {
     const maximumBitrateKbps = manifest.video.adaptive.maximumBitrateKbps;
-    const changeThresholdPct =
-      manifest.video.adaptive.changeThresholdPct || 0;
+    const changeThresholdPct = manifest.video.adaptive.changeThresholdPct || 0;
     healthyLinkTargetKbps =
       (maximumBitrateKbps * (100 - changeThresholdPct)) / 100;
     const baselineSamples = enriched.filter(
@@ -419,11 +416,20 @@ export function analyze(
   if (manifest.webrtc?.rtxNegotiated) {
     assert(
       assertions,
-      counterIncrease(enriched, "retransmittedPacketsReceived", ["impaired"]) >
-        0,
-      "rtx-repair",
-      "the receiver observes RTX repair packets while loss is injected",
+      counterIncrease(enriched, "pacerSentRTX", ["impaired"]) > 0,
+      "rtx-sender-pacing",
+      "the sender records paced RTX packets while loss is injected",
     );
+    if (!manifest.protection?.flexFEC) {
+      assert(
+        assertions,
+        counterIncrease(enriched, "retransmittedPacketsReceived", [
+          "impaired",
+        ]) > 0,
+        "rtx-repair",
+        "the receiver observes RTX repair packets while loss is injected without proactive FEC",
+      );
+    }
     assert(
       assertions,
       (impaired?.nackToPacketRatio || Infinity) <= 0.1,
@@ -467,7 +473,6 @@ export function analyze(
       enriched.every((sample) => {
         const expected = protectedPacingEnvelopeKbps(
           sample.pacerTargetBitrateKbps,
-          manifest.protection,
         );
         return (
           Number.isFinite(expected) &&
@@ -477,8 +482,8 @@ export function analyze(
             Math.max(1, expected * 0.001)
         );
       }),
-      "flexfec-shared-pacing-envelope",
-      "the sender shares its real-time pacing headroom with proactive repair instead of multiplying both budgets",
+      "flexfec-burst-headroom",
+      "the protected wire rate retains the sender's real-time burst headroom",
     );
   }
   assert(
@@ -891,29 +896,36 @@ export function renderMarkdown(analysis, manifest) {
   const constrained = analysis.phases.constrained;
   const impaired = analysis.phases.impaired;
   const recovery = analysis.phases.recovery;
-  const rateReduction = baseline?.medianEncoderTargetKbps > 0
-    ? 1 - constrained.medianEncoderTargetKbps / baseline.medianEncoderTargetKbps
-    : null;
-  const receiveRecoveryRatio = baseline?.medianReceivedBitrateKbps > 0
-    ? recovery.medianReceivedBitrateKbps / baseline.medianReceivedBitrateKbps
-    : null;
-  const endingRecoveryRatio = baseline?.medianEncoderTargetKbps > 0
-    ? recovery.endingEncoderTargetKbps / baseline.medianEncoderTargetKbps
-    : null;
+  const rateReduction =
+    baseline?.medianEncoderTargetKbps > 0
+      ? 1 -
+        constrained.medianEncoderTargetKbps / baseline.medianEncoderTargetKbps
+      : null;
+  const receiveRecoveryRatio =
+    baseline?.medianReceivedBitrateKbps > 0
+      ? recovery.medianReceivedBitrateKbps / baseline.medianReceivedBitrateKbps
+      : null;
+  const endingRecoveryRatio =
+    baseline?.medianEncoderTargetKbps > 0
+      ? recovery.endingEncoderTargetKbps / baseline.medianEncoderTargetKbps
+      : null;
   const capacityIsolation =
     conditioning?.endingEncoderTargetKbps > 0 &&
     baseline?.medianEncoderTargetKbps > 0
-      ? conditioning.endingEncoderTargetKbps /
-        baseline.medianEncoderTargetKbps
+      ? conditioning.endingEncoderTargetKbps / baseline.medianEncoderTargetKbps
       : null;
   const phaseValues = Object.values(analysis.phases);
   const maximumQueueResidence = Math.max(
     0,
-    ...phaseValues.map((phase) => phase.maximumPacerQueueDelayMilliseconds || 0),
+    ...phaseValues.map(
+      (phase) => phase.maximumPacerQueueDelayMilliseconds || 0,
+    ),
   );
   const maximumAdmittedBacklog = Math.max(
     0,
-    ...phaseValues.map((phase) => phase.maximumPacerAdmittedDelayMilliseconds || 0),
+    ...phaseValues.map(
+      (phase) => phase.maximumPacerAdmittedDelayMilliseconds || 0,
+    ),
   );
   const queueDrops = phaseValues.reduce(
     (total, phase) => total + (phase.pacerQueueDropsIncrease || 0),
@@ -921,13 +933,13 @@ export function renderMarkdown(analysis, manifest) {
   );
   const repairObserved = manifest.webrtc?.rtxNegotiated
     ? manifest.protection?.flexFEC
-      ? `NACK ${impaired.nackIncrease}; RTX ${impaired.retransmittedPacketsIncrease}; FlexFEC ${impaired.fecPacketsIncrease}`
-      : `NACK ${impaired.nackIncrease}; RTX ${impaired.retransmittedPacketsIncrease}`
+      ? `NACK ${impaired.nackIncrease}; sender RTX ${impaired.pacerSentRTXIncrease}; receiver RTX ${impaired.retransmittedPacketsIncrease}; FlexFEC ${impaired.fecPacketsIncrease}`
+      : `NACK ${impaired.nackIncrease}; sender RTX ${impaired.pacerSentRTXIncrease}; receiver RTX ${impaired.retransmittedPacketsIncrease}`
     : `NACK ${impaired.nackIncrease}`;
   const repairRequired = manifest.webrtc?.rtxNegotiated
     ? manifest.protection?.flexFEC
-      ? "NACK, RTX, and FlexFEC greater than zero"
-      : "NACK and RTX greater than zero"
+      ? "NACK, sender RTX, and FlexFEC greater than zero"
+      : "NACK, sender RTX, and receiver RTX greater than zero"
     : "NACK greater than zero";
   const decisionRows = [
     ...(Number.isFinite(analysis.healthyLinkTargetRatio)
@@ -991,7 +1003,9 @@ export function renderMarkdown(analysis, manifest) {
       "at most 375 ms; at most 225 ms; zero overflow",
     ],
   ]
-    .map(([gate, observed, required]) => `| ${gate} | ${observed} | ${required} |`)
+    .map(
+      ([gate, observed, required]) => `| ${gate} | ${observed} | ${required} |`,
+    )
     .join("\n");
   const controllerRows = Object.entries(analysis.phases)
     .map(
@@ -2150,15 +2164,13 @@ function summarizeTrafficControl(evidence) {
       impairedDropRatio: dropRatio(impaired.packets, impaired.drops),
       impairedDrops: impaired.drops,
       impairedPackets: impaired.packets,
-      recoveryDrainConfiguredLossRatio:
-        recoveryDrain?.configuredLossRatio || 0,
+      recoveryDrainConfiguredLossRatio: recoveryDrain?.configuredLossRatio || 0,
       recoveryDrainDropRatio: recoveryDrain
         ? dropRatio(recoveryDrain.packets, recoveryDrain.drops)
         : 0,
       recoveryDrainDrops: recoveryDrain?.drops || 0,
       recoveryDrainEndQueuePackets: recoveryDrain?.endQueuePackets || 0,
-      recoveryDrainEndQueueUtilization:
-        recoveryDrain?.endQueueUtilization || 0,
+      recoveryDrainEndQueueUtilization: recoveryDrain?.endQueueUtilization || 0,
       recoveryDrainEvidenceAvailable: recoveryDrain !== null,
       recoveryDrainPackets: recoveryDrain?.packets || 0,
       recoveryDrainQueueLimitPackets: recoveryDrain?.queueLimitPackets || 0,
@@ -2254,29 +2266,14 @@ function mediaCapacityKbps(wireCapacityKbps, protection) {
   return (wireCapacityKbps * mediaPackets) / (mediaPackets + repairPackets);
 }
 
-function protectedPacingEnvelopeKbps(protectedWireTargetKbps, protection) {
+function protectedPacingEnvelopeKbps(protectedWireTargetKbps) {
   if (
     !Number.isFinite(protectedWireTargetKbps) ||
     protectedWireTargetKbps <= 0
   ) {
     return 0;
   }
-  if (!protection?.flexFEC) {
-    return protectedWireTargetKbps * 1.5;
-  }
-  const mediaPackets = protection.flexFECMediaPackets;
-  const repairPackets = protection.flexFECRepairPackets;
-  if (
-    !Number.isFinite(mediaPackets) ||
-    !Number.isFinite(repairPackets) ||
-    mediaPackets <= 0 ||
-    repairPackets <= 0
-  ) {
-    return 0;
-  }
-  const mediaTargetKbps =
-    (protectedWireTargetKbps * mediaPackets) / (mediaPackets + repairPackets);
-  return Math.max(protectedWireTargetKbps, mediaTargetKbps * 1.5);
+  return protectedWireTargetKbps * 1.5;
 }
 
 function netemStats(qdiscs) {
