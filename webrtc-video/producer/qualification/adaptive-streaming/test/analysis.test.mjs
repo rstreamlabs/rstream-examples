@@ -625,6 +625,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
   const chart = renderSVG(result, manifest);
   assert.match(chart, /Adaptive sender response to controlled link changes/);
   assert.match(chart, /Configured capacity/);
+  assert.match(chart, /y="518"[^>]*>Elapsed time/);
   assert.match(chart, /stroke="#be185d"[^>]+points="[^"]+"/);
   const networkConditions = renderNetworkConditionsSVG(result, manifest);
   assert.match(networkConditions, /Controlled network conditions/);
@@ -633,10 +634,16 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
   assert.match(playbackQuality, /Decoded frame rate/);
   assert.match(playbackQuality, /Freeze duration/);
   assert.match(playbackQuality, /H\.264 QP/);
+  assert.match(playbackQuality, />35 fps</);
+  assert.match(playbackQuality, />0\.1 s</);
+  assert.match(playbackQuality, />51 QP</);
   const transportEvidence = renderTransportEvidenceSVG(result, manifest);
   assert.match(transportEvidence, /NACK \/ RTX/);
   assert.match(transportEvidence, /FlexFEC received/);
   assert.match(transportEvidence, /Injected \/ TWCC loss/);
+  assert.match(transportEvidence, /300 ms phase-average buffer limit/);
+  assert.match(transportEvidence, />[0-9]+ packets</);
+  assert.match(transportEvidence, />5\.0 %</);
   assert.ok(
     (transportEvidence.match(/stroke="#059669"/g) || []).length > 6,
     "phase-boundary counter gaps must render as separate line segments",

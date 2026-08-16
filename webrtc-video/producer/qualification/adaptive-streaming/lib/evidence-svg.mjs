@@ -82,10 +82,12 @@ export function renderPlaybackQualitySVG(analysis, manifest) {
   const qpHeight = 145;
   let body = phaseBackgrounds(c, fpsTop, qpTop + qpHeight - fpsTop);
   const fps = c.samples.map((s) => numberOrNull(s.framesPerSecond));
-  const fpsY = yScale(fpsTop, fpsHeight, Math.max(35, finiteMaximum(fps, 35)));
+  const fpsMaximum = Math.max(35, finiteMaximum(fps, 35));
+  const fpsY = yScale(fpsTop, fpsHeight, fpsMaximum);
   body += panelFrame(c, fpsTop, fpsHeight, "Decoded frame rate", "fps");
-  body += threshold(c, fpsY(25), "25 fps healthy", "#059669");
-  body += threshold(c, fpsY(20), "20 fps impaired", "#d97706");
+  body += panelScale(c, fpsTop, fpsHeight, fpsMaximum, "fps");
+  body += threshold(c, fpsY(25), "25 fps healthy", "#059669", "left");
+  body += threshold(c, fpsY(20), "20 fps impaired", "#d97706", "left");
   body += line(c, fps, fpsY, "#2563eb");
   body += c.samples
     .map((sample, index) => {
@@ -96,12 +98,10 @@ export function renderPlaybackQualitySVG(analysis, manifest) {
     .join("");
   const freezes = counterDeltas(c.samples, "totalFreezesDurationSeconds");
   const freezeTotal = freezes.reduce((sum, value) => sum + value, 0);
-  const freezeY = yScale(
-    freezeTop,
-    freezeHeight,
-    Math.max(0.1, finiteMaximum(freezes, 0.1)),
-  );
+  const freezeMaximum = Math.max(0.1, finiteMaximum(freezes, 0.1));
+  const freezeY = yScale(freezeTop, freezeHeight, freezeMaximum);
   body += panelFrame(c, freezeTop, freezeHeight, "Freeze duration", "s");
+  body += panelScale(c, freezeTop, freezeHeight, freezeMaximum, "s");
   body += bars(c, freezes, freezeY, freezeTop, freezeHeight, "#dc2626", 6);
   body += `<text x="${c.left + 10}" y="${freezeTop + 25}" font-size="14" font-weight="600" fill="${freezeTotal === 0 ? "#047857" : "#b91c1c"}">${freezeTotal === 0 ? "No frozen playback interval observed" : `Total frozen playback ${format(freezeTotal, 2)} s`}</text>`;
   const qp = c.samples.map((sample) =>
@@ -109,7 +109,8 @@ export function renderPlaybackQualitySVG(analysis, manifest) {
   );
   const qpY = yScale(qpTop, qpHeight, 51);
   body += panelFrame(c, qpTop, qpHeight, "H.264 QP", "QP");
-  body += threshold(c, qpY(42), "42 impaired ceiling", "#d97706");
+  body += panelScale(c, qpTop, qpHeight, 51, "QP");
+  body += threshold(c, qpY(42), "42 impaired ceiling", "#d97706", "left");
   body += `<polyline fill="none" stroke="#7c3aed" stroke-width="3" points="${stepPoints(c, qp, qpY)}"/>`;
   return documentSVG(
     c,
@@ -151,17 +152,20 @@ export function renderTransportEvidenceSVG(analysis, manifest) {
     "jitterBufferEmittedCount",
     1000,
   );
-  const latencyY = yScale(
-    latencyTop,
-    latencyHeight,
-    Math.max(
-      600,
-      finiteMaximum([...rtt, ...pacer, ...playout, ...playoutTarget], 600),
-    ),
+  const latencyMaximum = Math.max(
+    600,
+    finiteMaximum([...rtt, ...pacer, ...playout, ...playoutTarget], 600),
   );
+  const latencyY = yScale(latencyTop, latencyHeight, latencyMaximum);
   body += panelFrame(c, latencyTop, latencyHeight, "Latency / buffering", "ms");
+  body += rangeLabel(c, latencyTop, latencyMaximum, "ms");
   body += threshold(c, latencyY(600), "600 ms shaped RTT limit", "#dc2626");
-  body += threshold(c, latencyY(300), "300 ms buffered limit", "#059669");
+  body += threshold(
+    c,
+    latencyY(300),
+    "300 ms phase-average buffer limit",
+    "#059669",
+  );
   body += threshold(c, latencyY(250), "250 ms target limit", "#7c3aed");
   body += line(c, rtt, latencyY, "#2563eb");
   body += line(c, pacer, latencyY, "#d97706");
@@ -181,6 +185,13 @@ export function renderTransportEvidenceSVG(analysis, manifest) {
     Math.max(1, finiteMaximum([...nack, ...rtx], 1)),
   );
   body += panelFrame(c, repairTop, repairHeight, "NACK / RTX", "packets");
+  body += panelScale(
+    c,
+    repairTop,
+    repairHeight,
+    Math.max(1, finiteMaximum([...nack, ...rtx], 1)),
+    "packets",
+  );
   body += bars(c, nack, repairY, repairTop, repairHeight, "#dc2626", 4, -2);
   body += bars(c, rtx, repairY, repairTop, repairHeight, "#2563eb", 4, 2);
   body += legend(c.left + 10, repairTop + 25, [
@@ -190,6 +201,13 @@ export function renderTransportEvidenceSVG(analysis, manifest) {
   const fec = counterDeltas(c.samples, "fecPacketsReceived");
   const fecY = yScale(fecTop, fecHeight, Math.max(1, finiteMaximum(fec, 1)));
   body += panelFrame(c, fecTop, fecHeight, "FlexFEC received", "packets");
+  body += panelScale(
+    c,
+    fecTop,
+    fecHeight,
+    Math.max(1, finiteMaximum(fec, 1)),
+    "packets",
+  );
   body += line(c, fec, fecY, "#059669");
   const observedLoss = intervalRatios(
     c.samples,
@@ -206,6 +224,13 @@ export function renderTransportEvidenceSVG(analysis, manifest) {
     Math.max(5, finiteMaximum([...observedLoss, ...injectedLoss], 5)),
   );
   body += panelFrame(c, lossTop, lossHeight, "Injected / TWCC loss", "%");
+  body += panelScale(
+    c,
+    lossTop,
+    lossHeight,
+    Math.max(5, finiteMaximum([...observedLoss, ...injectedLoss], 5)),
+    "%",
+  );
   body += line(c, injectedLoss, lossY, "#dc2626", "8 6");
   body += line(c, observedLoss, lossY, "#7c3aed");
   body += legend(c.left + 10, lossTop + 22, [
@@ -217,7 +242,7 @@ export function renderTransportEvidenceSVG(analysis, manifest) {
     "Transport latency, loss, and repair",
     "RTT, sender queue residence, playback buffering, NACK, RTX, FlexFEC, and TWCC loss aligned with the controlled path.",
     body,
-    "Cumulative counters are converted to per-sample deltas. Raw totals remain in metrics.csv and summary.json.",
+    "Buffer trace is per sample; its gate is per phase. Counters are per-sample deltas.",
   );
 }
 
@@ -323,6 +348,10 @@ function panelScale(c, top, height, maximum, unit) {
     .join("");
 }
 
+function rangeLabel(c, top, maximum, unit) {
+  return `<text x="${c.left - 12}" y="${top + 58}" text-anchor="end" font-size="12" fill="#64748b">0–${format(maximum, maximum < 10 ? 1 : 0)} ${xml(unit)}</text>`;
+}
+
 function yScale(top, height, maximum) {
   const max = Math.max(0.0001, maximum);
   return (value) =>
@@ -408,8 +437,10 @@ function consecutiveUnique(values) {
   );
 }
 
-function threshold(c, y, label, color) {
-  return `<line x1="${c.left}" y1="${round(y)}" x2="${c.width - c.right}" y2="${round(y)}" stroke="${color}" stroke-width="1.5" stroke-dasharray="7 6"/><text x="${c.width - c.right - 5}" y="${round(y - 5)}" text-anchor="end" font-size="12" fill="${color}">${xml(label)}</text>`;
+function threshold(c, y, label, color, labelSide = "right") {
+  const left = labelSide === "left";
+  const x = left ? c.left + 7 : c.width - c.right - 5;
+  return `<line x1="${c.left}" y1="${round(y)}" x2="${c.width - c.right}" y2="${round(y)}" stroke="${color}" stroke-width="1.5" stroke-dasharray="7 6"/><text x="${x}" y="${round(y - 5)}" text-anchor="${left ? "start" : "end"}" font-size="12" fill="${color}">${xml(label)}</text>`;
 }
 
 function bars(c, values, y, top, height, color, width = 6, offset = 0) {

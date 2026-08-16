@@ -370,8 +370,9 @@ The acceptance checks reject, among other cases:
 - missing host scheduling evidence, sustained hypervisor steal time, or a
   runtime pause longer than 350 ms between 250 ms heartbeat samples;
 - excessive frozen time or low decoded frame rate;
-- missing jitter-buffer evidence, a requested target above 250 ms, or an
-  effective buffered delay above 300 ms;
+- missing jitter-buffer evidence, a requested target above 250 ms, or a phase
+  whose average effective buffered delay exceeds 300 ms; per-sample values
+  remain visible in the transport figure;
 - missing quality telemetry, excessive H.264 quantization, or a resolution
   change hidden behind a healthy frame count;
 - encoder cadence with a p99 gap above 50 ms, any gap above 200 ms, or more
