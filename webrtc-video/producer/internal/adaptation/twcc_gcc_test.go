@@ -74,7 +74,7 @@ func TestTWCCGCCBackendIgnoresIncreaseWithinChangeThreshold(t *testing.T) {
 	}
 }
 
-func TestTWCCGCCBackendRampsUpGradually(t *testing.T) {
+func TestTWCCGCCBackendFollowsEstimatorIncrease(t *testing.T) {
 	cfg := config.Default()
 	cfg.WebRTC.Adaptive.Backend = config.AdaptiveBackendTWCCGCC
 	backend := newTestTWCCGCCBackend(t, cfg)
@@ -85,12 +85,12 @@ func TestTWCCGCCBackendRampsUpGradually(t *testing.T) {
 	if !ok {
 		t.Fatal("expected a bitrate increase decision")
 	}
-	if decision.TargetBitrateKbps != 2300 {
-		t.Fatalf("expected gradual ramp-up to 2300 kbit/s, got %d", decision.TargetBitrateKbps)
+	if decision.TargetBitrateKbps != 5000 {
+		t.Fatalf("expected estimator target 5000 kbit/s, got %d", decision.TargetBitrateKbps)
 	}
 }
 
-func TestTWCCGCCBackendReachesTargetWhenFinalStepFitsCap(t *testing.T) {
+func TestTWCCGCCBackendFollowsSmallerEstimatorIncrease(t *testing.T) {
 	cfg := config.Default()
 	cfg.WebRTC.Adaptive.Backend = config.AdaptiveBackendTWCCGCC
 	backend := newTestTWCCGCCBackend(t, cfg)
@@ -99,7 +99,7 @@ func TestTWCCGCCBackendReachesTargetWhenFinalStepFitsCap(t *testing.T) {
 		EncoderTargetBitrateKbps: 2000,
 	})
 	if !ok {
-		t.Fatal("expected a final ramp-up step to reach the target")
+		t.Fatal("expected an encoder increase to reach the estimator target")
 	}
 	if decision.TargetBitrateKbps != 2300 {
 		t.Fatalf("expected target bitrate 2300 kbit/s, got %d", decision.TargetBitrateKbps)
@@ -138,15 +138,15 @@ func TestTWCCGCCBackendHoldsIncreasesAfterLossSubsides(t *testing.T) {
 	}
 	now = now.Add(time.Second)
 	decision, ok := backend.Decide(observation)
-	if !ok || decision.TargetBitrateKbps != 2300 {
-		t.Fatalf("post-hold decision = %+v, %v, want a 2300 kbit/s increase", decision, ok)
+	if !ok || decision.TargetBitrateKbps != 3000 {
+		t.Fatalf("post-hold decision = %+v, %v, want a 3000 kbit/s increase", decision, ok)
 	}
 	if !backend.ConsumeRecoveryKeyFrame() {
 		t.Fatal("first post-loss increase did not request a recovery key frame")
 	}
 	decision, ok = backend.Decide(Observation{
 		EstimatedBitrateBps:      4_000_000,
-		EncoderTargetBitrateKbps: 2300,
+		EncoderTargetBitrateKbps: 3000,
 	})
 	if !ok {
 		t.Fatal("expected the recovery ramp to continue")

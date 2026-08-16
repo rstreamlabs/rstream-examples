@@ -297,29 +297,6 @@ func TestAdaptiveBackendRejectsDecreaseThresholdAboveBurstHeadroom(t *testing.T)
 	}
 }
 
-func TestAdaptiveBackendRejectsInvalidIncreaseLimits(t *testing.T) {
-	for _, testCase := range []struct {
-		name  string
-		apply func(*WebRTCTWCCGCCBackendConfig)
-	}{
-		{name: "zero increase percentage", apply: func(cfg *WebRTCTWCCGCCBackendConfig) { cfg.MaxIncreasePct = 0 }},
-		{name: "increase percentage above 100", apply: func(cfg *WebRTCTWCCGCCBackendConfig) { cfg.MaxIncreasePct = 101 }},
-		{name: "zero increase step", apply: func(cfg *WebRTCTWCCGCCBackendConfig) { cfg.MaxIncreaseStepKbps = 0 }},
-		{name: "negative increase step", apply: func(cfg *WebRTCTWCCGCCBackendConfig) { cfg.MaxIncreaseStepKbps = -1 }},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			cfg := Default()
-			cfg.Media.Mode = MediaModePerViewer
-			cfg.WebRTC.Adaptive.Enabled = true
-			cfg.WebRTC.Adaptive.Backend = AdaptiveBackendTWCCGCC
-			testCase.apply(&cfg.WebRTC.Adaptive.TWCCGCC)
-			if err := cfg.Validate(); err == nil {
-				t.Fatal("expected invalid increase limit to fail validation")
-			}
-		})
-	}
-}
-
 func TestTURNTransportsNormalizeAndDeduplicate(t *testing.T) {
 	cfg := Default()
 	cfg.TURN.Transports = []string{" UDP ", "tls", "udp", "DTLS"}

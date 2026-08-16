@@ -13,8 +13,6 @@ type TWCCGCCBackend struct {
 	maxBitrateKbps          int
 	changeThresholdPct      int
 	decreaseThresholdPct    int
-	maxIncreasePct          int
-	maxIncreaseStepKbps     int
 	maxIncreaseLoss         float64
 	increaseHoldAfterLoss   time.Duration
 	now                     func() time.Time
@@ -33,8 +31,6 @@ func NewTWCCGCCBackend(cfg config.Config) (*TWCCGCCBackend, error) {
 		maxBitrateKbps:        cfg.WebRTC.Adaptive.TWCCGCC.MaxBitrateKbps,
 		changeThresholdPct:    cfg.WebRTC.Adaptive.TWCCGCC.ChangeThresholdPct,
 		decreaseThresholdPct:  cfg.WebRTC.Adaptive.TWCCGCC.DecreaseThresholdPct,
-		maxIncreasePct:        cfg.WebRTC.Adaptive.TWCCGCC.MaxIncreasePct,
-		maxIncreaseStepKbps:   cfg.WebRTC.Adaptive.TWCCGCC.MaxIncreaseStepKbps,
 		maxIncreaseLoss:       cfg.WebRTC.Adaptive.TWCCGCC.MaxIncreaseLossPct / 100,
 		increaseHoldAfterLoss: increaseHoldAfterLoss,
 		now:                   time.Now,
@@ -73,26 +69,11 @@ func (b *TWCCGCCBackend) Decide(observation Observation) (Decision, bool) {
 	if !increaseAllowed {
 		return Decision{}, false
 	}
-	if target-current <= b.maxIncreaseStepKbps {
-		return Decision{TargetBitrateKbps: target}, true
-	}
-	step := current * b.maxIncreasePct / 100
-	if step > b.maxIncreaseStepKbps {
-		step = b.maxIncreaseStepKbps
-	}
-	if step <= 0 {
-		step = 1
-	}
-	next := current + step
-	if next > target {
-		next = target
-	}
-	if next == current {
-		return Decision{}, false
-	}
-	return Decision{
-		TargetBitrateKbps: clampKbps(next, b.minBitrateKbps, b.maxBitrateKbps),
-	}, true
+	// GCC already bounds its increase from measured receive rate and delay.
+	// Adding another encoder ramp makes the sender application-limited: GCC
+	// cannot observe the capacity it has just granted and eventually collapses
+	// its estimate to the artificially low source rate.
+	return Decision{TargetBitrateKbps: target}, true
 }
 
 func (b *TWCCGCCBackend) updateIncreaseState(averageLoss float64) bool {

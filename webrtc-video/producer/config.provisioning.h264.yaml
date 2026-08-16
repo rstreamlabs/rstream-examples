@@ -39,8 +39,6 @@ webrtc:
       updateInterval: 1s
       changeThresholdPct: 10
       decreaseThresholdPct: 5
-      maxIncreasePct: 15
-      maxIncreaseStepKbps: 500
       maxIncreaseLossPct: 1
       increaseHoldAfterLoss: 5s
   video:
