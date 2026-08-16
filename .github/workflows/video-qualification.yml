@@ -27,12 +27,12 @@ on:
       flexfec_media_packets:
         description: Media packets per FlexFEC protection group
         required: true
-        default: "4"
+        default: "5"
         type: string
       flexfec_repair_packets:
         description: FlexFEC repair packets per protection group
         required: true
-        default: "2"
+        default: "1"
         type: string
       mobility:
         description: Exercise producer-side network migration

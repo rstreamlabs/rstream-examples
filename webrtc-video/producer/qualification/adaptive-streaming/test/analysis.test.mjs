@@ -442,6 +442,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
   let jitterBufferEmittedCount = 0;
   let jitterBufferTargetDelaySeconds = 0;
   let retransmittedPacketsReceived = 0;
+  let pacerSentRTX = 0;
   let totalDecodeTimeSeconds = 0;
   for (const [phase, encoderTargetKbps, receivedBitrateKbps] of phases) {
     for (let index = 0; index < 20; index += 1) {
@@ -459,6 +460,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
       packetsReceived += 100;
       if (phase === "impaired") {
         retransmittedPacketsReceived += 1;
+        pacerSentRTX += 1;
       }
       samples.push({
         bytesReceived,
@@ -479,6 +481,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
         nackCount,
         packetsReceived,
         peerConnectionState: "connected",
+        pacerSentRTX,
         phase,
         playback: "Playing",
         remoteCandidateType: "relay",
@@ -550,7 +553,10 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
   );
   assert.match(report, /## Qualification decision/);
   assert.match(report, /\| Shaper activation \| not measured \|/);
-  assert.match(report, /\| Packet repair \| NACK [0-9]+; RTX [0-9]+ \|/);
+  assert.match(
+    report,
+    /\| Packet repair \| NACK [0-9]+; sender RTX [0-9]+; receiver RTX [0-9]+ \|/,
+  );
   assert.equal(result.trafficControl.impairedDropRatio, 40 / 2040);
   assert.equal(result.candidatePairSwitches, 1);
   const ceilingResult = analyze(samples, {
@@ -1334,7 +1340,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
       flexFECRepairPackets: 1,
       pacerSentFEC,
       pacerTargetBitrateKbps: sample.twccTargetKbps * 1.2,
-      pacerPacingBitrateKbps: sample.twccTargetKbps * 1.5,
+      pacerPacingBitrateKbps: sample.twccTargetKbps * 1.8,
     };
   });
   const fecResult = analyze(
@@ -1385,10 +1391,10 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     ).passed,
     false,
   );
-  const multipliedPacingBudgets = analyze(
+  const collapsedPacingHeadroom = analyze(
     fecSamples.map((sample) => ({
       ...sample,
-      pacerPacingBitrateKbps: sample.pacerTargetBitrateKbps * 1.5,
+      pacerPacingBitrateKbps: sample.twccTargetKbps * 1.5,
     })),
     {
       ...manifest,
@@ -1401,10 +1407,37 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     },
   );
   assert.equal(
-    multipliedPacingBudgets.assertions.find(
-      (assertion) => assertion.name === "flexfec-shared-pacing-envelope",
+    collapsedPacingHeadroom.assertions.find(
+      (assertion) => assertion.name === "flexfec-burst-headroom",
     ).passed,
     false,
+  );
+  const proactiveRepairWinsTheRace = analyze(
+    fecSamples.map((sample) => ({
+      ...sample,
+      retransmittedPacketsReceived: 0,
+    })),
+    {
+      ...manifest,
+      protection: {
+        flexFEC: true,
+        flexFECMediaPackets: 5,
+        flexFECRepairPackets: 1,
+      },
+      webrtc: { flexFECNegotiated: true, rtxNegotiated: true },
+    },
+  );
+  assert.equal(
+    proactiveRepairWinsTheRace.assertions.some(
+      (assertion) => assertion.name === "rtx-repair",
+    ),
+    false,
+  );
+  assert.equal(
+    proactiveRepairWinsTheRace.assertions.find(
+      (assertion) => assertion.name === "rtx-sender-pacing",
+    ).passed,
+    true,
   );
   const mismatchedFEC = analyze(
     fecSamples.map((sample) => ({
@@ -1642,6 +1675,12 @@ test("rejects negotiated RTX when loss produces no repair packets", () => {
     webrtc: { rtxNegotiated: true },
   });
   assert.equal(result.passed, false);
+  assert.equal(
+    result.assertions.find(
+      (assertion) => assertion.name === "rtx-sender-pacing",
+    ).passed,
+    false,
+  );
   assert.equal(
     result.assertions.find((assertion) => assertion.name === "rtx-repair")
       .passed,
