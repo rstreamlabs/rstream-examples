@@ -323,12 +323,12 @@ controlled loss comparison. The sender includes the 50% packet overhead in its
 wire-rate congestion budget rather than filling the link with encoder traffic
 and appending FEC on top.
 
-GCC keeps its target in media bitrate because Chromium acknowledges primary and
-RTX packets through TWCC, but not the FlexFEC stream. The pacer converts that
-media target into the protected wire budget and schedules media plus repair
-inside it. Keeping the two units at their respective boundaries lets GCC
-compare its target with the traffic it actually observes and rediscover
-available capacity after congestion clears.
+GCC controls the complete paced wire budget. The producer derives the encoder's
+media share from that budget before applying a bitrate update, then schedules
+media and repair inside the original limit. Chromium does not acknowledge the
+FlexFEC stream through TWCC, but its configured share still consumes capacity;
+reserving that share inside GCC's target prevents proactive repair from filling
+the network queue behind an apparently compliant encoder.
 
 Use `config.test-pattern.h264.twcc-gcc-flexfec.yaml` when loss resilience is the
 goal. Use a NACK/RTX-only adaptive profile when capacity is scarce and measured
@@ -364,13 +364,11 @@ frame drops, actual packet residence time, prospective sustained-rate backlog,
 the key-frame reserve, and packet-level rejections are exposed in the session
 diagnostics and qualification report.
 
-The pacing envelope derives its sustained wire target from GCC's media target
-and the configured FlexFEC ratio, then reserves 1.5× that wire rate for normal
-encoded-frame bursts and prompt packet repair. The burst allowance is distinct
-from the sustained repair budget: counting the FlexFEC overhead twice would
-remove the headroom needed to packetize a protected key frame. The 225 ms
-admission ceiling and complete-access-unit gate keep the allowance from
-becoming unbounded buffering.
+The pacing envelope follows GCC's sustained wire target and permits short bursts
+up to 1.5× that rate for encoded access units and prompt packet repair. FlexFEC
+already occupies a share of the sustained target; it is not added again at the
+pacer boundary. The 225 ms admission ceiling and complete-access-unit gate keep
+the burst allowance from becoming unbounded buffering.
 
 Material target decreases are applied to the encoder immediately when fresh
 feedback requires them. Callback bursts are coalesced to the newest value, and
