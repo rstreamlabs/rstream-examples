@@ -350,14 +350,17 @@ capture constrained-step-1
 require_shaped_traffic constrained-step-1
 apply_shaping "${capacity_step_two_kbps}" 0ms 0ms 0%
 capture constrained-step-2-start
+emit constrained-step-2-started
 "${sleep_command}" "${transition_step_seconds}"
 capture constrained-step-2
 apply_shaping "${capacity_step_three_kbps}" 0ms 0ms 0%
 capture constrained-step-3-start
+emit constrained-step-3-started
 "${sleep_command}" "${transition_step_seconds}"
 capture constrained-step-3
 apply_shaping "${capacity_kbps}" 0ms 0ms 0%
 capture constrained-steady-start
+emit constrained-steady-started
 "${sleep_command}" "${constrained_steady_seconds}"
 capture constrained-steady
 apply_shaping "${capacity_kbps}" 120ms 30ms 2%
@@ -373,6 +376,7 @@ emit recovery-started
 capture recovery-settle
 apply_shaping "${conditioning_capacity_kbps}" 0ms 0ms 0%
 capture recovery-capacity-start
+emit recovery-capacity-started
 "${sleep_command}" "$((recovery_seconds - transition_step_seconds))"
 capture recovery-capacity
 
