@@ -200,8 +200,8 @@ test("passes and records the configured FlexFEC protection ratio", async () => {
     fileURLToPath(new URL("../collect.mjs", import.meta.url)),
     "utf8",
   );
-  assert.match(runScript, /RSTREAM_QUALIFICATION_FLEXFEC_MEDIA_PACKETS:-4/);
-  assert.match(runScript, /RSTREAM_QUALIFICATION_FLEXFEC_REPAIR_PACKETS:-2/);
+  assert.match(runScript, /RSTREAM_QUALIFICATION_FLEXFEC_MEDIA_PACKETS:-5/);
+  assert.match(runScript, /RSTREAM_QUALIFICATION_FLEXFEC_REPAIR_PACKETS:-1/);
   assert.match(
     runScript,
     /"-flex-fec-media-packets=\$\{flexfec_media_packets\}"/,
@@ -280,7 +280,7 @@ test("keeps one qualification path when the producer uses another Docker daemon"
   assert.match(runScript, /RSTREAM_QUALIFICATION_PRODUCER_DOCKER_HOST:-/);
   assert.match(
     runScript,
-    /RSTREAM_QUALIFICATION_PLAYOUT_DELAY_HINT_SECONDS:-0/,
+    /RSTREAM_QUALIFICATION_PLAYOUT_DELAY_HINT_SECONDS:-0\.2/,
   );
   assert.match(runScript, /--playout-delay-hint-seconds/);
   assert.match(runScript, /producer_docker build/);
