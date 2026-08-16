@@ -167,6 +167,10 @@ test("passes and records the configured FlexFEC protection ratio", async () => {
     fileURLToPath(new URL("../run.sh", import.meta.url)),
     "utf8",
   );
+  const collector = await readFile(
+    fileURLToPath(new URL("../collect.mjs", import.meta.url)),
+    "utf8",
+  );
   assert.match(runScript, /RSTREAM_QUALIFICATION_FLEXFEC_MEDIA_PACKETS:-4/);
   assert.match(runScript, /RSTREAM_QUALIFICATION_FLEXFEC_REPAIR_PACKETS:-2/);
   assert.match(
@@ -190,6 +194,7 @@ test("passes and records the configured FlexFEC protection ratio", async () => {
     /if \[\[ "\$\{flexfec_enabled\}" == "true" \]\]; then\n+    producer_config_path="\$\{producer_directory\}\/config\.test-pattern\.h264\.twcc-gcc-flexfec\.yaml"/,
   );
   assert.match(runScript, /-producer-config "\$\{producer_config_path\}"/);
+  assert.match(collector, /pacerSentFEC: bandwidth\?\.pacerSentFEC \|\| 0/);
   assert.doesNotMatch(
     runScript,
     /-producer-config "\$\{producer_directory\}\/config\.test-pattern\.h264\.twcc-gcc\.yaml"/,

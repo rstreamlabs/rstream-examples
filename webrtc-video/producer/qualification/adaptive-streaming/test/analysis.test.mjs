@@ -1180,15 +1180,18 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
   );
 
   let fecPacketsReceived = 0;
+  let pacerSentFEC = 0;
   const fecSamples = samples.map((sample) => {
     if (sample.phase === "impaired") {
       fecPacketsReceived += 1;
+      pacerSentFEC += 1;
     }
     return {
       ...sample,
       fecPacketsReceived,
       flexFECMediaPackets: 5,
       flexFECRepairPackets: 1,
+      pacerSentFEC,
       pacerTargetBitrateKbps: sample.twccTargetKbps * 1.2,
       pacerPacingBitrateKbps: sample.twccTargetKbps * 1.5,
     };
@@ -1217,6 +1220,30 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     },
   );
   assert.equal(fecResult.passed, true, JSON.stringify(fecResult.assertions));
+  assert.equal(
+    fecResult.assertions.find(
+      (assertion) => assertion.name === "flexfec-sender-pacing",
+    ).passed,
+    true,
+  );
+  const missingSenderFEC = analyze(
+    fecSamples.map((sample) => ({ ...sample, pacerSentFEC: 0 })),
+    {
+      ...manifest,
+      protection: {
+        flexFEC: true,
+        flexFECMediaPackets: 5,
+        flexFECRepairPackets: 1,
+      },
+      webrtc: { flexFECNegotiated: true, rtxNegotiated: true },
+    },
+  );
+  assert.equal(
+    missingSenderFEC.assertions.find(
+      (assertion) => assertion.name === "flexfec-sender-pacing",
+    ).passed,
+    false,
+  );
   const multipliedPacingBudgets = analyze(
     fecSamples.map((sample) => ({
       ...sample,

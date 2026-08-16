@@ -423,6 +423,12 @@ export function analyze(
     );
     assert(
       assertions,
+      counterIncrease(enriched, "pacerSentFEC", ["impaired"]) > 0,
+      "flexfec-sender-pacing",
+      "the sender records paced FlexFEC packets while loss is injected",
+    );
+    assert(
+      assertions,
       enriched.every(
         (sample) =>
           sample.flexFECMediaPackets ===
@@ -793,11 +799,11 @@ export function renderSVG(analysis, manifest) {
       (step) => step.loss === undefined || step.loss === "0%",
     );
   const subtitle = isolatedCapacityStep
-    ? "Capacity changes while delay stays at " +
+    ? "Capacity transitions are isolated at " +
       constrainedSchedule[0].delay +
-      ", jitter at " +
+      " delay, " +
       constrainedSchedule[0].jitter +
-      ", and injected loss at 0%"
+      " jitter, and 0% injected loss"
     : "Capacity, delay, jitter, and loss follow the recorded phase manifest";
   const resultColor = analysis.passed ? "#047857" : "#b91c1c";
   const resultLabel = analysis.passed ? "PASS" : "FAIL";

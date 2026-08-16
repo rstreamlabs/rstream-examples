@@ -521,6 +521,7 @@ async function collectSample(activePage) {
       pacerSentPrimary: bandwidth?.pacerSentPrimary || 0,
       pacerSentRepair: bandwidth?.pacerSentRepair || 0,
       pacerSentRTX: bandwidth?.pacerSentRTX || 0,
+      pacerSentFEC: bandwidth?.pacerSentFEC || 0,
       adaptiveBitrateUpdates: sessionStats?.adaptiveBitrateUpdates || 0,
       adaptiveBitrateFailures: sessionStats?.adaptiveBitrateFailures || 0,
       staleBitrateCallbacks: bandwidth?.staleBitrateCallbacks || 0,
