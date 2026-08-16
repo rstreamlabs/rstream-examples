@@ -152,12 +152,56 @@ Start from one of the shipped profiles and adjust only the sections you need. Th
 The configuration is split by responsibility:
 
 - `server` controls the local HTTP listener.
+- `metrics` controls the optional producer-side OpenMetrics listener.
 - `web` controls whether the producer serves its local viewer.
 - `tunnel` controls publication through `rstream`, edge authentication, provisioning, and tunnel reconnection.
 - `turn` controls TURN credential lifetime.
 - `webrtc` controls codec settings, interceptors, adaptive bitrate, and viewer limits.
 - `media` controls the GStreamer pipeline itself and how pipelines are allocated across viewers.
 - `logging` controls verbosity.
+
+### Producer metrics
+
+The producer can expose its capture, encoder, congestion-control, pacing, and
+repair signals as OpenMetrics. The listener is disabled by default and is
+separate from the HTTP application published through rstream.
+
+```yaml
+metrics:
+  enabled: true
+  listen: 127.0.0.1:9090
+```
+
+Keeping the loopback address lets a vmagent or another collector on the device
+scrape `http://127.0.0.1:9090/metrics` without adding a public endpoint. Bind a
+private interface only when the deployment deliberately collects metrics from
+another host.
+
+The counters preserve producer lifetime totals when a viewer session closes,
+and the metric dimensions remain bounded: codec and enabled features describe
+the process, while no viewer or session identifier becomes a label. Useful
+queries include:
+
+```promql
+# Encoder output in Mbit/s
+rate(rstream_video_producer_encoded_bytes_total[1m]) * 8 / 1e6
+
+# RTP traffic written by the pacer, including RTX and FlexFEC
+sum(rate(rstream_video_producer_pacer_sent_bytes_total[1m])) * 8 / 1e6
+
+# Encoded frames per second
+sum(rate(rstream_video_producer_encoded_frames_total[1m]))
+
+# Seconds since the capture pipeline produced a frame
+time() - rstream_video_producer_last_encoded_frame_timestamp_seconds
+```
+
+The current gauges expose the encoder and pacer targets, the TWCC estimate,
+packet-loss ratio, delay estimate, queue depth, queue delay, and active loss
+guards. Counters cover source backpressure, frame admission drops, adaptive
+updates, key-frame recovery, malformed feedback, RTX and FlexFEC traffic, and
+repair packets discarded before transmission. Each series includes its HELP,
+TYPE, and UNIT metadata in the OpenMetrics response.
 
 ### Tunnel publication and authentication
 
@@ -390,10 +434,10 @@ the result, so the measured trade-offs remain tied to an exact implementation.
 | Encoder VBV            |                                                       250 ms | Bounds the encoder-side rate reservoir while retaining enough room for normal frame-size variation. It is one component of latency, not a promise that end-to-end delay is 250 ms.                                                                                                                                                                                                       |
 | Initial encoder target |                                                     5 Mbit/s | Starts 1080p with useful quality before TWCC has accumulated enough feedback. A high startup target can briefly overshoot a smaller access link, which is why the pacer still enforces the current wire budget.                                                                                                                                                                          |
 | Adaptive range         |                                                   2–8 Mbit/s | The 2 Mbit/s floor protects fixed 1080p quality observed through x264 QP; the ceiling bounds CPU and link demand. Operating below the floor calls for a source ladder, not a hidden quality collapse.                                                                                                                                                                                    |
-| Update hysteresis      |                      2 s, 10% increases, immediate decreases | Filters estimator noise while keeping the encoder aligned with the capacity granted by GCC. Decreases bypass the periodic update gate; increases follow GCC after the loss-recovery hold.                                                                                                                                                                                                 |
+| Update hysteresis      |                      2 s, 10% increases, immediate decreases | Filters estimator noise while keeping the encoder aligned with the capacity granted by GCC. Decreases bypass the periodic update gate; increases follow GCC after the loss-recovery hold.                                                                                                                                                                                                |
 | Pacing and admission   | Shared 1.5x media envelope, 225 ms sustained-backlog ceiling | Media, proactive repair, and retransmissions share one pacing allowance. The admission ceiling preserves 150 ms of scheduling margin under the measured 375 ms packet-residence budget. Over-budget access units are rejected whole before RTP packetization.                                                                                                                            |
 | Repair scheduling      |        One repair packet per scheduling burst; 225 ms expiry | Gives RTX a prompt opportunity without starving current media, and discards a repair packet once its playback value is lower than the latency it would add.                                                                                                                                                                                                                              |
-| FlexFEC                |                     One repair packet per five media packets | Adds moderate proactive protection for lossy, higher-RTT paths where reactive RTX can arrive after the playout window. Stronger ratios remain explicit stress profiles; leave FlexFEC disabled when measured NACK/RTX recovery is sufficient or the link cannot afford the overhead.                                                                                                    |
+| FlexFEC                |                     One repair packet per five media packets | Adds moderate proactive protection for lossy, higher-RTT paths where reactive RTX can arrive after the playout window. Stronger ratios remain explicit stress profiles; leave FlexFEC disabled when measured NACK/RTX recovery is sufficient or the link cannot afford the overhead.                                                                                                     |
 
 With the 1080p30 H.264 reference settings, the sender starts at `5 Mbps` and may
 adapt within the `2–8 Mbps` range. Qualification showed that allowing the fixed

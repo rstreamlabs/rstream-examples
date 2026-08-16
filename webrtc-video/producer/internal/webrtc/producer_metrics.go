@@ -1,0 +1,203 @@
+package webrtc
+
+import "github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/config"
+
+type ProducerStats struct {
+	ActiveSessions                int
+	OpeningSessions               int
+	EstimatedBitrateBps           int64
+	EncoderTargetBitrateBps       int64
+	PacerTargetBitrateBps         int64
+	PacerPacingBitrateBps         int64
+	PacerQueuePackets             int64
+	MaximumPacketLossRatio        float64
+	MaximumDelayEstimateSeconds   float64
+	MaximumPacerQueueDelaySeconds float64
+	LossGuardActiveSessions       int
+	AdaptiveBitrateUpdates        uint64
+	AdaptiveBitrateFailures       uint64
+	RecoveryKeyFrameRequests      uint64
+	RecoveryKeyFrameCoalesced     uint64
+	RecoveryKeyFrameFailures      uint64
+	RTCPKeyFrameRequests          uint64
+	RTCPMalformedFeedback         uint64
+	LossGuardReductions           uint64
+	LossGuardRecoveries           uint64
+	PacerQueueDrops               uint64
+	PacerMediaFrameDrops          uint64
+	PacerMediaByteDrops           uint64
+	PacerRepairPacketsExpired     uint64
+	PacerRepairPacketsTrimmed     uint64
+	PacerRTXPacketsExpired        uint64
+	PacerFECPacketsExpired        uint64
+	PacerRTXPacketsTrimmed        uint64
+	PacerFECPacketsTrimmed        uint64
+	PacerSentPrimary              uint64
+	PacerSentPrimaryBytes         uint64
+	PacerSentRepair               uint64
+	PacerSentRTX                  uint64
+	PacerSentRTXBytes             uint64
+	PacerSentFEC                  uint64
+	PacerSentFECBytes             uint64
+	StaleBitrateCallbacks         uint64
+	TWCCFeedbackPackets           uint64
+	TWCCMalformedFeedback         uint64
+	TWCCPaddingStatuses           uint64
+	TWCCReportedLost              uint64
+	TWCCReportedStatuses          uint64
+}
+
+type producerTotals struct {
+	AdaptiveBitrateUpdates    uint64
+	AdaptiveBitrateFailures   uint64
+	RecoveryKeyFrameRequests  uint64
+	RecoveryKeyFrameCoalesced uint64
+	RecoveryKeyFrameFailures  uint64
+	RTCPKeyFrameRequests      uint64
+	RTCPMalformedFeedback     uint64
+	Bandwidth                 BandwidthStats
+}
+
+func (b *Broadcaster) MetricsSnapshot() ProducerStats {
+	b.mu.Lock()
+	sessions := make([]*Session, 0, len(b.sessions))
+	for _, session := range b.sessions {
+		sessions = append(sessions, session)
+	}
+	stats := ProducerStats{
+		ActiveSessions:  len(sessions),
+		OpeningSessions: b.opening,
+	}
+	sharedMedia := b.mediaMode == config.MediaModeShared
+	addProducerTotals(&stats, b.retired)
+	b.mu.Unlock()
+	for _, session := range sessions {
+		addActiveSessionStats(&stats, session.StatsSnapshot(), sharedMedia)
+	}
+	return stats
+}
+
+func (b *Broadcaster) retireSession(session *Session) int {
+	stats := producerTotalsFromSession(session.StatsSnapshot())
+	b.mu.Lock()
+	if _, ok := b.sessions[session.id]; ok {
+		b.retired.add(stats)
+		delete(b.sessions, session.id)
+	}
+	count := len(b.sessions)
+	b.mu.Unlock()
+	return count
+}
+
+func producerTotalsFromSession(stats SessionStats) producerTotals {
+	totals := producerTotals{
+		AdaptiveBitrateUpdates:    stats.AdaptiveBitrateUpdates,
+		AdaptiveBitrateFailures:   stats.AdaptiveBitrateFailures,
+		RecoveryKeyFrameRequests:  stats.RecoveryKeyFrameRequests,
+		RecoveryKeyFrameCoalesced: stats.RecoveryKeyFrameCoalesced,
+		RecoveryKeyFrameFailures:  stats.RecoveryKeyFrameFailures,
+		RTCPKeyFrameRequests:      stats.RTCPKeyFrameRequests,
+		RTCPMalformedFeedback:     stats.RTCPMalformedFeedback,
+	}
+	if stats.Bandwidth != nil {
+		totals.Bandwidth = *stats.Bandwidth
+	}
+	return totals
+}
+
+func (t *producerTotals) add(other producerTotals) {
+	t.AdaptiveBitrateUpdates += other.AdaptiveBitrateUpdates
+	t.AdaptiveBitrateFailures += other.AdaptiveBitrateFailures
+	t.RecoveryKeyFrameRequests += other.RecoveryKeyFrameRequests
+	t.RecoveryKeyFrameCoalesced += other.RecoveryKeyFrameCoalesced
+	t.RecoveryKeyFrameFailures += other.RecoveryKeyFrameFailures
+	t.RTCPKeyFrameRequests += other.RTCPKeyFrameRequests
+	t.RTCPMalformedFeedback += other.RTCPMalformedFeedback
+	addBandwidthCounters(&t.Bandwidth, other.Bandwidth)
+}
+
+func addActiveSessionStats(producer *ProducerStats, session SessionStats, sharedMedia bool) {
+	addProducerTotals(producer, producerTotalsFromSession(session))
+	producer.EstimatedBitrateBps += int64(session.EstimatedBitrateBps)
+	encoderTarget := int64(session.EncoderTargetBitrateKbps) * 1000
+	if sharedMedia {
+		producer.EncoderTargetBitrateBps = max(producer.EncoderTargetBitrateBps, encoderTarget)
+	} else {
+		producer.EncoderTargetBitrateBps += encoderTarget
+	}
+	bandwidth := session.Bandwidth
+	if bandwidth == nil {
+		return
+	}
+	producer.PacerTargetBitrateBps += int64(bandwidth.PacerTargetBitrateBps)
+	producer.PacerPacingBitrateBps += int64(bandwidth.PacerPacingBitrateBps)
+	producer.PacerQueuePackets += int64(bandwidth.PacerQueuePackets)
+	producer.MaximumPacketLossRatio = max(producer.MaximumPacketLossRatio, bandwidth.AverageLoss)
+	producer.MaximumDelayEstimateSeconds = max(producer.MaximumDelayEstimateSeconds, bandwidth.DelayEstimateMs/1000)
+	producer.MaximumPacerQueueDelaySeconds = max(producer.MaximumPacerQueueDelaySeconds, bandwidth.PacerQueueDelayMs/1000)
+	if bandwidth.LossGuardActive {
+		producer.LossGuardActiveSessions++
+	}
+}
+
+func addProducerTotals(producer *ProducerStats, totals producerTotals) {
+	producer.AdaptiveBitrateUpdates += totals.AdaptiveBitrateUpdates
+	producer.AdaptiveBitrateFailures += totals.AdaptiveBitrateFailures
+	producer.RecoveryKeyFrameRequests += totals.RecoveryKeyFrameRequests
+	producer.RecoveryKeyFrameCoalesced += totals.RecoveryKeyFrameCoalesced
+	producer.RecoveryKeyFrameFailures += totals.RecoveryKeyFrameFailures
+	producer.RTCPKeyFrameRequests += totals.RTCPKeyFrameRequests
+	producer.RTCPMalformedFeedback += totals.RTCPMalformedFeedback
+	bandwidth := totals.Bandwidth
+	producer.LossGuardReductions += bandwidth.LossGuardReductions
+	producer.LossGuardRecoveries += bandwidth.LossGuardRecoveries
+	producer.PacerQueueDrops += bandwidth.PacerQueueDrops
+	producer.PacerMediaFrameDrops += bandwidth.PacerMediaFrameDrops
+	producer.PacerMediaByteDrops += bandwidth.PacerMediaByteDrops
+	producer.PacerRepairPacketsExpired += bandwidth.PacerRepairPacketsExpired
+	producer.PacerRepairPacketsTrimmed += bandwidth.PacerRepairPacketsTrimmed
+	producer.PacerRTXPacketsExpired += bandwidth.PacerRTXPacketsExpired
+	producer.PacerFECPacketsExpired += bandwidth.PacerFECPacketsExpired
+	producer.PacerRTXPacketsTrimmed += bandwidth.PacerRTXPacketsTrimmed
+	producer.PacerFECPacketsTrimmed += bandwidth.PacerFECPacketsTrimmed
+	producer.PacerSentPrimary += bandwidth.PacerSentPrimary
+	producer.PacerSentPrimaryBytes += bandwidth.PacerSentPrimaryBytes
+	producer.PacerSentRepair += bandwidth.PacerSentRepair
+	producer.PacerSentRTX += bandwidth.PacerSentRTX
+	producer.PacerSentRTXBytes += bandwidth.PacerSentRTXBytes
+	producer.PacerSentFEC += bandwidth.PacerSentFEC
+	producer.PacerSentFECBytes += bandwidth.PacerSentFECBytes
+	producer.StaleBitrateCallbacks += bandwidth.StaleBitrateCallbacks
+	producer.TWCCFeedbackPackets += bandwidth.TWCCFeedbackPackets
+	producer.TWCCMalformedFeedback += bandwidth.TWCCMalformedFeedback
+	producer.TWCCPaddingStatuses += bandwidth.TWCCPaddingStatuses
+	producer.TWCCReportedLost += bandwidth.TWCCReportedLost
+	producer.TWCCReportedStatuses += bandwidth.TWCCReportedStatuses
+}
+
+func addBandwidthCounters(target *BandwidthStats, source BandwidthStats) {
+	target.LossGuardReductions += source.LossGuardReductions
+	target.LossGuardRecoveries += source.LossGuardRecoveries
+	target.PacerQueueDrops += source.PacerQueueDrops
+	target.PacerMediaFrameDrops += source.PacerMediaFrameDrops
+	target.PacerMediaByteDrops += source.PacerMediaByteDrops
+	target.PacerRepairPacketsExpired += source.PacerRepairPacketsExpired
+	target.PacerRepairPacketsTrimmed += source.PacerRepairPacketsTrimmed
+	target.PacerRTXPacketsExpired += source.PacerRTXPacketsExpired
+	target.PacerFECPacketsExpired += source.PacerFECPacketsExpired
+	target.PacerRTXPacketsTrimmed += source.PacerRTXPacketsTrimmed
+	target.PacerFECPacketsTrimmed += source.PacerFECPacketsTrimmed
+	target.PacerSentPrimary += source.PacerSentPrimary
+	target.PacerSentPrimaryBytes += source.PacerSentPrimaryBytes
+	target.PacerSentRepair += source.PacerSentRepair
+	target.PacerSentRTX += source.PacerSentRTX
+	target.PacerSentRTXBytes += source.PacerSentRTXBytes
+	target.PacerSentFEC += source.PacerSentFEC
+	target.PacerSentFECBytes += source.PacerSentFECBytes
+	target.StaleBitrateCallbacks += source.StaleBitrateCallbacks
+	target.TWCCFeedbackPackets += source.TWCCFeedbackPackets
+	target.TWCCMalformedFeedback += source.TWCCMalformedFeedback
+	target.TWCCPaddingStatuses += source.TWCCPaddingStatuses
+	target.TWCCReportedLost += source.TWCCReportedLost
+	target.TWCCReportedStatuses += source.TWCCReportedStatuses
+}

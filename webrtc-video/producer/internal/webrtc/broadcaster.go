@@ -103,9 +103,12 @@ type BandwidthStats struct {
 	PacerRTXPacketsTrimmed       uint64  `json:"pacerRTXPacketsTrimmed"`
 	PacerFECPacketsTrimmed       uint64  `json:"pacerFECPacketsTrimmed"`
 	PacerSentPrimary             uint64  `json:"pacerSentPrimary"`
+	PacerSentPrimaryBytes        uint64  `json:"pacerSentPrimaryBytes"`
 	PacerSentRepair              uint64  `json:"pacerSentRepair"`
 	PacerSentRTX                 uint64  `json:"pacerSentRTX"`
+	PacerSentRTXBytes            uint64  `json:"pacerSentRTXBytes"`
 	PacerSentFEC                 uint64  `json:"pacerSentFEC"`
+	PacerSentFECBytes            uint64  `json:"pacerSentFECBytes"`
 	StaleBitrateCallbacks        uint64  `json:"staleBitrateCallbacks"`
 	TWCCFeedbackPackets          uint64  `json:"twccFeedbackPackets"`
 	TWCCMalformedFeedback        uint64  `json:"twccMalformedFeedback"`
@@ -130,6 +133,7 @@ type Broadcaster struct {
 	maxViewers    int
 	mu            sync.Mutex
 	sessions      map[string]*Session
+	retired       producerTotals
 	opening       int
 	closed        bool
 }
@@ -300,10 +304,7 @@ func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) 
 		},
 	}
 	session.onClose = func(reason string) {
-		b.mu.Lock()
-		delete(b.sessions, session.id)
-		count := len(b.sessions)
-		b.mu.Unlock()
+		count := b.retireSession(session)
 		b.logger.Info("Viewer %s closed: %s (active viewers: %d)", session.id, reason, count)
 	}
 	session.trackSelectedICEPath()
@@ -825,9 +826,12 @@ func snapshotBandwidthStats(estimator bandwidthEstimator) *BandwidthStats {
 	stats.PacerRTXPacketsTrimmed, _ = raw["pacerRetransmissionPacketsTrimmed"].(uint64)
 	stats.PacerFECPacketsTrimmed, _ = raw["pacerForwardErrorCorrectionPacketsTrimmed"].(uint64)
 	stats.PacerSentPrimary, _ = raw["pacerSentPrimary"].(uint64)
+	stats.PacerSentPrimaryBytes, _ = raw["pacerSentPrimaryBytes"].(uint64)
 	stats.PacerSentRepair, _ = raw["pacerSentRepair"].(uint64)
 	stats.PacerSentRTX, _ = raw["pacerSentRetransmission"].(uint64)
+	stats.PacerSentRTXBytes, _ = raw["pacerSentRetransmissionBytes"].(uint64)
 	stats.PacerSentFEC, _ = raw["pacerSentForwardErrorCorrection"].(uint64)
+	stats.PacerSentFECBytes, _ = raw["pacerSentForwardErrorCorrectionBytes"].(uint64)
 	stats.StaleBitrateCallbacks, _ = raw["staleBitrateCallbacks"].(uint64)
 	stats.TWCCFeedbackPackets, _ = raw["twccFeedbackPackets"].(uint64)
 	stats.TWCCMalformedFeedback, _ = raw["twccMalformedFeedback"].(uint64)

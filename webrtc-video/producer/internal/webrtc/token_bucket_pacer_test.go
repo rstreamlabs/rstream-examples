@@ -471,6 +471,9 @@ func TestTokenBucketPacerSendsFECImmediatelyAfterItsProtectedGroup(t *testing.T)
 	if sent, _ := stats["pacerSentForwardErrorCorrection"].(uint64); sent != 1 {
 		t.Fatalf("sent FEC packets = %d, want 1", sent)
 	}
+	if sent, _ := stats["pacerSentForwardErrorCorrectionBytes"].(uint64); sent == 0 {
+		t.Fatal("sent FEC bytes = 0, want a positive wire byte count")
+	}
 	if sent, _ := stats["pacerSentRetransmission"].(uint64); sent != 0 {
 		t.Fatalf("sent RTX packets = %d, want 0", sent)
 	}

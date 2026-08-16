@@ -110,9 +110,12 @@ type tokenBucketPacer struct {
 	packetizationBitrate                     atomic.Int64
 	rateDecreasePending                      atomic.Bool
 	sentPrimary                              atomic.Uint64
+	sentPrimaryBytes                         atomic.Uint64
 	sentRepair                               atomic.Uint64
 	sentRetransmission                       atomic.Uint64
+	sentRetransmissionBytes                  atomic.Uint64
 	sentForwardErrorCorrection               atomic.Uint64
+	sentForwardErrorCorrectionBytes          atomic.Uint64
 	transportSequence                        atomic.Uint32
 	writersMu                                sync.RWMutex
 	writers                                  map[uint32]pacedStream
@@ -482,17 +485,19 @@ func (p *tokenBucketPacer) run() {
 				p.discardQueuedPackets()
 				continue
 			}
-			if _, err := pending.writer.Write(
+			written, err := pending.writer.Write(
 				&pending.header,
 				(*pending.payload)[:len(*pending.payload)],
 				pending.attributes,
-			); err != nil {
+			)
+			if err != nil {
 				p.recordError(fmt.Errorf("paced RTP write failed: %w", err))
 				p.discardQueuedPackets()
 			} else if pending.repair != repairKindNone {
-				p.recordRepairSent(pending.repair)
+				p.recordRepairSent(pending.repair, written)
 			} else {
 				p.sentPrimary.Add(1)
+				p.sentPrimaryBytes.Add(uint64(max(0, written)))
 			}
 			switch pending.repair {
 			case repairKindNone:
@@ -752,9 +757,12 @@ func (p *tokenBucketPacer) Stats() map[string]any {
 		"pacerRetransmissionPacketsTrimmed":                       p.retransmissionPacketsTrimmed.Load(),
 		"pacerForwardErrorCorrectionPacketsTrimmed":               p.forwardErrorCorrectionPacketsTrimmed.Load(),
 		"pacerSentPrimary":                                        p.sentPrimary.Load(),
+		"pacerSentPrimaryBytes":                                   p.sentPrimaryBytes.Load(),
 		"pacerSentRepair":                                         p.sentRepair.Load(),
 		"pacerSentRetransmission":                                 p.sentRetransmission.Load(),
+		"pacerSentRetransmissionBytes":                            p.sentRetransmissionBytes.Load(),
 		"pacerSentForwardErrorCorrection":                         p.sentForwardErrorCorrection.Load(),
+		"pacerSentForwardErrorCorrectionBytes":                    p.sentForwardErrorCorrectionBytes.Load(),
 	}
 }
 
@@ -867,13 +875,15 @@ func (p *tokenBucketPacer) recordRepairTrim(kind repairKind) {
 	}
 }
 
-func (p *tokenBucketPacer) recordRepairSent(kind repairKind) {
+func (p *tokenBucketPacer) recordRepairSent(kind repairKind, bytes int) {
 	p.sentRepair.Add(1)
 	switch kind {
 	case repairKindRetransmission:
 		p.sentRetransmission.Add(1)
+		p.sentRetransmissionBytes.Add(uint64(max(0, bytes)))
 	case repairKindForwardErrorCorrection:
 		p.sentForwardErrorCorrection.Add(1)
+		p.sentForwardErrorCorrectionBytes.Add(uint64(max(0, bytes)))
 	}
 }
 

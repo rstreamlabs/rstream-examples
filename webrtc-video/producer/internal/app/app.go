@@ -12,6 +12,7 @@ import (
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/config"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/logs"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/media"
+	producerMetrics "github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/metrics"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/provisioning"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/tunnel"
 	turnprovider "github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/turn"
@@ -28,6 +29,7 @@ type App struct {
 	turn         *turnprovider.Provider
 	broadcaster  *rtc.Broadcaster
 	web          *web.Server
+	metrics      http.Handler
 	infoMu       sync.RWMutex
 	info         web.Info
 	openTunnel   func(context.Context, config.Config, *logs.Logger, tunnel.OpenOptions) (tunnelManager, error)
@@ -97,6 +99,7 @@ func New(cfg config.Config) (*App, error) {
 			Viewer: cfg.Web.Viewer.Enabled,
 		},
 	)
+	instance.metrics = producerMetrics.NewHandler(cfg, sourceFactory, broadcaster)
 	return instance, nil
 }
 
@@ -113,17 +116,44 @@ func (a *App) Run(ctx context.Context) error {
 		FlexFECEnabled:  a.cfg.WebRTC.Interceptors.FlexFEC,
 		AdaptiveBackend: a.cfg.AdaptiveBackend(),
 	}
-	var localServer *http.Server
-	var localServerErrors <-chan error
-	if a.localServerEnabled() {
-		localListener, err := net.Listen("tcp", a.cfg.Server.Listen)
+	var metricsServer *http.Server
+	var metricsListener net.Listener
+	if a.cfg.Metrics.Enabled {
+		var err error
+		metricsListener, err = net.Listen("tcp", a.cfg.Metrics.Listen)
 		if err != nil {
+			return fmt.Errorf("failed to listen for metrics on %s: %w", a.cfg.Metrics.Listen, err)
+		}
+		metricsServer = &http.Server{
+			Handler:           a.metrics,
+			ReadHeaderTimeout: 5 * time.Second,
+			WriteTimeout:      10 * time.Second,
+			IdleTimeout:       time.Minute,
+		}
+	}
+	var localServer *http.Server
+	var localListener net.Listener
+	if a.localServerEnabled() {
+		var err error
+		localListener, err = net.Listen("tcp", a.cfg.Server.Listen)
+		if err != nil {
+			if metricsListener != nil {
+				_ = metricsListener.Close()
+			}
 			return fmt.Errorf("failed to listen on %s: %w", a.cfg.Server.Listen, err)
 		}
 		a.info.LocalURL = "http://" + localListener.Addr().String()
 		localServer = &http.Server{Handler: handler}
-		localServerErrors = serveHTTP(localServer, localListener)
 		a.logger.Info("Local URL: %s", a.info.LocalURL)
+	}
+	var metricsServerErrors <-chan error
+	if metricsServer != nil {
+		metricsServerErrors = serveHTTP(metricsServer, metricsListener)
+		a.logger.Info("Metrics URL: http://%s/metrics", metricsListener.Addr())
+	}
+	var localServerErrors <-chan error
+	if localServer != nil {
+		localServerErrors = serveHTTP(localServer, localListener)
 	}
 	a.web.SetInfo(a.info)
 	var tunnelErrors <-chan error
@@ -142,6 +172,11 @@ func (a *App) Run(ctx context.Context) error {
 			runErr = err
 			cancel()
 		}
+	case err := <-metricsServerErrors:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			runErr = fmt.Errorf("the metrics HTTP server stopped: %w", err)
+			cancel()
+		}
 	case <-ctx.Done():
 		runErr = ctx.Err()
 	}
@@ -149,6 +184,9 @@ func (a *App) Run(ctx context.Context) error {
 	defer shutdownCancel()
 	if localServer != nil {
 		_ = localServer.Shutdown(shutdownCtx)
+	}
+	if metricsServer != nil {
+		_ = metricsServer.Shutdown(shutdownCtx)
 	}
 	if tunnelErrors != nil {
 		select {
