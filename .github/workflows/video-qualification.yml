@@ -52,10 +52,6 @@ jobs:
     name: ${{ inputs.path }} ${{ inputs.protection }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    env:
-      RSTREAM_QUALIFICATION_API_URL: ${{ vars.RSTREAM_QUALIFICATION_API_URL }}
-      RSTREAM_QUALIFICATION_ENGINE: ${{ vars.RSTREAM_QUALIFICATION_ENGINE }}
-      RSTREAM_QUALIFICATION_PROJECT_ENDPOINT: ${{ vars.RSTREAM_QUALIFICATION_PROJECT_ENDPOINT }}
     steps:
       - name: Check out the tested revision
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -70,13 +66,12 @@ jobs:
         shell: bash
         env:
           RSTREAM_AUTHENTICATION_TOKEN: ${{ secrets.RSTREAM_QUALIFICATION_TOKEN }}
+          RSTREAM_QUALIFICATION_CONFIG_B64: ${{ secrets.RSTREAM_QUALIFICATION_CONFIG_B64 }}
         run: |
           set -euo pipefail
           for name in \
             RSTREAM_AUTHENTICATION_TOKEN \
-            RSTREAM_QUALIFICATION_API_URL \
-            RSTREAM_QUALIFICATION_ENGINE \
-            RSTREAM_QUALIFICATION_PROJECT_ENDPOINT; do
+            RSTREAM_QUALIFICATION_CONFIG_B64; do
             if [[ -z "${!name:-}" ]]; then
               printf 'Missing required qualification setting: %s\n' "$name" >&2
               exit 1
@@ -95,6 +90,7 @@ jobs:
           INPUT_PATH: ${{ inputs.path }}
           INPUT_PROTECTION: ${{ inputs.protection }}
           RSTREAM_AUTHENTICATION_TOKEN: ${{ secrets.RSTREAM_QUALIFICATION_TOKEN }}
+          RSTREAM_QUALIFICATION_CONFIG_B64: ${{ secrets.RSTREAM_QUALIFICATION_CONFIG_B64 }}
         run: |
           set -euo pipefail
           config_directory="$(mktemp -d)"
@@ -102,17 +98,13 @@ jobs:
           output_directory="${RUNNER_TEMP}/video-qualification"
           mkdir -p "$output_directory"
           chmod 700 "$config_directory" "$runtime_directory" "$output_directory"
-          cat >"${config_directory}/config.yaml" <<EOF
-          version: 1
-          defaults:
-            context:
-              name: qualification
-          contexts:
-            - name: qualification
-              apiUrl: ${RSTREAM_QUALIFICATION_API_URL}
-              engine: ${RSTREAM_QUALIFICATION_ENGINE}
-              projectEndpoint: ${RSTREAM_QUALIFICATION_PROJECT_ENDPOINT}
-          EOF
+          printf '%s' "$RSTREAM_QUALIFICATION_CONFIG_B64" \
+            | base64 --decode >"${config_directory}/config.yaml"
+          chmod 600 "${config_directory}/config.yaml"
+          if [[ ! -s "${config_directory}/config.yaml" ]]; then
+            printf 'Decoded qualification config is empty.\n' >&2
+            exit 1
+          fi
           mobility=off
           if [[ "$INPUT_MOBILITY" == "true" ]]; then
             mobility=producer
