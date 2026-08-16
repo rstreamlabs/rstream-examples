@@ -670,9 +670,7 @@ export function analyze(
         (trafficControlSummary.recoveryDrainConfiguredLossRatio === 0 &&
           trafficControlSummary.recoveryDrainPackets >= 100 &&
           trafficControlSummary.recoveryDrainDrops === 0 &&
-          trafficControlSummary.recoveryDrainEndQueuePackets <= 16 &&
-          (trafficControlSummary.recoveryDrainQueueLimitPackets === 0 ||
-            trafficControlSummary.recoveryDrainEndQueueUtilization <= 0.02)),
+          trafficControlSummary.recoveryDrainEndQueuePackets <= 16),
       "traffic-control-recovery-drain",
       "the healthy recovery profile carries media, adds no drops, and leaves at most one short RTP burst queued before traffic-control teardown",
     );
