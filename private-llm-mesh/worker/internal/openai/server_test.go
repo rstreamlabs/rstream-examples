@@ -3,6 +3,8 @@ package openai
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -11,9 +13,15 @@ import (
 	"github.com/rstreamlabs/rstream-examples/private-llm-mesh/worker/internal/llm"
 )
 
-type fakeChatter struct{ result *llm.Result }
+type fakeChatter struct {
+	result *llm.Result
+	err    error
+}
 
 func (f fakeChatter) Chat(_ context.Context, _, _ string, _ int, _ float32, onDelta func(string)) (*llm.Result, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
 	if onDelta != nil && len(f.result.ToolCalls) == 0 {
 		onDelta(f.result.Content)
 	}
@@ -23,7 +31,7 @@ func (f fakeChatter) Chat(_ context.Context, _, _ string, _ int, _ float32, onDe
 func (f fakeChatter) Stats() llm.Stats { return llm.Stats{Parallel: 2, InFlight: 1, Waiting: 0} }
 
 func newServer(result *llm.Result, modelID string) *Server {
-	return NewServer(fakeChatter{result}, modelID, 256, 0, time.Minute, nil)
+	return NewServer(fakeChatter{result: result}, modelID, 256, 0, time.Minute, nil)
 }
 
 func post(t *testing.T, srv *Server, body string) map[string]any {
@@ -94,6 +102,106 @@ func TestChatCompletionRejectsUnavailableModel(t *testing.T) {
 	srv.Handler().ServeHTTP(w, req)
 	if w.Code != 404 || !strings.Contains(w.Body.String(), `model \"mistral\" is not available`) {
 		t.Fatalf("unexpected unavailable-model response: %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestChatCompletionRejectsTrailingJSON(t *testing.T) {
+	srv := newServer(&llm.Result{Content: "Blue."}, "qwen")
+	req := httptest.NewRequest("POST", "/v1/chat/completions",
+		strings.NewReader(`{"model":"qwen","messages":[]} {}`))
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "one JSON object") {
+		t.Fatalf("trailing JSON response = %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestChatCompletionValidatesMessagesAndTools(t *testing.T) {
+	srv := newServer(&llm.Result{Content: "Blue."}, "qwen")
+	for name, body := range map[string]string{
+		"messages object": `{"model":"qwen","messages":{}}`,
+		"empty messages":  `{"model":"qwen","messages":[]}`,
+		"message scalar":  `{"model":"qwen","messages":["hi"]}`,
+		"missing role":    `{"model":"qwen","messages":[{"content":"hi"}]}`,
+		"tools object":    `{"model":"qwen","messages":[{"role":"user","content":"hi"}],"tools":{}}`,
+		"tool scalar":     `{"model":"qwen","messages":[{"role":"user","content":"hi"}],"tools":["bad"]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(body))
+			w := httptest.NewRecorder()
+			srv.Handler().ServeHTTP(w, req)
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("validation response = %d %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestChatCompletionBoundsGenerationParameters(t *testing.T) {
+	srv := newServer(&llm.Result{Content: "Blue."}, "qwen")
+	for name, body := range map[string]string{
+		"zero tokens":          `{"model":"qwen","messages":[{"role":"user"}],"max_tokens":0}`,
+		"excess tokens":        `{"model":"qwen","messages":[{"role":"user"}],"max_tokens":1048577}`,
+		"negative temperature": `{"model":"qwen","messages":[{"role":"user"}],"temperature":-0.1}`,
+		"excess temperature":   `{"model":"qwen","messages":[{"role":"user"}],"temperature":2.1}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(body))
+			w := httptest.NewRecorder()
+			srv.Handler().ServeHTTP(w, req)
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("bounds response = %d %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestChatCompletionBoundsRequestBody(t *testing.T) {
+	srv := newServer(&llm.Result{Content: "Blue."}, "qwen")
+	body := `{"model":"qwen","messages":[{"role":"user","content":"` + strings.Repeat("x", maxRequestBodyBytes) + `"}]}`
+	req := httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusRequestEntityTooLarge || !strings.Contains(w.Body.String(), "too large") {
+		t.Fatalf("oversized response = %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestChatCompletionReportsCapacityWithoutStartingWork(t *testing.T) {
+	srv := NewServer(fakeChatter{err: llm.ErrAtCapacity}, "qwen", 256, 0, time.Minute, nil)
+	req := httptest.NewRequest("POST", "/v1/chat/completions",
+		strings.NewReader(`{"model":"qwen","messages":[{"role":"user","content":"hi"}]}`))
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusTooManyRequests || !strings.Contains(w.Body.String(), "worker is at capacity") {
+		t.Fatalf("capacity response = %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestChatCompletionStreamDoesNotMaskWorkerFailureAsSuccess(t *testing.T) {
+	srv := NewServer(fakeChatter{err: errors.New("inference failed")}, "qwen", 256, 0, time.Minute, nil)
+	req := httptest.NewRequest("POST", "/v1/chat/completions",
+		strings.NewReader(`{"model":"qwen","messages":[{"role":"user","content":"hi"}],"stream":true}`))
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+	body := w.Body.String()
+	if !strings.Contains(body, `"error":{"code":500,"message":"inference failed"`) {
+		t.Fatalf("stream error was masked: %s", body)
+	}
+	if strings.Contains(body, `"finish_reason":"stop"`) {
+		t.Fatalf("failed stream reported a successful stop: %s", body)
+	}
+}
+
+func TestChatCompletionStreamDoesNotReportClientCancellationAsWorkerFailure(t *testing.T) {
+	srv := NewServer(fakeChatter{err: context.Canceled}, "qwen", 256, 0, time.Minute, nil)
+	req := httptest.NewRequest("POST", "/v1/chat/completions",
+		strings.NewReader(`{"model":"qwen","messages":[{"role":"user","content":"hi"}],"stream":true}`))
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+	body := w.Body.String()
+	if strings.Contains(body, `"error"`) || strings.Contains(body, `"finish_reason":"stop"`) {
+		t.Fatalf("canceled stream reported a terminal worker event: %s", body)
 	}
 }
 

@@ -1,9 +1,16 @@
 package webrtc
 
 import (
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/pion/interceptor"
+	"github.com/pion/interceptor/pkg/flexfec"
+	"github.com/pion/interceptor/pkg/gcc"
+	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
+	"github.com/pion/webrtc/v4/pkg/media"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/config"
 )
 
@@ -61,6 +68,60 @@ func TestPeerConnectionFactorySeedsTWCCWithInitialBitrate(t *testing.T) {
 	}
 }
 
+func TestAssociatedEstimatorEnforcesConfiguredMediaFloorAcrossLossController(t *testing.T) {
+	pacer := newMinimumBitratePacer(2_400_000, 2_400_000)
+	estimator, err := gcc.NewSendSideBWE(
+		gcc.SendSideBWEPacer(pacer),
+		gcc.SendSideBWEInitialBitrate(50_000),
+		gcc.SendSideBWEMinBitrate(2_400_000),
+		gcc.SendSideBWEMaxBitrate(9_600_000),
+	)
+	if err != nil {
+		t.Fatalf("create estimator: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := estimator.Close(); err != nil {
+			t.Errorf("close estimator: %v", err)
+		}
+	})
+	wrapped := &associatedStreamBandwidthEstimator{
+		SendSideBWE:         estimator,
+		minimumMediaBitrate: 2_000_000,
+		maximumMediaBitrate: 8_000_000,
+		pacer:               pacer,
+		protection: flexFECProtection{
+			mediaPackets:  5,
+			repairPackets: 1,
+		},
+	}
+	if raw := estimator.GetTargetBitrate(); raw != 50_000 {
+		t.Fatalf("raw Pion target = %d, want 50000", raw)
+	}
+	if effective := wrapped.GetTargetBitrate(); effective != 2_000_000 {
+		t.Fatalf("effective media target = %d, want 2000000", effective)
+	}
+	stats := wrapped.GetStats()
+	if raw, ok := stats["rawMediaTargetBitrate"].(int); !ok || raw != 50_000 {
+		t.Fatalf("raw media target = %v, want 50000", stats["rawMediaTargetBitrate"])
+	}
+	if raw, ok := stats["wireTargetBitrate"].(int); !ok || raw != 60_000 {
+		t.Fatalf("raw wire target = %v, want 60000", stats["wireTargetBitrate"])
+	}
+	if effective, ok := stats["effectiveWireTargetBitrate"].(int); !ok || effective != 2_400_000 {
+		t.Fatalf("effective wire target = %v, want 2400000", stats["effectiveWireTargetBitrate"])
+	}
+	callbackTarget := 0
+	wrapped.deliverCurrentBitrate(50_000, func(bitrate int) {
+		callbackTarget = bitrate
+	})
+	if callbackTarget != 2_000_000 {
+		t.Fatalf("callback media target = %d, want 2000000", callbackTarget)
+	}
+	if stale := wrapped.staleBitrateCallbacks.Load(); stale != 0 {
+		t.Fatalf("matching raw callback counted as stale %d times", stale)
+	}
+}
+
 func TestPeerConnectionFactoryKeepsTWCCProtocolWithoutEstimatorWhenAdaptiveIsOff(t *testing.T) {
 	cfg := config.Default()
 	factory, _, err := newPeerConnectionFactory(cfg)
@@ -76,5 +137,233 @@ func TestPeerConnectionFactoryKeepsTWCCProtocolWithoutEstimatorWhenAdaptiveIsOff
 	}()
 	if estimator != nil {
 		t.Fatal("expected no TWCC estimator when adaptive bitrate is disabled")
+	}
+}
+
+func TestFlexFECRepairPacketsTraverseTWCCAndGCC(t *testing.T) {
+	cfg := config.Default()
+	cfg.WebRTC.UseTURN = false
+	cfg.WebRTC.Adaptive.Enabled = true
+	cfg.WebRTC.Interceptors.FlexFEC = true
+	cfg.WebRTC.Interceptors.FlexFECMediaPackets = 5
+	cfg.WebRTC.Interceptors.FlexFECRepairPackets = 2
+	factory, codec, err := newPeerConnectionFactory(cfg)
+	if err != nil {
+		t.Fatalf("create peer connection factory: %v", err)
+	}
+	producer, estimator, err := factory.NewPeerConnection(5_000_000, webrtc.Configuration{})
+	if err != nil {
+		t.Fatalf("create producer peer connection: %v", err)
+	}
+	if estimator.GetTargetBitrate() != 5_000_000 {
+		t.Fatalf("media target = %d, want 5000000", estimator.GetTargetBitrate())
+	}
+	associated, ok := estimator.(*associatedStreamBandwidthEstimator)
+	if !ok {
+		t.Fatalf("estimator type = %T, want *associatedStreamBandwidthEstimator", estimator)
+	}
+	if raw := associated.SendSideBWE.GetTargetBitrate(); raw != 5_000_000 {
+		t.Fatalf("raw GCC media target = %d, want 5000000", raw)
+	}
+	pacer, ok := associated.pacer.delegate.(*tokenBucketPacer)
+	if !ok {
+		t.Fatalf("pacer type = %T, want *tokenBucketPacer", associated.pacer.delegate)
+	}
+	if wire := pacer.targetBitrateValue(); wire != 7_000_000 {
+		t.Fatalf("paced wire target = %d, want 7000000", wire)
+	}
+	if wire, ok := estimator.GetStats()["wireTargetBitrate"].(int); !ok || wire != 7_000_000 {
+		t.Fatalf("wire target = %v, want 7000000", estimator.GetStats()["wireTargetBitrate"])
+	}
+	defer func() {
+		_ = producer.Close()
+	}()
+	track, err := webrtc.NewTrackLocalStaticSample(codec, "video", "qualification")
+	if err != nil {
+		t.Fatalf("create producer track: %v", err)
+	}
+	if _, err := producer.AddTrack(track); err != nil {
+		t.Fatalf("add producer track: %v", err)
+	}
+	viewerMediaEngine := &webrtc.MediaEngine{}
+	if err := viewerMediaEngine.RegisterDefaultCodecs(); err != nil {
+		t.Fatalf("register viewer codecs: %v", err)
+	}
+	viewerInterceptors := &interceptor.Registry{}
+	if err := webrtc.ConfigureFlexFEC03(
+		webrtc.PayloadType(cfg.FlexFECPayloadType()),
+		viewerMediaEngine,
+		viewerInterceptors,
+	); err != nil {
+		t.Fatalf("configure viewer FlexFEC: %v", err)
+	}
+	if err := webrtc.RegisterDefaultInterceptors(viewerMediaEngine, viewerInterceptors); err != nil {
+		t.Fatalf("register viewer interceptors: %v", err)
+	}
+	viewerAPI := webrtc.NewAPI(
+		webrtc.WithMediaEngine(viewerMediaEngine),
+		webrtc.WithInterceptorRegistry(viewerInterceptors),
+	)
+	viewer, err := viewerAPI.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatalf("create viewer peer connection: %v", err)
+	}
+	defer func() {
+		_ = viewer.Close()
+	}()
+	if _, err := viewer.AddTransceiverFromKind(
+		webrtc.RTPCodecTypeVideo,
+		webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly},
+	); err != nil {
+		t.Fatalf("add viewer transceiver: %v", err)
+	}
+	offer, err := viewer.CreateOffer(nil)
+	if err != nil {
+		t.Fatalf("create offer: %v", err)
+	}
+	viewerGatheringComplete := webrtc.GatheringCompletePromise(viewer)
+	if err := viewer.SetLocalDescription(offer); err != nil {
+		t.Fatalf("set viewer local description: %v", err)
+	}
+	select {
+	case <-viewerGatheringComplete:
+	case <-time.After(5 * time.Second):
+		t.Fatal("viewer ICE gathering timed out")
+	}
+	if err := producer.SetRemoteDescription(*viewer.LocalDescription()); err != nil {
+		t.Fatalf("set producer remote description: %v", err)
+	}
+	answer, err := producer.CreateAnswer(nil)
+	if err != nil {
+		t.Fatalf("create answer: %v", err)
+	}
+	producerGatheringComplete := webrtc.GatheringCompletePromise(producer)
+	if err := producer.SetLocalDescription(answer); err != nil {
+		t.Fatalf("set producer local description: %v", err)
+	}
+	select {
+	case <-producerGatheringComplete:
+	case <-time.After(5 * time.Second):
+		t.Fatal("producer ICE gathering timed out")
+	}
+	if !strings.Contains(producer.LocalDescription().SDP, "flexfec-03") {
+		t.Fatal("producer answer did not negotiate FlexFEC-03")
+	}
+	connected := make(chan struct{}, 1)
+	producer.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+		if state == webrtc.PeerConnectionStateConnected {
+			select {
+			case connected <- struct{}{}:
+			default:
+			}
+		}
+	})
+	if err := viewer.SetRemoteDescription(*producer.LocalDescription()); err != nil {
+		t.Fatalf("set viewer remote description: %v", err)
+	}
+	select {
+	case <-connected:
+	case <-time.After(5 * time.Second):
+		t.Fatal("peer connection timed out")
+	}
+	sample := media.Sample{
+		Data:     []byte{0, 0, 0, 1, 0x65, 0x88, 0x84, 0x21},
+		Duration: time.Second / 30,
+	}
+	for index := 0; index < 20; index++ {
+		if err := track.WriteSample(sample); err != nil {
+			t.Fatalf("write protected sample %d: %v", index, err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(200 * time.Millisecond)
+	stats := estimator.GetStats()
+	if sent, ok := stats["pacerSentForwardErrorCorrection"].(uint64); !ok || sent < 8 {
+		t.Fatalf("paced FEC packets = %v, want at least 8", stats["pacerSentForwardErrorCorrection"])
+	}
+	if averageLoss, ok := stats["averageLoss"].(float64); ok && averageLoss > 0.01 {
+		t.Fatalf("loss estimator counted healthy FlexFEC traffic as %.2f%% loss", averageLoss*100)
+	}
+}
+
+func TestFlexFECWireBudgetRoundsWithoutUnderProvisioning(t *testing.T) {
+	tests := []struct {
+		mediaTarget int
+		protection  flexFECProtection
+		wireTarget  int
+	}{
+		{mediaTarget: 1, protection: flexFECProtection{mediaPackets: 5, repairPackets: 1}, wireTarget: 2},
+		{mediaTarget: 1_500_000, protection: flexFECProtection{mediaPackets: 5, repairPackets: 1}, wireTarget: 1_800_000},
+		{mediaTarget: 5_000_001, protection: flexFECProtection{mediaPackets: 5, repairPackets: 1}, wireTarget: 6_000_002},
+		{mediaTarget: 1_500_000, protection: flexFECProtection{mediaPackets: 5, repairPackets: 2}, wireTarget: 2_100_000},
+		{mediaTarget: 5_000_001, protection: flexFECProtection{mediaPackets: 5, repairPackets: 2}, wireTarget: 7_000_002},
+		{mediaTarget: 8_000_000, protection: flexFECProtection{mediaPackets: 110, repairPackets: 110}, wireTarget: 16_000_000},
+	}
+	for _, test := range tests {
+		if wireTarget := wireBitrate(test.mediaTarget, test.protection); wireTarget != test.wireTarget {
+			t.Fatalf("wire target for %d with %+v = %d, want %d", test.mediaTarget, test.protection, wireTarget, test.wireTarget)
+		}
+	}
+	if wireBitrate(5_000_000, flexFECProtection{}) != 5_000_000 {
+		t.Fatal("disabled FlexFEC changed the bitrate budget")
+	}
+}
+
+func TestFlexFECProtectionKeepsRepairWindowAndOverheadBounded(t *testing.T) {
+	protection := flexFECProtection{mediaPackets: 5, repairPackets: 1}
+	mediaPackets := make([]rtp.Packet, protection.mediaPackets)
+	for index := range mediaPackets {
+		mediaPackets[index].SequenceNumber = uint16(index)
+	}
+	coverage := flexfec.NewCoverage(mediaPackets, protection.repairPackets)
+	if coverage == nil {
+		t.Fatal("expected a valid FlexFEC protection map")
+	}
+	protectedSequences := make([]uint16, 0, protection.mediaPackets)
+	for repairIndex := uint32(0); repairIndex < protection.repairPackets; repairIndex++ {
+		iterator := coverage.GetCoveredBy(repairIndex)
+		for iterator.HasNext() {
+			packet := iterator.Next()
+			protectedSequences = append(protectedSequences, packet.SequenceNumber)
+		}
+	}
+	if len(protectedSequences) != int(protection.mediaPackets) {
+		t.Fatalf("protected media packets = %d, want %d", len(protectedSequences), protection.mediaPackets)
+	}
+	for index, sequence := range protectedSequences {
+		if sequence != uint16(index) {
+			t.Fatalf("protected sequence %d = %d", index, sequence)
+		}
+	}
+	if wireBitrate(5_000_000, protection) != 6_000_000 {
+		t.Fatal("bounded repair window changed the 20% wire overhead")
+	}
+}
+
+func TestAssociatedEstimatorSupersedesOutOfOrderBitrateCallback(t *testing.T) {
+	underlying, err := gcc.NewSendSideBWE(
+		gcc.SendSideBWEInitialBitrate(5_000_000),
+	)
+	if err != nil {
+		t.Fatalf("create bandwidth estimator: %v", err)
+	}
+	defer func() {
+		if err := underlying.Close(); err != nil {
+			t.Fatalf("close bandwidth estimator: %v", err)
+		}
+	}()
+	estimator := &associatedStreamBandwidthEstimator{
+		SendSideBWE: underlying,
+		protection:  flexFECProtection{mediaPackets: 5, repairPackets: 1},
+	}
+	delivered := 0
+	estimator.deliverCurrentBitrate(1_800_000, func(bitrate int) {
+		delivered = bitrate
+	})
+	if delivered != 5_000_000 {
+		t.Fatalf("delivered stale bitrate %d, want current bitrate 5000000", delivered)
+	}
+	if stale := estimator.staleBitrateCallbacks.Load(); stale != 1 {
+		t.Fatalf("stale callback count = %d, want 1", stale)
 	}
 }

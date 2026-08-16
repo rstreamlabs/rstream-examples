@@ -64,13 +64,20 @@ Served on the tunnel, OpenAI-compatible:
 - `GET /healthz` — liveness, model id, uptime, and load (`parallel`, `in_flight`,
   `waiting`) for the app's least-loaded routing.
 
+Chat bodies are bounded to 4 MiB. Messages and tools must retain their OpenAI
+array shape, `temperature` stays within 0–2, and one request may ask for at most
+1,048,576 completion tokens; the model context and generation deadline remain
+the practical lower limits. Malformed explicit environment values fail startup
+instead of silently falling back to a different runtime configuration.
+
 ## Concurrency
 
 A loaded model shares its weights across a pool of `--parallel` decoding contexts,
-so that many requests run at once (each context has its own KV cache). Requests
-beyond the pool queue for the next free context. Each turn is stateless — the
-context's KV cache is reset — and a request is aborted if the client disconnects
-or the `--max-gen-time` deadline passes.
+so that many requests run at once (each context has its own KV cache). At most
+`--max-queue` additional requests wait for a context; excess work fails fast with
+HTTP 429 so memory, sockets, and latency remain bounded. Each turn is stateless —
+the context's KV cache is reset — and a request is aborted if the client
+disconnects, the worker shuts down, or the `--max-gen-time` deadline passes.
 
 ## Flags
 
@@ -82,6 +89,7 @@ or the `--max-gen-time` deadline passes.
 | `--max-tokens` | `PLLM_MAX_TOKENS` | `0` | default response cap; `0` = until EOS or the context limit (per-request overridable) |
 | `--temp` | `PLLM_TEMP` | `0` | default temperature (0 = greedy) |
 | `--parallel` | `PLLM_PARALLEL` | `1` | concurrent decoding contexts (each holds its own KV cache) |
+| `--max-queue` | `PLLM_MAX_QUEUE` | `4` | maximum requests waiting for a decoding context before HTTP 429 |
 | `--max-gen-time` | `PLLM_MAX_GEN_TIME` | `5m` | max wall-clock time per response |
 | `--tunnel-name` | `PLLM_TUNNEL_NAME` | `private-llm-mesh` | published tunnel name |
 | `--labels` | `PLLM_LABELS` | – | `key=value,…` tunnel labels for discovery |

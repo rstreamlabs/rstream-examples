@@ -13,6 +13,7 @@ import (
 	"io"
 	stdlog "log"
 	"log/slog"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"os"
@@ -35,6 +36,32 @@ import (
 type labelFlags map[string]string
 
 type stringFlags []string
+
+const maxRstreamRetryInterval = time.Minute
+
+type permanentRstreamError struct {
+	err error
+}
+
+type connectedRstreamError struct {
+	err error
+}
+
+func (e *permanentRstreamError) Error() string {
+	return e.err.Error()
+}
+
+func (e *permanentRstreamError) Unwrap() error {
+	return e.err
+}
+
+func (e *connectedRstreamError) Error() string {
+	return e.err.Error()
+}
+
+func (e *connectedRstreamError) Unwrap() error {
+	return e.err
+}
 
 func (l *labelFlags) String() string {
 	if l == nil || len(*l) == 0 {
@@ -160,6 +187,8 @@ func main() {
 }
 
 func runRstreamRetryLoop(ctx context.Context, retryInterval time.Duration, logger *slog.Logger, runOnce func() error) error {
+	failures := 0
+	failureLogged := false
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -168,12 +197,27 @@ func runRstreamRetryLoop(ctx context.Context, retryInterval time.Duration, logge
 		if err == nil || !retryableRstreamError(err) {
 			return err
 		}
-		logger.Warn("rstream tunnel disconnected; reconnecting", "error", err, "retry_in", retryInterval)
-		timer := time.NewTimer(retryInterval)
+		var connectedErr *connectedRstreamError
+		if errors.As(err, &connectedErr) {
+			failures = 0
+			failureLogged = false
+		}
+		failures++
+		delay := rstreamRetryDelay(retryInterval, failures)
+		if !failureLogged {
+			logger.Warn("rstream tunnel unavailable; retrying", "error", err, "retry_in", delay)
+			failureLogged = true
+		}
+		timer := time.NewTimer(delay)
 		select {
 		case <-timer.C:
 		case <-ctx.Done():
-			_ = timer.Stop()
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
 			return ctx.Err()
 		}
 	}
@@ -181,6 +225,10 @@ func runRstreamRetryLoop(ctx context.Context, retryInterval time.Duration, logge
 
 func retryableRstreamError(err error) bool {
 	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	var permanentErr *permanentRstreamError
+	if errors.As(err, &permanentErr) {
 		return false
 	}
 	var engineErr *rstream.EngineError
@@ -192,6 +240,25 @@ func retryableRstreamError(err error) bool {
 			strings.TrimSpace(engineErr.Message) == "Hostname is already in use."
 	}
 	return true
+}
+
+func rstreamRetryDelay(base time.Duration, failures int) time.Duration {
+	delay := base
+	for attempt := 1; attempt < failures && delay < maxRstreamRetryInterval; attempt++ {
+		if delay > maxRstreamRetryInterval/2 {
+			delay = maxRstreamRetryInterval
+			break
+		}
+		delay *= 2
+	}
+	if delay > maxRstreamRetryInterval {
+		delay = maxRstreamRetryInterval
+	}
+	jitter := delay / 4
+	if jitter == 0 {
+		return delay
+	}
+	return delay - jitter + time.Duration(rand.Int64N(int64(jitter)+1))
 }
 
 type runOptions struct {
@@ -211,7 +278,7 @@ func runRstream(ctx context.Context, handler http.Handler, opts runOptions) erro
 	// The Go SDK resolves the active rstream context used by this gateway.
 	client, err := rsconfig.NewClientFromEnv()
 	if err != nil {
-		return fmt.Errorf("load rstream configuration: %w", err)
+		return &permanentRstreamError{err: fmt.Errorf("load rstream configuration: %w", err)}
 	}
 	ctrl, err := client.Connect(ctx, nil)
 	if err != nil {
@@ -261,7 +328,11 @@ func runRstream(ctx context.Context, handler http.Handler, opts runOptions) erro
 	}
 	// The datagram tunnel is exposed as a PacketConn for quic-go.
 	packetConn := rstream.PacketConnFromPacketListener(datagramTunnel)
-	return serveH3(ctx, packetConn, handler)
+	err = serveH3(ctx, packetConn, handler)
+	if err == nil {
+		return nil
+	}
+	return &connectedRstreamError{err: err}
 }
 
 func runLocal(ctx context.Context, addr string, handler http.Handler, opts runOptions) error {

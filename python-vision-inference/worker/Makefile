@@ -23,6 +23,8 @@ run: build
 
 test: build
 	PYTHONPATH=$(PYTHONPATH) $(PY) -m py_compile worker.py ../shared/protocol.py
+	PYTHONPATH=$(PYTHONPATH) $(PY) -m unittest discover -s . -p 'test_*.py'
+	PYTHONPATH=$(PYTHONPATH) $(PY) -m unittest discover -s ../shared -p 'test_*.py'
 	PYTHONPATH=$(PYTHONPATH) $(PY) worker.py --help >/dev/null
 	$(PIP) check
 

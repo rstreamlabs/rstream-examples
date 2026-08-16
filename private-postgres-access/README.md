@@ -69,3 +69,11 @@ bytestream tunnels for direct engine deployments.
 Use a dedicated database role for tunneled workflows, and keep normal database
 authentication enabled. rstream controls access to the network path; PostgreSQL
 still owns database identity, authorization, and audit behavior.
+
+## Qualification evidence
+
+The optional [`qualification`](qualification/) pack goes beyond the quick
+start. It verifies PostgreSQL TLS, transactions, bulk copy, concurrent sessions,
+query cancellation, and recovery after independent database and tunnel
+interruptions. The normal `make run` and `make client-port` workflow does not
+depend on the qualification toolchain.

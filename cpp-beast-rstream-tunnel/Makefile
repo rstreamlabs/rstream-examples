@@ -11,7 +11,7 @@ BIN_DIR := $(OUT)/bin
 BINARY := $(BIN_DIR)/cpp_beast_rstream_tunnel
 SOURCES := $(shell find src -name '*.cpp' -o -name '*.h' -o -name '*.hpp') CMakeLists.txt conanfile.py
 
-.PHONY: build run check-conan-remote clean verify
+.PHONY: build run check-conan-remote clean verify verify-runtime
 
 build: $(BINARY)
 
@@ -30,8 +30,17 @@ $(BINARY): $(SOURCES) check-conan-remote | $(BIN_DIR)
 	@echo "Binary available at: $(CURDIR)/$(BINARY)"
 
 verify:
+	python3 -m py_compile \
+		test/runtime.py test/test_runtime.py \
+		qualification/run.py qualification/test_run.py
+	PYTHONPATH=test python3 -m unittest discover -s test -p 'test_*.py'
+	PYTHONPATH=qualification python3 -m unittest discover -s qualification -p 'test_*.py'
 	$(MAKE) clean
 	$(MAKE) build
+
+verify-runtime: build
+	@test -n "$(RSTREAM_RUNTIME_CONTEXT)" || { echo "RSTREAM_RUNTIME_CONTEXT is required."; exit 1; }
+	RSTREAM_RUNTIME_CONTEXT="$(RSTREAM_RUNTIME_CONTEXT)" python3 test/runtime.py
 
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)

@@ -92,6 +92,7 @@ func (s *Server) mountViewerRoutes(mux *http.ServeMux) {
 		mux.HandleFunc("GET /{$}", s.handleIndex)
 		mux.HandleFunc("GET /app.js", s.handleStatic)
 		mux.HandleFunc("GET /app.css", s.handleStatic)
+		mux.HandleFunc("GET /favicon.ico", s.handleFavicon)
 	}
 }
 
@@ -121,6 +122,11 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func (s *Server) handleFavicon(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleAPIStatus(w http.ResponseWriter, _ *http.Request) {

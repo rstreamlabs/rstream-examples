@@ -10,6 +10,22 @@ Treat this repository as a reference base rather than a fixed product. The profi
 
 If you want a guided walkthrough of the architecture and the `rstream-go` integration, see the associated guide: [Build Device-to-Browser Video Streaming with WebRTC and rstream](https://rstream.io/guides/build-device-to-browser-webrtc-streaming-with-rstream).
 
+## Integration paths
+
+This producer is the application-controlled path for products that combine
+browser signaling, managed TURN, ICE recovery, congestion-aware encoding,
+bounded media queues, packet repair, and session diagnostics. `rstream-go`
+places tunnel lifecycle, cancellation, and recovery policy inside the same Go
+process as the media application.
+
+The repository also includes a pipeline-first path in
+[`netcat-media-streaming`](../../netcat-media-streaming/). It connects
+GStreamer or FFmpeg to `rstream nc` through standard input and output, which
+fits private point-to-point streams whose media pipeline already owns buffering
+and recovery. Both paths use the same rstream network: the CLI keeps the
+integration compact, while the SDK exposes the controls required by a complete
+video product.
+
 ## Architecture
 
 The local HTTP server serves the embedded page and the small API surface the page needs: signaling, TURN bootstrap, and status endpoints. On the media side, a GStreamer pipeline produces H.264 or AV1 access units and passes them to a WebRTC sender built on top of Pion. `rstream-go` publishes that local server through an HTTP tunnel and keeps the public URL available.
@@ -122,6 +138,9 @@ The repository ships a small set of reference YAML files so you can start from k
 - `config.macos-webcam.h264.yaml` and `config.macos-webcam.av1.yaml` are the macOS webcam variants built around `avfvideosrc`.
 - `config.raspberry-pi-camera.h264.yaml` and `config.raspberry-pi-camera.av1.yaml` are the Raspberry Pi variants built around `libcamerasrc`.
 - The `.twcc-gcc.yaml` variants enable adaptive bitrate. The plain variants keep TWCC enabled but leave the encoder on a fixed target bitrate.
+- `config.test-pattern.h264.twcc-gcc-flexfec.yaml` is the loss-resilient
+  reference used by the direct-versus-rstream qualification. It adds proactive
+  FlexFEC to TWCC/GCC, NACK, and RTX without changing the normal quick start.
 
 Use those files as starting points. On a real device you will often need to adjust the device index, resolution, frame rate, or encoder settings.
 
@@ -200,7 +219,36 @@ configuration error because the viewer assets are intentionally absent.
 
 ### TURN and ICE
 
-`turn.ttl` controls the lifetime of TURN credentials minted by the local process. `webrtc.useTurn` controls whether the Go peer itself uses the managed `rstream` TURN service. The browser can still be forced into direct or relay-only mode from the viewer page, but the default path keeps both peers on the same TURN service when relay is required.
+`turn.ttl` controls the lifetime of TURN credentials minted by the local
+process. An optional `turn.transports` allowlist can restrict both the embedded
+browser response and the Go peer to `udp`, `tcp`, `dtls`, and/or `tls`. Empty
+means all URLs returned by rstream. This is primarily a deployment-policy and
+diagnostic control for networks that prohibit particular transports; prefer all
+transports unless the target network has been measured.
+
+```yaml
+turn:
+  ttl: 10m
+  transports: [udp, tcp, dtls, tls]
+```
+
+`webrtc.useTurn` controls whether the Go peer itself uses the managed `rstream`
+TURN service. The browser can still be forced into direct or relay-only mode
+from the viewer page, but the default path keeps both peers on the same TURN
+service when relay is required.
+
+`webrtc.iceTransportPolicy` controls candidate selection on the Go peer. `all`
+is the default and lets ICE prefer a direct candidate while retaining TURN
+fallbacks. `relay` accepts only relay candidates and therefore requires
+`webrtc.useTurn: true`; use it for egress-restricted deployments and
+qualification, not as an accidental default because every media packet then
+crosses TURN.
+
+```yaml
+webrtc:
+  useTurn: true
+  iceTransportPolicy: all # or relay
+```
 
 The signaling path uses Trickle ICE: both peers exchange candidates as soon as they are discovered. If the selected network path disappears during playback, the browser keeps the same WebRTC session and sends a new offer with ICE restart enabled. The producer keeps the session open during that recovery window and only closes it if ICE does not reconnect.
 
@@ -220,7 +268,27 @@ On macOS webcam pipelines, keep `format=I420` before `av1enc`. That avoids forma
 
 `twcc` enables Transport-Wide Congestion Control feedback. `nack` enables packet-loss feedback. `rtx` enables retransmission payloads so those loss reports can actually be repaired. The reference profiles keep all three enabled because that combination is practical and broadly supported.
 
-`flexFEC` stays off by default. It is available as an opt-in, but it adds overhead and is less generally useful than `TWCC + NACK + RTX`.
+`flexFEC` stays off in the quick-start profiles because proactive repair spends
+bandwidth even when a link is healthy. The loss-resilient reference enables it
+at two repair packets per four media packets. Pion interleaves the media across
+two independent XOR groups, so each repair can recover one missing packet in
+its own group; this is different from recovering any two losses in the complete
+window. Shorter groups reduced late reactive repair and visible freezes in the
+controlled loss comparison. The sender includes the 50% packet overhead in its
+wire-rate congestion budget rather than filling the link with encoder traffic
+and appending FEC on top.
+
+GCC keeps its target in media bitrate because Chromium acknowledges primary and
+RTX packets through TWCC, but not the FlexFEC stream. The pacer converts that
+media target into the protected wire budget and schedules media plus repair
+inside it. Keeping the two units at their respective boundaries lets GCC
+compare its target with the traffic it actually observes and rediscover
+available capacity after congestion clears.
+
+Use `config.test-pattern.h264.twcc-gcc-flexfec.yaml` when loss resilience is the
+goal. Use a NACK/RTX-only adaptive profile when capacity is scarce and measured
+loss/RTT show that reactive repair is sufficient. In both cases, qualify the
+real target network rather than treating the reference ratio as universal.
 
 ### Adaptive bitrate
 
@@ -228,20 +296,136 @@ On macOS webcam pipelines, keep `format=I420` before `av1enc`. That avoids forma
 
 TWCC is Transport-Wide Congestion Control feedback from the browser. GCC is Google Congestion Control. In this sample, the transport estimate comes from the standard Pion TWCC/GCC path, and the application then applies bounded bitrate updates to the active `x264enc` or `av1enc` instance.
 
-The backend is intentionally narrow. It changes bitrate only. It does not rebuild the pipeline, renegotiate resolution, or try to handle multiple viewers through one shared encoder. For that reason it is only valid when one feedback loop controls one encoder, which means either `media.mode: per-viewer` or `webrtc.maxViewers: 1`.
+The configured minimum is applied to both the encoder controller and the RTP
+pacer. Pion's public send-side minimum bounds its delay controller, while its
+loss controller has a separate internal 100 kbit/s floor. Without an aligned
+pacer floor, a loss event can pace far below the encoder minimum and accumulate
+an unbounded queue even though the encoder has already respected the
+application profile. The small pacer adapter in this sample prevents that
+split-brain state; the raw loss and delay targets remain exposed in the session
+diagnostics so qualification can distinguish a conservative loss estimate from
+the effective encoder and pacing limits.
 
-That is also a deliberate simplification of the sample. In a real deployment it can be useful to react not only on the encoder target, but also on the source itself by reducing frame rate, resolution, or capture profile. This example stops at encoder modulation because it keeps the media path readable and avoids pipeline rebuilds inside the reference implementation.
+The pacer permits at most 225 ms of transient backlog at the sustained rate. If
+a source overshoot exceeds that envelope, the sender drops complete encoded
+access units before RTP packetization and waits for a key frame before
+resuming. The request is deferred until the queue has room for the most recent
+key-frame size plus 25% headroom; this avoids generating a recovery frame only
+to reject it at the same admission boundary. The pacer neither deletes already
+packetized RTP nor bursts above GCC's budget to make a local queue metric look
+healthy. This avoids artificial RTP gaps, partial-frame corruption, and
+key-frame storms while keeping hard RTP queue exhaustion actionable. Complete
+frame drops, actual packet residence time, prospective sustained-rate backlog,
+the key-frame reserve, and packet-level rejections are exposed in the session
+diagnostics and qualification report.
+
+The pacing envelope reserves up to 1.5× GCC's media target for encoded-frame
+bursts and packet repair. FlexFEC consumes that same allowance. With the
+reference `2/4` ratio, the protected wire target is already 1.5× the media
+target, so the pacer does not apply a second multiplier. Lighter protection
+leaves the unused share available to packetization and occasional RTX; a
+larger repair ratio makes the protected wire target the floor. This shared
+budget drains ordinary bursts without turning repair into persistent local
+congestion. The 225 ms admission ceiling and complete-access-unit gate keep
+the allowance from becoming unbounded buffering.
+
+Material target decreases are applied to the encoder immediately when fresh
+feedback requires them. Callback bursts are coalesced to the newest value, and
+the controller re-reads GCC's current target before every periodic decision so
+an out-of-order callback can never apply a stale increase. Increases remain
+limited by `updateInterval` and bounded steps. This keeps the encoder aligned
+with an urgent pacer reduction without letting optimistic feedback repeatedly
+reconfigure it or produce an abrupt quality spike. New access units continue to
+use the sustained target for admission. Already packetized units keep their RTP
+sequence continuity and drain only at the current GCC budget; the report
+records the estimator-induced backlog separately from actual packet residence
+time so a target decrease cannot hide bufferbloat behind a derived queue value.
+
+Transport-wide sequence numbers are assigned at actual pacer egress, after the
+bounded repair-priority scheduler has chosen the next packet. Assigning them
+before that scheduler would turn intentional RTX prioritization into apparent
+packet loss at the receiver. Primary and RTX packets share this contiguous
+sequence space; FlexFEC remains outside it because Chromium does not report
+that repair stream through TWCC. The qualification report cross-checks the
+resulting feedback loss against independent Linux traffic-control counters.
+
+Pion publishes target changes asynchronously. A late callback may therefore
+carry a value older than the estimator's current target. The adapter always
+re-reads the locked current target when delivering a callback and counts
+superseded values, so callback scheduling cannot roll the encoder back to a
+stale bitrate.
+
+The backend governs encoder bitrate within an established WebRTC session.
+Resolution, frame rate, and capture profile remain stable, which keeps the
+transport feedback loop measurable and avoids pipeline rebuilds during a
+session. One feedback loop therefore controls one encoder: use
+`media.mode: per-viewer` or set `webrtc.maxViewers: 1`. Products that must span a
+wider capacity range can add a measured source ladder above this backend.
 
 The main settings are:
 
 - `webrtc.initialBitrateKbps`, which seeds the sender before the first TWCC reports arrive
 - `webrtc.adaptive.enabled`, which turns adaptation on or off
 - `webrtc.adaptive.backend`, which selects the backend
-- `webrtc.adaptive.twccGCC.minBitrateKbps` and `maxBitrateKbps`, which define the allowed range
+- `webrtc.adaptive.twccGCC.minBitrateKbps` and `maxBitrateKbps`, which define the allowed range (500–8000 kbit/s is supported; the 1080p30 H.264 examples keep a quality-protecting 2000 kbit/s floor)
 - `webrtc.adaptive.twccGCC.updateInterval`, which sets how often bitrate changes may be applied
-- `webrtc.adaptive.twccGCC.changeThresholdPct`, `maxIncreasePct`, and `maxIncreaseStepKbps`, which control how aggressively the encoder target moves
+- `webrtc.adaptive.twccGCC.changeThresholdPct` and `decreaseThresholdPct`, which keep small estimator fluctuations from reconfiguring the encoder while preserving the available pacing headroom; startup validation rejects a decrease threshold that the configured FlexFEC ratio cannot safely absorb
+- `webrtc.adaptive.twccGCC.maxIncreasePct` and `maxIncreaseStepKbps`, which bound each progressive recovery step
+- `webrtc.adaptive.twccGCC.maxIncreaseLossPct`, which prevents a delayed estimator increase from raising the encoder target while measured packet loss is still above the configured recovery threshold
 
-With the reference settings, the sender starts at `5 Mbps` and may adapt within the `1.5–8 Mbps` range. The viewer page exposes the codec, the enabled recovery path, the adaptive backend state, the current TWCC target, and the current encoder target so you can validate the behavior without immediately jumping into browser internals.
+#### Reference operating envelope
+
+The reference settings form one coherent 1080p30 qualification profile. Its
+limits were exercised together across the direct and relay matrices; changing
+the codec, frame cadence, resolution, CPU budget, or network envelope calls for
+a new qualification run. Each report records the Git revision that produced
+the result, so the measured trade-offs remain tied to an exact implementation.
+
+| Setting                |                                              Reference value | Reason and trade-off                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------- | -----------------------------------------------------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frame size and cadence |                                          1920x1080 at 30 fps | Exercises a real live-video workload while remaining reproducible. If the link cannot sustain the quality floor, add a measured resolution/frame-rate ladder instead of compressing this fixed profile indefinitely.                                                                                                                                                                     |
+| x264 latency controls  |                       `zerolatency`, `veryfast`, `bframes=0` | Avoids frame reordering and deep encoder buffering. The `zerolatency` tune owns its internally coherent lookahead and threading choices; duplicating those private tune settings in the pipeline made the profile harder to reason about without establishing a measured benefit. A slower preset may improve compression, but it spends CPU and can add latency on constrained devices. |
+| Key-frame policy       |                               `key-int-max=60`, `scenecut=0` | Gives the qualification source a deterministic maximum two-second GOP at 30 fps, so recovery runs are comparable. Content-driven production encoders may re-enable scene cuts after measuring their key-frame bursts.                                                                                                                                                                    |
+| Encoder VBV            |                                                       250 ms | Bounds the encoder-side rate reservoir while retaining enough room for normal frame-size variation. It is one component of latency, not a promise that end-to-end delay is 250 ms.                                                                                                                                                                                                       |
+| Initial encoder target |                                                     5 Mbit/s | Starts 1080p with useful quality before TWCC has accumulated enough feedback. A high startup target can briefly overshoot a smaller access link, which is why the pacer still enforces the current wire budget.                                                                                                                                                                          |
+| Adaptive range         |                                                   2–8 Mbit/s | The 2 Mbit/s floor protects fixed 1080p quality observed through x264 QP; the ceiling bounds CPU and link demand. Operating below the floor calls for a source ladder, not a hidden quality collapse.                                                                                                                                                                                    |
+| Update hysteresis      |                      2 s, 10% increases, immediate decreases | Filters optimistic estimator noise while keeping the encoder aligned with the protected-wire pacing budget. Decreases bypass the periodic increase gate; increases remain progressive.                                                                                                                                                                                                   |
+| Increase limit         |                           15%, at most 500 kbit/s per update | Makes recovery progressive and observable instead of creating a large optimistic burst after congestion clears.                                                                                                                                                                                                                                                                          |
+| Pacing and admission   | Shared 1.5x media envelope, 225 ms sustained-backlog ceiling | Media, proactive repair, and retransmissions share one pacing allowance. The admission ceiling preserves 150 ms of scheduling margin under the measured 375 ms packet-residence budget. Over-budget access units are rejected whole before RTP packetization.                                                                                                                            |
+| Repair scheduling      |        One repair packet per scheduling burst; 225 ms expiry | Gives RTX a prompt opportunity without starving current media, and discards a repair packet once its playback value is lower than the latency it would add.                                                                                                                                                                                                                              |
+| FlexFEC                |                    Two repair packets per four media packets | Adds 50% as many proactive repair packets as media packets to protect lossy, higher-RTT paths where reactive RTX often arrives after the playout window. Leave it disabled when measured NACK/RTX recovery is sufficient or the link cannot afford the overhead.                                                                                                                         |
+
+With the 1080p30 H.264 reference settings, the sender starts at `5 Mbps` and may
+adapt within the `2–8 Mbps` range. Qualification showed that allowing the fixed
+1080p encoder to fall to 1.2–1.5 Mbps could preserve frame delivery while
+pushing x264 into visibly destructive quantization. The reference therefore
+protects image quality with a 2 Mbps media floor and qualifies the full
+NACK/RTX/FlexFEC profile on a 4 Mbps wire budget. A deployment that must operate
+below that point should add a measured resolution/frame-rate ladder instead of
+silently degrading a fixed 1080p stream. The viewer page exposes the codec, the
+enabled recovery path, the adaptive backend state, the current TWCC target, and
+the current encoder target so you can validate the behavior without immediately
+jumping into browser internals.
+
+For repeatable evidence rather than an interactive spot check, use
+`qualification/adaptive-streaming/run-matrix.sh`. The isolated harness compares
+the rstream TURN path with a direct Docker reference under the same selective
+media impairment and records bitrate, controller internals, decoded frame rate,
+freezes, NACK/RTX/FEC activity, RTT, continuity, and recovery. The isolated
+direct-path filter follows the peer address rather than the first ICE port, so
+a legitimate candidate-pair switch cannot escape later impairment phases. A
+single `qualification/adaptive-streaming/run.sh` invocation remains useful
+while debugging one path/profile combination. The normal quick start does not
+require Docker or the qualification tooling.
+
+The comparison does not equate frame delivery with visual quality. The pinned
+qualification encoder reports its per-frame H.264 quantization parameter (QP),
+while Chromium independently reports decoded frame rate, freezes, resolution,
+and decode cost. The checks bound both the absolute sender QP and the
+relay-to-direct QP gap while requiring 1920x1080 output throughout the run. This
+catches a stream that remains at 30 fps only by compressing the image too
+aggressively, without pretending that sender QP alone is an end-to-end image
+similarity score.
 
 ### Viewer limits and pipeline allocation
 

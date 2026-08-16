@@ -31,7 +31,9 @@ run: build
 test: $(PY_STAMP) $(NPM_STAMP)
 	$(NPM) run typecheck
 	PYTHONPATH=$(PYTHONPATH) $(PY) -m py_compile device.py ../shared/protocol.py
-	PYTHONPATH=$(PYTHONPATH) $(PY) device.py --help >/dev/null
+	PYTHONPATH=$(PYTHONPATH) $(PY) -m unittest discover -s . -p 'test_*.py'
+	PYTHONPATH=$(PYTHONPATH) $(PY) -m unittest discover -s ../shared -p 'test_*.py'
+	@output="$$(PYTHONPATH=$(PYTHONPATH) $(PY) device.py --help 2>&1 >/dev/null)"; test -z "$$output" || { echo "Unexpected runtime diagnostics:" >&2; echo "$$output" >&2; exit 1; }
 	$(PIP) check
 
 verify: test build

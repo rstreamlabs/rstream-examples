@@ -3,11 +3,15 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,6 +53,26 @@ func TestRunRstreamRetryLoopRejectsConfigurationError(t *testing.T) {
 	}
 }
 
+func TestRunRstreamRetryLoopRejectsMissingContextWithoutRetry(t *testing.T) {
+	t.Setenv("RSTREAM_CONFIG", filepath.Join(t.TempDir(), "config.yaml"))
+	t.Setenv("RSTREAM_CONTEXT", "missing")
+	t.Setenv("RSTREAM_ENGINE", "")
+	t.Setenv("RSTREAM_AUTHENTICATION_TOKEN", "")
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	attempts := 0
+	err := runRstreamRetryLoop(ctx, time.Millisecond, discardLogger(), func() error {
+		attempts++
+		return runRstream(ctx, http.NotFoundHandler(), runOptions{logger: discardLogger()})
+	})
+	if err == nil || !strings.Contains(err.Error(), `context "missing" not found`) {
+		t.Fatalf("runRstreamRetryLoop() error = %v, want missing context", err)
+	}
+	if attempts != 1 {
+		t.Fatalf("runRstreamRetryLoop() attempts = %d, want 1", attempts)
+	}
+}
+
 func TestRunRstreamRetryLoopStopsWhileWaiting(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	attempted := make(chan struct{})
@@ -68,6 +92,71 @@ func TestRunRstreamRetryLoopStopsWhileWaiting(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("runRstreamRetryLoop() did not stop after cancellation")
+	}
+}
+
+func TestRunRstreamRetryLoopCoalescesFailuresAndResetsAfterConnection(t *testing.T) {
+	var output bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&output, nil))
+	errorsByAttempt := []error{
+		&connectedRstreamError{err: errors.New("first disconnect")},
+		errors.New("reconnect failed"),
+		&connectedRstreamError{err: errors.New("second disconnect")},
+		nil,
+	}
+	attempts := 0
+	err := runRstreamRetryLoop(t.Context(), time.Nanosecond, logger, func() error {
+		err := errorsByAttempt[attempts]
+		attempts++
+		return err
+	})
+	if err != nil {
+		t.Fatalf("runRstreamRetryLoop() error = %v", err)
+	}
+	if attempts != len(errorsByAttempt) {
+		t.Fatalf("runRstreamRetryLoop() attempts = %d, want %d", attempts, len(errorsByAttempt))
+	}
+	if got := strings.Count(output.String(), "rstream tunnel unavailable; retrying"); got != 2 {
+		t.Fatalf("retry warnings = %d, want 2; output = %q", got, output.String())
+	}
+}
+
+func TestRunRstreamRetryLoopBoundsCallsDuringSustainedFailure(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Millisecond)
+	defer cancel()
+	attempts := 0
+	err := runRstreamRetryLoop(ctx, 20*time.Millisecond, discardLogger(), func() error {
+		attempts++
+		return errors.New("engine unavailable")
+	})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("runRstreamRetryLoop() error = %v, want deadline exceeded", err)
+	}
+	if attempts < 2 || attempts > 4 {
+		t.Fatalf("runRstreamRetryLoop() attempts = %d, want 2..4", attempts)
+	}
+}
+
+func TestRstreamRetryDelayIsJitteredAndCapped(t *testing.T) {
+	tests := []struct {
+		name     string
+		failures int
+		ceiling  time.Duration
+		floor    time.Duration
+	}{
+		{name: "first", failures: 1, floor: 750 * time.Millisecond, ceiling: time.Second},
+		{name: "third", failures: 3, floor: 3 * time.Second, ceiling: 4 * time.Second},
+		{name: "capped", failures: 20, floor: 45 * time.Second, ceiling: time.Minute},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for range 100 {
+				delay := rstreamRetryDelay(time.Second, tt.failures)
+				if delay < tt.floor || delay > tt.ceiling {
+					t.Fatalf("rstreamRetryDelay() = %s, want %s..%s", delay, tt.floor, tt.ceiling)
+				}
+			}
+		})
 	}
 }
 

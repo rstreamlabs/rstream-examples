@@ -2,10 +2,12 @@ package webrtc
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/pkg/cc"
+	"github.com/pion/interceptor/pkg/flexfec"
 	"github.com/pion/interceptor/pkg/gcc"
 	"github.com/pion/logging"
 	"github.com/pion/webrtc/v4"
@@ -21,6 +23,17 @@ type bandwidthEstimator interface {
 type peerConnectionFactory struct {
 	cfg   config.Config
 	codec webrtc.RTPCodecCapability
+}
+
+const transportCCHeaderExtensionURI = "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
+
+type flexFECProtection struct {
+	mediaPackets  uint32
+	repairPackets uint32
+}
+
+func (p flexFECProtection) enabled() bool {
+	return p.mediaPackets > 0 && p.repairPackets > 0
 }
 
 func newPeerConnectionFactory(cfg config.Config) (*peerConnectionFactory, webrtc.RTPCodecCapability, error) {
@@ -71,18 +84,37 @@ func (f *peerConnectionFactory) NewPeerConnection(
 	if f.cfg.WebRTC.Interceptors.TWCC && f.cfg.AdaptiveBackend() != config.AdaptiveBackendOff {
 		estimators = make(chan bandwidthEstimator, 1)
 		congestionController, err := cc.NewInterceptor(func() (cc.BandwidthEstimator, error) {
+			protection := f.flexFECProtection()
+			minimumMediaBitrateBps := f.cfg.WebRTC.Adaptive.TWCCGCC.MinBitrateKbps * 1000
+			maximumMediaBitrateBps := f.cfg.WebRTC.Adaptive.TWCCGCC.MaxBitrateKbps * 1000
+			pacer := newMinimumBitratePacerWithProtection(
+				initialBitrateBps,
+				minimumMediaBitrateBps,
+				protection,
+			)
 			options := []gcc.Option{
 				gcc.WithLoggerFactory(newPionLoggerFactory(f.cfg.Logging.Verbose)),
+				gcc.SendSideBWEPacer(pacer),
 			}
 			if initialBitrateBps > 0 {
 				options = append(options, gcc.SendSideBWEInitialBitrate(initialBitrateBps))
 			}
 			options = append(
 				options,
-				gcc.SendSideBWEMinBitrate(f.cfg.WebRTC.Adaptive.TWCCGCC.MinBitrateKbps*1000),
-				gcc.SendSideBWEMaxBitrate(f.cfg.WebRTC.Adaptive.TWCCGCC.MaxBitrateKbps*1000),
+				gcc.SendSideBWEMinBitrate(minimumMediaBitrateBps),
+				gcc.SendSideBWEMaxBitrate(maximumMediaBitrateBps),
 			)
-			return gcc.NewSendSideBWE(options...)
+			estimator, err := gcc.NewSendSideBWE(options...)
+			if err != nil {
+				return nil, err
+			}
+			return &associatedStreamBandwidthEstimator{
+				SendSideBWE:         estimator,
+				minimumMediaBitrate: minimumMediaBitrateBps,
+				maximumMediaBitrate: maximumMediaBitrateBps,
+				pacer:               pacer,
+				protection:          protection,
+			}, nil
 		})
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create the congestion controller: %w", err)
@@ -97,6 +129,8 @@ func (f *peerConnectionFactory) NewPeerConnection(
 			webrtc.PayloadType(f.cfg.FlexFECPayloadType()),
 			mediaEngine,
 			interceptors,
+			flexfec.NumMediaPackets(f.cfg.FlexFECMediaPackets()),
+			flexfec.NumFECPackets(f.cfg.FlexFECRepairPackets()),
 		); err != nil {
 			return nil, nil, fmt.Errorf("failed to enable FlexFEC: %w", err)
 		}
@@ -137,6 +171,154 @@ func (f *peerConnectionFactory) NewPeerConnection(
 		_ = peerConnection.Close()
 		return nil, nil, fmt.Errorf("failed to initialize the TWCC bandwidth estimator")
 	}
+}
+
+type associatedStreamBandwidthEstimator struct {
+	*gcc.SendSideBWE
+	minimumMediaBitrate   int
+	maximumMediaBitrate   int
+	pacer                 *minimumBitratePacer
+	protection            flexFECProtection
+	staleBitrateCallbacks atomic.Uint64
+	twccFeedbackPackets   atomic.Uint64
+	twccMalformedFeedback atomic.Uint64
+	twccPaddingStatuses   atomic.Uint64
+	twccReportedLost      atomic.Uint64
+	twccReportedStatuses  atomic.Uint64
+}
+
+func (e *associatedStreamBandwidthEstimator) GetTargetBitrate() int {
+	return e.effectiveMediaBitrate(e.SendSideBWE.GetTargetBitrate())
+}
+
+func (e *associatedStreamBandwidthEstimator) OnTargetBitrateChange(callback func(int)) {
+	e.SendSideBWE.OnTargetBitrateChange(func(bitrate int) {
+		e.deliverCurrentBitrate(bitrate, callback)
+	})
+}
+
+func (e *associatedStreamBandwidthEstimator) deliverCurrentBitrate(
+	callbackMediaBitrate int,
+	callback func(int),
+) {
+	currentMediaBitrate := e.SendSideBWE.GetTargetBitrate()
+	if callbackMediaBitrate != currentMediaBitrate {
+		e.staleBitrateCallbacks.Add(1)
+	}
+	callback(e.effectiveMediaBitrate(currentMediaBitrate))
+}
+
+func (e *associatedStreamBandwidthEstimator) GetStats() map[string]any {
+	stats := e.SendSideBWE.GetStats()
+	rawMediaBitrate := e.SendSideBWE.GetTargetBitrate()
+	effectiveMediaBitrate := e.effectiveMediaBitrate(rawMediaBitrate)
+	stats["rawMediaTargetBitrate"] = rawMediaBitrate
+	stats["mediaTargetBitrate"] = effectiveMediaBitrate
+	stats["wireTargetBitrate"] = wireBitrate(rawMediaBitrate, e.protection)
+	stats["effectiveWireTargetBitrate"] = wireBitrate(effectiveMediaBitrate, e.protection)
+	stats["flexFECMediaPackets"] = e.protection.mediaPackets
+	stats["flexFECRepairPackets"] = e.protection.repairPackets
+	stats["staleBitrateCallbacks"] = e.staleBitrateCallbacks.Load()
+	stats["twccFeedbackPackets"] = e.twccFeedbackPackets.Load()
+	stats["twccMalformedFeedback"] = e.twccMalformedFeedback.Load()
+	stats["twccPaddingStatuses"] = e.twccPaddingStatuses.Load()
+	stats["twccReportedLost"] = e.twccReportedLost.Load()
+	stats["twccReportedStatuses"] = e.twccReportedStatuses.Load()
+	for name, value := range e.pacerStats() {
+		stats[name] = value
+	}
+	return stats
+}
+
+func (e *associatedStreamBandwidthEstimator) effectiveMediaBitrate(mediaBitrateBps int) int {
+	if e.minimumMediaBitrate > 0 && mediaBitrateBps < e.minimumMediaBitrate {
+		mediaBitrateBps = e.minimumMediaBitrate
+	}
+	if e.maximumMediaBitrate > 0 && mediaBitrateBps > e.maximumMediaBitrate {
+		mediaBitrateBps = e.maximumMediaBitrate
+	}
+	return mediaBitrateBps
+}
+
+func (e *associatedStreamBandwidthEstimator) AdmitMediaFrame(
+	size int,
+	keyFrame bool,
+) mediaFrameAdmission {
+	controller, ok := e.pacer.delegate.(interface {
+		AdmitMediaFrame(int, bool) mediaFrameAdmission
+	})
+	if !ok {
+		return mediaFrameAdmission{admitted: true}
+	}
+	return controller.AdmitMediaFrame(size, keyFrame)
+}
+
+func wireBitrate(mediaBitrateBps int, protection flexFECProtection) int {
+	if !protection.enabled() || mediaBitrateBps <= 0 {
+		return mediaBitrateBps
+	}
+	totalPackets := int64(protection.mediaPackets) + int64(protection.repairPackets)
+	mediaPackets := int64(protection.mediaPackets)
+	mediaBitrate := int64(mediaBitrateBps)
+	return int((mediaBitrate*totalPackets + mediaPackets - 1) / mediaPackets)
+}
+
+func (f *peerConnectionFactory) flexFECProtection() flexFECProtection {
+	if !f.cfg.WebRTC.Interceptors.FlexFEC {
+		return flexFECProtection{}
+	}
+	return flexFECProtection{
+		mediaPackets:  f.cfg.FlexFECMediaPackets(),
+		repairPackets: f.cfg.FlexFECRepairPackets(),
+	}
+}
+
+func (e *associatedStreamBandwidthEstimator) pacerStats() map[string]any {
+	provider, ok := e.pacer.delegate.(interface{ Stats() map[string]any })
+	if !ok {
+		return nil
+	}
+	return provider.Stats()
+}
+
+func (e *associatedStreamBandwidthEstimator) AddStream(
+	info *interceptor.StreamInfo,
+	writer interceptor.RTPWriter,
+) interceptor.RTPWriter {
+	result := e.SendSideBWE.AddStream(info, writer)
+	transportCCExtensionID := findTransportCCExtensionID(info)
+	e.pacer.addAssociatedStreams(
+		info.SSRC,
+		info.SSRCRetransmission,
+	)
+	e.pacer.setTransportCCExtension(info.SSRC, transportCCExtensionID, true)
+	e.pacer.setTransportCCExtension(
+		info.SSRCRetransmission,
+		transportCCExtensionID,
+		true,
+	)
+	// Chromium does not acknowledge FlexFEC packets in transport-wide
+	// feedback. Pace them, but do not assign TWCC sequence numbers or count
+	// their absence as media loss in GCC.
+	e.pacer.addUntrackedRepairStream(info.SSRCForwardErrorCorrection, writer)
+	e.pacer.setTransportCCExtension(
+		info.SSRCForwardErrorCorrection,
+		transportCCExtensionID,
+		false,
+	)
+	return result
+}
+
+func findTransportCCExtensionID(info *interceptor.StreamInfo) uint8 {
+	if info == nil {
+		return 0
+	}
+	for _, extension := range info.RTPHeaderExtensions {
+		if extension.URI == transportCCHeaderExtensionURI && extension.ID > 0 && extension.ID <= 255 {
+			return uint8(extension.ID)
+		}
+	}
+	return 0
 }
 
 func newPionLoggerFactory(verbose bool) logging.LoggerFactory {

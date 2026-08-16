@@ -20,6 +20,7 @@ LLAMA_BUILD_JOBS ?=
 LLAMA_BUILD_PARALLEL := $(if $(strip $(LLAMA_BUILD_JOBS)),-j$(LLAMA_BUILD_JOBS),-j)
 STATICCHECK_VERSION ?= v0.7.0
 GOVULNCHECK_VERSION ?= v1.1.4
+GO_TEST_FLAGS ?=
 
 # Acceleration follows the host: Metal on Apple Silicon, where it is always
 # present and several times faster than CPU, and a portable CPU build elsewhere.
@@ -65,7 +66,7 @@ export CGO_ENABLED := 1
 export CGO_CXXFLAGS
 export CGO_LDFLAGS
 
-.PHONY: all build run test test-race vet staticcheck vulncheck format check-format check verify clean distclean deps \
+.PHONY: all build run test test-race test-lifecycle-stress vet staticcheck vulncheck format check-format check verify clean distclean deps \
 	check-go check-cmake check-c-compiler
 
 all: build
@@ -113,10 +114,13 @@ run: build
 
 ## test: run Go tests. Set MODEL=/path/to/gguf to include the engine tests.
 test: check-go deps
-	$(GO) test ./...
+	$(GO) test $(GO_TEST_FLAGS) ./...
 
 test-race: check-go deps
-	$(GO) test -race ./...
+	$(GO) test -race $(GO_TEST_FLAGS) ./...
+
+test-lifecycle-stress: check-go deps
+	$(GO) test -race ./internal/engine -run 'TestEngine(RejectsBoundedAdmissionOverflow|CloseWaitsForRegisteredChatsAndRejectsNewOnes)' -count=100
 
 ## vet: run go vet (needs the cgo flags, so it depends on deps and the exported environment).
 vet: check-go deps

@@ -29,11 +29,41 @@ jobs:
             published-tcp-ssh/ssh/entrypoint.sh
             webrtc-video/producer/build-gstreamer-static-linux.sh
             webrtc-video/producer/build-static-linux.sh
+            webrtc-video/producer/qualification/adaptive-streaming/sample-host-cpu.sh
           )
           shellcheck "${scripts[@]}"
           for script in "${scripts[@]}"; do
             sh -n "$script"
           done
+          bash_scripts=(
+            netcat-media-streaming/qualification/check.sh
+            netcat-media-streaming/qualification/common.sh
+            netcat-media-streaming/qualification/datagram-media.sh
+            netcat-media-streaming/qualification/datagram-media-guaranteed.sh
+            netcat-media-streaming/qualification/reliable-media-matrix.sh
+            netcat-media-streaming/qualification/rtcp-repair.sh
+            netcat-media-streaming/qualification/rtsp-media-matrix.sh
+            netcat-media-streaming/qualification/run.sh
+            webrtc-video/producer/qualification/adaptive-streaming/run-matrix.sh
+            webrtc-video/producer/qualification/adaptive-streaming/run.sh
+            webrtc-video/producer/qualification/adaptive-streaming/traffic-control.sh
+          )
+          shellcheck "${bash_scripts[@]}"
+          for script in "${bash_scripts[@]}"; do
+            bash -n "$script"
+          done
+          PYTHONPATH=netcat-media-streaming/qualification python3 -m unittest \
+            netcat-media-streaming/qualification/test_analyze_frames.py \
+            netcat-media-streaming/qualification/test_analyze_logs.py \
+            netcat-media-streaming/qualification/test_analyze_rtp.py \
+            netcat-media-streaming/qualification/test_compare_frames.py \
+            netcat-media-streaming/qualification/test_render_report.py \
+            netcat-media-streaming/qualification/test_rtp_probe.py \
+            netcat-media-streaming/qualification/test_write_manifest.py
+          PYTHONPATH=private-llm-mesh/qualification python3 -m unittest \
+            private-llm-mesh/qualification/test_render_report.py
+          PYTHONPATH=private-postgres-access/qualification python3 -m unittest \
+            private-postgres-access/qualification/test_run.py
       - name: Check Node scripts
         shell: bash
         run: |
@@ -45,6 +75,8 @@ jobs:
             private-llm-mesh/web/mint-worker-token.mjs
             private-llm-mesh/web/scripts/meshload.mjs
             webrtc-video/platform/scripts/smoke-dev.mjs
+            webrtc-video/producer/qualification/adaptive-streaming/collect.mjs
+            webrtc-video/producer/qualification/adaptive-streaming/lib/analysis.mjs
           )
           for script in "${scripts[@]}"; do
             node --check "$script"
@@ -78,6 +110,27 @@ jobs:
           done
           test "$(docker inspect --format '{{.State.Health.Status}}' "$container")" = "healthy"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$tmp/id_ed25519" -p "$port" demo@127.0.0.1 "test \$(id -u) -gt 0"
+  cpp-beast-rstream-tunnel:
+    name: C++ Beast rstream tunnel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.13"
+      - name: Install Conan
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check conan==2.31.2
+          conan profile detect --force
+          conan remote add rstream https://nexus.rstream.io/repository/conan
+      - name: Verify helpers and native build
+        working-directory: cpp-beast-rstream-tunnel
+        shell: bash
+        run: make verify
   homelab-rstream:
     name: Homelab rstream
     runs-on: ubuntu-latest
@@ -151,6 +204,30 @@ jobs:
         working-directory: python-vision-inference/device
         shell: bash
         run: npm audit --omit=dev --audit-level=moderate
+  python-vision-inference-worker:
+    name: Python vision inference worker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: python-vision-inference/worker/requirements.txt
+      - name: Verify worker and shared protocol
+        working-directory: python-vision-inference/worker
+        shell: bash
+        run: make verify
+      - name: Verify qualification tooling
+        working-directory: python-vision-inference
+        shell: bash
+        run: |
+          worker/.venv/bin/python -m py_compile qualification/*.py
+          PYTHONPATH=.:device:worker:qualification \
+            worker/.venv/bin/python -m unittest discover \
+              -s qualification -p 'test_*.py'
   private-postgres-access:
     name: Private PostgreSQL access
     runs-on: ubuntu-latest
@@ -235,7 +312,16 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt update
-          sudo apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev pkg-config
+          sudo apt-get install -y \
+            gstreamer1.0-plugins-bad \
+            gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-ugly \
+            gstreamer1.0-tools \
+            libgstreamer-plugins-base1.0-dev \
+            libgstreamer1.0-dev \
+            pkg-config
+          gst-inspect-1.0 appsink h264parse videotestsrc x264enc >/dev/null
       - name: Test
         working-directory: webrtc-video/producer
         shell: bash
@@ -244,6 +330,12 @@ jobs:
         working-directory: webrtc-video/producer
         shell: bash
         run: go test -race ./...
+      - name: Test adaptive-streaming qualification analyzer
+        working-directory: webrtc-video/producer/qualification/adaptive-streaming
+        shell: bash
+        run: |
+          npm ci
+          npm test
       - name: Check formatting
         working-directory: webrtc-video/producer
         shell: bash

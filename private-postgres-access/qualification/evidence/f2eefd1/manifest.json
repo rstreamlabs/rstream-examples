@@ -1,0 +1,37 @@
+{
+  "environment": "staging",
+  "generatedAt": "2026-08-15T19:28:45.727873+00:00",
+  "parameters": {
+    "averageLatencyBudgetMS": 500.0,
+    "bulkPayloadBytes": 512,
+    "bulkRows": 10000,
+    "cancellationBudgetSeconds": 5.0,
+    "maximumLatencyBudgetMS": 2000.0,
+    "minimumBulkBytesPerSecond": 250000.0,
+    "minimumTransactionsPerSecond": 20.0,
+    "p95LatencyBudgetMS": 750.0,
+    "pgbenchClients": 8,
+    "pgbenchThreads": 4,
+    "recoveryBudgetSeconds": 20.0,
+    "transactionsPerClient": 20
+  },
+  "repository": {
+    "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "dirty": false,
+    "revision": "f2eefd162ba0308a5309ff171fe58dceff1088b8"
+  },
+  "runtime": {
+    "docker": "Docker version 29.6.2, build dfc4efb",
+    "machine": "arm64",
+    "python": "3.14.6",
+    "release": "25.5.0",
+    "rstream": "rstream version 1.28.1",
+    "system": "Darwin"
+  },
+  "schemaVersion": 1,
+  "tunnel": {
+    "kind": "private-tcp",
+    "name": "ephemeral qualification name"
+  },
+  "verdict": "PASS"
+}

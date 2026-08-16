@@ -15,7 +15,8 @@ it current through the real-time watch API, so starting a worker anywhere adds
 capacity within seconds and stopping one removes it. The labels also carry the
 `model`, the `device` (`cpu`, `mps`, `cuda:0`), and the `accelerator` name, so
 the pool view in any viewer reads the hardware behind each worker straight from
-the registry, with no extra protocol. Both roles also survive losing the engine
+the registry, including the rstream region that accepted each worker, with no
+extra service. Both roles also survive losing the engine
 connection itself: the worker recreates its registration tunnel, the device
 re-seeds its pool and republishes the viewer, each with a capped backoff, while
 sessions in flight ride their own connections.
@@ -43,12 +44,24 @@ Load spreads across the pool without a balancer. Each device ranks workers
 by rendezvous hashing, so different devices prefer different workers, then
 probes its two best candidates and keeps the less loaded one, the classic
 power of two choices, using the session count each worker reports in its
-hello. When the pool empties, the device suspends detection and resumes it by
+hello. When normalized loads are equal, the concurrently measured session
+establishment time breaks the tie; this avoids choosing a remote region merely
+because it appeared first without allowing latency to outrank available
+capacity. When the pool empties, the device suspends detection and resumes it by
 itself as soon as capacity returns; an explicit enable or disable from the UI
 always wins over that automatism. The viewer can also pin the session to a
 specific worker by clicking it in the pool, which routes inference there
 explicitly; the pin is advisory, so if that worker disappears the device falls
 back to automatic selection and snaps back when it returns.
+
+Each worker has a bounded session capacity (`--max-sessions`, four by default)
+and rejects excess devices explicitly instead of accumulating an unbounded
+queue. Devices normalize the advertised active-session count by that capacity,
+so a one-of-two worker is considered busier than a one-of-eight worker. An
+overloaded candidate enters the normal cooldown and the device immediately
+tries another pool member. A device that stops sending frames also loses its
+slot after a bounded idle timeout, so a dead peer cannot exhaust the worker
+pool indefinitely.
 
 Display is fully decoupled from inference. The video always plays, whether or
 not a worker is reachable and whether or not detection is enabled. A ByteTrack
@@ -94,7 +107,8 @@ since ultralytics defaults to CPU even when a GPU is present) and advertises it
 through its labels; `--device cpu` forces one, which is handy for running a CPU
 worker and a GPU worker side by side from the same machine. Start more workers
 on other machines to grow the pool; every worker registers itself through its
-tunnel labels.
+tunnel labels. Worker names are ephemeral by default; pass `--name` when a
+stable routing identity is useful.
 
 ## Run the device
 
@@ -126,6 +140,21 @@ reconnecting, waiting for workers, disabled) alongside the desired one; since th
 Stop the worker currently serving the device and watch the session move to
 another worker within seconds, with the video playing through the switch. Add
 a worker back and the pool regrows, with no restart anywhere.
+
+## Qualification and measured evidence
+
+The commands above are deliberately the complete quickstart. For repeatable
+real-model latency, concurrency, cancellation, malformed-message, registry,
+selection, saturation, and failover qualification, see
+[`qualification/README.md`](qualification/README.md). The qualification runner
+hashes the exact model and media, retains raw logs and JSON measurements, and
+generates compact Markdown/SVG evidence tied to the tested repository commit.
+The latest committed reference run is
+[`qualification/evidence/34aa947/report.md`](qualification/evidence/34aa947/report.md):
+it was produced from a clean worktree against staging and includes the raw
+logs, machine-readable measurements, integrity manifest, and SVG charts. Its
+budgets are regression gates for that recorded environment, not universal
+product SLOs.
 
 ## Web UI
 

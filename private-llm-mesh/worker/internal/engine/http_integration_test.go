@@ -1,6 +1,8 @@
 package engine_test
 
 import (
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -29,7 +31,7 @@ func TestConcurrentHTTP(t *testing.T) {
 	srv := httptest.NewServer(openai.NewServer(e, "test", 64, 0, time.Minute, nil).Handler())
 	defer srv.Close()
 	const n = 3
-	body := `{"model":"x","messages":[{"role":"user","content":"In one word, name a color"}],"max_tokens":16}`
+	body := `{"model":"test","messages":[{"role":"user","content":"In one word, name a color"}],"max_tokens":16}`
 	var wg sync.WaitGroup
 	errs := make([]error, n)
 	for i := range n {
@@ -41,8 +43,34 @@ func TestConcurrentHTTP(t *testing.T) {
 				errs[i] = err
 				return
 			}
-			_, _ = io.ReadAll(resp.Body)
-			_ = resp.Body.Close()
+			data, readErr := io.ReadAll(resp.Body)
+			closeErr := resp.Body.Close()
+			if readErr != nil {
+				errs[i] = readErr
+				return
+			}
+			if closeErr != nil {
+				errs[i] = closeErr
+				return
+			}
+			if resp.StatusCode != http.StatusOK {
+				errs[i] = fmt.Errorf("status %d: %s", resp.StatusCode, data)
+				return
+			}
+			var completion struct {
+				Choices []struct {
+					Message struct {
+						Content string `json:"content"`
+					} `json:"message"`
+				} `json:"choices"`
+			}
+			if err := json.Unmarshal(data, &completion); err != nil {
+				errs[i] = fmt.Errorf("decode completion: %w", err)
+				return
+			}
+			if len(completion.Choices) != 1 || strings.TrimSpace(completion.Choices[0].Message.Content) == "" {
+				errs[i] = fmt.Errorf("empty completion: %s", data)
+			}
 		}(i)
 	}
 	done := make(chan struct{})

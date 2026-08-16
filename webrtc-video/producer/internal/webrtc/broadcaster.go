@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v4"
 	rtcmedia "github.com/pion/webrtc/v4/pkg/media"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/adaptation"
@@ -33,16 +35,78 @@ type SignalMessage struct {
 }
 
 type SessionStats struct {
-	Codec                    string                 `json:"codec"`
-	TWCCEnabled              bool                   `json:"twccEnabled"`
-	NACKEnabled              bool                   `json:"nackEnabled"`
-	RTXEnabled               bool                   `json:"rtxEnabled"`
-	FlexFECEnabled           bool                   `json:"flexFECEnabled"`
-	AdaptiveBackend          config.AdaptiveBackend `json:"adaptiveBackend"`
-	AdaptiveActive           bool                   `json:"adaptiveActive"`
-	EstimatedBitrateBps      int                    `json:"estimatedBitrateBps"`
-	EncoderTargetBitrateKbps int                    `json:"encoderTargetBitrateKbps"`
-	LastAppliedBitrateKbps   int                    `json:"lastAppliedBitrateKbps"`
+	Codec                     string                 `json:"codec"`
+	TWCCEnabled               bool                   `json:"twccEnabled"`
+	NACKEnabled               bool                   `json:"nackEnabled"`
+	RTXEnabled                bool                   `json:"rtxEnabled"`
+	FlexFECEnabled            bool                   `json:"flexFECEnabled"`
+	AdaptiveBackend           config.AdaptiveBackend `json:"adaptiveBackend"`
+	AdaptiveActive            bool                   `json:"adaptiveActive"`
+	EstimatedBitrateBps       int                    `json:"estimatedBitrateBps"`
+	EncoderTargetBitrateKbps  int                    `json:"encoderTargetBitrateKbps"`
+	LastAppliedBitrateKbps    int                    `json:"lastAppliedBitrateKbps"`
+	AdaptiveBitrateUpdates    uint64                 `json:"adaptiveBitrateUpdates"`
+	AdaptiveBitrateFailures   uint64                 `json:"adaptiveBitrateFailures"`
+	RecoveryKeyFrameRequests  uint64                 `json:"recoveryKeyFrameRequests"`
+	RecoveryKeyFrameCoalesced uint64                 `json:"recoveryKeyFrameCoalesced"`
+	RecoveryKeyFrameFailures  uint64                 `json:"recoveryKeyFrameFailures"`
+	RTCPKeyFrameRequests      uint64                 `json:"rtcpKeyFrameRequests"`
+	RTCPMalformedFeedback     uint64                 `json:"rtcpMalformedFeedback"`
+	Bandwidth                 *BandwidthStats        `json:"bandwidth,omitempty"`
+	ICEPath                   *ICEPathStats          `json:"icePath,omitempty"`
+}
+
+type ICEPathStats struct {
+	LocalCandidateType      string `json:"localCandidateType"`
+	LocalCandidateProtocol  string `json:"localCandidateProtocol"`
+	LocalCandidateURL       string `json:"localCandidateURL,omitempty"`
+	LocalRelayProtocol      string `json:"localRelayProtocol,omitempty"`
+	RemoteCandidateType     string `json:"remoteCandidateType"`
+	RemoteCandidateProtocol string `json:"remoteCandidateProtocol"`
+}
+
+type BandwidthStats struct {
+	LossTargetBitrateBps         int     `json:"lossTargetBitrateBps"`
+	DelayTargetBitrateBps        int     `json:"delayTargetBitrateBps"`
+	AverageLoss                  float64 `json:"averageLoss"`
+	FlexFECMediaPackets          uint32  `json:"flexFECMediaPackets"`
+	FlexFECRepairPackets         uint32  `json:"flexFECRepairPackets"`
+	DelayMeasurementMs           float64 `json:"delayMeasurementMs"`
+	DelayEstimateMs              float64 `json:"delayEstimateMs"`
+	DelayThresholdMs             float64 `json:"delayThresholdMs"`
+	Usage                        string  `json:"usage"`
+	State                        string  `json:"state"`
+	PacerTargetBitrateBps        int     `json:"pacerTargetBitrateBps"`
+	PacerPacingBitrateBps        int     `json:"pacerPacingBitrateBps"`
+	PacerQueuePackets            int     `json:"pacerQueuePackets"`
+	PacerQueueDrops              uint64  `json:"pacerQueueDrops"`
+	PacerQueueDelayMs            float64 `json:"pacerQueueDelayMs"`
+	PacerMaximumDelayMs          float64 `json:"pacerMaximumDelayMs"`
+	PacerMaximumPrimaryDelayMs   float64 `json:"pacerMaximumPrimaryDelayMs"`
+	PacerMaximumRepairDelayMs    float64 `json:"pacerMaximumRepairDelayMs"`
+	PacerMaximumRTXDelayMs       float64 `json:"pacerMaximumRTXDelayMs"`
+	PacerMaximumFECDelayMs       float64 `json:"pacerMaximumFECDelayMs"`
+	PacerMaximumSustainedDelayMs float64 `json:"pacerMaximumSustainedDelayMs"`
+	PacerMaximumAdmittedDelayMs  float64 `json:"pacerMaximumAdmittedDelayMs"`
+	PacerKeyFrameReserveBytes    int64   `json:"pacerKeyFrameReserveBytes"`
+	PacerMediaFrameDrops         uint64  `json:"pacerMediaFrameDrops"`
+	PacerMediaByteDrops          uint64  `json:"pacerMediaByteDrops"`
+	PacerRepairPacketsExpired    uint64  `json:"pacerRepairPacketsExpired"`
+	PacerRepairPacketsTrimmed    uint64  `json:"pacerRepairPacketsTrimmed"`
+	PacerRTXPacketsExpired       uint64  `json:"pacerRTXPacketsExpired"`
+	PacerFECPacketsExpired       uint64  `json:"pacerFECPacketsExpired"`
+	PacerRTXPacketsTrimmed       uint64  `json:"pacerRTXPacketsTrimmed"`
+	PacerFECPacketsTrimmed       uint64  `json:"pacerFECPacketsTrimmed"`
+	PacerSentPrimary             uint64  `json:"pacerSentPrimary"`
+	PacerSentRepair              uint64  `json:"pacerSentRepair"`
+	PacerSentRTX                 uint64  `json:"pacerSentRTX"`
+	PacerSentFEC                 uint64  `json:"pacerSentFEC"`
+	StaleBitrateCallbacks        uint64  `json:"staleBitrateCallbacks"`
+	TWCCFeedbackPackets          uint64  `json:"twccFeedbackPackets"`
+	TWCCMalformedFeedback        uint64  `json:"twccMalformedFeedback"`
+	TWCCPaddingStatuses          uint64  `json:"twccPaddingStatuses"`
+	TWCCReportedLost             uint64  `json:"twccReportedLost"`
+	TWCCReportedStatuses         uint64  `json:"twccReportedStatuses"`
 }
 
 type Broadcaster struct {
@@ -66,30 +130,42 @@ type Broadcaster struct {
 }
 
 type Session struct {
-	id           string
-	logger       *logs.Logger
-	pc           *webrtc.PeerConnection
-	track        *webrtc.TrackLocalStaticSample
-	sender       *webrtc.RTPSender
-	unsubscribe  func()
-	release      func()
-	estimator    bandwidthEstimator
-	encoder      media.EncoderController
-	adaptive     *adaptation.Controller
-	send         func(SignalMessage) error
-	close        sync.Once
-	closed       chan struct{}
-	onClose      func(string)
-	statsMu      sync.RWMutex
-	stats        SessionStats
-	signalingMu  sync.Mutex
-	pendingICE   []webrtc.ICECandidateInit
-	pendingBytes int
-	candidateMu  sync.Mutex
-	localICE     candidateCounts
-	remoteICE    candidateCounts
-	recoveryMu   sync.Mutex
-	recovery     *time.Timer
+	id                        string
+	logger                    *logs.Logger
+	pc                        *webrtc.PeerConnection
+	track                     *webrtc.TrackLocalStaticSample
+	sender                    *webrtc.RTPSender
+	unsubscribe               func()
+	release                   func()
+	estimator                 bandwidthEstimator
+	encoder                   media.EncoderController
+	adaptive                  *adaptation.Controller
+	send                      func(SignalMessage) error
+	close                     sync.Once
+	closed                    chan struct{}
+	onClose                   func(string)
+	statsMu                   sync.RWMutex
+	stats                     SessionStats
+	signalingMu               sync.Mutex
+	pendingICE                []webrtc.ICECandidateInit
+	pendingBytes              int
+	candidateMu               sync.Mutex
+	localICE                  candidateCounts
+	remoteICE                 candidateCounts
+	recoveryKeyFrameRequests  atomic.Uint64
+	recoveryKeyFrameCoalesced atomic.Uint64
+	recoveryKeyFrameFailures  atomic.Uint64
+	rtcpKeyFrameRequests      atomic.Uint64
+	rtcpMalformedFeedback     atomic.Uint64
+	malformedRTCPLog          sync.Once
+	keyFrameMu                sync.Mutex
+	lastKeyFrameRequest       time.Time
+	keyFrameRequestTimer      *time.Timer
+	keyFrameRequestDue        time.Time
+	keyFrameRequestGeneration uint64
+	recoveryMu                sync.Mutex
+	recovery                  *time.Timer
+	turnURLs                  map[string]string
 }
 
 type candidateCounts struct {
@@ -102,6 +178,7 @@ type candidateCounts struct {
 
 const (
 	networkRecoveryTimeout      = 30 * time.Second
+	keyFrameRequestInterval     = 250 * time.Millisecond
 	maxPendingICECandidates     = 64
 	maxPendingICECandidateBytes = 64 * 1024
 )
@@ -149,11 +226,16 @@ func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) 
 	}()
 	encoderController, _ := sourceEncoderController(source)
 	var credentials *rstream.TURNCredentials
+	turnURLs := make(map[string]string)
 	if b.useTURN {
 		credentials, err = b.turn.Credentials(ctx)
 		if err != nil {
 			b.logger.Warn("Failed to load TURN credentials for viewer session: %v", err)
 			return nil, err
+		}
+		turnURLs, err = turnprovider.URLsByTransport(credentials)
+		if err != nil {
+			return nil, fmt.Errorf("failed to classify TURN credentials: %w", err)
 		}
 		b.logger.Info("Viewer session TURN credentials loaded (%d URL(s))", len(credentials.URLs))
 	} else {
@@ -166,12 +248,17 @@ func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) 
 			initialBitrateBps = info.TargetBitrateKbps * 1000
 		}
 	}
-	peerConnection, estimator, err := b.peerFactory.NewPeerConnection(initialBitrateBps, turnprovider.ICEConfig(credentials))
+	iceConfiguration := turnprovider.ICEConfig(credentials)
+	if b.cfg.ICETransportPolicy() == config.ICETransportPolicyRelay {
+		iceConfiguration.ICETransportPolicy = webrtc.ICETransportPolicyRelay
+	}
+	peerConnection, estimator, err := b.peerFactory.NewPeerConnection(initialBitrateBps, iceConfiguration)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the peer connection: %w", err)
 	}
 	sessionID, err := randomID()
 	if err != nil {
+		_ = peerConnection.Close()
 		return nil, err
 	}
 	track, err := webrtc.NewTrackLocalStaticSample(b.codec, b.trackID, b.streamID)
@@ -197,6 +284,7 @@ func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) 
 		encoder:     encoderController,
 		send:        send,
 		closed:      make(chan struct{}),
+		turnURLs:    turnURLs,
 		stats: SessionStats{
 			Codec:           b.codec.MimeType,
 			TWCCEnabled:     b.cfg.WebRTC.Interceptors.TWCC,
@@ -213,6 +301,7 @@ func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) 
 		b.mu.Unlock()
 		b.logger.Info("Viewer %s closed: %s (active viewers: %d)", session.id, reason, count)
 	}
+	session.trackSelectedICEPath()
 	peerConnection.OnICECandidate(func(candidate *webrtc.ICECandidate) {
 		if candidate == nil {
 			return
@@ -249,7 +338,7 @@ func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) 
 			session.scheduleNetworkRecovery("ICE " + state.String())
 		}
 	})
-	if adaptiveController, ok := b.newAdaptiveController(encoderController); ok {
+	if adaptiveController, ok := b.newAdaptiveController(encoderController, estimator); ok {
 		session.adaptive = adaptiveController
 		snapshot := adaptiveController.Snapshot()
 		session.updateStats(func(stats *SessionStats) {
@@ -459,6 +548,7 @@ func (s *Session) flushPendingICECandidates() error {
 func (s *Session) Close(reason string) {
 	s.close.Do(func() {
 		s.clearNetworkRecovery()
+		s.cancelScheduledKeyFrameRequest()
 		close(s.closed)
 		if s.unsubscribe != nil {
 			s.unsubscribe()
@@ -579,6 +669,12 @@ func (s *Session) StatsSnapshot() SessionStats {
 	s.statsMu.RLock()
 	stats := s.stats
 	s.statsMu.RUnlock()
+	stats.RecoveryKeyFrameRequests = s.recoveryKeyFrameRequests.Load()
+	stats.RecoveryKeyFrameCoalesced = s.recoveryKeyFrameCoalesced.Load()
+	stats.RecoveryKeyFrameFailures = s.recoveryKeyFrameFailures.Load()
+	stats.RTCPKeyFrameRequests = s.rtcpKeyFrameRequests.Load()
+	stats.RTCPMalformedFeedback = s.rtcpMalformedFeedback.Load()
+	stats.Bandwidth = snapshotBandwidthStats(s.estimator)
 	if s.adaptive == nil {
 		return stats
 	}
@@ -587,6 +683,143 @@ func (s *Session) StatsSnapshot() SessionStats {
 	stats.EstimatedBitrateBps = snapshot.EstimatedBitrateBps
 	stats.EncoderTargetBitrateKbps = snapshot.EncoderTargetBitrateKbps
 	stats.LastAppliedBitrateKbps = snapshot.LastAppliedBitrateKbps
+	stats.AdaptiveBitrateUpdates = snapshot.AppliedUpdates
+	stats.AdaptiveBitrateFailures = snapshot.FailedUpdates
+	return stats
+}
+
+func (s *Session) trackSelectedICEPath() {
+	transport := s.sender.Transport()
+	if transport == nil || transport.ICETransport() == nil {
+		return
+	}
+	transport.ICETransport().OnSelectedCandidatePairChange(func(pair *webrtc.ICECandidatePair) {
+		s.updateSelectedICEPath(pair)
+	})
+}
+
+func (s *Session) ensureSelectedICEPath() {
+	s.statsMu.RLock()
+	path := s.stats.ICEPath
+	complete := path != nil && (path.LocalCandidateType != "relay" || path.LocalRelayProtocol != "")
+	s.statsMu.RUnlock()
+	if complete {
+		return
+	}
+	transport := s.sender.Transport()
+	if transport == nil || transport.ICETransport() == nil {
+		return
+	}
+	pair, err := transport.ICETransport().GetSelectedCandidatePair()
+	if err != nil || pair == nil {
+		return
+	}
+	s.updateSelectedICEPath(pair)
+}
+
+func (s *Session) updateSelectedICEPath(pair *webrtc.ICECandidatePair) {
+	path := selectedICEPath(s.pc.GetStats(), pair)
+	if path == nil {
+		return
+	}
+	completeICEPathURL(path, s.turnURLs)
+	s.logger.Debug(
+		"Viewer %s selected ICE path: local=%s/%s relay-transport=%s remote=%s/%s",
+		s.id,
+		path.LocalCandidateType,
+		path.LocalCandidateProtocol,
+		path.LocalRelayProtocol,
+		path.RemoteCandidateType,
+		path.RemoteCandidateProtocol,
+	)
+	s.updateStats(func(stats *SessionStats) {
+		stats.ICEPath = path
+	})
+}
+
+func completeICEPathURL(path *ICEPathStats, urls map[string]string) {
+	if path != nil && path.LocalCandidateURL == "" {
+		path.LocalCandidateURL = urls[path.LocalRelayProtocol]
+	}
+}
+
+func selectedICEPath(report webrtc.StatsReport, pair *webrtc.ICECandidatePair) *ICEPathStats {
+	var local *webrtc.ICECandidateStats
+	if pair != nil && pair.Local != nil {
+		if stats, ok := report.GetICECandidateStats(pair.Local); ok {
+			local = &stats
+		}
+	}
+	return icePathFromCandidates(pair, local)
+}
+
+func icePathFromCandidates(pair *webrtc.ICECandidatePair, local *webrtc.ICECandidateStats) *ICEPathStats {
+	if pair == nil || pair.Local == nil || pair.Remote == nil {
+		return nil
+	}
+	path := &ICEPathStats{
+		LocalCandidateType:      pair.Local.Typ.String(),
+		LocalCandidateProtocol:  pair.Local.Protocol.String(),
+		RemoteCandidateType:     pair.Remote.Typ.String(),
+		RemoteCandidateProtocol: pair.Remote.Protocol.String(),
+	}
+	if local != nil {
+		path.LocalCandidateURL = local.URL
+		path.LocalRelayProtocol = local.RelayProtocol
+	}
+	return path
+}
+
+func snapshotBandwidthStats(estimator bandwidthEstimator) *BandwidthStats {
+	if estimator == nil {
+		return nil
+	}
+	raw := estimator.GetStats()
+	if len(raw) == 0 {
+		return nil
+	}
+	stats := &BandwidthStats{}
+	stats.LossTargetBitrateBps, _ = raw["lossTargetBitrate"].(int)
+	stats.DelayTargetBitrateBps, _ = raw["delayTargetBitrate"].(int)
+	stats.AverageLoss, _ = raw["averageLoss"].(float64)
+	stats.FlexFECMediaPackets, _ = raw["flexFECMediaPackets"].(uint32)
+	stats.FlexFECRepairPackets, _ = raw["flexFECRepairPackets"].(uint32)
+	stats.DelayMeasurementMs, _ = raw["delayMeasurement"].(float64)
+	stats.DelayEstimateMs, _ = raw["delayEstimate"].(float64)
+	stats.DelayThresholdMs, _ = raw["delayThreshold"].(float64)
+	stats.Usage, _ = raw["usage"].(string)
+	stats.State, _ = raw["state"].(string)
+	stats.PacerTargetBitrateBps, _ = raw["pacerTargetBitrateBps"].(int)
+	stats.PacerPacingBitrateBps, _ = raw["pacerPacingBitrateBps"].(int)
+	stats.PacerQueuePackets, _ = raw["pacerQueuePackets"].(int)
+	stats.PacerQueueDrops, _ = raw["pacerQueueDrops"].(uint64)
+	stats.PacerQueueDelayMs, _ = raw["pacerQueueDelayMilliseconds"].(float64)
+	stats.PacerMaximumDelayMs, _ = raw["pacerMaximumQueueDelayMilliseconds"].(float64)
+	stats.PacerMaximumPrimaryDelayMs, _ = raw["pacerMaximumPrimaryResidenceMilliseconds"].(float64)
+	stats.PacerMaximumRepairDelayMs, _ = raw["pacerMaximumRepairResidenceMilliseconds"].(float64)
+	stats.PacerMaximumRTXDelayMs, _ = raw["pacerMaximumRetransmissionResidenceMilliseconds"].(float64)
+	stats.PacerMaximumFECDelayMs, _ = raw["pacerMaximumForwardErrorCorrectionResidenceMilliseconds"].(float64)
+	stats.PacerMaximumSustainedDelayMs, _ = raw["pacerMaximumSustainedDelayMilliseconds"].(float64)
+	stats.PacerMaximumAdmittedDelayMs, _ = raw["pacerMaximumAdmittedSustainedDelayMilliseconds"].(float64)
+	stats.PacerKeyFrameReserveBytes, _ = raw["pacerKeyFrameReserveBytes"].(int64)
+	stats.PacerMediaFrameDrops, _ = raw["pacerMediaFramesDropped"].(uint64)
+	stats.PacerMediaByteDrops, _ = raw["pacerMediaBytesDropped"].(uint64)
+	stats.PacerRepairPacketsExpired, _ = raw["pacerRepairPacketsExpired"].(uint64)
+	stats.PacerRepairPacketsTrimmed, _ = raw["pacerRepairPacketsTrimmed"].(uint64)
+	stats.PacerRTXPacketsExpired, _ = raw["pacerRetransmissionPacketsExpired"].(uint64)
+	stats.PacerFECPacketsExpired, _ = raw["pacerForwardErrorCorrectionPacketsExpired"].(uint64)
+	stats.PacerRTXPacketsTrimmed, _ = raw["pacerRetransmissionPacketsTrimmed"].(uint64)
+	stats.PacerFECPacketsTrimmed, _ = raw["pacerForwardErrorCorrectionPacketsTrimmed"].(uint64)
+	stats.PacerSentPrimary, _ = raw["pacerSentPrimary"].(uint64)
+	stats.PacerSentRepair, _ = raw["pacerSentRepair"].(uint64)
+	stats.PacerSentRTX, _ = raw["pacerSentRetransmission"].(uint64)
+	stats.PacerSentFEC, _ = raw["pacerSentForwardErrorCorrection"].(uint64)
+	stats.StaleBitrateCallbacks, _ = raw["staleBitrateCallbacks"].(uint64)
+	stats.TWCCFeedbackPackets, _ = raw["twccFeedbackPackets"].(uint64)
+	stats.TWCCMalformedFeedback, _ = raw["twccMalformedFeedback"].(uint64)
+	stats.TWCCPaddingStatuses, _ = raw["twccPaddingStatuses"].(uint64)
+	stats.TWCCReportedLost, _ = raw["twccReportedLost"].(uint64)
+	stats.TWCCReportedStatuses, _ = raw["twccReportedStatuses"].(uint64)
 	return stats
 }
 
@@ -602,6 +835,7 @@ func (s *Session) pushStats() {
 	for {
 		select {
 		case <-ticker.C:
+			s.ensureSelectedICEPath()
 			if err := s.send(SignalMessage{
 				Type:  "session.stats",
 				Stats: ptrSessionStats(s.StatsSnapshot()),
@@ -624,8 +858,32 @@ func (s *Session) drainRTCP() {
 			return
 		default:
 		}
-		if _, _, err := s.sender.Read(buffer); err != nil {
+		n, _, err := s.sender.Read(buffer)
+		if err != nil {
 			return
+		}
+		packets, err := rtcp.Unmarshal(buffer[:n])
+		if err != nil {
+			s.recordMalformedRTCP(err)
+			continue
+		}
+		s.handleRTCPPackets(packets)
+	}
+}
+
+func (s *Session) recordMalformedRTCP(err error) {
+	s.rtcpMalformedFeedback.Add(1)
+	s.malformedRTCPLog.Do(func() {
+		s.logger.Warn("Viewer %s sent malformed RTCP feedback: %v", s.id, err)
+	})
+}
+
+func (s *Session) handleRTCPPackets(packets []rtcp.Packet) {
+	for _, packet := range packets {
+		switch packet.(type) {
+		case *rtcp.PictureLossIndication, *rtcp.FullIntraRequest:
+			s.rtcpKeyFrameRequests.Add(1)
+			s.requestKeyFrame()
 		}
 	}
 }
@@ -641,15 +899,126 @@ func (s *Session) writeSamples(samples <-chan media.AccessUnit) {
 				s.Close("media source stopped")
 				return
 			}
-			if err := s.track.WriteSample(rtcmedia.Sample{
+			decision := mediaFrameAdmission{admitted: true}
+			if admission, ok := s.estimator.(interface {
+				AdmitMediaFrame(int, bool) mediaFrameAdmission
+			}); ok {
+				decision = admission.AdmitMediaFrame(
+					len(unit.Data),
+					unit.KeyFrame,
+				)
+				if decision.recoveryComplete {
+					s.cancelScheduledKeyFrameRequest()
+				}
+				if decision.requestKeyFrame {
+					s.requestRecoveryKeyFrame(decision.requestRetryAfter)
+				}
+				if !decision.admitted {
+					continue
+				}
+			}
+			err := s.track.WriteSample(rtcmedia.Sample{
 				Data:     unit.Data,
 				Duration: unit.Duration,
-			}); err != nil {
+			})
+			decision.completePacketization()
+			if err != nil {
 				s.logger.Warn("Viewer %s media write failed: %v", s.id, err)
 				s.Close("media write failed")
 				return
 			}
 		}
+	}
+}
+
+func (s *Session) requestKeyFrame() {
+	s.scheduleKeyFrameRequest(0, false)
+}
+
+func (s *Session) requestRecoveryKeyFrame(delay time.Duration) {
+	s.scheduleKeyFrameRequest(delay, true)
+}
+
+func (s *Session) scheduleKeyFrameRequest(delay time.Duration, deferIfLimited bool) {
+	now := time.Now()
+	due := now.Add(max(delay, 0))
+	s.keyFrameMu.Lock()
+	earliest := s.lastKeyFrameRequest.Add(keyFrameRequestInterval)
+	if earliest.After(due) {
+		due = earliest
+	}
+	if !deferIfLimited && delay <= 0 && due.After(now) {
+		s.keyFrameMu.Unlock()
+		s.recoveryKeyFrameCoalesced.Add(1)
+		return
+	}
+	if due.After(now) {
+		if s.keyFrameRequestTimer != nil && !due.Before(s.keyFrameRequestDue) {
+			s.keyFrameMu.Unlock()
+			s.recoveryKeyFrameCoalesced.Add(1)
+			return
+		}
+		if s.keyFrameRequestTimer != nil {
+			s.keyFrameRequestTimer.Stop()
+		}
+		s.keyFrameRequestGeneration++
+		generation := s.keyFrameRequestGeneration
+		s.keyFrameRequestDue = due
+		s.keyFrameRequestTimer = time.AfterFunc(time.Until(due), func() {
+			s.fireScheduledKeyFrameRequest(generation)
+		})
+		s.keyFrameMu.Unlock()
+		return
+	}
+	s.cancelScheduledKeyFrameRequestLocked()
+	s.lastKeyFrameRequest = now
+	s.keyFrameMu.Unlock()
+	s.issueKeyFrameRequest()
+}
+
+func (s *Session) fireScheduledKeyFrameRequest(generation uint64) {
+	s.keyFrameMu.Lock()
+	if generation != s.keyFrameRequestGeneration || s.keyFrameRequestTimer == nil {
+		s.keyFrameMu.Unlock()
+		return
+	}
+	s.keyFrameRequestTimer = nil
+	s.keyFrameRequestDue = time.Time{}
+	s.lastKeyFrameRequest = time.Now()
+	s.keyFrameMu.Unlock()
+	if s.isClosed() {
+		return
+	}
+	s.issueKeyFrameRequest()
+}
+
+func (s *Session) cancelScheduledKeyFrameRequest() {
+	s.keyFrameMu.Lock()
+	s.cancelScheduledKeyFrameRequestLocked()
+	s.keyFrameMu.Unlock()
+}
+
+func (s *Session) cancelScheduledKeyFrameRequestLocked() {
+	if s.keyFrameRequestTimer == nil {
+		return
+	}
+	s.keyFrameRequestTimer.Stop()
+	s.keyFrameRequestTimer = nil
+	s.keyFrameRequestDue = time.Time{}
+	s.keyFrameRequestGeneration++
+}
+
+func (s *Session) issueKeyFrameRequest() {
+	s.recoveryKeyFrameRequests.Add(1)
+	requester, ok := s.encoder.(media.KeyFrameRequester)
+	if !ok {
+		s.recoveryKeyFrameFailures.Add(1)
+		s.logger.Warn("Viewer %s encoder cannot request a recovery key frame", s.id)
+		return
+	}
+	if err := requester.RequestKeyFrame(); err != nil {
+		s.recoveryKeyFrameFailures.Add(1)
+		s.logger.Warn("Viewer %s key-frame request failed: %v", s.id, err)
 	}
 }
 
@@ -680,8 +1049,11 @@ func sourceEncoderController(source media.Source) (media.EncoderController, bool
 	return controller.EncoderController()
 }
 
-func (b *Broadcaster) newAdaptiveController(encoder media.EncoderController) (*adaptation.Controller, bool) {
-	if encoder == nil {
+func (b *Broadcaster) newAdaptiveController(
+	encoder media.EncoderController,
+	estimator bandwidthEstimator,
+) (*adaptation.Controller, bool) {
+	if encoder == nil || estimator == nil {
 		return nil, false
 	}
 	backend, interval, err := adaptation.NewBackend(b.cfg)
@@ -692,7 +1064,17 @@ func (b *Broadcaster) newAdaptiveController(encoder media.EncoderController) (*a
 	if backend == nil {
 		return nil, false
 	}
-	return adaptation.NewController(b.logger, encoder, backend, interval), true
+	return adaptation.NewController(
+		b.logger,
+		encoder,
+		backend,
+		interval,
+		estimator.GetTargetBitrate,
+		func() float64 {
+			loss, _ := estimator.GetStats()["averageLoss"].(float64)
+			return loss
+		},
+	), true
 }
 
 func ptrSessionStats(stats SessionStats) *SessionStats {

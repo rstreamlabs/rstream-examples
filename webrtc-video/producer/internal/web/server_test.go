@@ -58,6 +58,29 @@ func TestStatusReturnsLowercaseTunnelAuthFields(t *testing.T) {
 	}
 }
 
+func TestViewerFaviconDoesNotCreateABrowserConsoleError(t *testing.T) {
+	hub := logs.NewHub(16)
+	server := NewServer(
+		logs.NewLogger(hub, false),
+		hub,
+		func(context.Context) (*rstream.TURNCredentials, error) {
+			return nil, errors.New("not implemented")
+		},
+		func(context.Context, func(rtc.SignalMessage) error) (*rtc.Session, error) {
+			return nil, errors.New("not implemented")
+		},
+	)
+	req := httptest.NewRequest(http.MethodGet, "/favicon.ico", nil)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusNoContent {
+		t.Fatalf("favicon status = %d, want %d", res.Code, http.StatusNoContent)
+	}
+	if cacheControl := res.Header().Get("Cache-Control"); cacheControl == "" {
+		t.Fatal("favicon response has no cache policy")
+	}
+}
+
 func TestSameOriginAllowsBrowserViewerOrigin(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "https://viewer.example/ws", nil)
 	req.Host = "viewer.example"

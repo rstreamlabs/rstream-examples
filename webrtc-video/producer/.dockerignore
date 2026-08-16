@@ -4,4 +4,8 @@
 dist
 node_modules
 out
+qualification/*
+!qualification/adaptive-streaming/
+qualification/adaptive-streaming/*
+!qualification/adaptive-streaming/sample-host-cpu.sh
 webrtc-video-producer

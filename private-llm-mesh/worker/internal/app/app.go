@@ -68,7 +68,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		modelID = res.ID
 	}
 	logger.Info("loading model", "path", res.Path, "ctx", cfg.NCtx, "parallel", cfg.Parallel)
-	eng, err := engine.Load(res.Path, cfg.NCtx, cfg.Parallel)
+	eng, err := engine.LoadWithOptions(res.Path, cfg.NCtx, engine.Options{Parallel: cfg.Parallel, MaxQueue: cfg.MaxQueue})
 	if err != nil {
 		return err
 	}
@@ -112,11 +112,17 @@ func serveOnce(ctx context.Context, cfg config.Config, handler http.Handler, log
 	logger.Info("worker online", "url", mgr.PublicURL(), "tunnel", cfg.TunnelName)
 	start := time.Now()
 	server := &http.Server{Handler: handler, ReadHeaderTimeout: readHeaderTO, IdleTimeout: idleTO}
-	go func() {
-		<-ctx.Done()
+	shutdownDone := make(chan struct{})
+	stopShutdown := context.AfterFunc(ctx, func() {
+		defer close(shutdownDone)
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
 		defer cancel()
 		_ = server.Shutdown(shutdownCtx)
+	})
+	defer func() {
+		if !stopShutdown() {
+			<-shutdownDone
+		}
 	}()
 	err = server.Serve(mgr.Listener())
 	if errors.Is(err, http.ErrServerClosed) {

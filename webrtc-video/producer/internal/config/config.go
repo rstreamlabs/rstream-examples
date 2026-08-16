@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"strings"
@@ -17,6 +18,7 @@ type (
 	MediaMode              string
 	VideoCodec             string
 	AdaptiveBackend        string
+	ICETransportPolicy     string
 )
 
 const (
@@ -41,14 +43,24 @@ const (
 )
 
 const (
-	DefaultServerListen        = "127.0.0.1:8080"
-	DefaultTunnelName          = "webrtc-video-producer"
-	DefaultTURNTTL             = "10m"
-	DefaultProvisioningTimeout = "10s"
-	DefaultReconnect           = "5s"
-	DefaultBitrateKbps         = 5000
-	MinBitrateKbps             = 1500
-	MaxBitrateKbps             = 8000
+	ICETransportPolicyAll   ICETransportPolicy = "all"
+	ICETransportPolicyRelay ICETransportPolicy = "relay"
+)
+
+const (
+	DefaultServerListen          = "127.0.0.1:8080"
+	DefaultTunnelName            = "webrtc-video-producer"
+	DefaultTURNTTL               = "10m"
+	DefaultProvisioningTimeout   = "10s"
+	DefaultReconnect             = "5s"
+	DefaultBitrateKbps           = 5000
+	MinBitrateKbps               = 500
+	MaxBitrateKbps               = 8000
+	RealTimePacingFactor         = 1.5
+	DefaultFlexFECMediaPackets   = 5
+	DefaultFlexFECRepairPackets  = 1
+	MaxFlexFECPackets            = 110
+	DefaultIncreaseHoldAfterLoss = "5s"
 )
 
 type Config struct {
@@ -105,11 +117,13 @@ type TunnelProvisioningConfig struct {
 }
 
 type TURNConfig struct {
-	TTL string `yaml:"ttl"`
+	TTL        string   `yaml:"ttl"`
+	Transports []string `yaml:"transports"`
 }
 
 type WebRTCConfig struct {
 	UseTURN            bool                     `yaml:"useTurn"`
+	ICETransportPolicy ICETransportPolicy       `yaml:"iceTransportPolicy"`
 	MaxViewers         int                      `yaml:"maxViewers"`
 	InitialBitrateKbps int                      `yaml:"initialBitrateKbps"`
 	Video              WebRTCVideoConfig        `yaml:"video"`
@@ -128,11 +142,13 @@ type WebRTCVideoConfig struct {
 }
 
 type WebRTCInterceptorsConfig struct {
-	TWCC               bool  `yaml:"twcc"`
-	NACK               bool  `yaml:"nack"`
-	RTX                bool  `yaml:"rtx"`
-	FlexFEC            bool  `yaml:"flexFEC"`
-	FlexFECPayloadType uint8 `yaml:"flexFECPayloadType"`
+	TWCC                 bool   `yaml:"twcc"`
+	NACK                 bool   `yaml:"nack"`
+	RTX                  bool   `yaml:"rtx"`
+	FlexFEC              bool   `yaml:"flexFEC"`
+	FlexFECPayloadType   uint8  `yaml:"flexFECPayloadType"`
+	FlexFECMediaPackets  uint32 `yaml:"flexFECMediaPackets"`
+	FlexFECRepairPackets uint32 `yaml:"flexFECRepairPackets"`
 }
 
 type WebRTCAdaptiveConfig struct {
@@ -142,12 +158,15 @@ type WebRTCAdaptiveConfig struct {
 }
 
 type WebRTCTWCCGCCBackendConfig struct {
-	MinBitrateKbps      int    `yaml:"minBitrateKbps"`
-	MaxBitrateKbps      int    `yaml:"maxBitrateKbps"`
-	UpdateInterval      string `yaml:"updateInterval"`
-	ChangeThresholdPct  int    `yaml:"changeThresholdPct"`
-	MaxIncreasePct      int    `yaml:"maxIncreasePct"`
-	MaxIncreaseStepKbps int    `yaml:"maxIncreaseStepKbps"`
+	MinBitrateKbps        int     `yaml:"minBitrateKbps"`
+	MaxBitrateKbps        int     `yaml:"maxBitrateKbps"`
+	UpdateInterval        string  `yaml:"updateInterval"`
+	ChangeThresholdPct    int     `yaml:"changeThresholdPct"`
+	DecreaseThresholdPct  int     `yaml:"decreaseThresholdPct"`
+	MaxIncreasePct        int     `yaml:"maxIncreasePct"`
+	MaxIncreaseStepKbps   int     `yaml:"maxIncreaseStepKbps"`
+	MaxIncreaseLossPct    float64 `yaml:"maxIncreaseLossPct"`
+	IncreaseHoldAfterLoss string  `yaml:"increaseHoldAfterLoss"`
 }
 
 type MediaConfig struct {
@@ -188,6 +207,7 @@ func Default() Config {
 		},
 		WebRTC: WebRTCConfig{
 			UseTURN:            true,
+			ICETransportPolicy: ICETransportPolicyAll,
 			MaxViewers:         0,
 			InitialBitrateKbps: DefaultBitrateKbps,
 			Video: WebRTCVideoConfig{
@@ -200,22 +220,27 @@ func Default() Config {
 				TrackID:        "video",
 			},
 			Interceptors: WebRTCInterceptorsConfig{
-				TWCC:               true,
-				NACK:               true,
-				RTX:                true,
-				FlexFEC:            false,
-				FlexFECPayloadType: 118,
+				TWCC:                 true,
+				NACK:                 true,
+				RTX:                  true,
+				FlexFEC:              false,
+				FlexFECPayloadType:   118,
+				FlexFECMediaPackets:  DefaultFlexFECMediaPackets,
+				FlexFECRepairPackets: DefaultFlexFECRepairPackets,
 			},
 			Adaptive: WebRTCAdaptiveConfig{
 				Enabled: false,
 				Backend: AdaptiveBackendTWCCGCC,
 				TWCCGCC: WebRTCTWCCGCCBackendConfig{
-					MinBitrateKbps:      1500,
-					MaxBitrateKbps:      MaxBitrateKbps,
-					UpdateInterval:      "1s",
-					ChangeThresholdPct:  10,
-					MaxIncreasePct:      15,
-					MaxIncreaseStepKbps: 500,
+					MinBitrateKbps:        2000,
+					MaxBitrateKbps:        MaxBitrateKbps,
+					UpdateInterval:        "1s",
+					ChangeThresholdPct:    10,
+					DecreaseThresholdPct:  5,
+					MaxIncreasePct:        15,
+					MaxIncreaseStepKbps:   500,
+					MaxIncreaseLossPct:    1,
+					IncreaseHoldAfterLoss: DefaultIncreaseHoldAfterLoss,
 				},
 			},
 		},
@@ -268,6 +293,9 @@ func (c Config) Validate() error {
 	if _, err := c.TURNTTL(); err != nil {
 		return err
 	}
+	if _, err := c.TURNTransports(); err != nil {
+		return err
+	}
 	if _, err := c.TunnelProvisioningTimeout(); err != nil {
 		return err
 	}
@@ -316,6 +344,15 @@ func (c Config) Validate() error {
 	if c.WebRTC.MaxViewers < 0 {
 		return errors.New("webrtc maxViewers must be greater than or equal to 0")
 	}
+	switch c.ICETransportPolicy() {
+	case ICETransportPolicyAll:
+	case ICETransportPolicyRelay:
+		if !c.WebRTC.UseTURN {
+			return errors.New("webrtc iceTransportPolicy relay requires useTurn to be enabled")
+		}
+	default:
+		return fmt.Errorf("invalid webrtc iceTransportPolicy %q", c.WebRTC.ICETransportPolicy)
+	}
 	if c.InitialBitrateKbps() <= 0 {
 		return errors.New("webrtc initialBitrateKbps must be greater than 0")
 	}
@@ -329,6 +366,17 @@ func (c Config) Validate() error {
 		fecPayloadType := c.FlexFECPayloadType()
 		if fecPayloadType == c.WebRTC.Video.PayloadType || fecPayloadType == c.RTXPayloadType() {
 			return errors.New("webrtc flexFECPayloadType must be different from video payload types")
+		}
+		mediaPackets := c.FlexFECMediaPackets()
+		repairPackets := c.FlexFECRepairPackets()
+		if mediaPackets > MaxFlexFECPackets {
+			return fmt.Errorf("webrtc flexFECMediaPackets must be at most %d", MaxFlexFECPackets)
+		}
+		if repairPackets > MaxFlexFECPackets {
+			return fmt.Errorf("webrtc flexFECRepairPackets must be at most %d", MaxFlexFECPackets)
+		}
+		if repairPackets > mediaPackets {
+			return errors.New("webrtc flexFECRepairPackets must be less than or equal to flexFECMediaPackets")
 		}
 	}
 	pipeline := strings.ToLower(c.Media.Pipeline)
@@ -367,6 +415,37 @@ func (c Config) Validate() error {
 		}
 		if c.InitialBitrateKbps() > c.WebRTC.Adaptive.TWCCGCC.MaxBitrateKbps {
 			return errors.New("webrtc initialBitrateKbps must be less than or equal to webrtc adaptive twccGCC maxBitrateKbps")
+		}
+		if c.WebRTC.Adaptive.TWCCGCC.ChangeThresholdPct < 0 ||
+			c.WebRTC.Adaptive.TWCCGCC.ChangeThresholdPct > 100 {
+			return errors.New("webrtc adaptive twccGCC changeThresholdPct must be between 0 and 100")
+		}
+		if c.WebRTC.Adaptive.TWCCGCC.DecreaseThresholdPct < 0 ||
+			c.WebRTC.Adaptive.TWCCGCC.DecreaseThresholdPct > 100 {
+			return errors.New("webrtc adaptive twccGCC decreaseThresholdPct must be between 0 and 100")
+		}
+		maximumDecreaseThreshold := c.MaxSafeAdaptiveDecreaseThresholdPct()
+		if c.WebRTC.Adaptive.TWCCGCC.DecreaseThresholdPct > maximumDecreaseThreshold {
+			return fmt.Errorf(
+				"webrtc adaptive twccGCC decreaseThresholdPct must be at most %d with the configured pacing and FlexFEC ratio",
+				maximumDecreaseThreshold,
+			)
+		}
+		if c.WebRTC.Adaptive.TWCCGCC.MaxIncreasePct <= 0 ||
+			c.WebRTC.Adaptive.TWCCGCC.MaxIncreasePct > 100 {
+			return errors.New("webrtc adaptive twccGCC maxIncreasePct must be greater than 0 and at most 100")
+		}
+		if c.WebRTC.Adaptive.TWCCGCC.MaxIncreaseStepKbps <= 0 {
+			return errors.New("webrtc adaptive twccGCC maxIncreaseStepKbps must be greater than 0")
+		}
+		if math.IsNaN(c.WebRTC.Adaptive.TWCCGCC.MaxIncreaseLossPct) ||
+			math.IsInf(c.WebRTC.Adaptive.TWCCGCC.MaxIncreaseLossPct, 0) ||
+			c.WebRTC.Adaptive.TWCCGCC.MaxIncreaseLossPct < 0 ||
+			c.WebRTC.Adaptive.TWCCGCC.MaxIncreaseLossPct > 100 {
+			return errors.New("webrtc adaptive twccGCC maxIncreaseLossPct must be between 0 and 100")
+		}
+		if _, err := c.AdaptiveIncreaseHoldAfterLoss(); err != nil {
+			return err
 		}
 	default:
 		return fmt.Errorf("invalid webrtc adaptive backend %q", c.WebRTC.Adaptive.Backend)
@@ -439,6 +518,14 @@ func (c Config) AdaptiveBackend() AdaptiveBackend {
 	return AdaptiveBackend(value)
 }
 
+func (c Config) ICETransportPolicy() ICETransportPolicy {
+	value := strings.ToLower(strings.TrimSpace(string(c.WebRTC.ICETransportPolicy)))
+	if value == "" {
+		return ICETransportPolicyAll
+	}
+	return ICETransportPolicy(value)
+}
+
 func (c Config) RTXPayloadType() uint8 {
 	if c.WebRTC.Video.RTXPayloadType != 0 {
 		return c.WebRTC.Video.RTXPayloadType
@@ -456,6 +543,37 @@ func (c Config) FlexFECPayloadType() uint8 {
 		return c.WebRTC.Interceptors.FlexFECPayloadType
 	}
 	return 118
+}
+
+func (c Config) FlexFECMediaPackets() uint32 {
+	if c.WebRTC.Interceptors.FlexFECMediaPackets != 0 {
+		return c.WebRTC.Interceptors.FlexFECMediaPackets
+	}
+	return DefaultFlexFECMediaPackets
+}
+
+func (c Config) FlexFECRepairPackets() uint32 {
+	if c.WebRTC.Interceptors.FlexFECRepairPackets != 0 {
+		return c.WebRTC.Interceptors.FlexFECRepairPackets
+	}
+	return DefaultFlexFECRepairPackets
+}
+
+func (c Config) MaxSafeAdaptiveDecreaseThresholdPct() int {
+	protectedWireFactor := 1.0
+	if c.WebRTC.Interceptors.FlexFEC {
+		mediaPackets := float64(c.FlexFECMediaPackets())
+		repairPackets := float64(c.FlexFECRepairPackets())
+		if mediaPackets > 0 && repairPackets > 0 {
+			protectedWireFactor = (mediaPackets + repairPackets) / mediaPackets
+		}
+	}
+	pacingEnvelopeFactor := math.Max(RealTimePacingFactor, protectedWireFactor)
+	availableFraction := 1 - protectedWireFactor/pacingEnvelopeFactor
+	if availableFraction <= 0 {
+		return 0
+	}
+	return int(math.Floor(availableFraction * 100))
 }
 
 func (c Config) InitialBitrateKbps() int {
@@ -480,6 +598,21 @@ func (c Config) AdaptiveUpdateInterval() (time.Duration, error) {
 	return dur, nil
 }
 
+func (c Config) AdaptiveIncreaseHoldAfterLoss() (time.Duration, error) {
+	value := strings.TrimSpace(c.WebRTC.Adaptive.TWCCGCC.IncreaseHoldAfterLoss)
+	if value == "" {
+		value = DefaultIncreaseHoldAfterLoss
+	}
+	dur, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("invalid webrtc adaptive twccGCC increaseHoldAfterLoss %q", c.WebRTC.Adaptive.TWCCGCC.IncreaseHoldAfterLoss)
+	}
+	if dur < 0 {
+		return 0, errors.New("webrtc adaptive twccGCC increaseHoldAfterLoss must not be negative")
+	}
+	return dur, nil
+}
+
 func (c Config) TURNTTL() (time.Duration, error) {
 	value := strings.TrimSpace(c.TURN.TTL)
 	if value == "" {
@@ -490,6 +623,28 @@ func (c Config) TURNTTL() (time.Duration, error) {
 		return 0, fmt.Errorf("invalid TURN TTL %q", c.TURN.TTL)
 	}
 	return dur, nil
+}
+
+func (c Config) TURNTransports() ([]string, error) {
+	if len(c.TURN.Transports) == 0 {
+		return nil, nil
+	}
+	seen := make(map[string]struct{}, len(c.TURN.Transports))
+	transports := make([]string, 0, len(c.TURN.Transports))
+	for _, raw := range c.TURN.Transports {
+		transport := strings.ToLower(strings.TrimSpace(raw))
+		switch transport {
+		case "udp", "tcp", "dtls", "tls":
+		default:
+			return nil, fmt.Errorf("invalid TURN transport %q", raw)
+		}
+		if _, ok := seen[transport]; ok {
+			continue
+		}
+		seen[transport] = struct{}{}
+		transports = append(transports, transport)
+	}
+	return transports, nil
 }
 
 func (c Config) TunnelProvisioningTimeout() (time.Duration, error) {

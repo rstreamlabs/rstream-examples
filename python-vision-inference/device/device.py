@@ -27,6 +27,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import math
 import shutil
 import sys
 import time
@@ -38,7 +39,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import supervision as sv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from trackers import ByteTrackTracker
 
@@ -48,11 +49,14 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+from shared.images import CODECS, encode_for_worker
 from shared.protocol import read_message, send_message
 
 WEB_DIR = Path(__file__).parent / "web"
 WORKER_FILTERS = rstream.TunnelFilters(labels={"role": "inference"})
 RESPONSE_TIMEOUT = 20.0
+DIAL_TIMEOUT = 10.0
+CONTROL_TIMEOUT = 15.0
 DIAL_COOLDOWN = 1.0
 SESSION_COOLDOWN = 3.0
 MAX_IN_FLIGHT = 2
@@ -60,7 +64,7 @@ FRESHNESS_LIMIT = 1.0
 FRAME_BUFFER_SIZE = 64  # ~1 s at 60 fps, above the 500 ms jitter-target cap
 DISPLAY_MAX_WIDTH = 960
 DISPLAY_FPS = 24.0
-CODECS = {"jpeg": ".jpg", "webp": ".webp", "png": ".png"}
+MAX_DETECTIONS_PER_FRAME = 10_000
 
 # Highway traffic clip from Pexels (https://www.pexels.com/video/2103099/),
 # distributed under the Pexels license (free to use). Downloaded once and
@@ -195,6 +199,9 @@ class DeviceState:
                 "accelerator": self.worker_labels.get(name, {}).get("accelerator"),
                 "model": self.worker_labels.get(name, {}).get("model"),
                 "device": self.worker_labels.get(name, {}).get("device"),
+                "engine_region": self.worker_labels.get(name, {}).get(
+                    "engine_region"
+                ),
             }
             for name in sorted(self.workers)
         ]
@@ -231,7 +238,10 @@ def ensure_source(source: str) -> str:
     if target.exists():
         return str(target)
     try:
-        print("Downloading the sample highway clip (Pexels, free license)…", flush=True)
+        print(
+            "Downloading the sample highway clip (Pexels, free license)…",
+            flush=True,
+        )
         _download_sample_video(target)
         return str(target)
     except OSError as error:
@@ -242,10 +252,14 @@ def ensure_source(source: str) -> str:
 def _download_sample_video(target: Path) -> None:
     request = urllib.request.Request(SAMPLE_VIDEO_URL, headers=SAMPLE_VIDEO_HEADERS)
     partial = target.with_suffix(f"{target.suffix}.download")
-    with urllib.request.urlopen(request, timeout=60) as response:
-        with partial.open("wb") as output:
-            shutil.copyfileobj(response, output)
-    partial.replace(target)
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            with partial.open("wb") as output:
+                shutil.copyfileobj(response, output)
+        partial.replace(target)
+    except BaseException:
+        partial.unlink(missing_ok=True)
+        raise
 
 
 def _fit_display(frame: np.ndarray) -> np.ndarray:
@@ -276,25 +290,42 @@ async def capture_loop(state: DeviceState, source: str, fps_override: float) -> 
             await asyncio.sleep(1.0 / fps)
     capture = cv2.VideoCapture(int(source) if source.isdigit() else source)
     if not capture.isOpened():
+        capture.release()
         raise SystemExit(f"failed to open capture source {source!r}")
     is_file = not source.isdigit()
     fps = fps_override or (capture.get(cv2.CAP_PROP_FPS) if is_file else 0.0) or 25.0
     interval = 1.0 / fps
     next_tick = time.monotonic()
-    while True:
-        ok, frame = await loop.run_in_executor(None, capture.read)
-        if not ok:
-            if is_file:
-                capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                continue
-            raise SystemExit("capture source ended")
-        state.add_frame(_fit_display(frame))
-        next_tick += interval
-        delay = next_tick - time.monotonic()
-        if delay > 0:
-            await asyncio.sleep(delay)
-        else:
-            next_tick = time.monotonic()
+    try:
+        while True:
+            ok, frame = await _read_capture(loop, capture)
+            if not ok:
+                if is_file:
+                    capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    continue
+                raise SystemExit("capture source ended")
+            state.add_frame(_fit_display(frame))
+            next_tick += interval
+            delay = next_tick - time.monotonic()
+            if delay > 0:
+                await asyncio.sleep(delay)
+            else:
+                next_tick = time.monotonic()
+    finally:
+        capture.release()
+
+
+async def _read_capture(
+    loop: asyncio.AbstractEventLoop, capture: cv2.VideoCapture
+) -> tuple[bool, np.ndarray]:
+    """Do not release a capture while its blocking read still owns it."""
+    future = loop.run_in_executor(None, capture.read)
+    try:
+        return await asyncio.shield(future)
+    except asyncio.CancelledError:
+        with suppress(Exception):
+            await future
+        raise
 
 
 async def registry_loop(state: DeviceState, client: rstream.Client) -> None:
@@ -310,13 +341,19 @@ async def registry_loop(state: DeviceState, client: rstream.Client) -> None:
         try:
             # Seed the pool from the inventory: list_tunnels filtered by label
             # is a point-in-time snapshot of the registry.
-            state.workers.clear()
-            state.worker_labels.clear()
-            for tunnel in await client.list_tunnels(filters=WORKER_FILTERS):
+            workers: dict[str, str] = {}
+            worker_labels: dict[str, dict[str, str]] = {}
+            inventory = await asyncio.wait_for(
+                client.list_tunnels(filters=WORKER_FILTERS),
+                CONTROL_TIMEOUT,
+            )
+            for tunnel in inventory:
                 name = tunnel.properties.name
                 if name and tunnel.status == "online":
-                    state.workers[name] = tunnel.status
-                    state.worker_labels[name] = dict(tunnel.properties.labels)
+                    workers[name] = tunnel.status
+                    worker_labels[name] = dict(tunnel.properties.labels)
+            state.workers = workers
+            state.worker_labels = worker_labels
             state.workers_event.set()
             _apply_capacity_transition(state)
             state.publish({})
@@ -325,19 +362,8 @@ async def registry_loop(state: DeviceState, client: rstream.Client) -> None:
             # arrival or departure, so the pool stays current with no polling.
             async with client.watch(tunnels=WORKER_FILTERS) as events:
                 async for event in events:
-                    obj = event.object or {}
-                    name = obj.get("name")
-                    if not isinstance(name, str):
+                    if not _apply_worker_event(state, event.type, event.object or {}):
                         continue
-                    if event.type == "tunnel.deleted" or obj.get("status") == "offline":
-                        state.workers.pop(name, None)
-                        state.worker_labels.pop(name, None)
-                    elif isinstance(obj.get("labels"), dict):
-                        state.workers[name] = str(obj.get("status", "online"))
-                        state.worker_labels[name] = {
-                            str(k): str(v) for k, v in obj["labels"].items()
-                        }
-                        state.cooldown.pop(name, None)
                     state.workers_event.set()
                     _apply_capacity_transition(state)
                     state.publish({})
@@ -349,6 +375,26 @@ async def registry_loop(state: DeviceState, client: rstream.Client) -> None:
             )
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 15.0)
+
+
+def _apply_worker_event(
+    state: DeviceState, event_type: str, obj: dict[str, object]
+) -> bool:
+    name = obj.get("name")
+    if not isinstance(name, str) or not name:
+        return False
+    status = str(obj.get("status", "online"))
+    if event_type == "tunnel.deleted" or status != "online":
+        state.workers.pop(name, None)
+        state.worker_labels.pop(name, None)
+        return True
+    labels = obj.get("labels")
+    if not isinstance(labels, dict):
+        return False
+    state.workers[name] = status
+    state.worker_labels[name] = {str(key): str(value) for key, value in labels.items()}
+    state.cooldown.pop(name, None)
+    return True
 
 
 def _apply_capacity_transition(state: DeviceState) -> None:
@@ -370,21 +416,28 @@ def _apply_capacity_transition(state: DeviceState) -> None:
 def _encode_for_worker(
     frame: np.ndarray, input_size: int, codec: str, quality: int
 ) -> tuple[bytes, float]:
-    height, width = frame.shape[:2]
-    scale = max(width, height) / float(input_size)
-    if scale > 1.0:
-        frame = cv2.resize(frame, (round(width / scale), round(height / scale)))
-    else:
-        scale = 1.0
-    params: list[int] = []
-    if codec == "jpeg":
-        params = [cv2.IMWRITE_JPEG_QUALITY, quality]
-    elif codec == "webp":
-        params = [cv2.IMWRITE_WEBP_QUALITY, quality]
-    ok, encoded = cv2.imencode(CODECS[codec], frame, params)
-    if not ok:
-        raise ValueError(f"failed to encode frame with codec {codec}")
-    return encoded.tobytes(), scale
+    return encode_for_worker(frame, input_size, codec, quality)
+
+
+async def _encode_for_worker_async(
+    frame: np.ndarray, input_size: int, codec: str, quality: int
+) -> tuple[bytes, float]:
+    """Join an in-progress OpenCV encode before propagating cancellation."""
+    loop = asyncio.get_running_loop()
+    future = loop.run_in_executor(
+        None,
+        _encode_for_worker,
+        frame,
+        input_size,
+        codec,
+        quality,
+    )
+    try:
+        return await asyncio.shield(future)
+    except asyncio.CancelledError:
+        with suppress(Exception):
+            await future
+        raise
 
 
 def _to_tracked_detections(
@@ -408,17 +461,199 @@ async def open_session(
     # dial opens a bytestream to the worker's private tunnel by name. rstream
     # routes it through the engine; the device never learns the worker's IP or
     # port, and the worker exposes neither.
-    stream = await client.dial(worker)
+    stream = await asyncio.wait_for(client.dial(worker), DIAL_TIMEOUT)
     try:
         hello = await asyncio.wait_for(read_message(stream), RESPONSE_TIMEOUT)
-        if hello is None or hello[0].get("type") != "hello":
+        if hello is None:
             raise ConnectionError("worker did not send a hello")
+        if hello[0].get("type") == "error":
+            raise ConnectionError(_worker_error(hello[0]))
+        if hello[0].get("type") != "hello":
+            raise ConnectionError("worker did not send a hello")
+        _validate_hello(hello[0])
         return stream, hello[0]
     except BaseException:
         with suppress(Exception):
             stream.close()
             await stream.wait_closed()
         raise
+
+
+def _validate_hello(header: dict[str, object]) -> None:
+    worker = header.get("worker")
+    if not isinstance(worker, str) or not worker:
+        raise ValueError("worker hello requires a non-empty worker name")
+    input_size = header.get("input_size")
+    if (
+        not isinstance(input_size, int)
+        or isinstance(input_size, bool)
+        or not 32 <= input_size <= 8192
+    ):
+        raise ValueError("worker hello input_size must be an integer in [32,8192]")
+    active_sessions = header.get("active_sessions")
+    if (
+        not isinstance(active_sessions, int)
+        or isinstance(active_sessions, bool)
+        or active_sessions < 0
+    ):
+        raise ValueError("worker hello active_sessions must be a non-negative integer")
+    max_sessions = header.get("max_sessions")
+    if (
+        not isinstance(max_sessions, int)
+        or isinstance(max_sessions, bool)
+        or max_sessions <= 0
+        or active_sessions >= max_sessions
+    ):
+        raise ValueError(
+            "worker hello max_sessions must exceed the active session count"
+        )
+    offered = header.get("codecs")
+    if (
+        not isinstance(offered, list)
+        or not offered
+        or not all(isinstance(codec, str) for codec in offered)
+    ):
+        raise ValueError("worker hello codecs must be a non-empty string array")
+    engine_region = header.get("engine_region")
+    if (
+        not isinstance(engine_region, str)
+        or not engine_region
+        or len(engine_region) > 128
+    ):
+        raise ValueError("worker hello requires a valid engine_region")
+
+
+def _worker_error(header: dict[str, object]) -> str:
+    code = header.get("code")
+    message = header.get("message")
+    safe_code = code if isinstance(code, str) and code else "worker_error"
+    safe_message = message if isinstance(message, str) and message else "request failed"
+    return f"worker error {safe_code}: {safe_message}"
+
+
+def _detection_enabled(payload: dict[str, object]) -> bool:
+    enabled = payload.get("enabled")
+    if not isinstance(enabled, bool):
+        raise ValueError("enabled must be a boolean")
+    return enabled
+
+
+def _worker_pin(payload: dict[str, object]) -> str | None:
+    if "worker" not in payload:
+        raise ValueError("worker is required")
+    worker = payload.get("worker")
+    if worker is None:
+        return None
+    if not isinstance(worker, str) or not worker or len(worker) > 128:
+        raise ValueError("worker must be null or a non-empty string up to 128 bytes")
+    return worker
+
+
+def _session_load(header: dict[str, object]) -> float:
+    return int(header["active_sessions"]) / int(header["max_sessions"])
+
+
+def _parse_result(
+    header: dict[str, object], payload: bytes
+) -> tuple[int, float, list[dict[str, object]]]:
+    if payload:
+        raise ValueError("worker result must not contain a binary payload")
+    frame_id = header.get("frame_id")
+    if (
+        not isinstance(frame_id, int)
+        or isinstance(frame_id, bool)
+        or not 0 <= frame_id <= (1 << 63) - 1
+    ):
+        raise ValueError("worker returned an invalid frame_id")
+    infer_ms = header.get("infer_ms")
+    if (
+        not isinstance(infer_ms, (int, float))
+        or isinstance(infer_ms, bool)
+        or not math.isfinite(float(infer_ms))
+        or infer_ms < 0
+    ):
+        raise ValueError("worker returned an invalid inference duration")
+    raw = header.get("detections")
+    if not isinstance(raw, list) or len(raw) > MAX_DETECTIONS_PER_FRAME:
+        raise ValueError("worker returned an invalid detection array")
+    for detection in raw:
+        if not isinstance(detection, dict):
+            raise ValueError("worker returned a non-object detection")
+        box = detection.get("box")
+        if (
+            not isinstance(box, list)
+            or len(box) != 4
+            or not all(
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and math.isfinite(float(value))
+                for value in box
+            )
+        ):
+            raise ValueError("worker returned an invalid detection box")
+        x1, y1, x2, y2 = (float(value) for value in box)
+        if x2 < x1 or y2 < y1:
+            raise ValueError("worker returned an inverted detection box")
+        confidence = detection.get("confidence")
+        if (
+            not isinstance(confidence, (int, float))
+            or isinstance(confidence, bool)
+            or not math.isfinite(float(confidence))
+            or not 0 <= confidence <= 1
+        ):
+            raise ValueError("worker returned an invalid detection confidence")
+        label = detection.get("label")
+        if not isinstance(label, str) or not label or len(label) > 256:
+            raise ValueError("worker returned an invalid detection label")
+    return frame_id, float(infer_ms), raw
+
+
+def _complete_frame(
+    in_flight: dict[int, tuple[float, float]],
+    slots: asyncio.Semaphore,
+    frame_id: int,
+) -> tuple[float, float]:
+    sent = in_flight.pop(frame_id, None)
+    if sent is None:
+        raise ValueError(f"worker returned unknown frame_id {frame_id}")
+    slots.release()
+    return sent
+
+
+async def _open_candidates(
+    state: DeviceState,
+    client: rstream.Client,
+    candidates: list[str],
+) -> list[tuple[str, rstream.RstreamStream, dict[str, object], float]]:
+    async def timed_open(
+        name: str,
+    ) -> tuple[rstream.RstreamStream, dict[str, object], float]:
+        started = time.monotonic()
+        stream, hello = await open_session(client, name)
+        return stream, hello, (time.monotonic() - started) * 1000
+
+    results = await asyncio.gather(
+        *(timed_open(name) for name in candidates),
+        return_exceptions=True,
+    )
+    opened: list[tuple[str, rstream.RstreamStream, dict[str, object], float]] = []
+    for name, result in zip(candidates, results, strict=True):
+        if isinstance(result, asyncio.CancelledError):
+            raise result
+        if isinstance(result, Exception):
+            print(f"dial to {name} failed: {result!r}", flush=True)
+            state.cooldown[name] = time.monotonic() + DIAL_COOLDOWN
+            continue
+        stream, hello, establishment_ms = result
+        opened.append((name, stream, hello, establishment_ms))
+    return opened
+
+
+def _candidate_score(
+    header: dict[str, object], establishment_ms: float
+) -> tuple[float, float]:
+    """Prefer available capacity, then the nearer equally-loaded worker."""
+    return _session_load(header), establishment_ms
 
 
 async def run_session(
@@ -428,11 +663,13 @@ async def run_session(
     codec: str,
     quality: int,
 ) -> None:
-    loop = asyncio.get_running_loop()
     input_size = int(header.get("input_size", 640))
     offered = header.get("codecs")
     if isinstance(offered, list) and codec not in offered:
-        codec = "jpeg"
+        compatible = [candidate for candidate in offered if candidate in CODECS]
+        if not compatible:
+            raise ValueError("worker and device have no codec in common")
+        codec = "jpeg" if "jpeg" in compatible else compatible[0]
     state.publish(
         {
             "worker": header.get("worker"),
@@ -457,8 +694,8 @@ async def run_session(
                     if frame_id not in in_flight:
                         break
                 await event.wait()
-            payload, scale = await loop.run_in_executor(
-                None, _encode_for_worker, frame, input_size, codec, quality
+            payload, scale = await _encode_for_worker_async(
+                frame, input_size, codec, quality
             )
             in_flight[frame_id] = (time.monotonic(), scale)
             await send_message(
@@ -466,28 +703,24 @@ async def run_session(
             )
             state.uplink.tick(len(payload))
 
-    send_task = asyncio.create_task(sender())
-    try:
+    async def receiver() -> None:
+        nonlocal last_publish
         while True:
             message = await asyncio.wait_for(read_message(stream), RESPONSE_TIMEOUT)
             if message is None:
                 raise ConnectionError("worker closed the session")
-            header, _ = message
-            if header.get("type") != "result":
-                continue
-            frame_id = int(header.get("frame_id", -1))
-            sent = in_flight.pop(frame_id, None)
-            in_flight_slots.release()
-            if sent is None:
-                continue
-            sent_at, scale = sent
+            result, payload = message
+            if result.get("type") == "error":
+                raise ConnectionError(_worker_error(result))
+            if result.get("type") != "result":
+                raise ValueError(
+                    f"unexpected worker message type {result.get('type')!r}"
+                )
+            frame_id, infer_ms, raw = _parse_result(result, payload)
+            sent_at, scale = _complete_frame(in_flight, in_flight_slots, frame_id)
             rtt_ms = (time.monotonic() - sent_at) * 1000.0
-            infer_ms = float(header.get("infer_ms", 0.0))
             state.latency.update(rtt_ms)
-            raw = header.get("detections")
-            tracked = _to_tracked_detections(
-                state, raw if isinstance(raw, list) else [], scale
-            )
+            tracked = _to_tracked_detections(state, raw, scale)
             state.detections[frame_id] = (time.monotonic(), tracked)
             while len(state.detections) > FRAME_BUFFER_SIZE:
                 state.detections.popitem(last=False)
@@ -511,9 +744,25 @@ async def run_session(
                     ],
                 }
             )
+
+    send_task = asyncio.create_task(sender())
+    receive_task = asyncio.create_task(receiver())
+    tasks = {send_task, receive_task}
+    try:
+        done, pending = await asyncio.wait(
+            tasks,
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+        for task in done:
+            task.result()
     finally:
-        send_task.cancel()
-        await asyncio.gather(send_task, return_exceptions=True)
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 def _class_counts(state: DeviceState, tracked: sv.Detections) -> list[tuple[str, int]]:
@@ -551,18 +800,12 @@ async def inference_loop(state: DeviceState, client: rstream.Client) -> None:
             continue
         # Power of two choices: ask both candidates, keep the lighter one.
         # Dials are cheap, so balancing costs one extra hello.
-        opened: list[tuple[str, rstream.RstreamStream, dict[str, object]]] = []
-        for name in candidates:
-            try:
-                opened.append((name, *await open_session(client, name)))
-            except Exception as error:
-                print(f"dial to {name} failed: {error!r}", flush=True)
-                state.cooldown[name] = time.monotonic() + DIAL_COOLDOWN
+        opened = await _open_candidates(state, client, candidates)
         if not opened:
             continue
-        opened.sort(key=lambda item: int(item[2].get("active_sessions", 0)))
-        worker, stream, hello = opened[0]
-        for _, other_stream, _ in opened[1:]:
+        opened.sort(key=lambda item: _candidate_score(item[2], item[3]))
+        worker, stream, hello, _ = opened[0]
+        for _, other_stream, _, _ in opened[1:]:
             with suppress(Exception):
                 other_stream.close()
                 await other_stream.wait_closed()
@@ -588,13 +831,7 @@ async def inference_loop(state: DeviceState, client: rstream.Client) -> None:
             continue
         try:
             session.result()
-        except (
-            TimeoutError,
-            ConnectionError,
-            OSError,
-            ValueError,
-            rstream.RstreamError,
-        ) as error:
+        except Exception as error:
             if state.detection_enabled:
                 print(f"session with {worker} failed: {error!r}", flush=True)
             state.cooldown[worker] = time.monotonic() + SESSION_COOLDOWN
@@ -670,8 +907,17 @@ async def render_loop(state: DeviceState) -> None:
                 if now - det_ts <= FRESHNESS_LIMIT and state.detection_enabled:
                     overlay = det
                 break
+        class_names = {value: key for key, value in state.class_ids.items()}
+        display_quality = state.display_quality
         annotated = await loop.run_in_executor(
-            None, _render, state, frame, overlay, box_annotator, label_annotator
+            None,
+            _render,
+            frame,
+            overlay,
+            class_names,
+            box_annotator,
+            label_annotator,
+            display_quality,
         )
         if annotated:
             state.annotated = (annotated, ts)
@@ -685,17 +931,17 @@ async def render_loop(state: DeviceState) -> None:
 
 
 def _render(
-    state: DeviceState,
     frame: np.ndarray,
     overlay: sv.Detections | None,
+    class_names: dict[int, str],
     box_annotator: sv.BoxAnnotator,
     label_annotator: sv.LabelAnnotator,
+    display_quality: int,
 ) -> bytes:
     canvas = frame.copy()
     if overlay is not None and len(overlay) > 0:
-        names = {v: k for k, v in state.class_ids.items()}
         labels = [
-            f"{names.get(int(cid), '?')} #{tid}"
+            f"{class_names.get(int(cid), '?')} #{tid}"
             for cid, tid in zip(overlay.class_id, overlay.tracker_id, strict=False)
         ]
         canvas = box_annotator.annotate(scene=canvas, detections=overlay)
@@ -703,7 +949,7 @@ def _render(
             scene=canvas, detections=overlay, labels=labels
         )
     ok, jpeg = cv2.imencode(
-        ".jpg", canvas, [cv2.IMWRITE_JPEG_QUALITY, state.display_quality]
+        ".jpg", canvas, [cv2.IMWRITE_JPEG_QUALITY, display_quality]
     )
     return jpeg.tobytes() if ok else b""
 
@@ -736,7 +982,10 @@ def build_app(state: DeviceState) -> FastAPI:
 
     @app.post("/detection")
     async def set_detection(payload: dict[str, object]) -> dict[str, bool]:
-        enabled = bool(payload.get("enabled", True))
+        try:
+            enabled = _detection_enabled(payload)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
         state.resume_on_capacity = False
         if enabled != state.detection_enabled:
             state.detection_enabled = enabled
@@ -754,8 +1003,10 @@ def build_app(state: DeviceState) -> FastAPI:
         # selection. The pin is advisory: the inference loop falls back to
         # auto when the pinned worker is unavailable and snaps back when it
         # returns.
-        worker = payload.get("worker")
-        state.pinned_worker = worker if isinstance(worker, str) and worker else None
+        try:
+            state.pinned_worker = _worker_pin(payload)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
         state.publish({})
         return {"pinned_worker": state.pinned_worker}
 
@@ -823,6 +1074,13 @@ def build_app(state: DeviceState) -> FastAPI:
     return app
 
 
+def _validate_options(fps: float, quality: int) -> None:
+    if not math.isfinite(fps) or not 0 <= fps <= 240:
+        raise ValueError("--fps must be finite and in [0,240]")
+    if not 1 <= quality <= 100:
+        raise ValueError("--quality must be in [1,100]")
+
+
 async def viewer_loop(
     state: DeviceState,
     app: FastAPI,
@@ -839,17 +1097,21 @@ async def viewer_loop(
     backoff = 1.0
     while True:
         try:
-            async with await client.connect() as control:
-                viewer = await control.create_tunnel(
-                    name=f"{name}-viewer",
-                    protocol="http",
-                    http_version="http/1.1",
-                    # Published: the engine mints a public HTTPS URL for
-                    # standard browsers, optionally gated by an edge token.
-                    publish=True,
-                    hostname=host,
-                    auth=rstream.TunnelAuth(token=True) if token_auth else None,
-                    labels={"role": "viewer", "device": name},
+            connection = await asyncio.wait_for(client.connect(), CONTROL_TIMEOUT)
+            async with connection as control:
+                viewer = await asyncio.wait_for(
+                    control.create_tunnel(
+                        name=f"{name}-viewer",
+                        protocol="http",
+                        http_version="http/1.1",
+                        # Published: the engine mints a public HTTPS URL for
+                        # standard browsers, optionally gated by an edge token.
+                        publish=True,
+                        hostname=host,
+                        auth=rstream.TunnelAuth(token=True) if token_auth else None,
+                        labels={"role": "viewer", "device": name},
+                    ),
+                    CONTROL_TIMEOUT,
                 )
                 print("Viewer address:", viewer.forwarding_address, flush=True)
                 backoff = 1.0
@@ -899,6 +1161,10 @@ async def main() -> None:
         "generated so the address survives restarts",
     )
     args = parser.parse_args()
+    try:
+        _validate_options(args.fps, args.quality)
+    except ValueError as error:
+        parser.error(str(error))
     state = DeviceState()
     state.device_name = args.name
     state.codec = args.codec
@@ -912,7 +1178,10 @@ async def main() -> None:
         # generated stable domain. Reusing it on every reconnect is what keeps
         # the address constant, so the generation must happen here, not inside
         # the loop that recreates the tunnel.
-        host = args.host or await client.generate_stable_hostname()
+        host = args.host or await asyncio.wait_for(
+            client.generate_stable_hostname(),
+            CONTROL_TIMEOUT,
+        )
         await asyncio.gather(
             capture_loop(state, source, args.fps),
             registry_loop(state, client),

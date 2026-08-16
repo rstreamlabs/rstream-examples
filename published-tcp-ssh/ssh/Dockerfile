@@ -11,6 +11,6 @@ RUN chmod 0755 /usr/local/bin/entrypoint.sh
 
 EXPOSE 22
 
-HEALTHCHECK --interval=2s --timeout=1s --retries=15 CMD nc -z 127.0.0.1 22
+HEALTHCHECK --interval=2s --timeout=1s --retries=15 CMD kill -0 1
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

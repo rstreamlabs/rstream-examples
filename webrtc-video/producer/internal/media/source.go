@@ -19,6 +19,10 @@ type EncoderController interface {
 	SetTargetBitrateKbps(int) error
 }
 
+type KeyFrameRequester interface {
+	RequestKeyFrame() error
+}
+
 type Source interface {
 	Start() error
 	Stop() error

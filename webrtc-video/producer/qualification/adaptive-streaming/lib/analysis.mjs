@@ -1,0 +1,2162 @@
+import { readFile, writeFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
+import process from "node:process";
+
+export function enrichSamples(samples) {
+  let previous = null;
+  return samples.map((sample) => {
+    let receivedBitrateKbps = 0;
+    if (
+      previous &&
+      sample.bytesReceived >= previous.bytesReceived &&
+      sample.elapsedMilliseconds > previous.elapsedMilliseconds
+    ) {
+      const bytes = sample.bytesReceived - previous.bytesReceived;
+      const milliseconds =
+        sample.elapsedMilliseconds - previous.elapsedMilliseconds;
+      receivedBitrateKbps = (bytes * 8) / milliseconds;
+    }
+    previous = sample;
+    return { ...sample, receivedBitrateKbps };
+  });
+}
+
+export function analyze(
+  samples,
+  manifest,
+  trafficControl = null,
+  encoderQuality = null,
+  receiverUDPEvidence = null,
+  producerUDPEvidence = null,
+  setupEvidence = null,
+  hostCPUEvidence = null,
+  phaseTimeline = null,
+  receiverHostCPUEvidence = null,
+) {
+  const enriched = enrichSamples(samples);
+  const phaseOrder = manifest.phases.map((phase) => phase.name);
+  const qualificationPhaseOrder = phaseOrder.filter(
+    (name) => name !== "warmup",
+  );
+  const summaries = Object.fromEntries(
+    manifest.phases.map((phase) => [
+      phase.name,
+      summarizePhase(
+        enriched.filter((sample) => sample.phase === phase.name),
+        phase,
+        encoderQuality?.[phase.name] || null,
+      ),
+    ]),
+  );
+  const baseline = summaries.baseline;
+  const constrained = summaries.constrained;
+  const impaired = summaries.impaired;
+  const recovery = summaries.recovery;
+  const assertions = [];
+  const trafficControlSummary = summarizeTrafficControl(trafficControl);
+  const receiverUDP = summarizeReceiverUDP(receiverUDPEvidence, phaseOrder);
+  const producerUDP = summarizeReceiverUDP(producerUDPEvidence, phaseOrder);
+  const setup = summarizeSetup(setupEvidence);
+  const hostCPU = summarizeHostCPU(hostCPUEvidence, phaseTimeline, phaseOrder);
+  const receiverHostCPU = summarizeHostCPU(
+    receiverHostCPUEvidence,
+    phaseTimeline,
+    phaseOrder,
+  );
+  const candidatePairSwitches = countCandidatePairSwitches(enriched);
+  const icePolicy = manifest.networkPath?.icePolicy || "relay";
+  const constrainedMediaCapacityKbps = mediaCapacityKbps(
+    constrained?.capacityKbps || 0,
+    manifest.protection,
+  );
+  const congestionResponseRequired =
+    (baseline?.medianEncoderTargetKbps || 0) > constrainedMediaCapacityKbps;
+  assert(
+    assertions,
+    phaseOrder.every((name) => summaries[name]?.samples >= 15),
+    "phase-sample-coverage",
+    "every measured phase has at least 15 samples",
+  );
+  if (Number.isInteger(manifest.runtime?.logicalCPUs)) {
+    assert(
+      assertions,
+      hostCPU.available &&
+        phaseOrder.every(
+          (name) =>
+            hostCPU.phases[name]?.samples >= 15 &&
+            hostCPU.phases[name].samplingGapSamples >= 15 &&
+            hostCPU.phases[name].samplingGapMaximumMilliseconds <= 350 &&
+            hostCPU.phases[name].stealP95Ratio <= 0.05,
+        ),
+      "producer-host-scheduler",
+      "producer host CPU evidence covers every phase, its p95 hypervisor steal time stays at or below 5%, and its 250 ms sampler never stalls for more than 350 ms",
+    );
+  }
+  if (Number.isInteger(manifest.browserRuntime?.logicalCPUs)) {
+    assert(
+      assertions,
+      receiverHostCPU.available &&
+        phaseOrder.every(
+          (name) =>
+            receiverHostCPU.phases[name]?.samples >= 15 &&
+            receiverHostCPU.phases[name].samplingGapSamples >= 15 &&
+            receiverHostCPU.phases[name].samplingGapMaximumMilliseconds <=
+              350 &&
+            receiverHostCPU.phases[name].stealP95Ratio <= 0.05,
+        ),
+      "receiver-host-scheduler",
+      "receiver host CPU evidence covers every phase, its p95 hypervisor steal time stays at or below 5%, and its 250 ms sampler never stalls for more than 350 ms",
+    );
+  }
+  if (Number.isFinite(manifest.video?.playoutDelayHintSeconds)) {
+    assert(
+      assertions,
+      phaseOrder.every(
+        (name) =>
+          Number.isFinite(
+            summaries[name]?.averageJitterBufferTargetMilliseconds,
+          ) && summaries[name].averageJitterBufferTargetMilliseconds <= 250,
+      ),
+      "playout-target-latency-budget",
+      "receiver jitter-buffer target evidence covers every phase and remains at or below 250 ms",
+    );
+    assert(
+      assertions,
+      phaseOrder.every(
+        (name) =>
+          Number.isFinite(
+            summaries[name]?.averageJitterBufferDelayMilliseconds,
+          ) && summaries[name].averageJitterBufferDelayMilliseconds <= 300,
+      ),
+      "playout-effective-latency-budget",
+      "receiver effective buffered delay evidence covers every phase and remains at or below 300 ms",
+    );
+  }
+  assert(
+    assertions,
+    enriched.every((sample) => {
+      const usesRelay =
+        sample.localCandidateType === "relay" ||
+        sample.remoteCandidateType === "relay";
+      return icePolicy === "relay" ? usesRelay : !usesRelay;
+    }),
+    "ice-path",
+    icePolicy === "relay"
+      ? "every sample uses a TURN relay candidate"
+      : "every sample uses the direct Docker bridge path without TURN",
+  );
+  assert(
+    assertions,
+    phaseOrder.every((name) => summaries[name]?.connectedRatio >= 0.98),
+    "session-continuity",
+    "peer connection and playback remain healthy for at least 98% of samples",
+  );
+  assert(
+    assertions,
+    baseline?.medianReceivedBitrateKbps >= 1000,
+    "baseline-throughput",
+    "baseline median receive throughput is at least 1 Mbps",
+  );
+  const reductionThreshold = (baseline?.medianEncoderTargetKbps || 0) * 0.8;
+  assert(
+    assertions,
+    !congestionResponseRequired ||
+      (constrained?.medianEncoderTargetKbps || Infinity) <= reductionThreshold,
+    "congestion-response",
+    congestionResponseRequired
+      ? "constrained median encoder target falls by at least 20% from baseline"
+      : "the baseline encoder target already fits inside the constrained media budget, so no forced reduction is required",
+  );
+  const responseDelay = timeToEncoderTarget(
+    enriched,
+    "constrained",
+    reductionThreshold,
+    "at-most",
+  );
+  assert(
+    assertions,
+    !congestionResponseRequired ||
+      (responseDelay !== null && responseDelay <= 30_000),
+    "response-time",
+    congestionResponseRequired
+      ? "encoder target reacts to the constrained link within 30 seconds"
+      : "no response deadline applies because the baseline target fits the constrained media budget",
+  );
+  assert(
+    assertions,
+    (impaired?.maximumEncoderTargetKbps || Infinity) <=
+      (impaired?.startingEncoderTargetKbps || 0) * 1.05,
+    "continued-pressure",
+    "the encoder does not increase its target after additional loss starts",
+  );
+  assert(
+    assertions,
+    (constrained?.capacityUtilization || 0) >= 0.55,
+    "constrained-link-efficiency",
+    "median video payload uses at least 55% of constrained link capacity",
+  );
+  assert(
+    assertions,
+    (impaired?.medianReceivedBitrateKbps || 0) >=
+      (impaired?.medianEncoderTargetKbps || Infinity) * 0.85,
+    "impaired-target-efficiency",
+    "median received video remains at least 85% of the encoder target while loss is injected",
+  );
+  assert(
+    assertions,
+    phaseOrder.every((name) => summaries[name]?.decoderActiveRatio >= 0.95),
+    "decoder-activity",
+    "decoded-frame progress is visible in at least 95% of sample intervals",
+  );
+  assert(
+    assertions,
+    baseline?.freezeRatio <= 0.02 && recovery?.freezeRatio <= 0.02,
+    "healthy-link-freezes",
+    "baseline and recovery spend at most 2% of measured time frozen",
+  );
+  assert(
+    assertions,
+    constrained?.freezeRatio <= 0.1 && impaired?.freezeRatio <= 0.1,
+    "impaired-link-freezes",
+    "each shaped phase spends at most 10% of measured time frozen",
+  );
+  assert(
+    assertions,
+    baseline?.maximumRTTMilliseconds <= 350 &&
+      recovery?.maximumRTTMilliseconds <= 350 &&
+      constrained?.maximumRTTMilliseconds <= 600 &&
+      impaired?.maximumRTTMilliseconds <= 600,
+    "interactive-latency-budget",
+    "maximum RTT stays below 350 ms on unshaped links and 600 ms under the 120 ms one-way impairment",
+  );
+  assert(
+    assertions,
+    baseline?.decodedFramesPerSecond >= 25 &&
+      constrained?.decodedFramesPerSecond >= 20 &&
+      impaired?.decodedFramesPerSecond >= 20 &&
+      recovery?.decodedFramesPerSecond >= 25,
+    "decoded-frame-rate",
+    "decoded output stays above 25 fps on healthy links and 20 fps while shaped",
+  );
+  assert(
+    assertions,
+    phaseOrder.every(
+      (name) =>
+        Number.isFinite(summaries[name]?.averageQP) &&
+        summaries[name].averageQP >= 0 &&
+        summaries[name].averageQP <= 51 &&
+        summaries[name].encodedFrames >= 15,
+    ),
+    "encoder-quality-telemetry",
+    "the pinned x264 encoder reports valid per-frame H.264 quantization data in every phase",
+  );
+  assert(
+    assertions,
+    !Object.values(encoderQuality || {}).some((phase) =>
+      Object.hasOwn(phase, "frameIntervals"),
+    ) ||
+      qualificationPhaseOrder.every(
+        (name) =>
+          summaries[name]?.encoderFrameIntervals >= 15 &&
+          summaries[name].encoderFrameGapP99Milliseconds <= 50 &&
+          summaries[name].encoderMaximumFrameGapMilliseconds <= 100 &&
+          summaries[name].encoderLateFrameRatio <= 0.01 &&
+          summaries[name].encoderBurstFrameRatio <= 0.01,
+      ),
+    "encoder-cadence",
+    "the encoded source remains paced at 30 fps without stalls or catch-up bursts from baseline through recovery",
+  );
+  assert(
+    assertions,
+    impaired?.averageQP <= 42,
+    "impaired-compression-quality",
+    "impaired-link sender average H.264 QP stays at or below 42",
+  );
+  if (manifest.video?.width && manifest.video?.height) {
+    assert(
+      assertions,
+      phaseOrder.every(
+        (name) =>
+          summaries[name]?.medianFrameWidth === manifest.video.width &&
+          summaries[name]?.medianFrameHeight === manifest.video.height,
+      ),
+      "decoded-resolution",
+      `decoded video remains ${manifest.video.width}x${manifest.video.height} in every phase`,
+    );
+  }
+  const recoveryThreshold = (constrained?.medianEncoderTargetKbps || 0) * 1.2;
+  const recoveryDelay = timeToEncoderTarget(
+    enriched,
+    "recovery",
+    recoveryThreshold,
+    "at-least",
+  );
+  assert(
+    assertions,
+    !congestionResponseRequired ||
+      (recoveryDelay !== null && recoveryDelay <= 35_000),
+    "recovery-time",
+    congestionResponseRequired
+      ? "encoder target rises by at least 20% within 35 seconds of link recovery"
+      : "no recovery ramp is required because the capacity phase did not require a 20% reduction",
+  );
+  assert(
+    assertions,
+    !congestionResponseRequired ||
+      (recovery?.medianReceivedBitrateKbps || 0) >=
+        (impaired?.medianReceivedBitrateKbps || Infinity) * 1.15,
+    "throughput-recovery",
+    congestionResponseRequired
+      ? "median receive throughput rises by at least 15% after recovery"
+      : "no throughput increase is required when the capacity phase did not reduce the encoder by 20%",
+  );
+  assert(
+    assertions,
+    counterIncrease(enriched, "nackCount", ["constrained", "impaired"]) > 0,
+    "loss-feedback",
+    "network impairment produces NACK feedback",
+  );
+  if (manifest.webrtc?.rtxNegotiated) {
+    assert(
+      assertions,
+      counterIncrease(enriched, "retransmittedPacketsReceived", ["impaired"]) >
+        0,
+      "rtx-repair",
+      "the receiver observes RTX repair packets while loss is injected",
+    );
+    assert(
+      assertions,
+      (impaired?.nackToPacketRatio || Infinity) <= 0.1,
+      "repair-amplification",
+      "NACK feedback remains below 10% of received packets during 2% injected loss",
+    );
+  }
+  if (manifest.protection?.flexFEC) {
+    assert(
+      assertions,
+      manifest.webrtc?.flexFECNegotiated,
+      "flexfec-negotiation",
+      "the browser and producer negotiate the FlexFEC-03 protection stream",
+    );
+    assert(
+      assertions,
+      counterIncrease(enriched, "fecPacketsReceived", ["impaired"]) > 0,
+      "flexfec-repair",
+      "the receiver observes FlexFEC packets while loss is injected",
+    );
+    assert(
+      assertions,
+      enriched.every(
+        (sample) =>
+          sample.flexFECMediaPackets ===
+            manifest.protection.flexFECMediaPackets &&
+          sample.flexFECRepairPackets ===
+            manifest.protection.flexFECRepairPackets,
+      ),
+      "flexfec-configuration",
+      "runtime telemetry matches the FlexFEC protection recorded by the manifest",
+    );
+    assert(
+      assertions,
+      enriched.every((sample) => {
+        const expected = protectedPacingEnvelopeKbps(
+          sample.pacerTargetBitrateKbps,
+          manifest.protection,
+        );
+        return (
+          Number.isFinite(expected) &&
+          expected > 0 &&
+          Number.isFinite(sample.pacerPacingBitrateKbps) &&
+          Math.abs(sample.pacerPacingBitrateKbps - expected) <=
+            Math.max(1, expected * 0.001)
+        );
+      }),
+      "flexfec-shared-pacing-envelope",
+      "the sender shares its real-time pacing headroom with proactive repair instead of multiplying both budgets",
+    );
+  }
+  assert(
+    assertions,
+    counterIncrease(enriched, "framesDecoded", phaseOrder) > 0,
+    "decoded-video",
+    "the browser keeps decoding frames throughout the scenario",
+  );
+  assert(
+    assertions,
+    Math.max(0, ...enriched.map((sample) => sample.pacerQueueDrops || 0)) ===
+      0 &&
+      Math.max(
+        0,
+        ...enriched.map(
+          (sample) => sample.pacerMaximumQueueDelayMilliseconds || 0,
+        ),
+      ) <= 375 &&
+      Math.max(
+        0,
+        ...enriched.map(
+          (sample) => sample.pacerMaximumAdmittedDelayMilliseconds || 0,
+        ),
+      ) <= 225,
+    "bounded-pacer-capacity",
+    "the sender never overflows its packet queue, keeps actual packet residence within 375 ms, and admits no new media beyond 225 ms",
+  );
+  const recoveryTelemetryPresent = enriched.some((sample) =>
+    Object.hasOwn(sample, "recoveryKeyFrameRequests"),
+  );
+  const maximumRecoveryKeyFrameRequests = Math.max(
+    0,
+    ...enriched.map((sample) => sample.recoveryKeyFrameRequests || 0),
+  );
+  const maximumRecoveryKeyFrameFailures = Math.max(
+    0,
+    ...enriched.map((sample) => sample.recoveryKeyFrameFailures || 0),
+  );
+  const maximumRTCPKeyFrameRequests = Math.max(
+    0,
+    ...enriched.map((sample) => sample.rtcpKeyFrameRequests || 0),
+  );
+  const maximumRTCPMalformedFeedback = Math.max(
+    0,
+    ...enriched.map((sample) => sample.rtcpMalformedFeedback || 0),
+  );
+  const maximumBrowserPLIRequests = Math.max(
+    0,
+    ...enriched.map((sample) => sample.pliCount || 0),
+  );
+  const maximumPacerMediaFrameDrops = Math.max(
+    0,
+    ...enriched.map((sample) => sample.pacerMediaFramesDropped || 0),
+  );
+  assert(
+    assertions,
+    !recoveryTelemetryPresent ||
+      (maximumRecoveryKeyFrameFailures === 0 &&
+        (maximumPacerMediaFrameDrops === 0 ||
+          maximumRecoveryKeyFrameRequests > 0)),
+    "pacer-recovery-keyframes",
+    "every complete-frame admission drop requests a recovery key frame and encounters no encoder rejection",
+  );
+  assert(
+    assertions,
+    !recoveryTelemetryPresent ||
+      maximumBrowserPLIRequests === 0 ||
+      maximumRTCPKeyFrameRequests > 0,
+    "rtcp-keyframe-feedback",
+    "receiver PLI feedback reaches the producer's encoder instead of being discarded",
+  );
+  assert(
+    assertions,
+    !recoveryTelemetryPresent || maximumRTCPMalformedFeedback === 0,
+    "rtcp-feedback-integrity",
+    "the producer parses every compound RTCP feedback datagram",
+  );
+  const adaptiveUpdateTelemetryPresent = enriched.some((sample) =>
+    Object.hasOwn(sample, "adaptiveBitrateFailures"),
+  );
+  assert(
+    assertions,
+    !adaptiveUpdateTelemetryPresent ||
+      Math.max(
+        0,
+        ...enriched.map((sample) => sample.adaptiveBitrateFailures || 0),
+      ) === 0,
+    "adaptive-reconfiguration-integrity",
+    "the encoder accepts every rate-limited adaptive bitrate reconfiguration",
+  );
+  const twccTelemetryPresent = enriched.some((sample) =>
+    Object.hasOwn(sample, "twccFeedbackPackets"),
+  );
+  assert(
+    assertions,
+    !twccTelemetryPresent ||
+      (counterIncrease(enriched, "twccFeedbackPackets", phaseOrder) > 0 &&
+        Math.max(
+          0,
+          ...enriched.map((sample) => sample.twccMalformedFeedback || 0),
+        ) === 0),
+    "twcc-feedback-integrity",
+    "TWCC feedback is present and every reported status is parsed without malformed packets",
+  );
+  if (manifest.networkImpairment) {
+    assert(
+      assertions,
+      trafficControlSummary.constrainedPackets >= 100 &&
+        trafficControlSummary.impairedPackets >= 100,
+      "selective-media-shaping",
+      "the selective traffic-control branch handles the measured media flow",
+    );
+    assert(
+      assertions,
+      trafficControlSummary.constrainedConfiguredLossRatio === 0,
+      "capacity-profile-configuration",
+      "the capacity phase has no random-loss injector configured",
+    );
+    assert(
+      assertions,
+      Math.abs(trafficControlSummary.impairedConfiguredLossRatio - 0.02) <
+        0.0001,
+      "loss-profile-configuration",
+      "the impaired phase configures exactly 2% random packet loss",
+    );
+    assert(
+      assertions,
+      trafficControlSummary.constrainedTransitionDropRatio <= 0.15 &&
+        trafficControlSummary.constrainedSteadyDropRatio <= 0.05 &&
+        trafficControlSummary.impairedDropRatio <= 0.05,
+      "traffic-control-drop-budget",
+      "capacity-step transients stay below 15%, and steady capacity plus random-loss phases stay below 5% drops",
+    );
+    assert(
+      assertions,
+      trafficControlSummary.constrainedEndQueueUtilization <= 0.75 &&
+        trafficControlSummary.impairedEndQueueUtilization <= 0.75,
+      "traffic-control-queue-headroom",
+      "the shaped queue ends each steady interval below 75% occupancy, preventing a larger limit from hiding sustained bufferbloat",
+    );
+    assert(
+      assertions,
+      !twccTelemetryPresent ||
+        (constrained.twccReportedLossRatio <=
+          trafficControlSummary.constrainedDropRatio + 0.08 &&
+          impaired.twccReportedLossRatio <=
+            trafficControlSummary.impairedDropRatio + 0.08),
+      "twcc-loss-fidelity",
+      "browser TWCC loss stays within eight percentage points of shaped-link drops, detecting transport-sequence accounting regressions",
+    );
+  }
+  if (receiverUDP.available) {
+    assert(
+      assertions,
+      phaseOrder.every((name) => receiverUDP.phases[name]?.samples >= 10),
+      "receiver-udp-observability",
+      "receiver-kernel UDP counters cover every measured phase",
+    );
+    assert(
+      assertions,
+      receiverUDP.receiveBufferDropsIncrease === 0,
+      "receiver-kernel-capacity",
+      "the receiver kernel drops no UDP datagram because its socket buffer is full",
+    );
+  }
+  if (producerUDP.available) {
+    const producerUnshapedSendDrops = ["warmup", "baseline", "recovery"].reduce(
+      (total, name) =>
+        total + (producerUDP.phases[name]?.sendBufferDropsIncrease || 0),
+      0,
+    );
+    const producerConstrainedSendDrops =
+      producerUDP.phases.constrained?.sendBufferDropsIncrease || 0;
+    const producerImpairedSendDrops =
+      producerUDP.phases.impaired?.sendBufferDropsIncrease || 0;
+    assert(
+      assertions,
+      phaseOrder.every((name) => producerUDP.phases[name]?.samples >= 10),
+      "producer-udp-observability",
+      "producer-kernel UDP counters cover every measured phase",
+    );
+    assert(
+      assertions,
+      producerUDP.receiveBufferDropsIncrease === 0 &&
+        producerUnshapedSendDrops === 0 &&
+        producerConstrainedSendDrops <=
+          trafficControlSummary.constrainedDrops &&
+        producerImpairedSendDrops <= trafficControlSummary.impairedDrops,
+      "producer-kernel-capacity",
+      "the producer kernel has no UDP receive overflow or send rejection that is not bounded by its independently measured qdisc drops",
+    );
+  }
+  return {
+    assertions,
+    passed: assertions.every((assertion) => assertion.passed),
+    candidatePairSwitches,
+    congestionResponseRequired,
+    constrainedMediaCapacityKbps,
+    responseDelayMilliseconds: responseDelay,
+    recoveryDelayMilliseconds: recoveryDelay,
+    staleBitrateCallbacks: Math.max(
+      0,
+      ...enriched.map((sample) => sample.staleBitrateCallbacks || 0),
+    ),
+    phases: summaries,
+    producerUDP,
+    receiverUDP,
+    receiverHostCPU,
+    samples: enriched,
+    setup,
+    hostCPU,
+    trafficControl: trafficControlSummary,
+  };
+}
+
+export function renderSVG(analysis, manifest) {
+  const samples = analysis.samples;
+  const width = 1200;
+  const height = 520;
+  const margin = { top: 48, right: 36, bottom: 72, left: 82 };
+  const plotWidth = width - margin.left - margin.right;
+  const plotHeight = height - margin.top - margin.bottom;
+  const maximumTime = Math.max(
+    1,
+    ...samples.map((sample) => sample.elapsedMilliseconds),
+  );
+  const maximumBitrate = Math.max(
+    1000,
+    ...samples.flatMap((sample) => [
+      sample.encoderTargetKbps,
+      sample.twccTargetKbps,
+      sample.receivedBitrateKbps,
+    ]),
+  );
+  const x = (milliseconds) =>
+    margin.left + (milliseconds / maximumTime) * plotWidth;
+  const y = (kilobitsPerSecond) =>
+    margin.top +
+    plotHeight -
+    (Math.min(kilobitsPerSecond, maximumBitrate) / maximumBitrate) * plotHeight;
+  const phaseBlocks = manifest.phases
+    .map((phase, index) => {
+      const phaseSamples = samples.filter(
+        (sample) => sample.phase === phase.name,
+      );
+      if (phaseSamples.length === 0) {
+        return "";
+      }
+      const start = phaseSamples[0].elapsedMilliseconds;
+      const end = phaseSamples.at(-1).elapsedMilliseconds;
+      const fill = index % 2 === 0 ? "#f3f4f6" : "#e5e7eb";
+      return `<rect x="${round(x(start))}" y="${margin.top}" width="${round(Math.max(1, x(end) - x(start)))}" height="${plotHeight}" fill="${fill}"/><text x="${round(x(start) + 8)}" y="${margin.top + 20}" font-size="13" fill="#4b5563">${escapeXML(phase.name)}</text>`;
+    })
+    .join("");
+  const grid = Array.from({ length: 6 }, (_, index) => {
+    const value = (maximumBitrate * index) / 5;
+    const ordinate = y(value);
+    return `<line x1="${margin.left}" y1="${round(ordinate)}" x2="${width - margin.right}" y2="${round(ordinate)}" stroke="#d1d5db"/><text x="${margin.left - 12}" y="${round(ordinate + 4)}" text-anchor="end" font-size="12" fill="#6b7280">${Math.round(value / 100) / 10} Mb/s</text>`;
+  }).join("");
+  const series = [
+    ["Encoder target", "#2563eb", "encoderTargetKbps"],
+    ["TWCC target", "#d97706", "twccTargetKbps"],
+    ["Received", "#059669", "receivedBitrateKbps"],
+  ];
+  const lines = series
+    .map(([label, color, field], index) => {
+      const points = samples
+        .filter((sample) => Number.isFinite(sample[field]) && sample[field] > 0)
+        .map(
+          (sample) =>
+            `${round(x(sample.elapsedMilliseconds))},${round(y(sample[field]))}`,
+        )
+        .join(" ");
+      const legendX = margin.left + index * 190;
+      return `<polyline fill="none" stroke="${color}" stroke-width="2.5" points="${points}"/><line x1="${legendX}" y1="${height - 28}" x2="${legendX + 28}" y2="${height - 28}" stroke="${color}" stroke-width="3"/><text x="${legendX + 36}" y="${height - 23}" font-size="14" fill="#111827">${label}</text>`;
+    })
+    .join("");
+  const resultColor = analysis.passed ? "#047857" : "#b91c1c";
+  const resultLabel = analysis.passed ? "PASS" : "FAIL";
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title description">
+  <title id="title">rstream adaptive streaming qualification</title>
+  <desc id="description">Encoder, TWCC, and received bitrate across controlled network phases.</desc>
+  <rect width="100%" height="100%" fill="#ffffff"/>
+  <text x="${margin.left}" y="28" font-size="20" font-weight="600" fill="#111827">Adaptive streaming response</text>
+  <text x="${width - margin.right}" y="28" text-anchor="end" font-size="16" font-weight="700" fill="${resultColor}">${resultLabel}</text>
+  ${phaseBlocks}
+  ${grid}
+  ${lines}
+  <line x1="${margin.left}" y1="${margin.top + plotHeight}" x2="${width - margin.right}" y2="${margin.top + plotHeight}" stroke="#111827"/>
+  <text x="${width / 2}" y="${height - 48}" text-anchor="middle" font-size="13" fill="#6b7280">Elapsed time; link constraints are shown as phase bands</text>
+</svg>
+`;
+}
+
+export function renderMarkdown(analysis, manifest) {
+  const status = analysis.passed ? "PASS" : "FAIL";
+  const phaseRows = Object.entries(analysis.phases)
+    .map(
+      ([name, phase]) =>
+        `| ${name} | ${phase.samples} | ${formatNumber(phase.connectedRatio * 100, 1)}% | ${formatNumber(phase.medianReceivedBitrateKbps, 0)} | ${phase.capacityKbps ? `${formatNumber(phase.capacityUtilization * 100, 1)}%` : "n/a"} | ${formatNumber(phase.medianTWCCKbps, 0)} | ${formatNumber(phase.medianEncoderTargetKbps, 0)} | ${formatNumber(phase.decodedFramesPerSecond, 1)} | ${formatNumber(phase.averageQP, 1)} | ${formatNumber(phase.averageDecodeMilliseconds, 2)} | ${formatNumber(phase.freezeRatio * 100, 1)}% | ${phase.nackIncrease} | ${phase.retransmittedPacketsIncrease} | ${phase.fecPacketsIncrease} | ${formatNumber(phase.maximumRTTMilliseconds, 0)} |`,
+    )
+    .join("\n");
+  const assertions = analysis.assertions
+    .map(
+      (assertion) =>
+        `- ${assertion.passed ? "PASS" : "FAIL"} — ${assertion.name}: ${assertion.description}`,
+    )
+    .join("\n");
+  const controllerRows = Object.entries(analysis.phases)
+    .map(
+      ([name, phase]) =>
+        `| ${name} | ${formatNumber(phase.medianLossTargetKbps, 0)} | ${formatNumber(phase.medianDelayTargetKbps, 0)} | ${formatNumber(phase.medianAverageLoss * 100, 2)}% | ${formatNumber(phase.twccReportedLossRatio * 100, 2)}% | ${phase.adaptiveBitrateUpdatesIncrease} | ${phase.adaptiveBitrateFailuresIncrease} | ${phase.twccFeedbackPacketsIncrease} | ${phase.twccPaddingStatusesIncrease} | ${phase.twccMalformedFeedbackIncrease} |`,
+    )
+    .join("\n");
+  const pacingRows = Object.entries(analysis.phases)
+    .map(
+      ([name, phase]) =>
+        `| ${name} | ${formatNumber(phase.maximumPacerQueueDelayMilliseconds, 1)} | ${formatNumber(phase.maximumPacerPrimaryDelayMilliseconds, 1)} | ${formatNumber(phase.maximumPacerRepairDelayMilliseconds, 1)} | ${formatNumber(phase.maximumPacerAdmittedDelayMilliseconds, 1)} | ${formatNumber(phase.maximumPacerSustainedDelayMilliseconds, 1)} | ${phase.maximumPacerQueuePackets} | ${phase.maximumPacerKeyFrameReserveBytes} | ${phase.pacerMediaFrameDropsIncrease} | ${phase.pacerRepairPacketsExpiredIncrease} | ${phase.pacerRepairPacketsTrimmedIncrease} | ${phase.recoveryKeyFrameRequestsIncrease} | ${phase.recoveryKeyFrameCoalescedIncrease} | ${phase.rtcpKeyFrameRequestsIncrease} | ${phase.rtcpMalformedFeedbackIncrease} | ${phase.recoveryKeyFrameFailuresIncrease} | ${phase.pacerQueueDropsIncrease} |`,
+    )
+    .join("\n");
+  const repairRows = Object.entries(analysis.phases)
+    .map(
+      ([name, phase]) =>
+        `| ${name} | ${formatNumber(phase.maximumPacerFECDelayMilliseconds, 1)} | ${phase.pacerSentFECIncrease} | ${phase.pacerFECPacketsExpiredIncrease} | ${phase.pacerFECPacketsTrimmedIncrease} | ${formatNumber(phase.maximumPacerRTXDelayMilliseconds, 1)} | ${phase.pacerSentRTXIncrease} | ${phase.pacerRTXPacketsExpiredIncrease} | ${phase.pacerRTXPacketsTrimmedIncrease} |`,
+    )
+    .join("\n");
+  const encoderCadenceRows = Object.entries(analysis.phases)
+    .map(
+      ([name, phase]) =>
+        `| ${name} | ${phase.encoderFrameIntervals} | ${formatNumber(phase.encoderFrameGapP99Milliseconds, 1)} | ${formatNumber(phase.encoderMaximumFrameGapMilliseconds, 1)} | ${formatNumber(phase.encoderLateFrameRatio * 100, 2)}% | ${formatNumber(phase.encoderBurstFrameRatio * 100, 2)}% |`,
+    )
+    .join("\n");
+  const hostCPURows = Object.entries(analysis.hostCPU?.phases || {})
+    .map(
+      ([name, phase]) =>
+        `| ${name} | ${phase.samples} | ${formatNumber(phase.activeMedianRatio * 100, 1)}% | ${formatNumber(phase.stealP95Ratio * 100, 1)}% | ${formatNumber(phase.stealMaximumRatio * 100, 1)}% | ${formatNumber(phase.samplingGapP99Milliseconds, 0)} ms | ${formatNumber(phase.samplingGapMaximumMilliseconds, 0)} ms |`,
+    )
+    .join("\n");
+  const hostCPUSection = analysis.hostCPU?.available
+    ? `## Producer host scheduling
+
+Linux aggregate CPU counters are sampled from the producer's host namespace.
+They expose time withheld by the hypervisor separately from work performed by
+the application. A run with sustained steal time cannot establish a transport
+performance result because the source itself was not scheduled predictably.
+The 250 ms sampling heartbeat also exposes shorter pauses that aggregate CPU
+counters cannot attribute.
+The producer runtime reports ${manifest.runtime?.logicalCPUs || "an unknown number of"} logical CPUs.
+
+Source: \`${analysis.hostCPU.source}\`.
+
+| Phase | Samples | Median active CPU | p95 steal | Maximum steal | p99 sampler gap | Maximum sampler gap |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+${hostCPURows}
+
+`
+    : "";
+  const receiverHostCPURows = Object.entries(
+    analysis.receiverHostCPU?.phases || {},
+  )
+    .map(
+      ([name, phase]) =>
+        `| ${name} | ${phase.samples} | ${formatNumber(phase.activeMedianRatio * 100, 1)}% | ${formatNumber(phase.stealP95Ratio * 100, 1)}% | ${formatNumber(phase.stealMaximumRatio * 100, 1)}% | ${formatNumber(phase.samplingGapP99Milliseconds, 0)} ms | ${formatNumber(phase.samplingGapMaximumMilliseconds, 0)} ms |`,
+    )
+    .join("\n");
+  const receiverHostCPUSection = analysis.receiverHostCPU?.available
+    ? `## Receiver host scheduling
+
+Linux aggregate CPU counters are sampled from the receiver's host namespace.
+They distinguish media-path latency from time when the hypervisor prevented the
+browser host from running. The 250 ms sampling heartbeat also exposes shorter
+runtime pauses. The receiver runtime reports ${manifest.browserRuntime?.logicalCPUs || "an unknown number of"} logical CPUs.
+
+Source: \`${analysis.receiverHostCPU.source}\`.
+
+| Phase | Samples | Median active CPU | p95 steal | Maximum steal | p99 sampler gap | Maximum sampler gap |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+${receiverHostCPURows}
+
+`
+    : "";
+  const playoutRows = Object.entries(analysis.phases)
+    .map(
+      ([name, phase]) =>
+        `| ${name} | ${formatNumber(phase.averageJitterBufferDelayMilliseconds, 1)} | ${formatNumber(phase.averageJitterBufferTargetMilliseconds, 1)} |`,
+    )
+    .join("\n");
+  const playoutSection = Number.isFinite(
+    manifest.video?.playoutDelayHintSeconds,
+  )
+    ? `## Receiver playout latency
+
+The receiver uses a bounded jitter buffer to absorb packet timing variation and
+leave time for repair. Both columns come from cumulative WebRTC receiver
+counters. The configured minimum hint is ${formatNumber(manifest.video.playoutDelayHintSeconds * 1000, 0)} ms. Qualification caps the requested target at 250 ms and the effective buffered delay at 300 ms.
+
+| Phase | Average buffered delay ms/frame | Average target delay ms/frame |
+| --- | ---: | ---: |
+${playoutRows}
+
+`
+    : "";
+  const impairmentDescription =
+    manifest.networkImpairment?.scope === "producer-turn-transport"
+      ? "The impairment applies to the selected producer-to-TURN transport. Media, TURN permissions, and TURN channel traffic share that physical branch; rstream publication and HTTP signaling remain outside it."
+      : "The direct impairment applies to every outbound UDP packet on the isolated producer-to-browser address. It follows legitimate ICE candidate-port switches while excluding host and unrelated container traffic.";
+  const receiverRows = Object.entries(analysis.receiverUDP?.phases || {})
+    .map(
+      ([name, phase]) =>
+        `| ${name} | ${phase.samples} | ${phase.datagramsReceivedIncrease} | ${phase.datagramsSentIncrease} | ${phase.inputErrorsIncrease} | ${phase.noPortDropsIncrease} | ${phase.receiveBufferDropsIncrease} | ${phase.sendBufferDropsIncrease} |`,
+    )
+    .join("\n");
+  const receiverSection = analysis.receiverUDP?.available
+    ? `## Receiver-kernel UDP diagnostics
+
+These independent kernel counters distinguish upstream packet loss from a local
+browser socket that could not drain its receive buffer. The qualification
+browser is sampled inside its isolated Linux network namespace, so the counters
+exclude unrelated host and container traffic.
+
+Source: \`${analysis.receiverUDP.source}\`.
+
+| Phase | Samples | UDP received | UDP sent | Input errors | No-socket drops | Receive-buffer drops | Send-buffer drops |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+${receiverRows}
+
+`
+    : "";
+  const producerRows = Object.entries(analysis.producerUDP?.phases || {})
+    .map(
+      ([name, phase]) =>
+        `| ${name} | ${phase.samples} | ${phase.datagramsReceivedIncrease} | ${phase.datagramsSentIncrease} | ${phase.inputErrorsIncrease} | ${phase.noPortDropsIncrease} | ${phase.receiveBufferDropsIncrease} | ${phase.sendBufferDropsIncrease} |`,
+    )
+    .join("\n");
+  const producerSection = analysis.producerUDP?.available
+    ? `## Producer-kernel UDP diagnostics
+
+These counters come from the producer container's isolated Linux network
+namespace. Together with the receiver table they show whether a missing RTP
+sequence was dropped by a local socket or disappeared between two healthy
+kernel boundaries. Linux may account a \`netem\` rejection in both the qdisc
+drop counter and UDP \`SndbufErrors\`; therefore send-buffer errors are accepted
+only in shaped phases and only up to each interval's independently measured
+qdisc drops. Any receive overflow, unshaped-phase send rejection, or excess over
+those bounds fails the run.
+
+Source: \`${analysis.producerUDP.source}\`.
+
+| Phase | Samples | UDP received | UDP sent | Input errors | No-socket drops | Receive-buffer drops | Send-buffer drops |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+${producerRows}
+
+`
+    : "";
+  const setupRows = (analysis.setup?.milestones || [])
+    .map(
+      (milestone) =>
+        `| ${milestone.name} | ${milestone.sincePreviousMilliseconds === null ? "n/a" : formatDuration(milestone.sincePreviousMilliseconds)} |`,
+    )
+    .join("\n");
+  const setupSection = analysis.setup?.available
+    ? `## Qualification setup timeline
+
+Build time is reported separately from service establishment. The
+\`connection-started\` to \`media-connected\` interval covers producer startup,
+rstream publication, browser startup, signaling, ICE, and first selected media
+path; it does not include Docker image builds.
+
+| Milestone | Time since previous milestone |
+| --- | ---: |
+${setupRows}
+
+Measured service establishment: ${formatDuration(analysis.setup.connectionMilliseconds)}.
+
+`
+    : "";
+  return `# Adaptive streaming qualification — ${status}
+
+Generated at ${manifest.generatedAt} from repository revision \`${manifest.git.revision}\`${manifest.git.dirty ? " with uncommitted changes" : ""}.
+
+![Adaptive bitrate response](./adaptive-bitrate.svg)
+
+${setupSection}## Phase summary
+
+| Phase | Samples | Connected | Received kbps (median) | Link use | TWCC kbps (median) | Encoder kbps (median) | Decoded fps | Avg QP | Decode ms/frame | Frozen | NACK | RTX packets | FEC packets | Max RTT ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+${phaseRows}
+
+Congestion response: ${analysis.congestionResponseRequired ? formatDuration(analysis.responseDelayMilliseconds) : "not required (baseline target fits the constrained media budget)"}. Recovery response: ${analysis.congestionResponseRequired ? formatDuration(analysis.recoveryDelayMilliseconds) : "not required"}.
+
+Selected ICE candidate-pair switches: ${analysis.candidatePairSwitches}. ${manifest.networkPath?.kind === "relay" ? "Both peers remain on the required TURN relay path." : "The direct-path address selector remains active across port changes."}
+
+Superseded out-of-order estimator callbacks: ${analysis.staleBitrateCallbacks}. The producer always applies the estimator's current target rather than the potentially stale callback payload.
+
+## Congestion-controller diagnostics
+
+| Phase | Loss target kbps | Delay target kbps | Controller loss | Browser TWCC loss | Encoder updates | Update failures | Feedback packets | Padding statuses | Malformed feedback |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+${controllerRows}
+
+## Real-time sender queue
+
+The sender drops complete encoded access units before RTP packetization when
+its sustained-rate backlog would exceed 225 ms. It schedules a recovery key
+frame once the bounded queue has room and resumes on that frame, avoiding
+partial-frame corruption, multi-second GOP waits, and bufferbloat. Requests caused by one
+congestion event or by repeated receiver PLI/FIR feedback are coalesced to one
+encoder request per 250 ms, preventing recovery key frames from becoming their
+own burst-amplification loop. A rejected recovery request or packetized RTP
+rejection remains a hard failure. A sudden estimator decrease is applied to the
+encoder and new media immediately. A frame that was already accepted and
+packetized drains at its admission rate: slowing or deleting part of that RTP
+frame would create sequence holes and multi-second latency. This bounded
+transition is exposed by the actual-residence and scheduled-backlog columns.
+Queued FEC and RTX are purged on a rate decrease rather than consuming the new
+budget for stale repair. A recovery
+key-frame request is deferred until the queue has room for the most recently
+observed key-frame size plus 25% headroom, avoiding a request that would produce
+another key frame only to discard it. Admission accounts for every queued
+primary and FEC service interval, plus the single RTX packet that scheduling may
+place before each queued frame. Repair packets older than 225 ms are expired
+rather than consuming bandwidth after their media window. Expiration is
+reported separately from queue overflow. High-water values are cumulative
+process counters, so a later phase retains an earlier peak unless it establishes
+a new one; the packet count is sampled within each phase.
+
+| Phase | Any packet residence ms | Primary residence ms | Repair residence ms | Admitted backlog ms | Scheduled backlog ms | Maximum sampled packets | Key-frame reserve bytes | Complete frames dropped | Expired repair packets | Rate-trimmed repair packets | Encoder requests | Coalesced requests | Receiver PLI/FIR | Malformed RTCP | Request failures | RTP queue overflows |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+${pacingRows}
+
+### Repair timeliness
+
+FEC is paced immediately after each protected ${manifest.protection?.flexFECMediaPackets || 0}-packet media group so it can
+arrive before playout. RTX remains at media-frame boundaries because it repairs
+an already reported loss and must not delay completion of the current frame.
+The split counters below make a late proactive repair distinguishable from an
+expired retransmission.
+
+| Phase | Max FEC residence ms | FEC sent | FEC expired | FEC rate-trimmed | Max RTX residence ms | RTX sent | RTX expired | RTX rate-trimmed |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+${repairRows}
+
+${hostCPUSection}${receiverHostCPUSection}## Encoder cadence and observer effect
+
+The performance result is meaningful only if its source produces frames on
+time. Per-frame x264 evidence is written to container-local tmpfs and copied
+only after the pipeline stops, not streamed through Docker's logging path; this
+prevents detailed diagnostics or host I/O from blocking the encoder being
+measured. At 30 fps, a late interval exceeds
+50 ms and a catch-up burst is shorter than 16.7 ms. The p99 and maximum columns
+make scheduler stalls visible rather than misclassifying them as network loss.
+
+| Phase | Measured intervals | p99 frame gap ms | Maximum frame gap ms | Late intervals | Catch-up bursts |
+| --- | ---: | ---: | ---: | ---: | ---: |
+${encoderCadenceRows}
+
+## Network-emulation fidelity
+
+${impairmentDescription}
+
+| Interval | Configured random loss | Shaped packets | Total qdisc drops | Total drop ratio | Ending queue |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| capacity transitions | ${formatNumber(analysis.trafficControl.constrainedConfiguredLossRatio * 100, 2)}% | ${analysis.trafficControl.constrainedTransitionPackets} | ${analysis.trafficControl.constrainedTransitionDrops} | ${formatNumber(analysis.trafficControl.constrainedTransitionDropRatio * 100, 2)}% | n/a |
+| constrained steady state | ${formatNumber(analysis.trafficControl.constrainedConfiguredLossRatio * 100, 2)}% | ${analysis.trafficControl.constrainedSteadyPackets} | ${analysis.trafficControl.constrainedSteadyDrops} | ${formatNumber(analysis.trafficControl.constrainedSteadyDropRatio * 100, 2)}% | ${analysis.trafficControl.constrainedEndQueuePackets}/${analysis.trafficControl.constrainedQueueLimitPackets} (${formatNumber(analysis.trafficControl.constrainedEndQueueUtilization * 100, 1)}%) |
+| impaired (incremental) | ${formatNumber(analysis.trafficControl.impairedConfiguredLossRatio * 100, 2)}% | ${analysis.trafficControl.impairedPackets} | ${analysis.trafficControl.impairedDrops} | ${formatNumber(analysis.trafficControl.impairedDropRatio * 100, 2)}% | ${analysis.trafficControl.impairedEndQueuePackets}/${analysis.trafficControl.impairedQueueLimitPackets} (${formatNumber(analysis.trafficControl.impairedEndQueueUtilization * 100, 1)}%) |
+
+Total qdisc drops include both configured random loss and queue overflow while the congestion controller reacts. Capacity-transition counters are separated from the final steady interval so a bounded reaction transient cannot hide sustained overload, and steady behavior cannot hide a destructive transition.
+
+${playoutSection}${receiverSection}${producerSection}## Acceptance criteria
+
+${assertions}
+
+The checked-in summary is evidence for one pinned run, not a universal performance guarantee. Re-run \`./run.sh\` on the target architecture before using the result as an acceptance decision.
+`;
+}
+
+export async function writeArtifacts(outputDirectory, analysis, manifest) {
+  const summary = { ...analysis };
+  delete summary.samples;
+  await writeFile(
+    `${outputDirectory}/summary.json`,
+    `${JSON.stringify(summary, null, 2)}\n`,
+  );
+  await writeFile(
+    `${outputDirectory}/summary.md`,
+    renderMarkdown(analysis, manifest),
+  );
+  await writeFile(
+    `${outputDirectory}/adaptive-bitrate.svg`,
+    renderSVG(analysis, manifest),
+  );
+  const columns = [
+    "capturedAt",
+    "elapsedMilliseconds",
+    "phase",
+    "receivedBitrateKbps",
+    "twccTargetKbps",
+    "encoderTargetKbps",
+    "lossTargetKbps",
+    "delayTargetKbps",
+    "lossAverage",
+    "flexFECMediaPackets",
+    "flexFECRepairPackets",
+    "delayMeasurementMilliseconds",
+    "delayEstimateMilliseconds",
+    "delayThresholdMilliseconds",
+    "delayControllerUsage",
+    "delayControllerState",
+    "framesPerSecond",
+    "framesDecoded",
+    "framesDropped",
+    "totalDecodeTimeSeconds",
+    "packetsLost",
+    "packetsReceived",
+    "nackCount",
+    "retransmittedPacketsReceived",
+    "retransmittedBytesReceived",
+    "fecPacketsReceived",
+    "fecPacketsDiscarded",
+    "pacerTargetBitrateKbps",
+    "pacerPacingBitrateKbps",
+    "pacerQueuePackets",
+    "pacerQueueDrops",
+    "pacerQueueDelayMilliseconds",
+    "pacerMaximumQueueDelayMilliseconds",
+    "pacerMaximumPrimaryDelayMilliseconds",
+    "pacerMaximumRepairDelayMilliseconds",
+    "pacerMaximumRTXDelayMilliseconds",
+    "pacerMaximumFECDelayMilliseconds",
+    "pacerMaximumSustainedDelayMilliseconds",
+    "pacerMaximumAdmittedDelayMilliseconds",
+    "pacerKeyFrameReserveBytes",
+    "pacerMediaFramesDropped",
+    "pacerMediaBytesDropped",
+    "pacerRepairPacketsExpired",
+    "pacerRepairPacketsTrimmed",
+    "pacerRTXPacketsExpired",
+    "pacerFECPacketsExpired",
+    "pacerRTXPacketsTrimmed",
+    "pacerFECPacketsTrimmed",
+    "pacerSentPrimary",
+    "pacerSentRepair",
+    "pacerSentRTX",
+    "pacerSentFEC",
+    "adaptiveBitrateUpdates",
+    "adaptiveBitrateFailures",
+    "recoveryKeyFrameRequests",
+    "recoveryKeyFrameCoalesced",
+    "recoveryKeyFrameFailures",
+    "rtcpKeyFrameRequests",
+    "rtcpMalformedFeedback",
+    "staleBitrateCallbacks",
+    "twccFeedbackPackets",
+    "twccMalformedFeedback",
+    "twccPaddingStatuses",
+    "twccReportedLost",
+    "twccReportedStatuses",
+    "pliCount",
+    "currentRoundTripTimeSeconds",
+    "jitterSeconds",
+    "jitterBufferDelaySeconds",
+    "jitterBufferEmittedCount",
+    "jitterBufferTargetDelaySeconds",
+    "peerConnectionState",
+    "iceConnectionState",
+    "localCandidateType",
+    "localCandidateAddress",
+    "localCandidatePort",
+    "localCandidateProtocol",
+    "remoteCandidateType",
+    "remoteCandidateAddress",
+    "remoteCandidatePort",
+    "remoteCandidateProtocol",
+    "playoutDelayHintSeconds",
+  ];
+  const rows = [
+    columns.join(","),
+    ...analysis.samples.map((sample) =>
+      columns.map((column) => csvValue(sample[column])).join(","),
+    ),
+  ];
+  await writeFile(`${outputDirectory}/metrics.csv`, `${rows.join("\n")}\n`);
+}
+
+function countCandidatePairSwitches(samples) {
+  let previous = null;
+  let switches = 0;
+  for (const sample of samples) {
+    const localPort = Number(sample.localCandidatePort);
+    const remotePort = Number(sample.remoteCandidatePort);
+    if (
+      !Number.isInteger(localPort) ||
+      localPort <= 0 ||
+      !Number.isInteger(remotePort) ||
+      remotePort <= 0
+    ) {
+      continue;
+    }
+    const current = [
+      sample.localCandidateProtocol || "",
+      sample.localCandidateAddress || "",
+      localPort,
+      sample.remoteCandidateProtocol || "",
+      sample.remoteCandidateAddress || "",
+      remotePort,
+    ].join("|");
+    if (previous !== null && current !== previous) {
+      switches += 1;
+    }
+    previous = current;
+  }
+  return switches;
+}
+
+export function summarizeReceiverUDP(samples, phaseOrder) {
+  if (!Array.isArray(samples) || samples.length === 0) {
+    return {
+      available: false,
+      phases: {},
+      receiveBufferDropsIncrease: 0,
+      sendBufferDropsIncrease: 0,
+      source: null,
+    };
+  }
+  const fields = [
+    "datagramsReceived",
+    "datagramsSent",
+    "inputErrors",
+    "noPortDrops",
+    "receiveBufferDrops",
+    "sendBufferDrops",
+  ];
+  const phases = Object.fromEntries(
+    phaseOrder.map((phase) => [
+      phase,
+      {
+        datagramsReceivedIncrease: 0,
+        datagramsSentIncrease: 0,
+        inputErrorsIncrease: 0,
+        noPortDropsIncrease: 0,
+        receiveBufferDropsIncrease: 0,
+        sendBufferDropsIncrease: 0,
+        samples: 0,
+      },
+    ]),
+  );
+  let previous = null;
+  for (const sample of samples) {
+    const phase = phases[sample.phase];
+    if (phase) {
+      phase.samples += 1;
+      if (previous) {
+        for (const field of fields) {
+          const start = Number(previous[field]);
+          const end = Number(sample[field]);
+          if (Number.isFinite(start) && Number.isFinite(end)) {
+            phase[`${field}Increase`] += counterDelta(start, end);
+          }
+        }
+      }
+    }
+    previous = sample;
+  }
+  return {
+    available: true,
+    phases,
+    receiveBufferDropsIncrease: Object.values(phases).reduce(
+      (total, phase) => total + phase.receiveBufferDropsIncrease,
+      0,
+    ),
+    sendBufferDropsIncrease: Object.values(phases).reduce(
+      (total, phase) => total + phase.sendBufferDropsIncrease,
+      0,
+    ),
+    source: samples[0].source || "unknown",
+  };
+}
+
+export function summarizeSetup(milestones) {
+  if (!Array.isArray(milestones) || milestones.length === 0) {
+    return { available: false, connectionMilliseconds: null, milestones: [] };
+  }
+  let previous = null;
+  const normalized = milestones.map((milestone) => {
+    const observedAtMilliseconds = Date.parse(milestone.observedAt);
+    const sincePreviousMilliseconds =
+      previous === null || !Number.isFinite(observedAtMilliseconds)
+        ? null
+        : Math.max(0, observedAtMilliseconds - previous);
+    if (Number.isFinite(observedAtMilliseconds)) {
+      previous = observedAtMilliseconds;
+    }
+    return {
+      name: milestone.name,
+      observedAt: milestone.observedAt,
+      sincePreviousMilliseconds,
+    };
+  });
+  const byName = new Map(
+    normalized.map((milestone) => [
+      milestone.name,
+      Date.parse(milestone.observedAt),
+    ]),
+  );
+  const connectionStarted = byName.get("connection-started");
+  const mediaConnected = byName.get("media-connected");
+  return {
+    available: true,
+    connectionMilliseconds:
+      Number.isFinite(connectionStarted) && Number.isFinite(mediaConnected)
+        ? Math.max(0, mediaConnected - connectionStarted)
+        : null,
+    milestones: normalized,
+  };
+}
+
+export function summarizeHostCPU(samples, phaseTimeline, phaseOrder) {
+  const emptyPhases = Object.fromEntries(
+    phaseOrder.map((name) => [
+      name,
+      {
+        activeMedianRatio: 0,
+        samplingGapMaximumMilliseconds: 0,
+        samplingGapP99Milliseconds: 0,
+        samplingGapSamples: 0,
+        samples: 0,
+        stealMaximumRatio: 0,
+        stealP95Ratio: 0,
+      },
+    ]),
+  );
+  if (
+    !Array.isArray(samples) ||
+    samples.length < 2 ||
+    !Array.isArray(phaseTimeline)
+  ) {
+    return { available: false, phases: emptyPhases, source: null };
+  }
+  const timeline = phaseTimeline
+    .map((phase) => ({
+      name: phase.name,
+      startedAtMilliseconds: Date.parse(phase.startedAt),
+    }))
+    .filter(
+      (phase) =>
+        typeof phase.name === "string" &&
+        Number.isFinite(phase.startedAtMilliseconds),
+    )
+    .sort(
+      (left, right) => left.startedAtMilliseconds - right.startedAtMilliseconds,
+    );
+  const phaseAt = (timestamp) => {
+    let active = null;
+    for (const phase of timeline) {
+      if (phase.startedAtMilliseconds > timestamp) break;
+      active = phase.name;
+    }
+    return phaseOrder.includes(active) ? active : null;
+  };
+  const byPhase = Object.fromEntries(
+    phaseOrder.map((name) => [name, { active: [], gaps: [], steal: [] }]),
+  );
+  const counterFields = [
+    "userTicks",
+    "niceTicks",
+    "systemTicks",
+    "idleTicks",
+    "ioWaitTicks",
+    "irqTicks",
+    "softIRQTicks",
+    "stealTicks",
+  ];
+  let previous = null;
+  for (const sample of samples) {
+    const capturedAtMilliseconds = Date.parse(sample.capturedAt);
+    const valid =
+      Number.isFinite(capturedAtMilliseconds) &&
+      counterFields.every(
+        (field) => Number.isFinite(sample[field]) && sample[field] >= 0,
+      );
+    if (!valid) {
+      previous = null;
+      continue;
+    }
+    const phase = phaseAt(capturedAtMilliseconds);
+    const previousPhase = previous
+      ? phaseAt(previous.capturedAtMilliseconds)
+      : null;
+    if (previous && phase && phase === previousPhase) {
+      if (
+        Number.isFinite(sample.gapMilliseconds) &&
+        sample.gapMilliseconds > 0
+      ) {
+        byPhase[phase].gaps.push(sample.gapMilliseconds);
+      }
+      const deltas = Object.fromEntries(
+        counterFields.map((field) => [field, sample[field] - previous[field]]),
+      );
+      if (Object.values(deltas).every((value) => value >= 0)) {
+        const total = Object.values(deltas).reduce(
+          (sum, value) => sum + value,
+          0,
+        );
+        if (total > 0) {
+          const stealRatio = deltas.stealTicks / total;
+          const activeRatio =
+            (total -
+              deltas.idleTicks -
+              deltas.ioWaitTicks -
+              deltas.stealTicks) /
+            total;
+          byPhase[phase].active.push(Math.max(0, Math.min(1, activeRatio)));
+          byPhase[phase].steal.push(Math.max(0, Math.min(1, stealRatio)));
+        }
+      }
+    }
+    previous = { ...sample, capturedAtMilliseconds };
+  }
+  const phases = Object.fromEntries(
+    phaseOrder.map((name) => {
+      const active = byPhase[name].active.sort((left, right) => left - right);
+      const gaps = byPhase[name].gaps.sort((left, right) => left - right);
+      const steal = byPhase[name].steal.sort((left, right) => left - right);
+      return [
+        name,
+        {
+          activeMedianRatio: median(active),
+          samplingGapMaximumMilliseconds: gaps.at(-1) || 0,
+          samplingGapP99Milliseconds: percentile(gaps, 0.99),
+          samplingGapSamples: gaps.length,
+          samples: steal.length,
+          stealMaximumRatio: steal.at(-1) || 0,
+          stealP95Ratio: percentile(steal, 0.95),
+        },
+      ];
+    }),
+  );
+  return {
+    available: Object.values(phases).some((phase) => phase.samples > 0),
+    phases,
+    source: "linux-proc-stat",
+  };
+}
+
+function summarizePhase(samples, phase, encoderQuality) {
+  if (samples.length === 0) {
+    return null;
+  }
+  const settled = samples.slice(Math.min(8, Math.floor(samples.length / 3)));
+  const medianReceivedBitrateKbps = median(
+    settled.map((sample) => sample.receivedBitrateKbps).filter(positive),
+  );
+  const capacityKbps = phase.shaping?.capacityKbps || 0;
+  const first = samples[0];
+  const last = samples.at(-1);
+  const durationSeconds = Math.max(
+    0,
+    (last.elapsedMilliseconds - first.elapsedMilliseconds) / 1000,
+  );
+  const decodedFrames = Math.max(0, last.framesDecoded - first.framesDecoded);
+  const qpSumIncrease = nullableCounterIncrease(samples, "qpSum");
+  const totalDecodeTimeIncrease = nullableCounterIncrease(
+    samples,
+    "totalDecodeTimeSeconds",
+  );
+  const jitterBufferDelayIncrease = nullableCounterIncrease(
+    samples,
+    "jitterBufferDelaySeconds",
+  );
+  const jitterBufferEmittedIncrease = nullableCounterIncrease(
+    samples,
+    "jitterBufferEmittedCount",
+  );
+  const jitterBufferTargetDelayIncrease = nullableCounterIncrease(
+    samples,
+    "jitterBufferTargetDelaySeconds",
+  );
+  const decodedIntervals = samples
+    .slice(1)
+    .filter(
+      (sample, index) => sample.framesDecoded > samples[index].framesDecoded,
+    ).length;
+  const freezeDurationSeconds = Math.max(
+    0,
+    (last.totalFreezesDurationSeconds || 0) -
+      (first.totalFreezesDurationSeconds || 0),
+  );
+  const nackIncrease = counterIncrease(samples, "nackCount", [phase.name]);
+  const packetsReceivedIncrease = counterIncrease(samples, "packetsReceived", [
+    phase.name,
+  ]);
+  const twccReportedLostIncrease = counterIncrease(
+    samples,
+    "twccReportedLost",
+    [phase.name],
+  );
+  const twccReportedStatusesIncrease = counterIncrease(
+    samples,
+    "twccReportedStatuses",
+    [phase.name],
+  );
+  return {
+    averageDecodeMilliseconds:
+      decodedFrames > 0 && totalDecodeTimeIncrease !== null
+        ? (totalDecodeTimeIncrease * 1000) / decodedFrames
+        : null,
+    averageJitterBufferDelayMilliseconds:
+      jitterBufferEmittedIncrease > 0 && jitterBufferDelayIncrease !== null
+        ? (jitterBufferDelayIncrease * 1000) / jitterBufferEmittedIncrease
+        : null,
+    averageJitterBufferTargetMilliseconds:
+      jitterBufferEmittedIncrease > 0 &&
+      jitterBufferTargetDelayIncrease !== null
+        ? (jitterBufferTargetDelayIncrease * 1000) / jitterBufferEmittedIncrease
+        : null,
+    averageQP:
+      encoderQuality?.averageQP ??
+      (decodedFrames > 0 && qpSumIncrease !== null
+        ? qpSumIncrease / decodedFrames
+        : null),
+    encoderBurstFrameRatio: encoderQuality?.burstFrameRatio || 0,
+    encoderFrameGapP99Milliseconds:
+      encoderQuality?.frameGapP99Milliseconds || 0,
+    encoderFrameIntervals: encoderQuality?.frameIntervals || 0,
+    encoderLateFrameRatio: encoderQuality?.lateFrameRatio || 0,
+    encoderMaximumFrameGapMilliseconds:
+      encoderQuality?.maximumFrameGapMilliseconds || 0,
+    capacityKbps,
+    capacityUtilization:
+      capacityKbps > 0 ? medianReceivedBitrateKbps / capacityKbps : 0,
+    connectedRatio:
+      samples.filter(
+        (sample) =>
+          sample.peerConnectionState === "connected" &&
+          sample.playback === "Playing",
+      ).length / samples.length,
+    decodedFramesPerSecond:
+      durationSeconds > 0 ? decodedFrames / durationSeconds : 0,
+    decoderActiveRatio:
+      samples.length > 1 ? decodedIntervals / (samples.length - 1) : 0,
+    freezeDurationSeconds,
+    freezeRatio:
+      durationSeconds > 0 ? freezeDurationSeconds / durationSeconds : 0,
+    fecPacketsIncrease: counterIncrease(samples, "fecPacketsReceived", [
+      phase.name,
+    ]),
+    maximumRTTMilliseconds:
+      1000 *
+      Math.max(
+        0,
+        ...samples.map((sample) => sample.currentRoundTripTimeSeconds || 0),
+      ),
+    medianEncoderTargetKbps: median(
+      settled.map((sample) => sample.encoderTargetKbps).filter(positive),
+    ),
+    maximumEncoderTargetKbps: Math.max(
+      0,
+      ...samples.map((sample) => sample.encoderTargetKbps || 0),
+    ),
+    medianFrameHeight: median(
+      settled.map((sample) => sample.frameHeight).filter(positive),
+    ),
+    medianFrameWidth: median(
+      settled.map((sample) => sample.frameWidth).filter(positive),
+    ),
+    medianAverageLoss: median(
+      settled
+        .map((sample) => sample.lossAverage)
+        .filter((value) => Number.isFinite(value) && value >= 0),
+    ),
+    medianDelayTargetKbps: median(
+      settled.map((sample) => sample.delayTargetKbps).filter(positive),
+    ),
+    medianLossTargetKbps: median(
+      settled.map((sample) => sample.lossTargetKbps).filter(positive),
+    ),
+    medianReceivedBitrateKbps,
+    medianTWCCKbps: median(
+      settled.map((sample) => sample.twccTargetKbps).filter(positive),
+    ),
+    startingEncoderTargetKbps: first.encoderTargetKbps || 0,
+    nackIncrease,
+    nackToPacketRatio:
+      packetsReceivedIncrease > 0 ? nackIncrease / packetsReceivedIncrease : 0,
+    packetsLostIncrease: counterIncrease(samples, "packetsLost", [phase.name]),
+    packetsReceivedIncrease,
+    maximumPacerQueuePackets: Math.max(
+      0,
+      ...samples.map((sample) => sample.pacerQueuePackets || 0),
+    ),
+    maximumPacerQueueDelayMilliseconds: Math.max(
+      0,
+      ...samples.map(
+        (sample) => sample.pacerMaximumQueueDelayMilliseconds || 0,
+      ),
+    ),
+    maximumPacerPrimaryDelayMilliseconds: Math.max(
+      0,
+      ...samples.map(
+        (sample) => sample.pacerMaximumPrimaryDelayMilliseconds || 0,
+      ),
+    ),
+    maximumPacerRepairDelayMilliseconds: Math.max(
+      0,
+      ...samples.map(
+        (sample) => sample.pacerMaximumRepairDelayMilliseconds || 0,
+      ),
+    ),
+    maximumPacerRTXDelayMilliseconds: Math.max(
+      0,
+      ...samples.map((sample) => sample.pacerMaximumRTXDelayMilliseconds || 0),
+    ),
+    maximumPacerFECDelayMilliseconds: Math.max(
+      0,
+      ...samples.map((sample) => sample.pacerMaximumFECDelayMilliseconds || 0),
+    ),
+    maximumPacerSustainedDelayMilliseconds: Math.max(
+      0,
+      ...samples.map(
+        (sample) => sample.pacerMaximumSustainedDelayMilliseconds || 0,
+      ),
+    ),
+    maximumPacerAdmittedDelayMilliseconds: Math.max(
+      0,
+      ...samples.map(
+        (sample) => sample.pacerMaximumAdmittedDelayMilliseconds || 0,
+      ),
+    ),
+    maximumPacerKeyFrameReserveBytes: Math.max(
+      0,
+      ...samples.map((sample) => sample.pacerKeyFrameReserveBytes || 0),
+    ),
+    pacerMediaFrameDropsIncrease: counterIncrease(
+      samples,
+      "pacerMediaFramesDropped",
+      [phase.name],
+    ),
+    pacerMediaByteDropsIncrease: counterIncrease(
+      samples,
+      "pacerMediaBytesDropped",
+      [phase.name],
+    ),
+    pacerQueueDropsIncrease: counterIncrease(samples, "pacerQueueDrops", [
+      phase.name,
+    ]),
+    pacerRepairPacketsExpiredIncrease: counterIncrease(
+      samples,
+      "pacerRepairPacketsExpired",
+      [phase.name],
+    ),
+    pacerRepairPacketsTrimmedIncrease: counterIncrease(
+      samples,
+      "pacerRepairPacketsTrimmed",
+      [phase.name],
+    ),
+    pacerRTXPacketsExpiredIncrease: counterIncrease(
+      samples,
+      "pacerRTXPacketsExpired",
+      [phase.name],
+    ),
+    pacerFECPacketsExpiredIncrease: counterIncrease(
+      samples,
+      "pacerFECPacketsExpired",
+      [phase.name],
+    ),
+    pacerRTXPacketsTrimmedIncrease: counterIncrease(
+      samples,
+      "pacerRTXPacketsTrimmed",
+      [phase.name],
+    ),
+    pacerFECPacketsTrimmedIncrease: counterIncrease(
+      samples,
+      "pacerFECPacketsTrimmed",
+      [phase.name],
+    ),
+    pacerSentPrimaryIncrease: counterIncrease(samples, "pacerSentPrimary", [
+      phase.name,
+    ]),
+    pacerSentRepairIncrease: counterIncrease(samples, "pacerSentRepair", [
+      phase.name,
+    ]),
+    pacerSentRTXIncrease: counterIncrease(samples, "pacerSentRTX", [
+      phase.name,
+    ]),
+    pacerSentFECIncrease: counterIncrease(samples, "pacerSentFEC", [
+      phase.name,
+    ]),
+    recoveryKeyFrameRequestsIncrease: counterIncrease(
+      samples,
+      "recoveryKeyFrameRequests",
+      [phase.name],
+    ),
+    recoveryKeyFrameCoalescedIncrease: counterIncrease(
+      samples,
+      "recoveryKeyFrameCoalesced",
+      [phase.name],
+    ),
+    recoveryKeyFrameFailuresIncrease: counterIncrease(
+      samples,
+      "recoveryKeyFrameFailures",
+      [phase.name],
+    ),
+    rtcpKeyFrameRequestsIncrease: counterIncrease(
+      samples,
+      "rtcpKeyFrameRequests",
+      [phase.name],
+    ),
+    rtcpMalformedFeedbackIncrease: counterIncrease(
+      samples,
+      "rtcpMalformedFeedback",
+      [phase.name],
+    ),
+    adaptiveBitrateUpdatesIncrease: counterIncrease(
+      samples,
+      "adaptiveBitrateUpdates",
+      [phase.name],
+    ),
+    adaptiveBitrateFailuresIncrease: counterIncrease(
+      samples,
+      "adaptiveBitrateFailures",
+      [phase.name],
+    ),
+    twccFeedbackPacketsIncrease: counterIncrease(
+      samples,
+      "twccFeedbackPackets",
+      [phase.name],
+    ),
+    twccMalformedFeedbackIncrease: counterIncrease(
+      samples,
+      "twccMalformedFeedback",
+      [phase.name],
+    ),
+    twccPaddingStatusesIncrease: counterIncrease(
+      samples,
+      "twccPaddingStatuses",
+      [phase.name],
+    ),
+    twccReportedLostIncrease,
+    twccReportedStatusesIncrease,
+    twccReportedLossRatio:
+      twccReportedStatusesIncrease > 0
+        ? twccReportedLostIncrease / twccReportedStatusesIncrease
+        : 0,
+    retransmittedPacketsIncrease: counterIncrease(
+      samples,
+      "retransmittedPacketsReceived",
+      [phase.name],
+    ),
+    encodedBytes: encoderQuality?.encodedBytes || 0,
+    encodedFrames:
+      encoderQuality?.frames || (qpSumIncrease !== null ? decodedFrames : 0),
+    samples: samples.length,
+  };
+}
+
+function summarizeTrafficControl(evidence) {
+  if (evidence?.constrained?.end && evidence?.impaired?.end) {
+    const transitions = (evidence.constrainedTransitions || []).map(
+      (interval) => netemIntervalStats(interval.start, interval.end),
+    );
+    const constrained = netemIntervalStats(
+      evidence.constrained.start,
+      evidence.constrained.end,
+    );
+    const impaired = netemIntervalStats(
+      evidence.impaired.start,
+      evidence.impaired.end,
+    );
+    const constrainedTransitionPackets = transitions.reduce(
+      (total, interval) => total + interval.packets,
+      0,
+    );
+    const constrainedTransitionDrops = transitions.reduce(
+      (total, interval) => total + interval.drops,
+      0,
+    );
+    return {
+      constrainedConfiguredLossRatio: constrained.configuredLossRatio,
+      constrainedEndQueuePackets: constrained.endQueuePackets,
+      constrainedEndQueueUtilization: constrained.endQueueUtilization,
+      constrainedQueueLimitPackets: constrained.queueLimitPackets,
+      constrainedDropRatio: dropRatio(
+        constrained.packets + constrainedTransitionPackets,
+        constrained.drops + constrainedTransitionDrops,
+      ),
+      constrainedDrops: constrained.drops + constrainedTransitionDrops,
+      constrainedPackets: constrained.packets + constrainedTransitionPackets,
+      constrainedSteadyDropRatio: dropRatio(
+        constrained.packets,
+        constrained.drops,
+      ),
+      constrainedSteadyDrops: constrained.drops,
+      constrainedSteadyPackets: constrained.packets,
+      constrainedTransitionDropRatio: dropRatio(
+        constrainedTransitionPackets,
+        constrainedTransitionDrops,
+      ),
+      constrainedTransitionDrops,
+      constrainedTransitionPackets,
+      impairedConfiguredLossRatio: impaired.configuredLossRatio,
+      impairedEndQueuePackets: impaired.endQueuePackets,
+      impairedEndQueueUtilization: impaired.endQueueUtilization,
+      impairedQueueLimitPackets: impaired.queueLimitPackets,
+      impairedDropRatio: dropRatio(impaired.packets, impaired.drops),
+      impairedDrops: impaired.drops,
+      impairedPackets: impaired.packets,
+    };
+  }
+  const constrainedTransition = netemStats(evidence?.constrainedTransition);
+  const constrained = netemStats(evidence?.constrained);
+  const impaired = netemStats(evidence?.impaired);
+  const constrainedSteadyPackets = Math.max(
+    0,
+    constrained.packets - constrainedTransition.packets,
+  );
+  const constrainedSteadyDrops = Math.max(
+    0,
+    constrained.drops - constrainedTransition.drops,
+  );
+  const impairedPackets = Math.max(0, impaired.packets - constrained.packets);
+  const impairedDrops = Math.max(0, impaired.drops - constrained.drops);
+  return {
+    constrainedPackets: constrained.packets,
+    constrainedDrops: constrained.drops,
+    constrainedConfiguredLossRatio: constrained.configuredLossRatio,
+    constrainedEndQueuePackets: constrained.queueLengthPackets,
+    constrainedEndQueueUtilization: constrained.queueUtilization,
+    constrainedQueueLimitPackets: constrained.queueLimitPackets,
+    constrainedDropRatio: dropRatio(constrained.packets, constrained.drops),
+    constrainedSteadyPackets,
+    constrainedSteadyDrops,
+    constrainedSteadyDropRatio: dropRatio(
+      constrainedSteadyPackets,
+      constrainedSteadyDrops,
+    ),
+    constrainedTransitionPackets: constrainedTransition.packets,
+    constrainedTransitionDrops: constrainedTransition.drops,
+    constrainedTransitionDropRatio: dropRatio(
+      constrainedTransition.packets,
+      constrainedTransition.drops,
+    ),
+    impairedPackets,
+    impairedDrops,
+    impairedConfiguredLossRatio: impaired.configuredLossRatio,
+    impairedEndQueuePackets: impaired.queueLengthPackets,
+    impairedEndQueueUtilization: impaired.queueUtilization,
+    impairedQueueLimitPackets: impaired.queueLimitPackets,
+    impairedDropRatio: dropRatio(impairedPackets, impairedDrops),
+  };
+}
+
+function netemIntervalStats(startQdiscs, endQdiscs) {
+  const start = netemStats(startQdiscs);
+  const end = netemStats(endQdiscs);
+  return {
+    configuredLossRatio: end.configuredLossRatio,
+    drops: counterDelta(start.drops, end.drops),
+    endQueuePackets: end.queueLengthPackets,
+    endQueueUtilization: end.queueUtilization,
+    packets: counterDelta(start.packets, end.packets),
+    queueLimitPackets: end.queueLimitPackets,
+  };
+}
+
+function counterDelta(start, end) {
+  return Math.max(0, end >= start ? end - start : end);
+}
+
+function dropRatio(packets, drops) {
+  const attempted = packets + drops;
+  return attempted > 0 ? drops / attempted : 0;
+}
+
+function mediaCapacityKbps(wireCapacityKbps, protection) {
+  if (!protection?.flexFEC) {
+    return wireCapacityKbps;
+  }
+  const mediaPackets = protection.flexFECMediaPackets;
+  const repairPackets = protection.flexFECRepairPackets;
+  if (
+    !Number.isFinite(mediaPackets) ||
+    !Number.isFinite(repairPackets) ||
+    mediaPackets <= 0 ||
+    repairPackets <= 0
+  ) {
+    return 0;
+  }
+  return (wireCapacityKbps * mediaPackets) / (mediaPackets + repairPackets);
+}
+
+function protectedPacingEnvelopeKbps(protectedWireTargetKbps, protection) {
+  if (
+    !Number.isFinite(protectedWireTargetKbps) ||
+    protectedWireTargetKbps <= 0
+  ) {
+    return 0;
+  }
+  if (!protection?.flexFEC) {
+    return protectedWireTargetKbps * 1.5;
+  }
+  const mediaPackets = protection.flexFECMediaPackets;
+  const repairPackets = protection.flexFECRepairPackets;
+  if (
+    !Number.isFinite(mediaPackets) ||
+    !Number.isFinite(repairPackets) ||
+    mediaPackets <= 0 ||
+    repairPackets <= 0
+  ) {
+    return 0;
+  }
+  const mediaTargetKbps =
+    (protectedWireTargetKbps * mediaPackets) / (mediaPackets + repairPackets);
+  return Math.max(protectedWireTargetKbps, mediaTargetKbps * 1.5);
+}
+
+function netemStats(qdiscs) {
+  const netem = Array.isArray(qdiscs)
+    ? qdiscs.find((qdisc) => qdisc?.kind === "netem")
+    : null;
+  return {
+    configuredLossRatio: Number.isFinite(netem?.options?.["loss-random"]?.loss)
+      ? netem.options["loss-random"].loss
+      : 0,
+    drops: Number.isFinite(netem?.drops) ? netem.drops : 0,
+    packets: Number.isFinite(netem?.packets) ? netem.packets : 0,
+    queueLengthPackets: Number.isFinite(netem?.qlen) ? netem.qlen : 0,
+    queueLimitPackets: Number.isFinite(netem?.options?.limit)
+      ? netem.options.limit
+      : 0,
+    queueUtilization:
+      Number.isFinite(netem?.qlen) &&
+      Number.isFinite(netem?.options?.limit) &&
+      netem.options.limit > 0
+        ? netem.qlen / netem.options.limit
+        : 0,
+  };
+}
+
+function timeToEncoderTarget(samples, phase, target, comparison) {
+  const phaseSamples = samples.filter((sample) => sample.phase === phase);
+  if (phaseSamples.length === 0 || !Number.isFinite(target) || target <= 0) {
+    return null;
+  }
+  const first = phaseSamples[0].elapsedMilliseconds;
+  const match = phaseSamples.find((sample) =>
+    comparison === "at-most"
+      ? sample.encoderTargetKbps > 0 && sample.encoderTargetKbps <= target
+      : sample.encoderTargetKbps >= target,
+  );
+  return match ? match.elapsedMilliseconds - first : null;
+}
+
+function counterIncrease(samples, field, phases) {
+  const selected = samples.filter((sample) => phases.includes(sample.phase));
+  if (selected.length < 2) {
+    return 0;
+  }
+  const first = Number.isFinite(selected[0][field]) ? selected[0][field] : 0;
+  const last = Number.isFinite(selected.at(-1)[field])
+    ? selected.at(-1)[field]
+    : 0;
+  return Math.max(0, last - first);
+}
+
+function nullableCounterIncrease(samples, field) {
+  if (samples.length < 2) {
+    return null;
+  }
+  const first = samples[0][field];
+  const last = samples.at(-1)[field];
+  if (!Number.isFinite(first) || !Number.isFinite(last) || last < first) {
+    return null;
+  }
+  return last - first;
+}
+
+function assert(assertions, passed, name, description) {
+  assertions.push({ description, name, passed: Boolean(passed) });
+}
+
+function median(values) {
+  if (values.length === 0) {
+    return 0;
+  }
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[middle - 1] + sorted[middle]) / 2
+    : sorted[middle];
+}
+
+function positive(value) {
+  return Number.isFinite(value) && value > 0;
+}
+
+function csvValue(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  const stringValue = String(value);
+  return /[",\n]/.test(stringValue)
+    ? `"${stringValue.replaceAll('"', '""')}"`
+    : stringValue;
+}
+
+function formatDuration(milliseconds) {
+  return milliseconds === null
+    ? "not observed"
+    : `${formatNumber(milliseconds / 1000, 1)} s`;
+}
+
+function formatNumber(value, fractionDigits) {
+  return Number.isFinite(value) ? value.toFixed(fractionDigits) : "n/a";
+}
+
+function round(value) {
+  return Math.round(value * 10) / 10;
+}
+
+function escapeXML(value) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+export function parseEncoderQuality(
+  rawLog,
+  phaseTimeline,
+  producerStartedAt = null,
+  framesPerSecond = 30,
+) {
+  const phases = phaseTimeline
+    .map((phase) => ({
+      name: phase.name,
+      startedAtMilliseconds: Date.parse(phase.startedAt),
+    }))
+    .filter((phase) => Number.isFinite(phase.startedAtMilliseconds))
+    .sort(
+      (left, right) => left.startedAtMilliseconds - right.startedAtMilliseconds,
+    );
+  const collected = new Map();
+  for (const line of rawLog.split("\n")) {
+    const match = line.match(
+      /^(?:(\S+)\s+)?(\d+):(\d+):(\d+(?:\.\d+)?)\s+.*\bframe=\s*\d+\s+QP=([0-9]+(?:\.[0-9]+)?)\b.*\bsize=\s*([0-9]+)\s+bytes\b/,
+    );
+    if (!match) {
+      continue;
+    }
+    const monotonicMilliseconds =
+      ((Number(match[2]) * 60 + Number(match[3])) * 60 + Number(match[4])) *
+      1000;
+    const wallTimestamp = Date.parse(match[1]);
+    const processTimestamp = Date.parse(producerStartedAt);
+    const timestamp = Number.isFinite(wallTimestamp)
+      ? wallTimestamp
+      : processTimestamp + monotonicMilliseconds;
+    const qp = Number(match[5]);
+    const bytes = Number(match[6]);
+    if (!Number.isFinite(timestamp) || !Number.isFinite(qp)) {
+      continue;
+    }
+    const phase = [...phases]
+      .reverse()
+      .find((candidate) => candidate.startedAtMilliseconds <= timestamp);
+    if (!phase || phase.name === "connecting" || phase.name === "complete") {
+      continue;
+    }
+    const current = collected.get(phase.name) || {
+      encodedBytes: 0,
+      frameIntervals: [],
+      frames: 0,
+      lastMonotonicMilliseconds: null,
+      qpSum: 0,
+    };
+    if (current.lastMonotonicMilliseconds !== null) {
+      current.frameIntervals.push(
+        monotonicMilliseconds - current.lastMonotonicMilliseconds,
+      );
+    }
+    current.encodedBytes += Number.isFinite(bytes) ? bytes : 0;
+    current.frames += 1;
+    current.lastMonotonicMilliseconds = monotonicMilliseconds;
+    current.qpSum += qp;
+    collected.set(phase.name, current);
+  }
+  return Object.fromEntries(
+    [...collected].map(([name, values]) => {
+      const intervals = values.frameIntervals
+        .filter((value) => Number.isFinite(value) && value >= 0)
+        .sort((left, right) => left - right);
+      const expectedIntervalMilliseconds = 1000 / framesPerSecond;
+      return [
+        name,
+        {
+          averageQP: values.frames > 0 ? values.qpSum / values.frames : null,
+          burstFrameRatio: ratioBelow(
+            intervals,
+            expectedIntervalMilliseconds * 0.5,
+          ),
+          encodedBytes: values.encodedBytes,
+          frameGapP99Milliseconds: percentile(intervals, 0.99),
+          frameIntervals: intervals.length,
+          frames: values.frames,
+          lateFrameRatio: ratioAbove(
+            intervals,
+            expectedIntervalMilliseconds * 1.5,
+          ),
+          maximumFrameGapMilliseconds: intervals.at(-1) || 0,
+        },
+      ];
+    }),
+  );
+}
+
+function percentile(sortedValues, fraction) {
+  if (sortedValues.length === 0) return 0;
+  const index = Math.min(
+    sortedValues.length - 1,
+    Math.floor(sortedValues.length * fraction),
+  );
+  return sortedValues[index];
+}
+
+function ratioAbove(values, threshold) {
+  if (values.length === 0) return 0;
+  return values.filter((value) => value > threshold).length / values.length;
+}
+
+function ratioBelow(values, threshold) {
+  if (values.length === 0) return 0;
+  return values.filter((value) => value < threshold).length / values.length;
+}
+
+async function main() {
+  const outputDirectory = process.argv[2];
+  if (!outputDirectory) {
+    throw new Error("usage: node lib/analysis.mjs <output-directory>");
+  }
+  const [
+    rawSamples,
+    rawManifest,
+    constrainedStepOneStartQdisc,
+    constrainedStepOneQdisc,
+    constrainedStepTwoStartQdisc,
+    constrainedStepTwoQdisc,
+    constrainedStepThreeStartQdisc,
+    constrainedStepThreeQdisc,
+    constrainedStartQdisc,
+    constrainedQdisc,
+    impairedStartQdisc,
+    impairedQdisc,
+    rawProducerLog,
+    rawEncoderLog,
+    rawPhaseTimeline,
+    rawReceiverUDP,
+    rawProducerUDP,
+    rawSetupTimeline,
+    rawHostCPU,
+    rawReceiverHostCPU,
+  ] = await Promise.all([
+    readFile(`${outputDirectory}/samples.jsonl`, "utf8"),
+    readFile(`${outputDirectory}/manifest.json`, "utf8"),
+    readFile(`${outputDirectory}/qdisc-constrained-step-1-start.json`, "utf8"),
+    readFile(`${outputDirectory}/qdisc-constrained-step-1.json`, "utf8"),
+    readFile(`${outputDirectory}/qdisc-constrained-step-2-start.json`, "utf8"),
+    readFile(`${outputDirectory}/qdisc-constrained-step-2.json`, "utf8"),
+    readFile(`${outputDirectory}/qdisc-constrained-step-3-start.json`, "utf8"),
+    readFile(`${outputDirectory}/qdisc-constrained-step-3.json`, "utf8"),
+    readFile(`${outputDirectory}/qdisc-constrained-steady-start.json`, "utf8"),
+    readFile(`${outputDirectory}/qdisc-constrained-steady.json`, "utf8"),
+    readFile(`${outputDirectory}/qdisc-impaired-start.json`, "utf8"),
+    readFile(`${outputDirectory}/qdisc-impaired.json`, "utf8"),
+    readFile(`${outputDirectory}/producer.log`, "utf8"),
+    readOptional(`${outputDirectory}/encoder.log`),
+    readFile(`${outputDirectory}/phase-timeline.jsonl`, "utf8"),
+    readOptional(`${outputDirectory}/receiver-udp.jsonl`),
+    readOptional(`${outputDirectory}/producer-udp.jsonl`),
+    readOptional(`${outputDirectory}/setup-timeline.jsonl`),
+    readOptional(`${outputDirectory}/producer-host-cpu.jsonl`),
+    readOptional(`${outputDirectory}/receiver-host-cpu.jsonl`),
+  ]);
+  const samples = rawSamples
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+  const manifest = JSON.parse(rawManifest);
+  const phaseTimeline = rawPhaseTimeline
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+  const setupTimeline = rawSetupTimeline
+    ? rawSetupTimeline
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => JSON.parse(line))
+    : null;
+  const encoderQuality = parseEncoderQuality(
+    rawEncoderLog || rawProducerLog,
+    phaseTimeline,
+    setupTimeline?.find(
+      (milestone) => milestone.name === "producer-container-started",
+    )?.observedAt,
+    manifest.video?.framesPerSecond || 30,
+  );
+  const analysis = analyze(
+    samples,
+    manifest,
+    {
+      constrainedTransitions: [
+        {
+          start: JSON.parse(constrainedStepOneStartQdisc),
+          end: JSON.parse(constrainedStepOneQdisc),
+        },
+        {
+          start: JSON.parse(constrainedStepTwoStartQdisc),
+          end: JSON.parse(constrainedStepTwoQdisc),
+        },
+        {
+          start: JSON.parse(constrainedStepThreeStartQdisc),
+          end: JSON.parse(constrainedStepThreeQdisc),
+        },
+      ],
+      constrained: {
+        start: JSON.parse(constrainedStartQdisc),
+        end: JSON.parse(constrainedQdisc),
+      },
+      impaired: {
+        start: JSON.parse(impairedStartQdisc),
+        end: JSON.parse(impairedQdisc),
+      },
+    },
+    encoderQuality,
+    rawReceiverUDP
+      ? rawReceiverUDP
+          .split("\n")
+          .filter(Boolean)
+          .map((line) => JSON.parse(line))
+      : null,
+    rawProducerUDP
+      ? rawProducerUDP
+          .split("\n")
+          .filter(Boolean)
+          .map((line) => JSON.parse(line))
+      : null,
+    setupTimeline,
+    rawHostCPU
+      ? rawHostCPU
+          .split("\n")
+          .filter(Boolean)
+          .map((line) => JSON.parse(line))
+      : null,
+    phaseTimeline,
+    rawReceiverHostCPU
+      ? rawReceiverHostCPU
+          .split("\n")
+          .filter(Boolean)
+          .map((line) => JSON.parse(line))
+      : null,
+  );
+  await writeArtifacts(outputDirectory, analysis, manifest);
+  process.stdout.write(
+    `${analysis.passed ? "PASS" : "FAIL"}: ${outputDirectory}/summary.md\n`,
+  );
+  if (!analysis.passed) {
+    process.exitCode = 1;
+  }
+}
+
+async function readOptional(path) {
+  try {
+    return await readFile(path, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  await main();
+}
