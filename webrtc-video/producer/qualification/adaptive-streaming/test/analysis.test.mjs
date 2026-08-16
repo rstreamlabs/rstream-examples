@@ -868,6 +868,39 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     ).passed,
     true,
   );
+  const producerLossOutsideBoundaryTolerance = analyze(
+    samples,
+    manifest,
+    {
+      constrained: {
+        start: [{ kind: "netem", drops: 0, packets: 0 }],
+        end: [{ kind: "netem", drops: 5, packets: 1_000 }],
+      },
+      impaired: {
+        start: [{ kind: "netem", drops: 10, packets: 1_000 }],
+        end: [
+          {
+            kind: "netem",
+            drops: 50,
+            packets: 2_000,
+            options: { "loss-random": { loss: 0.02 } },
+          },
+        ],
+      },
+    },
+    null,
+    receiverSamples,
+    producerSamples.map((sample, index) => ({
+      ...sample,
+      sendBufferDrops: index >= 60 ? 28 : index >= 40 ? 8 : 0,
+    })),
+  );
+  assert.equal(
+    producerLossOutsideBoundaryTolerance.assertions.find(
+      (assertion) => assertion.name === "producer-kernel-capacity",
+    ).passed,
+    false,
+  );
   const receiverOverflow = analyze(
     samples,
     manifest,

@@ -671,6 +671,10 @@ export function analyze(
       producerUDP.phases.constrained?.sendBufferDropsIncrease || 0;
     const producerImpairedSendDrops =
       producerUDP.phases.impaired?.sendBufferDropsIncrease || 0;
+    const constrainedBoundaryTolerance =
+      trafficControlSummary.constrainedDrops > 0 ? 2 : 0;
+    const impairedBoundaryTolerance =
+      trafficControlSummary.impairedDrops > 0 ? 2 : 0;
     assert(
       assertions,
       phaseOrder.every((name) => producerUDP.phases[name]?.samples >= 10),
@@ -682,10 +686,12 @@ export function analyze(
       producerUDP.receiveBufferDropsIncrease === 0 &&
         producerUnshapedSendDrops === 0 &&
         producerConstrainedSendDrops <=
-          trafficControlSummary.constrainedDrops &&
-        producerImpairedSendDrops <= trafficControlSummary.impairedDrops,
+          trafficControlSummary.constrainedDrops +
+            constrainedBoundaryTolerance &&
+        producerImpairedSendDrops <=
+          trafficControlSummary.impairedDrops + impairedBoundaryTolerance,
       "producer-kernel-capacity",
-      "the producer kernel has no UDP receive overflow or send rejection that is not bounded by its independently measured qdisc drops",
+      "the producer kernel has no UDP receive overflow or send rejection outside the independently measured qdisc envelope, allowing at most two datagrams at an asynchronous phase boundary",
     );
   }
   return {
