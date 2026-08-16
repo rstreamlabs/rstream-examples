@@ -562,6 +562,25 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     ).passed,
     false,
   );
+  const pathLimitedRelayResult = analyze(samples, {
+    ...manifest,
+    networkPath: { icePolicy: "relay", kind: "relay" },
+    video: {
+      ...manifest.video,
+      adaptive: {
+        initialBitrateKbps: 4000,
+        minimumBitrateKbps: 2000,
+        maximumBitrateKbps: 8000,
+        changeThresholdPct: 10,
+      },
+    },
+  });
+  assert.equal(
+    pathLimitedRelayResult.assertions.some(
+      (assertion) => assertion.name === "healthy-link-quality-ceiling",
+    ),
+    false,
+  );
   assert.equal(result.phases.impaired.averageQP, 25);
   assert.ok(
     Math.abs(result.phases.impaired.averageDecodeMilliseconds - 3) < 0.0001,

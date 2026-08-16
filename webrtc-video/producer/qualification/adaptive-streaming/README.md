@@ -206,6 +206,14 @@ browser image. Only tunnel publication and TURN are disabled. Its Chromium
 viewer runs on the same isolated Docker bridge, which prevents the host route
 or an external service from silently changing the comparison.
 
+The direct reference must reach the configured 8 Mbit/s media ceiling on its
+healthy phase. A relay run crosses the qualification host's real access link
+and managed TURN, so its unshaped ceiling is not assumed. It must instead keep
+the available path full enough to preserve the declared quality floor, remain
+stable under added loss, and satisfy the direct-versus-relay bounds in the
+matrix. This keeps a limited uplink visible without attributing it to rstream
+or converting it into an artificial release failure.
+
 Release evidence can place the relay producer on a separate Docker host while
 the browser stays on the machine running the harness:
 
@@ -234,6 +242,29 @@ The runner gives the producer its selected CLI credential through an ephemeral
 mode-`0600` file. Interruptions remove that file, the containers, the private
 Docker network, and the private runtime directory. Retained manifests capture
 the topology and tool versions required to reproduce the result.
+
+## Qualify Trickle ICE mobility
+
+The relay harness can move the producer to a second isolated interface while
+the session is playing. The producer keeps its rstream QUIC client and
+signaling WebSocket, gathers a fresh ICE candidate, trickles it to the browser,
+and lets WebRTC select the replacement TURN path.
+
+```bash
+RSTREAM_CONTEXT=your-context \
+RSTREAM_QUALIFICATION_PATH=relay \
+RSTREAM_QUALIFICATION_PROTECTION=nack-rtx-flexfec \
+RSTREAM_QUALIFICATION_MOBILITY=producer \
+  ./qualification/adaptive-streaming/run.sh \
+  ./qualification/adaptive-streaming/.artifacts/relay-mobility
+```
+
+The mobility verdict requires one producer address change, a newly trickled
+candidate, a selected candidate-pair switch, one WebRTC peer connection, one
+signaling WebSocket with no close event, and playback recovery within 15
+seconds. The manifest records both interfaces and the switch point. Mobility
+is explicit and relay-only, so the normal release matrix keeps one stable path
+per run.
 
 ## Run the release matrix
 

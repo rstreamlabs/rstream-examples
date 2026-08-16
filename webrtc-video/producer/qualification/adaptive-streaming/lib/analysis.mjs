@@ -196,7 +196,10 @@ export function analyze(
     "baseline-throughput",
     "baseline median receive throughput is at least 1 Mbps",
   );
-  if (Number.isFinite(manifest.video?.adaptive?.maximumBitrateKbps)) {
+  if (
+    manifest.networkPath?.kind !== "relay" &&
+    Number.isFinite(manifest.video?.adaptive?.maximumBitrateKbps)
+  ) {
     const maximumBitrateKbps = manifest.video.adaptive.maximumBitrateKbps;
     const changeThresholdPct =
       manifest.video.adaptive.changeThresholdPct || 0;
