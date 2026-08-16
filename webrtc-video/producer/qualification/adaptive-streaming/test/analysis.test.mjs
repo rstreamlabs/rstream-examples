@@ -1203,7 +1203,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
           kind: "netem",
           drops: 20,
           packets: 3_000,
-          qlen: 3,
+          qlen: 8,
           options: { limit: 256 },
         },
       ],
