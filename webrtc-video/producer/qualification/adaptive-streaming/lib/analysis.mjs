@@ -40,6 +40,7 @@ export function analyze(
   hostCPUEvidence = null,
   phaseTimeline = null,
   receiverHostCPUEvidence = null,
+  networkConditionTimeline = null,
 ) {
   const enriched = enrichSamples(samples);
   const phaseOrder = manifest.phases.map((phase) => phase.name);
@@ -73,6 +74,11 @@ export function analyze(
     phaseTimeline,
     phaseOrder,
   );
+  const networkConditions = alignNetworkConditions(
+    networkConditionTimeline,
+    enriched,
+    manifest,
+  );
   const candidatePairSwitches = countCandidatePairSwitches(enriched);
   const networkMobility = summarizeNetworkMobility(enriched);
   const icePolicy = manifest.networkPath?.icePolicy || "relay";
@@ -84,6 +90,14 @@ export function analyze(
   );
   const congestionResponseRequired =
     (baseline?.medianEncoderTargetKbps || 0) > constrainedMediaCapacityKbps;
+  if (manifest.networkConditionTimeline?.required === true) {
+    assert(
+      assertions,
+      networkConditions.available && networkConditions.chronological,
+      "network-condition-timeline",
+      "every configured traffic-control transition is timestamped in chronological order on the metrics collector clock",
+    );
+  }
   assert(
     assertions,
     phaseOrder.every((name) => summaries[name]?.samples >= 15),
@@ -743,8 +757,99 @@ export function analyze(
     setup,
     hostCPU,
     networkMobility,
+    networkConditions,
     trafficControl: trafficControlSummary,
   };
+}
+
+export function alignNetworkConditions(events, samples, manifest) {
+  const firstSample = samples.find(
+    (sample) =>
+      Number.isFinite(sample.elapsedMilliseconds) &&
+      Number.isFinite(Date.parse(sample.capturedAt)),
+  );
+  const expected = networkConditionDefinitions(manifest);
+  if (!firstSample || !Array.isArray(events)) {
+    return {
+      available: false,
+      changes: [],
+      chronological: false,
+      expectedEvents: expected.map((entry) => entry.name),
+    };
+  }
+  const firstCapturedAt = Date.parse(firstSample.capturedAt);
+  const definitions = new Map(expected.map((entry) => [entry.name, entry]));
+  const changes = events
+    .map((event) => {
+      const definition = definitions.get(event.name);
+      const observedAt = Date.parse(event.observedAt);
+      if (!definition || !Number.isFinite(observedAt)) return null;
+      return {
+        ...definition,
+        elapsedMilliseconds:
+          firstSample.elapsedMilliseconds + observedAt - firstCapturedAt,
+        observedAt: event.observedAt,
+      };
+    })
+    .filter(Boolean);
+  const chronological = changes.every(
+    (change, index) =>
+      index === 0 ||
+      change.elapsedMilliseconds > changes[index - 1].elapsedMilliseconds,
+  );
+  const observedNames = new Set(changes.map((change) => change.name));
+  return {
+    available:
+      chronological &&
+      expected.length > 0 &&
+      expected.every((entry) => observedNames.has(entry.name)),
+    changes,
+    chronological,
+    expectedEvents: expected.map((entry) => entry.name),
+  };
+}
+
+function networkConditionDefinitions(manifest) {
+  const phases = new Map(
+    (manifest.phases || []).map((phase) => [phase.name, phase]),
+  );
+  const definitions = [];
+  const add = (name, shaping) => {
+    if (!shaping) return;
+    definitions.push({
+      capacityKbps: numberOrNull(shaping.capacityKbps),
+      delayMs: durationMilliseconds(shaping.delay),
+      jitterMs: durationMilliseconds(shaping.jitter),
+      lossPercent: parsePercent(shaping.loss),
+      name,
+    });
+  };
+  add("conditioning-started", phases.get("conditioning")?.shaping);
+  const constrained = phases.get("constrained")?.shaping;
+  if (Array.isArray(constrained?.schedule)) {
+    const names = [
+      "constrained-started",
+      "constrained-step-2-started",
+      "constrained-step-3-started",
+      "constrained-steady-started",
+    ];
+    constrained.schedule.forEach((step, index) =>
+      add(names[index], { ...constrained, ...step }),
+    );
+  } else {
+    add("constrained-started", constrained);
+  }
+  add("impaired-started", phases.get("impaired")?.shaping);
+  const recovery = phases.get("recovery")?.shaping;
+  if (Array.isArray(recovery?.schedule)) {
+    const names = ["recovery-started", "recovery-capacity-started"];
+    recovery.schedule.forEach((step, index) =>
+      add(names[index], { ...recovery, ...step }),
+    );
+  } else {
+    add("recovery-started", recovery);
+  }
+  return definitions;
 }
 
 export function renderSVG(analysis, manifest) {
@@ -766,6 +871,14 @@ export function renderSVG(analysis, manifest) {
   }
   const phases = new Map(manifest.phases.map((phase) => [phase.name, phase]));
   const capacityFor = (sample) => {
+    if (analysis.networkConditions?.available) {
+      const active = analysis.networkConditions.changes
+        .filter(
+          (change) => change.elapsedMilliseconds <= sample.elapsedMilliseconds,
+        )
+        .at(-1);
+      return active?.capacityKbps ?? null;
+    }
     const phase = phases.get(sample.phase);
     if (!phase?.shaping) return null;
     const schedule = phase.shaping.schedule;
@@ -792,6 +905,9 @@ export function renderSVG(analysis, manifest) {
       ])
       .filter(Number.isFinite),
     ...capacities.filter(Number.isFinite),
+    ...(analysis.networkConditions?.changes || [])
+      .map((change) => change.capacityKbps)
+      .filter(Number.isFinite),
   );
   const x = (milliseconds) =>
     margin.left + (milliseconds / maximumTime) * plotWidth;
@@ -840,15 +956,28 @@ export function renderSVG(analysis, manifest) {
     .join("");
   const capacityPointList = [];
   let previousCapacity = null;
-  for (let index = 0; index < samples.length; index += 1) {
-    const capacity = capacities[index];
+  const capacityChanges = analysis.networkConditions?.available
+    ? analysis.networkConditions.changes
+    : samples.map((sample, index) => ({
+        capacityKbps: capacities[index],
+        elapsedMilliseconds: sample.elapsedMilliseconds,
+      }));
+  for (const change of capacityChanges) {
+    const capacity = change.capacityKbps;
     if (!Number.isFinite(capacity)) continue;
-    const abscissa = round(x(samples[index].elapsedMilliseconds));
+    const abscissa = round(x(change.elapsedMilliseconds));
     if (Number.isFinite(previousCapacity) && capacity !== previousCapacity) {
       capacityPointList.push(`${abscissa},${round(y(previousCapacity))}`);
     }
-    capacityPointList.push(`${abscissa},${round(y(capacity))}`);
+    if (capacity !== previousCapacity) {
+      capacityPointList.push(`${abscissa},${round(y(capacity))}`);
+    }
     previousCapacity = capacity;
+  }
+  if (Number.isFinite(previousCapacity)) {
+    capacityPointList.push(
+      `${round(x(maximumTime))},${round(y(previousCapacity))}`,
+    );
   }
   const capacityPoints = capacityPointList.join(" ");
   const capacityLegendX = margin.left + 3 * 150;
@@ -872,6 +1001,11 @@ export function renderSVG(analysis, manifest) {
     : "Capacity, delay, jitter, and loss follow the recorded phase manifest";
   const resultColor = analysis.passed ? "#047857" : "#b91c1c";
   const resultLabel = analysis.passed ? "PASS" : "FAIL";
+  const timeTicks = Array.from({ length: 6 }, (_, index) => {
+    const elapsed = (maximumTime * index) / 5;
+    const abscissa = round(x(elapsed));
+    return `<line x1="${abscissa}" y1="${margin.top + plotHeight}" x2="${abscissa}" y2="${margin.top + plotHeight + 7}" stroke="#111827"/><text x="${abscissa}" y="${margin.top + plotHeight + 25}" text-anchor="middle" font-size="13" fill="#4b5563">${Math.round(elapsed / 1000)} s</text>`;
+  }).join("");
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title description" style="font-family:system-ui,sans-serif">
   <title id="title">Adaptive sender response to controlled link changes</title>
@@ -885,6 +1019,7 @@ export function renderSVG(analysis, manifest) {
   ${lines}
   ${capacityLine}
   <line x1="${margin.left}" y1="${margin.top + plotHeight}" x2="${width - margin.right}" y2="${margin.top + plotHeight}" stroke="#111827"/>
+  ${timeTicks}
   <text x="${width / 2}" y="${height - 50}" text-anchor="middle" font-size="15" fill="#6b7280">Elapsed time · capacity line exists only while traffic control is active</text>
 </svg>
 `;
@@ -2463,6 +2598,24 @@ function formatNumber(value, fractionDigits) {
   return Number.isFinite(value) ? value.toFixed(fractionDigits) : "n/a";
 }
 
+function durationMilliseconds(value) {
+  if (Number.isFinite(value)) return value;
+  const match =
+    typeof value === "string" ? value.match(/^([0-9]+(?:\.[0-9]+)?)ms$/) : null;
+  return match ? Number(match[1]) : null;
+}
+
+function parsePercent(value) {
+  if (Number.isFinite(value)) return value * 100;
+  const match =
+    typeof value === "string" ? value.match(/^([0-9]+(?:\.[0-9]+)?)%$/) : null;
+  return match ? Number(match[1]) : null;
+}
+
+function numberOrNull(value) {
+  return Number.isFinite(value) ? value : null;
+}
+
 function round(value) {
   return Math.round(value * 10) / 10;
 }
@@ -2612,6 +2765,7 @@ async function main() {
     rawSetupTimeline,
     rawHostCPU,
     rawReceiverHostCPU,
+    rawNetworkConditionTimeline,
   ] = await Promise.all([
     readFile(`${outputDirectory}/samples.jsonl`, "utf8"),
     readFile(`${outputDirectory}/manifest.json`, "utf8"),
@@ -2635,6 +2789,7 @@ async function main() {
     readOptional(`${outputDirectory}/setup-timeline.jsonl`),
     readOptional(`${outputDirectory}/producer-host-cpu.jsonl`),
     readOptional(`${outputDirectory}/receiver-host-cpu.jsonl`),
+    readOptional(`${outputDirectory}/network-condition-timeline.jsonl`),
   ]);
   const samples = rawSamples
     .split("\n")
@@ -2713,6 +2868,12 @@ async function main() {
     phaseTimeline,
     rawReceiverHostCPU
       ? rawReceiverHostCPU
+          .split("\n")
+          .filter(Boolean)
+          .map((line) => JSON.parse(line))
+      : null,
+    rawNetworkConditionTimeline
+      ? rawNetworkConditionTimeline
           .split("\n")
           .filter(Boolean)
           .map((line) => JSON.parse(line))

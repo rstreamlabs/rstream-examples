@@ -337,6 +337,21 @@ start_traffic_control() {
   traffic_control_pid=$!
 }
 
+record_traffic_control_event() {
+  local event="$1"
+  local timeline="${output_directory}/network-condition-timeline.jsonl"
+  local observed_at
+  if [[ -s "${timeline}" ]] && jq -e --arg event "${event}" \
+    'select(.name == $event)' "${timeline}" >/dev/null; then
+    return
+  fi
+  observed_at="$(node -e 'process.stdout.write(new Date().toISOString())')"
+  jq -cn \
+    --arg name "${event}" \
+    --arg observed_at "${observed_at}" \
+    '{name: $name, observedAt: $observed_at}' >>"${timeline}"
+}
+
 wait_for_traffic_control_event() {
   local event="$1"
   local timeout_seconds="$2"
@@ -355,8 +370,20 @@ wait_for_traffic_control_event() {
       printf 'timed out waiting for traffic-control event %s\n' "${event}" >&2
       return 1
     fi
+    if [[ -n "${collector_pid}" ]] && ! kill -0 "${collector_pid}" 2>/dev/null; then
+      local collector_status=0
+      wait "${collector_pid}" || collector_status=$?
+      collector_pid=""
+      printf 'collector exited before traffic-control event %s (status %s)\n' \
+        "${event}" "${collector_status}" >&2
+      if ((collector_status == 0)); then
+        collector_status=1
+      fi
+      return "${collector_status}"
+    fi
     sleep 0.1
   done
+  record_traffic_control_event "${event}"
 }
 
 wait_for_traffic_control() {
@@ -906,6 +933,11 @@ jq -n \
       turnTransport: (if $turn_transport == "" then null else $turn_transport end),
       producerTURNPolicy: $producer_turn_policy
     },
+    networkConditionTimeline: {
+      required: true,
+      clock: "metrics-collector",
+      precisionMilliseconds: 100
+    },
     runtime: {
       dockerVersion: $docker_version,
       operatingSystem: $operating_system,
@@ -1260,18 +1292,20 @@ start_traffic_control
 wait_for_traffic_control_event conditioning-started 15
 write_phase conditioning \
   "$(jq -cn --argjson capacity "${conditioning_capacity_kbps}" --argjson queue_limit "${queue_limit_packets}" --arg scope "${impairment_scope}" '{capacityKbps: $capacity, delay: "0ms", jitter: "0ms", loss: "0%", queueLimitPackets: $queue_limit, scope: $scope, purpose: "settle traffic-control activation without constraining the reference stream"}')"
-hold_phase conditioning "${conditioning_seconds}"
-wait_for_traffic_control_event constrained-started 15
+wait_for_traffic_control_event constrained-started $((conditioning_seconds + 15))
 write_phase constrained \
   "$(jq -cn --argjson one "${capacity_step_one_kbps}" --argjson two "${capacity_step_two_kbps}" --argjson three "${capacity_step_three_kbps}" --argjson steady "${capacity_kbps}" --argjson step "${transition_step_seconds}" --argjson duration "${constrained_seconds}" --argjson queue_limit "${queue_limit_packets}" --arg scope "${impairment_scope}" '{schedule: [{durationSeconds: $step, capacityKbps: $one, delay: "0ms", jitter: "0ms"}, {durationSeconds: $step, capacityKbps: $two, delay: "0ms", jitter: "0ms"}, {durationSeconds: $step, capacityKbps: $three, delay: "0ms", jitter: "0ms"}, {durationSeconds: ($duration - 3 * $step), capacityKbps: $steady, delay: "0ms", jitter: "0ms"}], loss: "0%", queueLimitPackets: $queue_limit, scope: $scope}')"
-wait_for_traffic_control_event impaired-started $((constrained_seconds + 15))
+wait_for_traffic_control_event constrained-step-2-started $((transition_step_seconds + 15))
+wait_for_traffic_control_event constrained-step-3-started $((transition_step_seconds + 15))
+wait_for_traffic_control_event constrained-steady-started $((transition_step_seconds + 15))
+wait_for_traffic_control_event impaired-started $((constrained_steady_seconds + 15))
 write_phase impaired \
   "$(jq -cn --argjson capacity "${capacity_kbps}" --argjson queue_limit "${queue_limit_packets}" --arg scope "${impairment_scope}" '{capacityKbps: $capacity, delay: "120ms", jitter: "30ms", loss: "2%", queueLimitPackets: $queue_limit, scope: $scope}')"
 wait_for_traffic_control_event recovery-started $((impaired_seconds + 15))
 write_phase recovery \
   "$(jq -cn --argjson constrained "${capacity_kbps}" --argjson restored "${conditioning_capacity_kbps}" --argjson step "${transition_step_seconds}" --argjson duration "${recovery_seconds}" --argjson queue_limit "${queue_limit_packets}" --arg scope "${impairment_scope}" '{schedule: [{durationSeconds: $step, capacityKbps: $constrained, delay: "0ms", jitter: "0ms"}, {durationSeconds: ($duration - $step), capacityKbps: $restored, delay: "0ms", jitter: "0ms"}], loss: "0%", queueLimitPackets: $queue_limit, scope: $scope}')"
-hold_phase recovery "${recovery_seconds}"
-wait_for_traffic_control_event recovery-drain-started 15
+wait_for_traffic_control_event recovery-capacity-started $((transition_step_seconds + 15))
+wait_for_traffic_control_event recovery-drain-started $((recovery_seconds - transition_step_seconds + 15))
 write_phase drain '{"purpose":"drain shaped packets before qdisc teardown"}'
 wait_for_traffic_control
 # The collector exits as soon as it observes the complete phase. Stop the

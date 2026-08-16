@@ -120,10 +120,11 @@ test("runs impairment timing inside the producer namespace", async () => {
     fileURLToPath(new URL("../run.sh", import.meta.url)),
     "utf8",
   );
-  assert.match(
-    runScript,
-    /RSTREAM_QUALIFICATION_CONDITIONING_SECONDS:-30/,
+  const trafficControlScript = await readFile(
+    fileURLToPath(new URL("../traffic-control.sh", import.meta.url)),
+    "utf8",
   );
+  assert.match(runScript, /RSTREAM_QUALIFICATION_CONDITIONING_SECONDS:-30/);
   assert.match(runScript, /start_traffic_control/);
   assert.match(
     runScript,
@@ -131,16 +132,34 @@ test("runs impairment timing inside the producer namespace", async () => {
   );
   assert.match(
     runScript,
-    /wait_for_traffic_control_event constrained-started 15/,
+    /wait_for_traffic_control_event constrained-started \$\(\(conditioning_seconds \+ 15\)\)/,
   );
+  for (const event of [
+    "constrained-step-2-started",
+    "constrained-step-3-started",
+    "constrained-steady-started",
+  ]) {
+    assert.match(
+      runScript,
+      new RegExp(
+        `wait_for_traffic_control_event ${event} \\$\\(\\(transition_step_seconds \\+ 15\\)\\)`,
+      ),
+    );
+    assert.match(trafficControlScript, new RegExp(`emit ${event}`));
+  }
   assert.match(
     runScript,
-    /wait_for_traffic_control_event impaired-started \$\(\(constrained_seconds \+ 15\)\)/,
+    /wait_for_traffic_control_event impaired-started \$\(\(constrained_steady_seconds \+ 15\)\)/,
   );
   assert.match(
     runScript,
     /wait_for_traffic_control_event recovery-started \$\(\(impaired_seconds \+ 15\)\)/,
   );
+  assert.match(
+    runScript,
+    /wait_for_traffic_control_event recovery-capacity-started \$\(\(transition_step_seconds \+ 15\)\)/,
+  );
+  assert.match(trafficControlScript, /emit recovery-capacity-started/);
   assert.match(
     runScript,
     /--conditioning-capacity-kbps "\$\{conditioning_capacity_kbps\}"/,
@@ -155,8 +174,10 @@ test("runs impairment timing inside the producer namespace", async () => {
   );
   assert.match(
     runScript,
-    /write_phase recovery[\s\S]+hold_phase recovery "\$\{recovery_seconds\}"[\s\S]+write_phase drain[\s\S]+wait_for_traffic_control/,
+    /write_phase recovery[\s\S]+wait_for_traffic_control_event recovery-capacity-started[\s\S]+wait_for_traffic_control_event recovery-drain-started[\s\S]+write_phase drain[\s\S]+wait_for_traffic_control/,
   );
+  assert.match(runScript, /network-condition-timeline\.jsonl/);
+  assert.match(runScript, /precisionMilliseconds: 100/);
   assert.match(runScript, /capture_network_evidence/);
   assert.match(
     runScript,

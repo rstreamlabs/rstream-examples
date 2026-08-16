@@ -2,22 +2,52 @@ export function renderNetworkConditionsSVG(analysis, manifest) {
   const c = chartContext(analysis, manifest, 960, 650);
   const conditions = c.samples.map((sample) => conditionAt(sample, c));
   const specs = [
-    ["Capacity", "Mb/s", "#be185d", conditions.map((v) => v.capacityKbps === null ? null : v.capacityKbps / 1000), 1],
+    [
+      "Capacity",
+      "Mb/s",
+      "#be185d",
+      conditions.map((v) =>
+        v.capacityKbps === null ? null : v.capacityKbps / 1000,
+      ),
+      1,
+    ],
     ["One-way delay", "ms", "#2563eb", conditions.map((v) => v.delayMs), 10],
     ["Jitter", "ms", "#d97706", conditions.map((v) => v.jitterMs), 5],
-    ["Injected random loss", "%", "#dc2626", conditions.map((v) => v.lossPercent), 1],
+    [
+      "Injected random loss",
+      "%",
+      "#dc2626",
+      conditions.map((v) => v.lossPercent),
+      1,
+    ],
   ];
   const top = 145;
   const height = 88;
   const gap = 28;
-  let body = phaseBackgrounds(c, top, specs.length * height + (specs.length - 1) * gap);
+  let body = phaseBackgrounds(
+    c,
+    top,
+    specs.length * height + (specs.length - 1) * gap,
+  );
   specs.forEach(([label, unit, color, values, floor], index) => {
     const yTop = top + index * (height + gap);
     const max = Math.max(floor, finiteMaximum(values, floor));
     const y = yScale(yTop, height, max);
     body += panelFrame(c, yTop, height, label, unit);
-    body += `<polyline fill="none" stroke="${color}" stroke-width="3" points="${stepPoints(c, values, y)}"/>`;
-    body += changeLabels(c, values, y, unit);
+    const field = ["capacityKbps", "delayMs", "jitterMs", "lossPercent"][index];
+    const points = c.analysis.networkConditions?.available
+      ? timelineStepPoints(c, field, y, field === "capacityKbps" ? 1000 : 1)
+      : stepPoints(c, values, y);
+    body += `<polyline fill="none" stroke="${color}" stroke-width="3" points="${points}"/>`;
+    body += c.analysis.networkConditions?.available
+      ? timelineChangeLabels(
+          c,
+          field,
+          y,
+          unit,
+          field === "capacityKbps" ? 1000 : 1,
+        )
+      : changeLabels(c, values, y, unit);
   });
   return documentSVG(
     c,
@@ -43,17 +73,26 @@ export function renderPlaybackQualitySVG(analysis, manifest) {
   body += threshold(c, fpsY(25), "25 fps healthy", "#059669");
   body += threshold(c, fpsY(20), "20 fps impaired", "#d97706");
   body += line(c, fps, fpsY, "#2563eb");
-  body += c.samples.map((sample, index) => {
-    if (sample.playback === undefined || sample.playback === "Playing") return "";
-    return `<circle cx="${round(c.x(sample.elapsedMilliseconds))}" cy="${round(fpsY(fps[index] || 0))}" r="4" fill="#dc2626"/>`;
-  }).join("");
+  body += c.samples
+    .map((sample, index) => {
+      if (sample.playback === undefined || sample.playback === "Playing")
+        return "";
+      return `<circle cx="${round(c.x(sample.elapsedMilliseconds))}" cy="${round(fpsY(fps[index] || 0))}" r="4" fill="#dc2626"/>`;
+    })
+    .join("");
   const freezes = counterDeltas(c.samples, "totalFreezesDurationSeconds");
   const freezeTotal = freezes.reduce((sum, value) => sum + value, 0);
-  const freezeY = yScale(freezeTop, freezeHeight, Math.max(0.1, finiteMaximum(freezes, 0.1)));
+  const freezeY = yScale(
+    freezeTop,
+    freezeHeight,
+    Math.max(0.1, finiteMaximum(freezes, 0.1)),
+  );
   body += panelFrame(c, freezeTop, freezeHeight, "Freeze duration", "s");
   body += bars(c, freezes, freezeY, freezeTop, freezeHeight, "#dc2626", 6);
   body += `<text x="${c.left + 10}" y="${freezeTop + 25}" font-size="14" font-weight="600" fill="${freezeTotal === 0 ? "#047857" : "#b91c1c"}">${freezeTotal === 0 ? "No frozen playback interval observed" : `Total frozen playback ${format(freezeTotal, 2)} s`}</text>`;
-  const qp = c.samples.map((sample) => numberOrNull(analysis.phases[sample.phase]?.averageQP));
+  const qp = c.samples.map((sample) =>
+    numberOrNull(analysis.phases[sample.phase]?.averageQP),
+  );
   const qpY = yScale(qpTop, qpHeight, 51);
   body += panelFrame(c, qpTop, qpHeight, "H.264 QP", "QP");
   body += threshold(c, qpY(42), "42 impaired ceiling", "#d97706");
@@ -78,11 +117,34 @@ export function renderTransportEvidenceSVG(analysis, manifest) {
   const lossTop = 700;
   const lossHeight = 80;
   let body = phaseBackgrounds(c, latencyTop, lossTop + lossHeight - latencyTop);
-  const rtt = c.samples.map((s) => Number.isFinite(s.currentRoundTripTimeSeconds) ? s.currentRoundTripTimeSeconds * 1000 : null);
-  const pacer = c.samples.map((s) => numberOrNull(s.pacerQueueDelayMilliseconds));
-  const playout = intervalRatios(c.samples, "jitterBufferDelaySeconds", "jitterBufferEmittedCount", 1000);
-  const playoutTarget = intervalRatios(c.samples, "jitterBufferTargetDelaySeconds", "jitterBufferEmittedCount", 1000);
-  const latencyY = yScale(latencyTop, latencyHeight, Math.max(600, finiteMaximum([...rtt, ...pacer, ...playout, ...playoutTarget], 600)));
+  const rtt = c.samples.map((s) =>
+    Number.isFinite(s.currentRoundTripTimeSeconds)
+      ? s.currentRoundTripTimeSeconds * 1000
+      : null,
+  );
+  const pacer = c.samples.map((s) =>
+    numberOrNull(s.pacerQueueDelayMilliseconds),
+  );
+  const playout = intervalRatios(
+    c.samples,
+    "jitterBufferDelaySeconds",
+    "jitterBufferEmittedCount",
+    1000,
+  );
+  const playoutTarget = intervalRatios(
+    c.samples,
+    "jitterBufferTargetDelaySeconds",
+    "jitterBufferEmittedCount",
+    1000,
+  );
+  const latencyY = yScale(
+    latencyTop,
+    latencyHeight,
+    Math.max(
+      600,
+      finiteMaximum([...rtt, ...pacer, ...playout, ...playoutTarget], 600),
+    ),
+  );
   body += panelFrame(c, latencyTop, latencyHeight, "Latency / buffering", "ms");
   body += threshold(c, latencyY(600), "600 ms shaped RTT limit", "#dc2626");
   body += threshold(c, latencyY(300), "300 ms buffered limit", "#059669");
@@ -91,25 +153,51 @@ export function renderTransportEvidenceSVG(analysis, manifest) {
   body += line(c, pacer, latencyY, "#d97706");
   body += line(c, playout, latencyY, "#059669");
   body += line(c, playoutTarget, latencyY, "#7c3aed");
-  body += legend(c.left + 10, latencyTop + 25, [["RTT", "#2563eb"], ["Pacer queue", "#d97706"], ["Effective buffer", "#059669"], ["Target buffer", "#7c3aed"]]);
+  body += legend(c.left + 10, latencyTop + 25, [
+    ["RTT", "#2563eb"],
+    ["Pacer queue", "#d97706"],
+    ["Effective buffer", "#059669"],
+    ["Target buffer", "#7c3aed"],
+  ]);
   const nack = counterDeltas(c.samples, "nackCount");
   const rtx = counterDeltas(c.samples, "retransmittedPacketsReceived");
-  const repairY = yScale(repairTop, repairHeight, Math.max(1, finiteMaximum([...nack, ...rtx], 1)));
+  const repairY = yScale(
+    repairTop,
+    repairHeight,
+    Math.max(1, finiteMaximum([...nack, ...rtx], 1)),
+  );
   body += panelFrame(c, repairTop, repairHeight, "NACK / RTX", "packets");
   body += bars(c, nack, repairY, repairTop, repairHeight, "#dc2626", 4, -2);
   body += bars(c, rtx, repairY, repairTop, repairHeight, "#2563eb", 4, 2);
-  body += legend(c.left + 10, repairTop + 25, [["NACK", "#dc2626"], ["RTX received", "#2563eb"]]);
+  body += legend(c.left + 10, repairTop + 25, [
+    ["NACK", "#dc2626"],
+    ["RTX received", "#2563eb"],
+  ]);
   const fec = counterDeltas(c.samples, "fecPacketsReceived");
   const fecY = yScale(fecTop, fecHeight, Math.max(1, finiteMaximum(fec, 1)));
   body += panelFrame(c, fecTop, fecHeight, "FlexFEC received", "packets");
   body += line(c, fec, fecY, "#059669");
-  const observedLoss = intervalRatios(c.samples, "twccReportedLost", "twccReportedStatuses", 100);
-  const injectedLoss = c.samples.map((sample) => conditionAt(sample, c).lossPercent);
-  const lossY = yScale(lossTop, lossHeight, Math.max(5, finiteMaximum([...observedLoss, ...injectedLoss], 5)));
+  const observedLoss = intervalRatios(
+    c.samples,
+    "twccReportedLost",
+    "twccReportedStatuses",
+    100,
+  );
+  const injectedLoss = c.samples.map(
+    (sample) => conditionAt(sample, c).lossPercent,
+  );
+  const lossY = yScale(
+    lossTop,
+    lossHeight,
+    Math.max(5, finiteMaximum([...observedLoss, ...injectedLoss], 5)),
+  );
   body += panelFrame(c, lossTop, lossHeight, "Injected / TWCC loss", "%");
   body += line(c, injectedLoss, lossY, "#dc2626", "8 6");
   body += line(c, observedLoss, lossY, "#7c3aed");
-  body += legend(c.left + 10, lossTop + 22, [["Configured", "#dc2626"], ["TWCC observed", "#7c3aed"]]);
+  body += legend(c.left + 10, lossTop + 22, [
+    ["Configured", "#dc2626"],
+    ["TWCC observed", "#7c3aed"],
+  ]);
   return documentSVG(
     c,
     "Transport latency, loss, and repair",
@@ -126,7 +214,8 @@ function chartContext(analysis, manifest, width, height) {
   const maximumTime = Math.max(1, ...samples.map((s) => s.elapsedMilliseconds));
   const phaseStarts = new Map();
   samples.forEach((sample) => {
-    if (!phaseStarts.has(sample.phase)) phaseStarts.set(sample.phase, sample.elapsedMilliseconds);
+    if (!phaseStarts.has(sample.phase))
+      phaseStarts.set(sample.phase, sample.elapsedMilliseconds);
   });
   return {
     analysis,
@@ -138,17 +227,43 @@ function chartContext(analysis, manifest, width, height) {
     right,
     samples,
     width,
-    x: (milliseconds) => left + (milliseconds / maximumTime) * (width - left - right),
+    x: (milliseconds) =>
+      left + (milliseconds / maximumTime) * (width - left - right),
   };
 }
 
 function conditionAt(sample, c) {
-  const phase = c.manifest.phases.find((candidate) => candidate.name === sample.phase);
+  if (c.analysis.networkConditions?.available) {
+    const active = c.analysis.networkConditions.changes
+      .filter(
+        (change) => change.elapsedMilliseconds <= sample.elapsedMilliseconds,
+      )
+      .at(-1);
+    if (!active) {
+      return {
+        capacityKbps: null,
+        delayMs: null,
+        jitterMs: null,
+        lossPercent: null,
+      };
+    }
+    return active;
+  }
+  const phase = c.manifest.phases.find(
+    (candidate) => candidate.name === sample.phase,
+  );
   const shaping = phase?.shaping;
-  if (!shaping) return { capacityKbps: null, delayMs: null, jitterMs: null, lossPercent: null };
+  if (!shaping)
+    return {
+      capacityKbps: null,
+      delayMs: null,
+      jitterMs: null,
+      lossPercent: null,
+    };
   let active = shaping;
   if (Array.isArray(shaping.schedule) && shaping.schedule.length > 0) {
-    const elapsed = (sample.elapsedMilliseconds - c.phaseStarts.get(sample.phase)) / 1000;
+    const elapsed =
+      (sample.elapsedMilliseconds - c.phaseStarts.get(sample.phase)) / 1000;
     let boundary = 0;
     active = shaping.schedule.at(-1);
     for (const step of shaping.schedule) {
@@ -168,14 +283,16 @@ function conditionAt(sample, c) {
 }
 
 function phaseBackgrounds(c, top, height) {
-  return c.manifest.phases.map((phase, index) => {
-    const samples = c.samples.filter((sample) => sample.phase === phase.name);
-    if (samples.length === 0) return "";
-    const start = c.x(samples[0].elapsedMilliseconds);
-    const end = c.x(samples.at(-1).elapsedMilliseconds);
-    const label = phase.name === "conditioning" ? "settling" : phase.name;
-    return `<rect x="${round(start)}" y="${top}" width="${round(Math.max(1, end - start))}" height="${height}" fill="${index % 2 === 0 ? "#f8fafc" : "#eef2f7"}"/><text x="${round(start + 6)}" y="${top - 18}" font-size="14" font-weight="600" fill="#111827">${xml(label)}</text>`;
-  }).join("");
+  return c.manifest.phases
+    .map((phase, index) => {
+      const samples = c.samples.filter((sample) => sample.phase === phase.name);
+      if (samples.length === 0) return "";
+      const start = c.x(samples[0].elapsedMilliseconds);
+      const end = c.x(samples.at(-1).elapsedMilliseconds);
+      const label = phase.name === "conditioning" ? "settling" : phase.name;
+      return `<rect x="${round(start)}" y="${top}" width="${round(Math.max(1, end - start))}" height="${height}" fill="${index % 2 === 0 ? "#f8fafc" : "#eef2f7"}"/><text x="${round(start + 6)}" y="${top - 18}" font-size="14" font-weight="600" fill="#111827">${xml(label)}</text>`;
+    })
+    .join("");
 }
 
 function panelFrame(c, top, height, label, unit) {
@@ -184,7 +301,8 @@ function panelFrame(c, top, height, label, unit) {
 
 function yScale(top, height, maximum) {
   const max = Math.max(0.0001, maximum);
-  return (value) => top + height - (Math.max(0, Math.min(max, value)) / max) * height;
+  return (value) =>
+    top + height - (Math.max(0, Math.min(max, value)) / max) * height;
 }
 
 function line(c, values, y, color, dash = "") {
@@ -196,10 +314,17 @@ function line(c, values, y, color, dash = "") {
       points = [];
       return;
     }
-    points.push(`${round(c.x(c.samples[index].elapsedMilliseconds))},${round(y(value))}`);
+    points.push(
+      `${round(c.x(c.samples[index].elapsedMilliseconds))},${round(y(value))}`,
+    );
   });
   if (points.length > 1) segments.push(points);
-  return segments.map((segment) => `<polyline fill="none" stroke="${color}" stroke-width="2.5" stroke-dasharray="${dash}" points="${segment.join(" ")}"/>`).join("");
+  return segments
+    .map(
+      (segment) =>
+        `<polyline fill="none" stroke="${color}" stroke-width="2.5" stroke-dasharray="${dash}" points="${segment.join(" ")}"/>`,
+    )
+    .join("");
 }
 
 function stepPoints(c, values, y) {
@@ -211,20 +336,60 @@ function stepPoints(c, values, y) {
       return;
     }
     const x = round(c.x(c.samples[index].elapsedMilliseconds));
-    if (Number.isFinite(previous) && previous !== value) points.push(`${x},${round(y(previous))}`);
+    if (Number.isFinite(previous) && previous !== value)
+      points.push(`${x},${round(y(previous))}`);
     points.push(`${x},${round(y(value))}`);
     previous = value;
   });
   return points.join(" ");
 }
 
+function timelineStepPoints(c, field, y, divisor) {
+  const points = [];
+  let previous = null;
+  for (const change of c.analysis.networkConditions.changes) {
+    const raw = change[field];
+    if (!Number.isFinite(raw)) {
+      previous = null;
+      continue;
+    }
+    const value = raw / divisor;
+    const x = round(c.x(change.elapsedMilliseconds));
+    if (Number.isFinite(previous) && previous !== value) {
+      points.push(`${x},${round(y(previous))}`);
+    }
+    if (value !== previous) points.push(`${x},${round(y(value))}`);
+    previous = value;
+  }
+  if (Number.isFinite(previous)) {
+    points.push(`${round(c.x(c.maximumTime))},${round(y(previous))}`);
+  }
+  return points.join(" ");
+}
+
+function timelineChangeLabels(c, field, y, unit, divisor) {
+  let previous = null;
+  return c.analysis.networkConditions.changes
+    .map((change) => {
+      const raw = change[field];
+      if (!Number.isFinite(raw)) return "";
+      const value = raw / divisor;
+      if (value === previous) return "";
+      previous = value;
+      return `<text x="${round(c.x(change.elapsedMilliseconds) + 5)}" y="${round(y(value) - 6)}" font-size="13" font-weight="600" fill="#111827">${format(value, value < 10 ? 1 : 0)} ${xml(unit)}</text>`;
+    })
+    .join("");
+}
+
 function changeLabels(c, values, y, unit) {
   let previous = null;
-  return values.map((value, index) => {
-    if (!Number.isFinite(value) || value === previous) return "";
-    previous = value;
-    return `<text x="${round(c.x(c.samples[index].elapsedMilliseconds) + 5)}" y="${round(y(value) - 6)}" font-size="13" font-weight="600" fill="#111827">${format(value, value < 10 ? 1 : 0)} ${xml(unit)}</text>`;
-  }).join("");
+  return values
+    .map((value, index) => {
+      if (!Number.isFinite(value) || value === previous) return "";
+      previous = value;
+      return `<text x="${round(c.x(c.samples[index].elapsedMilliseconds) + 5)}" y="${round(y(value) - 6)}" font-size="13" font-weight="600" fill="#111827">${format(value, value < 10 ? 1 : 0)} ${xml(unit)}</text>`;
+    })
+    .join("");
 }
 
 function threshold(c, y, label, color) {
@@ -232,18 +397,22 @@ function threshold(c, y, label, color) {
 }
 
 function bars(c, values, y, top, height, color, width = 6, offset = 0) {
-  return values.map((value, index) => {
-    if (!Number.isFinite(value) || value <= 0) return "";
-    const x = c.x(c.samples[index].elapsedMilliseconds) + offset;
-    return `<rect x="${round(x - width / 2)}" y="${round(y(value))}" width="${width}" height="${round(top + height - y(value))}" fill="${color}" opacity="0.82"/>`;
-  }).join("");
+  return values
+    .map((value, index) => {
+      if (!Number.isFinite(value) || value <= 0) return "";
+      const x = c.x(c.samples[index].elapsedMilliseconds) + offset;
+      return `<rect x="${round(x - width / 2)}" y="${round(y(value))}" width="${width}" height="${round(top + height - y(value))}" fill="${color}" opacity="0.82"/>`;
+    })
+    .join("");
 }
 
 function legend(x, y, entries) {
-  return entries.map(([label, color], index) => {
-    const start = x + index * 190;
-    return `<line x1="${start}" y1="${y}" x2="${start + 24}" y2="${y}" stroke="${color}" stroke-width="3"/><text x="${start + 31}" y="${y + 5}" font-size="13" fill="#111827">${xml(label)}</text>`;
-  }).join("");
+  return entries
+    .map(([label, color], index) => {
+      const start = x + index * 190;
+      return `<line x1="${start}" y1="${y}" x2="${start + 24}" y2="${y}" stroke="${color}" stroke-width="3"/><text x="${start + 31}" y="${y + 5}" font-size="13" fill="#111827">${xml(label)}</text>`;
+    })
+    .join("");
 }
 
 function counterDeltas(samples, field) {
@@ -251,16 +420,27 @@ function counterDeltas(samples, field) {
     if (index === 0 || samples[index - 1].phase !== sample.phase) return null;
     const before = Number(samples[index - 1][field]);
     const after = Number(sample[field]);
-    return Number.isFinite(before) && Number.isFinite(after) ? Math.max(0, after - before) : 0;
+    return Number.isFinite(before) && Number.isFinite(after)
+      ? Math.max(0, after - before)
+      : 0;
   });
 }
 
 function intervalRatios(samples, numeratorField, denominatorField, scale) {
   return samples.map((sample, index) => {
     if (index === 0 || samples[index - 1].phase !== sample.phase) return null;
-    const numerator = Number(sample[numeratorField]) - Number(samples[index - 1][numeratorField]);
-    const denominator = Number(sample[denominatorField]) - Number(samples[index - 1][denominatorField]);
-    return Number.isFinite(numerator) && Number.isFinite(denominator) && numerator >= 0 && denominator > 0 ? (numerator / denominator) * scale : null;
+    const numerator =
+      Number(sample[numeratorField]) -
+      Number(samples[index - 1][numeratorField]);
+    const denominator =
+      Number(sample[denominatorField]) -
+      Number(samples[index - 1][denominatorField]);
+    return Number.isFinite(numerator) &&
+      Number.isFinite(denominator) &&
+      numerator >= 0 &&
+      denominator > 0
+      ? (numerator / denominator) * scale
+      : null;
   });
 }
 
@@ -271,18 +451,24 @@ function finiteMaximum(values, fallback) {
 
 function durationMilliseconds(value) {
   if (Number.isFinite(value)) return value;
-  const match = typeof value === "string" ? value.match(/^([0-9]+(?:\.[0-9]+)?)ms$/) : null;
+  const match =
+    typeof value === "string" ? value.match(/^([0-9]+(?:\.[0-9]+)?)ms$/) : null;
   return match ? Number(match[1]) : null;
 }
 
 function parsePercent(value) {
   if (Number.isFinite(value)) return value * 100;
-  const match = typeof value === "string" ? value.match(/^([0-9]+(?:\.[0-9]+)?)%$/) : null;
+  const match =
+    typeof value === "string" ? value.match(/^([0-9]+(?:\.[0-9]+)?)%$/) : null;
   return match ? Number(match[1]) : null;
 }
 
 function finiteFallback(primary, fallback) {
-  return Number.isFinite(primary) ? primary : Number.isFinite(fallback) ? fallback : null;
+  return Number.isFinite(primary)
+    ? primary
+    : Number.isFinite(fallback)
+      ? fallback
+      : null;
 }
 
 function numberOrNull(value) {
@@ -298,7 +484,12 @@ function format(value, digits) {
 }
 
 function xml(value) {
-  return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;");
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
 }
 
 function documentSVG(c, title, description, body, footer) {
@@ -311,7 +502,16 @@ function documentSVG(c, title, description, body, footer) {
 <text x="${c.width - c.right}" y="34" text-anchor="end" font-size="16" font-weight="700" fill="${passed ? "#047857" : "#b91c1c"}">${passed ? "PASS" : "FAIL"}</text>
 ${body}
 <line x1="${c.left}" y1="${c.height - 55}" x2="${c.width - c.right}" y2="${c.height - 55}" stroke="#111827"/>
-<text x="${c.width / 2}" y="${c.height - 18}" text-anchor="middle" font-size="14" fill="#64748b">${xml(footer)}</text>
+${timeAxis(c, c.height - 55)}
+<text x="${c.width / 2}" y="${c.height - 8}" text-anchor="middle" font-size="12" fill="#64748b">${xml(footer)}</text>
 </svg>
 `;
+}
+
+function timeAxis(c, ordinate) {
+  return Array.from({ length: 6 }, (_, index) => {
+    const elapsed = (c.maximumTime * index) / 5;
+    const x = round(c.x(elapsed));
+    return `<line x1="${x}" y1="${ordinate}" x2="${x}" y2="${ordinate + 6}" stroke="#111827"/><text x="${x}" y="${ordinate + 22}" text-anchor="middle" font-size="12" fill="#4b5563">${Math.round(elapsed / 1000)} s</text>`;
+  }).join("");
 }

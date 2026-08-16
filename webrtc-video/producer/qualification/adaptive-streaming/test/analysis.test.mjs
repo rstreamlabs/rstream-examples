@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  alignNetworkConditions,
   analyze,
   parseEncoderQuality,
   renderMarkdown,
@@ -14,6 +15,89 @@ import {
   renderPlaybackQualitySVG,
   renderTransportEvidenceSVG,
 } from "../lib/evidence-svg.mjs";
+
+test("aligns link changes to observed collector timestamps", () => {
+  const startedAt = Date.parse("2026-08-16T10:00:00.000Z");
+  const samples = [
+    {
+      capturedAt: new Date(startedAt).toISOString(),
+      elapsedMilliseconds: 1000,
+    },
+    {
+      capturedAt: new Date(startedAt + 60_000).toISOString(),
+      elapsedMilliseconds: 61_000,
+    },
+  ];
+  const events = [
+    ["conditioning-started", 5000],
+    ["constrained-started", 10_000],
+    ["constrained-step-2-started", 15_000],
+    ["constrained-step-3-started", 20_000],
+    ["constrained-steady-started", 25_000],
+    ["impaired-started", 30_000],
+    ["recovery-started", 40_000],
+    ["recovery-capacity-started", 45_000],
+  ].map(([name, offset]) => ({
+    name,
+    observedAt: new Date(startedAt + offset).toISOString(),
+  }));
+  const manifest = {
+    phases: [
+      {
+        name: "conditioning",
+        shaping: {
+          capacityKbps: 32_000,
+          delay: "0ms",
+          jitter: "0ms",
+          loss: "0%",
+        },
+      },
+      {
+        name: "constrained",
+        shaping: {
+          schedule: [16_000, 12_000, 8000, 4000].map((capacityKbps) => ({
+            capacityKbps,
+            delay: "0ms",
+            jitter: "0ms",
+            loss: "0%",
+          })),
+        },
+      },
+      {
+        name: "impaired",
+        shaping: {
+          capacityKbps: 4000,
+          delay: "120ms",
+          jitter: "30ms",
+          loss: "2%",
+        },
+      },
+      {
+        name: "recovery",
+        shaping: {
+          schedule: [4000, 32_000].map((capacityKbps) => ({
+            capacityKbps,
+            delay: "0ms",
+            jitter: "0ms",
+            loss: "0%",
+          })),
+        },
+      },
+    ],
+  };
+  const timeline = alignNetworkConditions(events, samples, manifest);
+  assert.equal(timeline.available, true);
+  assert.deepEqual(
+    timeline.changes.map((change) => change.elapsedMilliseconds),
+    [6000, 11_000, 16_000, 21_000, 26_000, 31_000, 41_000, 46_000],
+  );
+  assert.equal(timeline.changes[4].capacityKbps, 4000);
+  assert.equal(timeline.changes[5].lossPercent, 2);
+  assert.equal(
+    alignNetworkConditions(events.slice(0, -1), samples, manifest).available,
+    false,
+  );
+});
 
 test("separates image builds from service establishment", () => {
   const setup = summarizeSetup([

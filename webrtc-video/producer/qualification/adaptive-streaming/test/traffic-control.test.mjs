@@ -102,8 +102,12 @@ test("runs one in-namespace impairment schedule and retains every snapshot", asy
   assert.deepEqual(result.stdout.trim().split("\n"), [
     "conditioning-started",
     "constrained-started",
+    "constrained-step-2-started",
+    "constrained-step-3-started",
+    "constrained-steady-started",
     "impaired-started",
     "recovery-started",
+    "recovery-capacity-started",
     "recovery-drain-started",
     "recovery-complete",
   ]);
