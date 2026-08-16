@@ -22,8 +22,8 @@ webrtc:
     nack: true
     rtx: true
     flexFEC: true
-    flexFECMediaPackets: 4
-    flexFECRepairPackets: 2
+    flexFECMediaPackets: 5
+    flexFECRepairPackets: 1
   adaptive:
     enabled: true
     backend: twcc-gcc
