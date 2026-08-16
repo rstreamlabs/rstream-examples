@@ -28,13 +28,16 @@ type Observation struct {
 }
 
 type Decision struct {
-	TargetBitrateKbps       int
-	RequestRecoveryKeyFrame bool
+	TargetBitrateKbps int
 }
 
 type Backend interface {
 	Name() config.AdaptiveBackend
 	Decide(Observation) (Decision, bool)
+}
+
+type recoveryKeyFrameBackend interface {
+	ConsumeRecoveryKeyFrame() bool
 }
 
 type Controller struct {
@@ -193,8 +196,12 @@ func (c *Controller) applyEstimate(estimate int, allowIncrease bool) bool {
 		})
 		return true
 	}
-	if decision.RequestRecoveryKeyFrame && c.requestRecoveryKeyFrame != nil {
-		c.requestRecoveryKeyFrame()
+	if decision.TargetBitrateKbps > encoderInfo.TargetBitrateKbps {
+		if recovery, ok := c.backend.(recoveryKeyFrameBackend); ok &&
+			recovery.ConsumeRecoveryKeyFrame() &&
+			c.requestRecoveryKeyFrame != nil {
+			c.requestRecoveryKeyFrame()
+		}
 	}
 	c.logger.Debug("Adaptive bitrate applied: %d kbit/s", decision.TargetBitrateKbps)
 	c.updateSnapshot(func(snapshot *Snapshot) {
