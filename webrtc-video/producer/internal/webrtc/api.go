@@ -2,6 +2,7 @@ package webrtc
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -112,6 +113,7 @@ func (f *peerConnectionFactory) NewPeerConnection(
 				SendSideBWE:         estimator,
 				minimumMediaBitrate: minimumMediaBitrateBps,
 				maximumMediaBitrate: maximumMediaBitrateBps,
+				lossGuard:           newFeedbackLossGuard(minimumMediaBitrateBps),
 				pacer:               pacer,
 				protection:          protection,
 			}, nil
@@ -177,8 +179,12 @@ type associatedStreamBandwidthEstimator struct {
 	*gcc.SendSideBWE
 	minimumMediaBitrate   int
 	maximumMediaBitrate   int
+	lossGuard             *feedbackLossGuard
 	pacer                 *minimumBitratePacer
 	protection            flexFECProtection
+	callbackMu            sync.RWMutex
+	targetCallback        func(int)
+	lastDeliveredBitrate  atomic.Int64
 	staleBitrateCallbacks atomic.Uint64
 	twccFeedbackPackets   atomic.Uint64
 	twccMalformedFeedback atomic.Uint64
@@ -188,30 +194,53 @@ type associatedStreamBandwidthEstimator struct {
 }
 
 func (e *associatedStreamBandwidthEstimator) GetTargetBitrate() int {
-	return e.effectiveMediaBitrate(e.SendSideBWE.GetTargetBitrate())
+	target := e.effectiveMediaBitrate(e.SendSideBWE.GetTargetBitrate())
+	if e.lossGuard != nil {
+		target = e.lossGuard.effectiveBitrate(target)
+	}
+	return target
 }
 
 func (e *associatedStreamBandwidthEstimator) OnTargetBitrateChange(callback func(int)) {
+	e.callbackMu.Lock()
+	e.targetCallback = callback
+	e.callbackMu.Unlock()
 	e.SendSideBWE.OnTargetBitrateChange(func(bitrate int) {
-		e.deliverCurrentBitrate(bitrate, callback)
+		e.deliverCurrentBitrate(bitrate)
 	})
 }
 
-func (e *associatedStreamBandwidthEstimator) deliverCurrentBitrate(
-	callbackMediaBitrate int,
-	callback func(int),
-) {
-	currentMediaBitrate := e.SendSideBWE.GetTargetBitrate()
-	if callbackMediaBitrate != currentMediaBitrate {
+func (e *associatedStreamBandwidthEstimator) deliverCurrentBitrate(callbackMediaBitrate int) {
+	currentRawBitrate := e.SendSideBWE.GetTargetBitrate()
+	if callbackMediaBitrate != currentRawBitrate {
 		e.staleBitrateCallbacks.Add(1)
 	}
-	callback(e.effectiveMediaBitrate(currentMediaBitrate))
+	e.deliverEffectiveBitrate(e.GetTargetBitrate())
+}
+
+func (e *associatedStreamBandwidthEstimator) deliverEffectiveBitrate(bitrate int) {
+	if e.pacer != nil {
+		e.pacer.SetTargetBitrate(bitrate)
+	}
+	previous := e.lastDeliveredBitrate.Swap(int64(bitrate))
+	if previous == int64(bitrate) {
+		return
+	}
+	e.callbackMu.RLock()
+	callback := e.targetCallback
+	e.callbackMu.RUnlock()
+	if callback != nil {
+		callback(bitrate)
+	}
 }
 
 func (e *associatedStreamBandwidthEstimator) GetStats() map[string]any {
 	stats := e.SendSideBWE.GetStats()
 	rawMediaBitrate := e.SendSideBWE.GetTargetBitrate()
 	effectiveMediaBitrate := e.effectiveMediaBitrate(rawMediaBitrate)
+	if e.lossGuard != nil {
+		effectiveMediaBitrate = e.lossGuard.effectiveBitrate(effectiveMediaBitrate)
+	}
 	stats["rawMediaTargetBitrate"] = rawMediaBitrate
 	stats["mediaTargetBitrate"] = effectiveMediaBitrate
 	stats["wireTargetBitrate"] = wireBitrate(rawMediaBitrate, e.protection)
@@ -224,6 +253,14 @@ func (e *associatedStreamBandwidthEstimator) GetStats() map[string]any {
 	stats["twccPaddingStatuses"] = e.twccPaddingStatuses.Load()
 	stats["twccReportedLost"] = e.twccReportedLost.Load()
 	stats["twccReportedStatuses"] = e.twccReportedStatuses.Load()
+	if e.lossGuard != nil {
+		guard := e.lossGuard.snapshot()
+		stats["lossGuardActive"] = guard.Active
+		stats["lossGuardTargetBitrate"] = guard.TargetBitrate
+		stats["lossGuardLastObservedLoss"] = guard.LastObservedLoss
+		stats["lossGuardReductions"] = guard.Reductions
+		stats["lossGuardRecoveries"] = guard.Recoveries
+	}
 	for name, value := range e.pacerStats() {
 		stats[name] = value
 	}

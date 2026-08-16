@@ -560,6 +560,20 @@ export function analyze(
     "twcc-feedback-integrity",
     "TWCC feedback is present and every reported status is parsed without malformed packets",
   );
+  const lossGuardTelemetryPresent = enriched.some((sample) =>
+    Object.hasOwn(sample, "lossGuardReductions"),
+  );
+  const sustainedHighLoss = Object.values(summaries).some(
+    (phase) => (phase?.twccReportedLossRatio || 0) > 0.1,
+  );
+  assert(
+    assertions,
+    !lossGuardTelemetryPresent ||
+      !sustainedHighLoss ||
+      counterIncrease(enriched, "lossGuardReductions", phaseOrder) > 0,
+    "loss-guard-response",
+    "persistent TWCC loss above 10% immediately reduces the sender target without waiting for a delay-estimator callback",
+  );
   if (manifest.networkImpairment) {
     assert(
       assertions,
@@ -937,7 +951,7 @@ export function renderMarkdown(analysis, manifest) {
   const controllerRows = Object.entries(analysis.phases)
     .map(
       ([name, phase]) =>
-        `| ${name} | ${formatNumber(phase.medianLossTargetKbps, 0)} | ${formatNumber(phase.medianDelayTargetKbps, 0)} | ${formatNumber(phase.medianAverageLoss * 100, 2)}% | ${formatNumber(phase.twccReportedLossRatio * 100, 2)}% | ${phase.adaptiveBitrateUpdatesIncrease} | ${phase.adaptiveBitrateFailuresIncrease} | ${phase.twccFeedbackPacketsIncrease} | ${phase.twccPaddingStatusesIncrease} | ${phase.twccMalformedFeedbackIncrease} |`,
+        `| ${name} | ${formatNumber(phase.medianLossTargetKbps, 0)} | ${formatNumber(phase.medianDelayTargetKbps, 0)} | ${formatNumber(phase.medianLossGuardTargetKbps, 0)} | ${formatNumber(phase.maximumLossGuardObservedLoss * 100, 2)}% | ${phase.lossGuardReductionsIncrease} / ${phase.lossGuardRecoveriesIncrease} | ${formatNumber(phase.medianAverageLoss * 100, 2)}% | ${formatNumber(phase.twccReportedLossRatio * 100, 2)}% | ${phase.adaptiveBitrateUpdatesIncrease} | ${phase.adaptiveBitrateFailuresIncrease} | ${phase.twccFeedbackPacketsIncrease} | ${phase.twccPaddingStatusesIncrease} | ${phase.twccMalformedFeedbackIncrease} |`,
     )
     .join("\n");
   const pacingRows = Object.entries(analysis.phases)
@@ -1145,8 +1159,8 @@ ${decisionRows}
 
 ## Congestion-controller diagnostics
 
-| Phase | Loss target kbps | Delay target kbps | Controller loss | Browser TWCC loss | Encoder updates | Update failures | Feedback packets | Padding statuses | Malformed feedback |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Phase | Loss target kbps | Delay target kbps | Guard target kbps | Peak report loss | Guard reduce / recover | Controller loss | Browser TWCC loss | Encoder updates | Update failures | Feedback packets | Padding statuses | Malformed feedback |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 ${controllerRows}
 
 ## Real-time sender queue
@@ -1266,6 +1280,10 @@ export async function writeArtifacts(outputDirectory, analysis, manifest) {
     "lossTargetKbps",
     "delayTargetKbps",
     "lossAverage",
+    "lossGuardTargetKbps",
+    "lossGuardLastObservedLoss",
+    "lossGuardReductions",
+    "lossGuardRecoveries",
     "flexFECMediaPackets",
     "flexFECRepairPackets",
     "delayMeasurementMilliseconds",
@@ -1827,6 +1845,23 @@ function summarizePhase(samples, phase, encoderQuality) {
       settled
         .map((sample) => sample.lossAverage)
         .filter((value) => Number.isFinite(value) && value >= 0),
+    ),
+    medianLossGuardTargetKbps: median(
+      settled.map((sample) => sample.lossGuardTargetKbps).filter(positive),
+    ),
+    maximumLossGuardObservedLoss: Math.max(
+      0,
+      ...samples.map((sample) => sample.lossGuardLastObservedLoss || 0),
+    ),
+    lossGuardReductionsIncrease: counterIncrease(
+      samples,
+      "lossGuardReductions",
+      [phase.name],
+    ),
+    lossGuardRecoveriesIncrease: counterIncrease(
+      samples,
+      "lossGuardRecoveries",
+      [phase.name],
     ),
     medianDelayTargetKbps: median(
       settled.map((sample) => sample.delayTargetKbps).filter(positive),

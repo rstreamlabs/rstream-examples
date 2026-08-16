@@ -480,6 +480,14 @@ async function collectSample(activePage) {
       localCandidateProtocol: localCandidate?.protocol || "",
       localCandidateType: localCandidate?.candidateType || "",
       lossAverage: bandwidth?.averageLoss ?? null,
+      lossGuardActive: bandwidth?.lossGuardActive || false,
+      lossGuardTargetKbps: bandwidth?.lossGuardTargetBitrateBps
+        ? bandwidth.lossGuardTargetBitrateBps / 1000
+        : 0,
+      lossGuardLastObservedLoss:
+        bandwidth?.lossGuardLastObservedLoss ?? null,
+      lossGuardReductions: bandwidth?.lossGuardReductions || 0,
+      lossGuardRecoveries: bandwidth?.lossGuardRecoveries || 0,
       flexFECMediaPackets: bandwidth?.flexFECMediaPackets || 0,
       flexFECRepairPackets: bandwidth?.flexFECRepairPackets || 0,
       lossTargetKbps: bandwidth?.lossTargetBitrateBps

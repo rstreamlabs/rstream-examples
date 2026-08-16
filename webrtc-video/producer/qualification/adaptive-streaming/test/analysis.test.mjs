@@ -1136,6 +1136,36 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     ).passed,
     false,
   );
+  const highLossWithoutGuardResponse = analyze(
+    samples.map((sample, index) => ({
+      ...sample,
+      lossGuardReductions: 0,
+      twccReportedLost: index * 20,
+      twccReportedStatuses: index * 100,
+    })),
+    manifest,
+  );
+  assert.equal(
+    highLossWithoutGuardResponse.assertions.find(
+      (assertion) => assertion.name === "loss-guard-response",
+    ).passed,
+    false,
+  );
+  const highLossWithGuardResponse = analyze(
+    samples.map((sample, index) => ({
+      ...sample,
+      lossGuardReductions: index === 0 ? 0 : 1,
+      twccReportedLost: index * 20,
+      twccReportedStatuses: index * 100,
+    })),
+    manifest,
+  );
+  assert.equal(
+    highLossWithGuardResponse.assertions.find(
+      (assertion) => assertion.name === "loss-guard-response",
+    ).passed,
+    true,
+  );
   assert.equal(
     brokenTWCC.assertions.find(
       (assertion) => assertion.name === "twcc-loss-fidelity",

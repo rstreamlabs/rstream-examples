@@ -157,6 +157,17 @@ profile those values are equal. Every recorded sample carries both the
 protected target and the effective pacing envelope, and the qualification
 fails if their relationship diverges from the configured protection ratio.
 
+Pion's delay and loss estimators remain the primary congestion controller. A
+bounded feedback-loss guard closes one coordination gap between them: two
+consecutive valid TWCC reports above 10% loss reduce the current media target
+immediately, even if the delay estimator has not emitted a new callback. The
+guard ignores reports with fewer than 20 statuses and isolated spikes. After a
+second of reports below 2% loss, its cap rises in 5% steps every 200 ms until
+Pion's target takes over again. This prevents a transient queue from becoming a
+loss/RTX/FlexFEC amplification loop without replacing GCC's normal bandwidth
+estimate. The phase report exposes the guard target, peak reported loss, and
+every reduction and recovery.
+
 Encoder hysteresis cannot spend the same headroom twice. Startup validation
 therefore derives the largest safe decrease threshold from the selected repair
 ratio and the shared pacing envelope. The reference `2/4` profile uses immediate

@@ -76,6 +76,11 @@ type BandwidthStats struct {
 	DelayThresholdMs             float64 `json:"delayThresholdMs"`
 	Usage                        string  `json:"usage"`
 	State                        string  `json:"state"`
+	LossGuardActive              bool    `json:"lossGuardActive"`
+	LossGuardTargetBitrateBps    int     `json:"lossGuardTargetBitrateBps"`
+	LossGuardLastObservedLoss    float64 `json:"lossGuardLastObservedLoss"`
+	LossGuardReductions          uint64  `json:"lossGuardReductions"`
+	LossGuardRecoveries          uint64  `json:"lossGuardRecoveries"`
 	PacerTargetBitrateBps        int     `json:"pacerTargetBitrateBps"`
 	PacerPacingBitrateBps        int     `json:"pacerPacingBitrateBps"`
 	PacerQueuePackets            int     `json:"pacerQueuePackets"`
@@ -793,6 +798,11 @@ func snapshotBandwidthStats(estimator bandwidthEstimator) *BandwidthStats {
 	stats.DelayThresholdMs, _ = raw["delayThreshold"].(float64)
 	stats.Usage, _ = raw["usage"].(string)
 	stats.State, _ = raw["state"].(string)
+	stats.LossGuardActive, _ = raw["lossGuardActive"].(bool)
+	stats.LossGuardTargetBitrateBps, _ = raw["lossGuardTargetBitrate"].(int)
+	stats.LossGuardLastObservedLoss, _ = raw["lossGuardLastObservedLoss"].(float64)
+	stats.LossGuardReductions, _ = raw["lossGuardReductions"].(uint64)
+	stats.LossGuardRecoveries, _ = raw["lossGuardRecoveries"].(uint64)
 	stats.PacerTargetBitrateBps, _ = raw["pacerTargetBitrateBps"].(int)
 	stats.PacerPacingBitrateBps, _ = raw["pacerPacingBitrateBps"].(int)
 	stats.PacerQueuePackets, _ = raw["pacerQueuePackets"].(int)

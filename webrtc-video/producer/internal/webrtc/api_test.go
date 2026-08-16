@@ -111,9 +111,12 @@ func TestAssociatedEstimatorEnforcesConfiguredMediaFloorAcrossLossController(t *
 		t.Fatalf("effective wire target = %v, want 2400000", stats["effectiveWireTargetBitrate"])
 	}
 	callbackTarget := 0
-	wrapped.deliverCurrentBitrate(50_000, func(bitrate int) {
+	wrapped.callbackMu.Lock()
+	wrapped.targetCallback = func(bitrate int) {
 		callbackTarget = bitrate
-	})
+	}
+	wrapped.callbackMu.Unlock()
+	wrapped.deliverCurrentBitrate(50_000)
 	if callbackTarget != 2_000_000 {
 		t.Fatalf("callback media target = %d, want 2000000", callbackTarget)
 	}
@@ -357,9 +360,12 @@ func TestAssociatedEstimatorSupersedesOutOfOrderBitrateCallback(t *testing.T) {
 		protection:  flexFECProtection{mediaPackets: 5, repairPackets: 1},
 	}
 	delivered := 0
-	estimator.deliverCurrentBitrate(1_800_000, func(bitrate int) {
+	estimator.callbackMu.Lock()
+	estimator.targetCallback = func(bitrate int) {
 		delivered = bitrate
-	})
+	}
+	estimator.callbackMu.Unlock()
+	estimator.deliverCurrentBitrate(1_800_000)
 	if delivered != 5_000_000 {
 		t.Fatalf("delivered stale bitrate %d, want current bitrate 5000000", delivered)
 	}
