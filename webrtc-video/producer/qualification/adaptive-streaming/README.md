@@ -1,11 +1,9 @@
 # Adaptive streaming qualification
 
 This qualification pack measures the adaptive H.264 sender under changing
-bandwidth, latency, and packet loss. It then compares the rstream TURN path with
-an isolated direct reference exposed to the same media impairment.
-
-The quick start remains a config copy plus `make build`. This pack adds the
-repeatable, longer-running evidence used to qualify a release.
+bandwidth, latency, and packet loss. It compares a managed rstream TURN path
+with an isolated direct reference, then moves the active producer between two
+interfaces to qualify Trickle ICE and ICE restart on the recovered session.
 
 ## What the harness measures
 
@@ -43,13 +41,19 @@ also records shorter runtime pauses that aggregate CPU counters cannot expose,
 including pauses of a local container VM.
 
 The impairment schedule runs as one process inside the producer network
-namespace. It applies each capacity step, captures the matching qdisc counters,
-then transitions to a zero-delay, zero-loss recovery profile whose capacity is
-20 times the configured encoder ceiling. During this one-second transition,
-the profile drains packets already held by the impaired qdisc and proves that
-the drain added no drops. Traffic control is then removed before the recovery
-event starts the unshaped measurement. Deleting a populated qdisc would create
-an artificial loss burst and misclassify teardown as transport recovery.
+namespace. It first holds a 16 Mbit/s profile with no added delay, jitter, or
+random loss long enough for the controller to settle after qdisc activation.
+The capacity experiment then changes only the rate while the path steps through
+12, 8, and 4 Mbit/s. Additional delay, jitter, and loss begin in a separate
+phase.
+
+Recovery follows the same discipline. It first removes loss, delay, and jitter
+while capacity remains at 4 Mbit/s, then raises capacity to 16 Mbit/s. The
+measured response time starts at that second event.
+After the recovery measurement, a zero-delay, zero-loss drain profile with
+capacity 20 times the encoder ceiling empties the qdisc before teardown.
+Deleting a populated qdisc would create an artificial loss burst and
+misclassify teardown as transport recovery.
 Docker API latency remains outside the measured phase durations, including
 when the producer runs on a separate daemon. An interruption removes the qdisc
 before the container is cleaned up.
@@ -63,15 +67,16 @@ key-frame reserve, actual packet residence time, and prospective sustained-rate
 backlog. These signals make the latency bound, sequence continuity, and egress
 rate directly verifiable.
 
-The link moves through five phases:
+The link moves through six measured phases:
 
-| Phase       | Media path                                               |
-| ----------- | -------------------------------------------------------- |
-| warmup      | unshaped                                                 |
-| baseline    | unshaped reference                                       |
-| constrained | 16, 12, 8, then 4 Mbit/s; 40–80 ms delay; no random loss |
-| impaired    | 4 Mbit/s; 120 ms delay; 30 ms jitter; 2% random loss     |
-| recovery    | unshaped after a measured one-second queue drain          |
+| Phase        | Media path                                               |
+| ------------ | -------------------------------------------------------- |
+| warmup       | unshaped reference                                      |
+| baseline     | unshaped quality ceiling                                |
+| conditioning | 16 Mbit/s; no delay, jitter, or random loss             |
+| constrained  | 12, 8, then 4 Mbit/s; no delay, jitter, or random loss   |
+| impaired     | 4 Mbit/s; 120 ms delay; 30 ms jitter; 2% random loss    |
+| recovery     | 4 then 16 Mbit/s; no delay, jitter, or random loss       |
 
 For a direct run, the Linux traffic-control filter applies to outbound UDP on
 the isolated producer-to-browser address. It deliberately does not pin the
@@ -326,11 +331,23 @@ matrix rejects runs that do not use one identical profile.
 
 ## Read one result
 
-Start with `summary.md` and `adaptive-bitrate.svg`. The phase table shows
-continuity, received payload, link use, controller/encoder targets, decoded
-frame rate, average H.264 QP, decode cost, frozen time, NACKs, RTX, FEC, and
-maximum RTT. The curve should show the sender reducing its target when the media
-budget requires it and recovering after shaping disappears.
+Start with the qualification-decision table in `summary.md`. It places the
+observed value beside each release threshold. The four synchronized figures
+then establish how that verdict was reached:
+
+- `network-conditions.svg` records the independently applied capacity, delay,
+  jitter, and random-loss schedule;
+- `adaptive-bitrate.svg` aligns that schedule with TWCC, the encoder target,
+  and received media;
+- `playback-quality.svg` exposes decoded frame rate, browser-reported freezes,
+  and encoder quantization;
+- `transport-evidence.svg` follows RTT, sender-queue residence, playout
+  buffering, NACK/RTX, FlexFEC, and TWCC loss.
+
+The capacity experiment keeps delay, jitter, and random loss at zero, so its
+rate response has one controlled cause. The following impairment phase holds
+capacity at 4 Mbit/s while adding delay, jitter, and loss. Its results qualify
+continuity and repair, independently of the capacity downshift.
 
 The setup timeline deliberately separates Docker builds from service
 establishment. Its connection duration starts immediately before the producer
@@ -372,6 +389,13 @@ The raw investigation set is `samples.jsonl`, `receiver-udp.jsonl`,
 qdisc/filter JSON, and producer/browser logs. One run proves one pinned tree on
 one recorded machine; release claims use the repeated matrix and should be
 regenerated on each target architecture.
+
+A relay run also measures the qualification host's real access link. An ICE
+outage, severe unshaped packet loss, excessive loaded latency, or a baseline
+that cannot sustain the profile's minimum wire budget invalidates that run.
+The failure remains useful diagnostic evidence, but it is not converted into a
+release claim. Repeat the scenario from a stable qualification host and compare
+the direct reference, the unshaped relay baseline, and the shaped intervals.
 
 For a targeted Pion subsystem investigation, pass a comma-separated debug scope
 without changing the reference configuration, for example

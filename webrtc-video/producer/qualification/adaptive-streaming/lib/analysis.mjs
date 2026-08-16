@@ -1,6 +1,11 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import process from "node:process";
+import {
+  renderNetworkConditionsSVG,
+  renderPlaybackQualitySVG,
+  renderTransportEvidenceSVG,
+} from "./evidence-svg.mjs";
 
 export function enrichSamples(samples) {
   let previous = null;
@@ -50,6 +55,7 @@ export function analyze(
     ]),
   );
   const baseline = summaries.baseline;
+  const conditioning = summaries.conditioning;
   const constrained = summaries.constrained;
   const impaired = summaries.impaired;
   const recovery = summaries.recovery;
@@ -197,6 +203,15 @@ export function analyze(
     "baseline-throughput",
     "baseline median receive throughput is at least 1 Mbps",
   );
+  if (conditioning) {
+    assert(
+      assertions,
+      conditioning.endingEncoderTargetKbps >=
+        (baseline?.medianEncoderTargetKbps || Infinity) * 0.8,
+      "capacity-experiment-settled",
+      "the encoder returns to at least 80% of its baseline target after traffic-control activation and before the first capacity step",
+    );
+  }
   if (
     manifest.networkPath?.kind !== "relay" &&
     Number.isFinite(manifest.video?.adaptive?.maximumBitrateKbps)
@@ -343,11 +358,15 @@ export function analyze(
     );
   }
   const recoveryThreshold = (constrained?.medianEncoderTargetKbps || 0) * 1.2;
+  const recoveryCapacityRestoredAfterMilliseconds =
+    (manifest.phases.find((phase) => phase.name === "recovery")?.shaping
+      ?.schedule?.[0]?.durationSeconds || 0) * 1000;
   const recoveryDelay = timeToEncoderTarget(
     enriched,
     "recovery",
     recoveryThreshold,
     "at-least",
+    recoveryCapacityRestoredAfterMilliseconds,
   );
   assert(
     assertions,
@@ -355,7 +374,7 @@ export function analyze(
       (recoveryDelay !== null && recoveryDelay <= 35_000),
     "recovery-time",
     congestionResponseRequired
-      ? "encoder target rises by at least 20% within 35 seconds of link recovery"
+      ? "encoder target rises by at least 20% within 35 seconds of the capacity-restoration step"
       : "no recovery ramp is required because the capacity phase did not require a 20% reduction",
   );
   assert(
@@ -659,22 +678,49 @@ export function analyze(
 
 export function renderSVG(analysis, manifest) {
   const samples = analysis.samples;
-  const width = 1200;
-  const height = 520;
-  const margin = { top: 48, right: 36, bottom: 72, left: 82 };
+  const width = 960;
+  const height = 540;
+  const margin = { top: 110, right: 28, bottom: 78, left: 78 };
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;
   const maximumTime = Math.max(
     1,
     ...samples.map((sample) => sample.elapsedMilliseconds),
   );
+  const phaseStarts = new Map();
+  for (const sample of samples) {
+    if (!phaseStarts.has(sample.phase)) {
+      phaseStarts.set(sample.phase, sample.elapsedMilliseconds);
+    }
+  }
+  const phases = new Map(manifest.phases.map((phase) => [phase.name, phase]));
+  const capacityFor = (sample) => {
+    const phase = phases.get(sample.phase);
+    if (!phase?.shaping) return null;
+    const schedule = phase.shaping.schedule;
+    if (!Array.isArray(schedule) || schedule.length === 0) {
+      return phase.shaping.capacityKbps;
+    }
+    const elapsedSeconds =
+      (sample.elapsedMilliseconds - phaseStarts.get(sample.phase)) / 1000;
+    let boundary = 0;
+    for (const step of schedule) {
+      boundary += step.durationSeconds;
+      if (elapsedSeconds < boundary) return step.capacityKbps;
+    }
+    return schedule.at(-1).capacityKbps;
+  };
+  const capacities = samples.map(capacityFor);
   const maximumBitrate = Math.max(
     1000,
-    ...samples.flatMap((sample) => [
-      sample.encoderTargetKbps,
-      sample.twccTargetKbps,
-      sample.receivedBitrateKbps,
-    ]),
+    ...samples
+      .flatMap((sample) => [
+        sample.encoderTargetKbps,
+        sample.twccTargetKbps,
+        sample.receivedBitrateKbps,
+      ])
+      .filter(Number.isFinite),
+    ...capacities.filter(Number.isFinite),
   );
   const x = (milliseconds) =>
     margin.left + (milliseconds / maximumTime) * plotWidth;
@@ -693,21 +739,23 @@ export function renderSVG(analysis, manifest) {
       const start = phaseSamples[0].elapsedMilliseconds;
       const end = phaseSamples.at(-1).elapsedMilliseconds;
       const fill = index % 2 === 0 ? "#f3f4f6" : "#e5e7eb";
-      return `<rect x="${round(x(start))}" y="${margin.top}" width="${round(Math.max(1, x(end) - x(start)))}" height="${plotHeight}" fill="${fill}"/><text x="${round(x(start) + 8)}" y="${margin.top + 20}" font-size="13" fill="#4b5563">${escapeXML(phase.name)}</text>`;
+      const path = phase.shaping ? "controlled link" : "unshaped";
+      const label = phase.name === "conditioning" ? "settling" : phase.name;
+      return `<rect x="${round(x(start))}" y="${margin.top}" width="${round(Math.max(1, x(end) - x(start)))}" height="${plotHeight}" fill="${fill}"/><text x="${round(x(start) + 7)}" y="${margin.top - 20}" font-size="15" font-weight="600" fill="#374151">${escapeXML(label)}</text><text x="${round(x(start) + 7)}" y="${margin.top - 3}" font-size="13" fill="#6b7280">${path}</text>`;
     })
     .join("");
-  const grid = Array.from({ length: 6 }, (_, index) => {
-    const value = (maximumBitrate * index) / 5;
+  const grid = Array.from({ length: 5 }, (_, index) => {
+    const value = (maximumBitrate * index) / 4;
     const ordinate = y(value);
-    return `<line x1="${margin.left}" y1="${round(ordinate)}" x2="${width - margin.right}" y2="${round(ordinate)}" stroke="#d1d5db"/><text x="${margin.left - 12}" y="${round(ordinate + 4)}" text-anchor="end" font-size="12" fill="#6b7280">${Math.round(value / 100) / 10} Mb/s</text>`;
+    return `<line x1="${margin.left}" y1="${round(ordinate)}" x2="${width - margin.right}" y2="${round(ordinate)}" stroke="#d1d5db"/><text x="${margin.left - 12}" y="${round(ordinate + 5)}" text-anchor="end" font-size="14" fill="#6b7280">${Math.round(value / 100) / 10} Mb/s</text>`;
   }).join("");
   const series = [
-    ["Encoder target", "#2563eb", "encoderTargetKbps"],
-    ["TWCC target", "#d97706", "twccTargetKbps"],
-    ["Received", "#059669", "receivedBitrateKbps"],
+    ["Encoder", "#2563eb", "encoderTargetKbps", ""],
+    ["TWCC", "#d97706", "twccTargetKbps", ""],
+    ["Received", "#059669", "receivedBitrateKbps", ""],
   ];
   const lines = series
-    .map(([label, color, field], index) => {
+    .map(([label, color, field, dash], index) => {
       const points = samples
         .filter((sample) => Number.isFinite(sample[field]) && sample[field] > 0)
         .map(
@@ -715,24 +763,58 @@ export function renderSVG(analysis, manifest) {
             `${round(x(sample.elapsedMilliseconds))},${round(y(sample[field]))}`,
         )
         .join(" ");
-      const legendX = margin.left + index * 190;
-      return `<polyline fill="none" stroke="${color}" stroke-width="2.5" points="${points}"/><line x1="${legendX}" y1="${height - 28}" x2="${legendX + 28}" y2="${height - 28}" stroke="${color}" stroke-width="3"/><text x="${legendX + 36}" y="${height - 23}" font-size="14" fill="#111827">${label}</text>`;
+      const legendX = margin.left + index * 150;
+      return `<polyline fill="none" stroke="${color}" stroke-width="2.5" stroke-dasharray="${dash}" points="${points}"/><line x1="${legendX}" y1="${height - 28}" x2="${legendX + 28}" y2="${height - 28}" stroke="${color}" stroke-width="3"/><text x="${legendX + 36}" y="${height - 22}" font-size="16" fill="#111827">${label}</text>`;
     })
     .join("");
+  const capacityPointList = [];
+  let previousCapacity = null;
+  for (let index = 0; index < samples.length; index += 1) {
+    const capacity = capacities[index];
+    if (!Number.isFinite(capacity)) continue;
+    const abscissa = round(x(samples[index].elapsedMilliseconds));
+    if (Number.isFinite(previousCapacity) && capacity !== previousCapacity) {
+      capacityPointList.push(`${abscissa},${round(y(previousCapacity))}`);
+    }
+    capacityPointList.push(`${abscissa},${round(y(capacity))}`);
+    previousCapacity = capacity;
+  }
+  const capacityPoints = capacityPointList.join(" ");
+  const capacityLegendX = margin.left + 3 * 150;
+  const capacityLine = `<polyline fill="none" stroke="#be185d" stroke-width="3" stroke-dasharray="8 6" points="${capacityPoints}"/><line x1="${capacityLegendX}" y1="${height - 28}" x2="${capacityLegendX + 28}" y2="${height - 28}" stroke="#be185d" stroke-width="3" stroke-dasharray="8 6"/><text x="${capacityLegendX + 36}" y="${height - 22}" font-size="16" fill="#111827">Configured capacity</text>`;
+  const constrainedSchedule =
+    manifest.phases.find((phase) => phase.name === "constrained")?.shaping
+      ?.schedule || [];
+  const isolatedCapacityStep =
+    constrainedSchedule.length > 0 &&
+    new Set(constrainedSchedule.map((step) => step.delay)).size === 1 &&
+    new Set(constrainedSchedule.map((step) => step.jitter)).size === 1 &&
+    constrainedSchedule.every(
+      (step) => step.loss === undefined || step.loss === "0%",
+    );
+  const subtitle = isolatedCapacityStep
+    ? "Capacity changes while delay stays at " +
+      constrainedSchedule[0].delay +
+      ", jitter at " +
+      constrainedSchedule[0].jitter +
+      ", and injected loss at 0%"
+    : "Capacity, delay, jitter, and loss follow the recorded phase manifest";
   const resultColor = analysis.passed ? "#047857" : "#b91c1c";
   const resultLabel = analysis.passed ? "PASS" : "FAIL";
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title description">
-  <title id="title">rstream adaptive streaming qualification</title>
-  <desc id="description">Encoder, TWCC, and received bitrate across controlled network phases.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title description" style="font-family:system-ui,sans-serif">
+  <title id="title">Adaptive sender response to controlled link changes</title>
+  <desc id="description">Measured encoder, TWCC, and receive rates are plotted against the independently configured traffic-control schedule.</desc>
   <rect width="100%" height="100%" fill="#ffffff"/>
-  <text x="${margin.left}" y="28" font-size="20" font-weight="600" fill="#111827">Adaptive streaming response</text>
+  <text x="${margin.left}" y="34" font-size="24" font-weight="600" fill="#111827">Adaptive sender response to controlled link changes</text>
+  <text x="${margin.left}" y="62" font-size="14" fill="#4b5563">${escapeXML(subtitle)}</text>
   <text x="${width - margin.right}" y="28" text-anchor="end" font-size="16" font-weight="700" fill="${resultColor}">${resultLabel}</text>
   ${phaseBlocks}
   ${grid}
   ${lines}
+  ${capacityLine}
   <line x1="${margin.left}" y1="${margin.top + plotHeight}" x2="${width - margin.right}" y2="${margin.top + plotHeight}" stroke="#111827"/>
-  <text x="${width / 2}" y="${height - 48}" text-anchor="middle" font-size="13" fill="#6b7280">Elapsed time; link constraints are shown as phase bands</text>
+  <text x="${width / 2}" y="${height - 50}" text-anchor="middle" font-size="15" fill="#6b7280">Elapsed time · capacity line exists only while traffic control is active</text>
 </svg>
 `;
 }
@@ -750,6 +832,101 @@ export function renderMarkdown(analysis, manifest) {
       (assertion) =>
         `- ${assertion.passed ? "PASS" : "FAIL"} — ${assertion.name}: ${assertion.description}`,
     )
+    .join("\n");
+  const baseline = analysis.phases.baseline;
+  const conditioning = analysis.phases.conditioning;
+  const constrained = analysis.phases.constrained;
+  const impaired = analysis.phases.impaired;
+  const recovery = analysis.phases.recovery;
+  const rateReduction = baseline?.medianEncoderTargetKbps > 0
+    ? 1 - constrained.medianEncoderTargetKbps / baseline.medianEncoderTargetKbps
+    : null;
+  const receiveRecovery = impaired?.medianReceivedBitrateKbps > 0
+    ? recovery.medianReceivedBitrateKbps / impaired.medianReceivedBitrateKbps - 1
+    : null;
+  const capacityIsolation =
+    conditioning?.endingEncoderTargetKbps > 0 &&
+    baseline?.medianEncoderTargetKbps > 0
+      ? conditioning.endingEncoderTargetKbps /
+        baseline.medianEncoderTargetKbps
+      : null;
+  const phaseValues = Object.values(analysis.phases);
+  const maximumQueueResidence = Math.max(
+    0,
+    ...phaseValues.map((phase) => phase.maximumPacerQueueDelayMilliseconds || 0),
+  );
+  const maximumAdmittedBacklog = Math.max(
+    0,
+    ...phaseValues.map((phase) => phase.maximumPacerAdmittedDelayMilliseconds || 0),
+  );
+  const queueDrops = phaseValues.reduce(
+    (total, phase) => total + (phase.pacerQueueDropsIncrease || 0),
+    0,
+  );
+  const repairObserved = manifest.webrtc?.rtxNegotiated
+    ? manifest.protection?.flexFEC
+      ? `NACK ${impaired.nackIncrease}; RTX ${impaired.retransmittedPacketsIncrease}; FlexFEC ${impaired.fecPacketsIncrease}`
+      : `NACK ${impaired.nackIncrease}; RTX ${impaired.retransmittedPacketsIncrease}`
+    : `NACK ${impaired.nackIncrease}`;
+  const repairRequired = manifest.webrtc?.rtxNegotiated
+    ? manifest.protection?.flexFEC
+      ? "NACK, RTX, and FlexFEC greater than zero"
+      : "NACK and RTX greater than zero"
+    : "NACK greater than zero";
+  const decisionRows = [
+    [
+      "Shaper activation",
+      capacityIsolation === null
+        ? "not measured"
+        : `${formatNumber(capacityIsolation * 100, 1)}% of baseline before the first capacity step`,
+      conditioning ? "at least 80%" : "not applicable",
+    ],
+    [
+      "Rate response",
+      analysis.congestionResponseRequired
+        ? `${formatNumber(rateReduction * 100, 1)}% reduction in ${formatDuration(analysis.responseDelayMilliseconds)}`
+        : `not required; baseline already at ${formatNumber(baseline.medianEncoderTargetKbps, 0)} kbps`,
+      analysis.congestionResponseRequired
+        ? "at least 20% within 30 s"
+        : "no increase under additional pressure",
+    ],
+    [
+      "Rate recovery",
+      analysis.congestionResponseRequired
+        ? `${formatDuration(analysis.recoveryDelayMilliseconds)}; received throughput ${receiveRecovery >= 0 ? "+" : ""}${formatNumber(receiveRecovery * 100, 1)}%`
+        : "not required; capacity phase did not reduce the target",
+      analysis.congestionResponseRequired
+        ? "target within 35 s; throughput at least +15%"
+        : "not applicable",
+    ],
+    [
+      "Playback under impairment",
+      `${formatNumber(impaired.decodedFramesPerSecond, 1)} fps; ${formatNumber(impaired.freezeRatio * 100, 1)}% frozen`,
+      "at least 20 fps; at most 10% frozen",
+    ],
+    [
+      "Latency under impairment",
+      `${formatNumber(impaired.maximumRTTMilliseconds, 0)} ms max RTT; ${formatNumber(impaired.averageJitterBufferDelayMilliseconds, 1)} ms effective playout buffer`,
+      "at most 600 ms RTT; at most 300 ms buffer",
+    ],
+    [
+      "Visual quality under impairment",
+      `QP ${formatNumber(impaired.averageQP, 1)}; ${impaired.medianFrameWidth}x${impaired.medianFrameHeight}`,
+      `QP at most 42; ${manifest.video?.width || "recorded"}x${manifest.video?.height || "resolution"}`,
+    ],
+    [
+      "Loss fidelity",
+      `qdisc ${formatNumber(analysis.trafficControl?.impairedDropRatio * 100, 2)}%; TWCC ${formatNumber(impaired.twccReportedLossRatio * 100, 2)}%`,
+      "2% injected; TWCC within 8 percentage points",
+    ],
+    ["Packet repair", repairObserved, repairRequired],
+    [
+      "Sender queue",
+      `${formatNumber(maximumQueueResidence, 1)} ms residence; ${formatNumber(maximumAdmittedBacklog, 1)} ms admitted backlog; ${queueDrops} overflow drops`,
+      "at most 375 ms; at most 225 ms; zero overflow",
+    ],
+  ]
+    .map(([gate, observed, required]) => `| ${gate} | ${observed} | ${required} |`)
     .join("\n");
   const controllerRows = Object.entries(analysis.phases)
     .map(
@@ -954,6 +1131,12 @@ Selected ICE candidate-pair switches: ${analysis.candidatePairSwitches}. ${manif
 
 Superseded out-of-order estimator callbacks: ${analysis.staleBitrateCallbacks}. The producer always applies the estimator's current target rather than the potentially stale callback payload.
 
+## Qualification decision
+
+| Gate | Observed | Required |
+| --- | ---: | ---: |
+${decisionRows}
+
 ## Congestion-controller diagnostics
 
 | Phase | Loss target kbps | Delay target kbps | Controller loss | Browser TWCC loss | Encoder updates | Update failures | Feedback packets | Padding statuses | Malformed feedback |
@@ -1055,6 +1238,18 @@ export async function writeArtifacts(outputDirectory, analysis, manifest) {
     `${outputDirectory}/adaptive-bitrate.svg`,
     renderSVG(analysis, manifest),
   );
+  await writeFile(
+    `${outputDirectory}/network-conditions.svg`,
+    renderNetworkConditionsSVG(analysis, manifest),
+  );
+  await writeFile(
+    `${outputDirectory}/playback-quality.svg`,
+    renderPlaybackQualitySVG(analysis, manifest),
+  );
+  await writeFile(
+    `${outputDirectory}/transport-evidence.svg`,
+    renderTransportEvidenceSVG(analysis, manifest),
+  );
   const columns = [
     "capturedAt",
     "elapsedMilliseconds",
@@ -1075,6 +1270,10 @@ export async function writeArtifacts(outputDirectory, analysis, manifest) {
     "framesPerSecond",
     "framesDecoded",
     "framesDropped",
+    "freezeCount",
+    "totalFreezesDurationSeconds",
+    "frameWidth",
+    "frameHeight",
     "totalDecodeTimeSeconds",
     "packetsLost",
     "packetsReceived",
@@ -1149,6 +1348,9 @@ export async function writeArtifacts(outputDirectory, analysis, manifest) {
     "remoteCandidatePort",
     "remoteCandidateProtocol",
     "playoutDelayHintSeconds",
+    "playback",
+    "videoCurrentTimeSeconds",
+    "videoReadyState",
   ];
   const rows = [
     columns.join(","),
@@ -1604,6 +1806,7 @@ function summarizePhase(samples, phase, encoderQuality) {
     medianEncoderTargetKbps: median(
       settled.map((sample) => sample.encoderTargetKbps).filter(positive),
     ),
+    endingEncoderTargetKbps: last.encoderTargetKbps,
     maximumEncoderTargetKbps: Math.max(
       0,
       ...samples.map((sample) => sample.encoderTargetKbps || 0),
@@ -2013,18 +2216,26 @@ function netemStats(qdiscs) {
   };
 }
 
-function timeToEncoderTarget(samples, phase, target, comparison) {
+function timeToEncoderTarget(
+  samples,
+  phase,
+  target,
+  comparison,
+  offsetMilliseconds = 0,
+) {
   const phaseSamples = samples.filter((sample) => sample.phase === phase);
   if (phaseSamples.length === 0 || !Number.isFinite(target) || target <= 0) {
     return null;
   }
-  const first = phaseSamples[0].elapsedMilliseconds;
-  const match = phaseSamples.find((sample) =>
-    comparison === "at-most"
-      ? sample.encoderTargetKbps > 0 && sample.encoderTargetKbps <= target
-      : sample.encoderTargetKbps >= target,
+  const event = phaseSamples[0].elapsedMilliseconds + offsetMilliseconds;
+  const match = phaseSamples.find(
+    (sample) =>
+      sample.elapsedMilliseconds >= event &&
+      (comparison === "at-most"
+        ? sample.encoderTargetKbps > 0 && sample.encoderTargetKbps <= target
+        : sample.encoderTargetKbps >= target),
   );
-  return match ? match.elapsedMilliseconds - first : null;
+  return match ? match.elapsedMilliseconds - event : null;
 }
 
 function counterIncrease(samples, field, phases) {

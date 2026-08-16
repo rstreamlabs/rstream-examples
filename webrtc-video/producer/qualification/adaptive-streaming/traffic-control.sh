@@ -17,10 +17,12 @@ capacity_step_two_kbps=""
 capacity_step_three_kbps=""
 capacity_kbps=""
 transition_step_seconds=""
+conditioning_seconds=""
 constrained_steady_seconds=""
 impaired_seconds=""
 recovery_capacity_kbps=""
 recovery_drain_seconds=""
+recovery_seconds=""
 shaping_initialized=0
 
 usage() {
@@ -32,7 +34,8 @@ usage() {
     '  --queue-limit-packets COUNT --capacity-step-one-kbps KBPS' \
     '  --capacity-step-two-kbps KBPS --capacity-step-three-kbps KBPS' \
     '  --capacity-kbps KBPS --transition-step-seconds SECONDS' \
-    '  --constrained-steady-seconds SECONDS --impaired-seconds SECONDS' \
+    '  --conditioning-seconds SECONDS --constrained-steady-seconds SECONDS' \
+    '  --impaired-seconds SECONDS --recovery-seconds SECONDS' \
     '  --recovery-capacity-kbps KBPS --recovery-drain-seconds SECONDS' >&2
 }
 
@@ -111,6 +114,11 @@ while [ "$#" -gt 0 ]; do
     transition_step_seconds="$2"
     shift 2
     ;;
+  --conditioning-seconds)
+    require_value "$@"
+    conditioning_seconds="$2"
+    shift 2
+    ;;
   --constrained-steady-seconds)
     require_value "$@"
     constrained_steady_seconds="$2"
@@ -129,6 +137,11 @@ while [ "$#" -gt 0 ]; do
   --recovery-drain-seconds)
     require_value "$@"
     recovery_drain_seconds="$2"
+    shift 2
+    ;;
+  --recovery-seconds)
+    require_value "$@"
+    recovery_seconds="$2"
     shift 2
     ;;
   *)
@@ -195,8 +208,10 @@ for value in \
   "${capacity_step_three_kbps}" \
   "${capacity_kbps}" \
   "${transition_step_seconds}" \
+  "${conditioning_seconds}" \
   "${constrained_steady_seconds}" \
   "${impaired_seconds}" \
+  "${recovery_seconds}" \
   "${recovery_capacity_kbps}" \
   "${recovery_drain_seconds}"; do
   if ! positive_integer "${value}"; then
@@ -312,21 +327,27 @@ emit() {
 }
 
 mkdir -p "${evidence_directory}"
-apply_shaping "${capacity_step_one_kbps}" 40ms 10ms 0%
+apply_shaping "${capacity_step_one_kbps}" 0ms 0ms 0%
+capture conditioning-start
+emit conditioning-started
+"${sleep_command}" "${conditioning_seconds}"
+capture conditioning
+require_shaped_traffic conditioning
+
+apply_shaping "${capacity_step_two_kbps}" 0ms 0ms 0%
 capture constrained-step-1-start
 emit constrained-started
 "${sleep_command}" "${transition_step_seconds}"
 capture constrained-step-1
 require_shaped_traffic constrained-step-1
-apply_shaping "${capacity_step_two_kbps}" 50ms 10ms 0%
+apply_shaping "${capacity_step_three_kbps}" 0ms 0ms 0%
 capture constrained-step-2-start
 "${sleep_command}" "${transition_step_seconds}"
 capture constrained-step-2
-apply_shaping "${capacity_step_three_kbps}" 65ms 15ms 0%
+apply_shaping "${capacity_kbps}" 0ms 0ms 0%
 capture constrained-step-3-start
 "${sleep_command}" "${transition_step_seconds}"
 capture constrained-step-3
-apply_shaping "${capacity_kbps}" 80ms 20ms 0%
 capture constrained-steady-start
 "${sleep_command}" "${constrained_steady_seconds}"
 capture constrained-steady
@@ -335,6 +356,17 @@ capture impaired-start
 emit impaired-started
 "${sleep_command}" "${impaired_seconds}"
 capture impaired
+
+apply_shaping "${capacity_kbps}" 0ms 0ms 0%
+capture recovery-settle-start
+emit recovery-started
+"${sleep_command}" "${transition_step_seconds}"
+capture recovery-settle
+apply_shaping "${capacity_step_one_kbps}" 0ms 0ms 0%
+capture recovery-capacity-start
+"${sleep_command}" "$((recovery_seconds - transition_step_seconds))"
+capture recovery-capacity
+
 apply_shaping "${recovery_capacity_kbps}" 0ms 0ms 0%
 capture recovery-drain-start
 emit recovery-drain-started
@@ -342,4 +374,4 @@ emit recovery-drain-started
 capture recovery-drain
 require_shaped_traffic recovery-drain
 clear_shaping
-emit recovery-started
+emit recovery-complete

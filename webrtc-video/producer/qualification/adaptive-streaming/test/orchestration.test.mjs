@@ -123,6 +123,10 @@ test("runs impairment timing inside the producer namespace", async () => {
   assert.match(runScript, /start_traffic_control/);
   assert.match(
     runScript,
+    /wait_for_traffic_control_event conditioning-started 15/,
+  );
+  assert.match(
+    runScript,
     /wait_for_traffic_control_event constrained-started 15/,
   );
   assert.match(
@@ -131,7 +135,7 @@ test("runs impairment timing inside the producer namespace", async () => {
   );
   assert.match(
     runScript,
-    /wait_for_traffic_control_event recovery-started \\\n\s+\$\(\(impaired_seconds \+ recovery_drain_seconds \+ 15\)\)/,
+    /wait_for_traffic_control_event recovery-started \$\(\(impaired_seconds \+ 15\)\)/,
   );
   assert.match(
     runScript,
@@ -143,7 +147,7 @@ test("runs impairment timing inside the producer namespace", async () => {
   );
   assert.match(
     runScript,
-    /write_phase recovery '\{\}'\s+wait_for_traffic_control\s+hold_phase recovery "\$\{recovery_seconds\}"/,
+    /write_phase recovery[\s\S]+hold_phase recovery "\$\{recovery_seconds\}"[\s\S]+write_phase drain[\s\S]+wait_for_traffic_control/,
   );
   assert.match(runScript, /capture_network_evidence/);
   assert.match(

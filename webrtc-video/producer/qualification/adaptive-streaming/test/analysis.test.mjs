@@ -9,6 +9,11 @@ import {
   summarizeNetworkMobility,
   summarizeSetup,
 } from "../lib/analysis.mjs";
+import {
+  renderNetworkConditionsSVG,
+  renderPlaybackQualitySVG,
+  renderTransportEvidenceSVG,
+} from "../lib/evidence-svg.mjs";
 
 test("separates image builds from service establishment", () => {
   const setup = summarizeSetup([
@@ -516,14 +521,36 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     ],
   });
   assert.equal(result.passed, true, JSON.stringify(result.assertions, null, 2));
-  assert.match(renderSVG(result, manifest), /Adaptive streaming response/);
+  const chart = renderSVG(result, manifest);
+  assert.match(chart, /Adaptive sender response to controlled link changes/);
+  assert.match(chart, /Configured capacity/);
+  assert.match(chart, /stroke="#be185d"[^>]+points="[^"]+"/);
+  const networkConditions = renderNetworkConditionsSVG(result, manifest);
+  assert.match(networkConditions, /Controlled network conditions/);
+  assert.match(networkConditions, /Injected random loss/);
+  const playbackQuality = renderPlaybackQualitySVG(result, manifest);
+  assert.match(playbackQuality, /Decoded frame rate/);
+  assert.match(playbackQuality, /Freeze duration/);
+  assert.match(playbackQuality, /H\.264 QP/);
+  const transportEvidence = renderTransportEvidenceSVG(result, manifest);
+  assert.match(transportEvidence, /NACK \/ RTX/);
+  assert.match(transportEvidence, /FlexFEC received/);
+  assert.match(transportEvidence, /Injected \/ TWCC loss/);
+  assert.ok(
+    (transportEvidence.match(/stroke="#059669"/g) || []).length > 6,
+    "phase-boundary counter gaps must render as separate line segments",
+  );
+  const report = renderMarkdown(result, {
+    ...manifest,
+    networkImpairment: { scope: "producer-turn-transport" },
+  });
   assert.match(
-    renderMarkdown(result, {
-      ...manifest,
-      networkImpairment: { scope: "producer-turn-transport" },
-    }),
+    report,
     /Media, TURN permissions, and TURN channel traffic share/,
   );
+  assert.match(report, /## Qualification decision/);
+  assert.match(report, /\| Shaper activation \| not measured \|/);
+  assert.match(report, /\| Packet repair \| NACK [0-9]+; RTX [0-9]+ \|/);
   assert.equal(result.trafficControl.impairedDropRatio, 40 / 2040);
   assert.equal(result.candidatePairSwitches, 1);
   const ceilingResult = analyze(samples, {
