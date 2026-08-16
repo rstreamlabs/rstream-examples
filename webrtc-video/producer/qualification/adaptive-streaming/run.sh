@@ -885,7 +885,7 @@ jq -n \
     networkMobility: (if $mobility_mode == "producer" then {
       subject: "producer",
       change: "network-interface-and-source-address",
-      expectedSignalingTransport: "rstream-quic",
+      signalingTransport: "quic",
       durationSeconds: $mobility_seconds
     } else null end),
     phases: ([
@@ -954,6 +954,7 @@ if [[ "${path_kind}" == "relay" ]]; then
       "${producer_secondary_network}" >/dev/null
     producer_secondary_network_created=1
     producer_arguments+=(--network "${producer_primary_network}")
+    producer_arguments+=(--env RSTREAM_TUNNEL_TRANSPORT=quic)
   fi
   if producer_is_remote; then
     producer_docker volume create "${producer_runtime_volume}" >/dev/null

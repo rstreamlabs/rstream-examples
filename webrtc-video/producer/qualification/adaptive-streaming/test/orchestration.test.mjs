@@ -339,6 +339,11 @@ test("switches the producer interface only in an explicit relay mobility run", a
   );
   assert.match(
     runScript,
+    /producer_arguments\+=\(--env RSTREAM_TUNNEL_TRANSPORT=quic\)/,
+  );
+  assert.match(runScript, /signalingTransport: "quic"/);
+  assert.match(
+    runScript,
     /producer_docker network connect \\\n+    "\$\{producer_secondary_network\}" "\$\{container_name\}"/,
   );
   assert.match(

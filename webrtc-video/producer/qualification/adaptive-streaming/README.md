@@ -246,9 +246,11 @@ the topology and tool versions required to reproduce the result.
 ## Qualify Trickle ICE mobility
 
 The relay harness can move the producer to a second isolated interface while
-the session is playing. The producer keeps its rstream QUIC client and
-signaling WebSocket, gathers a fresh ICE candidate, trickles it to the browser,
-and lets WebRTC select the replacement TURN path.
+the session is playing. This scenario forces the rstream upstream to QUIC, so a
+successful publication proves the signaling transport in use. The producer
+keeps that original QUIC client and signaling WebSocket, gathers a fresh ICE
+candidate, trickles it to the browser, and lets WebRTC select the replacement
+TURN path.
 
 ```bash
 RSTREAM_CONTEXT=your-context \

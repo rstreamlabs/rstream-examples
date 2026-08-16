@@ -177,6 +177,7 @@ export function analyze(
     );
     assert(
       assertions,
+      manifest.networkMobility.signalingTransport === "quic" &&
       networkMobility.peerConnectionsCreated === 1 &&
         networkMobility.webSocketsCreated === 1 &&
         networkMobility.webSocketCloses === 0,
