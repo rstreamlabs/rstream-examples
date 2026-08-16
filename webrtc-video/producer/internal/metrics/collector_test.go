@@ -79,6 +79,12 @@ func TestCollectorExportsStableUnitsAndBoundedDimensions(t *testing.T) {
 	if unit := metricUnit(t, families, namespace+"_pacer_sent_bytes_total"); unit != "bytes" {
 		t.Fatalf("wire byte unit = %q, want bytes", unit)
 	}
+	if help := metricHelp(t, families, namespace+"_twcc_estimated_available_bytes_per_second"); !strings.Contains(help, "media throughput") {
+		t.Fatalf("TWCC estimate help does not identify its media unit boundary: %q", help)
+	}
+	if help := metricHelp(t, families, namespace+"_pacer_target_bytes_per_second"); !strings.Contains(help, "sustained wire capacity") {
+		t.Fatalf("pacer target help does not identify its wire unit boundary: %q", help)
+	}
 }
 
 func TestHandlerNegotiatesOpenMetricsAndSupportsConcurrentScrapes(t *testing.T) {
@@ -182,6 +188,17 @@ func metricUnit(t *testing.T, families []*dto.MetricFamily, name string) string 
 	for _, family := range families {
 		if family.GetName() == name {
 			return family.GetUnit()
+		}
+	}
+	t.Fatalf("metric family %s not found", name)
+	return ""
+}
+
+func metricHelp(t *testing.T, families []*dto.MetricFamily, name string) string {
+	t.Helper()
+	for _, family := range families {
+		if family.GetName() == name {
+			return family.GetHelp()
 		}
 	}
 	t.Fatalf("metric family %s not found", name)

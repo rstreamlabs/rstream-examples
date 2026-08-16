@@ -138,7 +138,7 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 		),
 		estimatedAvailableBytesSecond: newDesc(
 			namespace+"_twcc_estimated_available_bytes_per_second",
-			"Sum of the current TWCC estimated available throughput across active sessions.",
+			"Sum of the current media throughput available to encoders after reserving configured repair capacity across active sessions.",
 			nil,
 			nil,
 			"bytes_per_second",
@@ -152,14 +152,14 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 		),
 		pacerTargetBytesSecond: newDesc(
 			namespace+"_pacer_target_bytes_per_second",
-			"Sum of the current media targets presented to the packet pacers across active sessions.",
+			"Sum of the sustained wire capacity budgets presented to packet pacers across active sessions, including configured proactive repair.",
 			nil,
 			nil,
 			"bytes_per_second",
 		),
 		pacerPacingBytesSecond: newDesc(
 			namespace+"_pacer_pacing_bytes_per_second",
-			"Sum of the current wire pacing rates across active sessions, including repair headroom.",
+			"Sum of the current short-burst wire pacing allowances across active sessions.",
 			nil,
 			nil,
 			"bytes_per_second",
