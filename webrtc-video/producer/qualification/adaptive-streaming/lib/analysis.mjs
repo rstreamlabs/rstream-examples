@@ -73,6 +73,8 @@ export function analyze(
   const candidatePairSwitches = countCandidatePairSwitches(enriched);
   const networkMobility = summarizeNetworkMobility(enriched);
   const icePolicy = manifest.networkPath?.icePolicy || "relay";
+  let healthyLinkTargetKbps = null;
+  let healthyLinkTargetRatio = null;
   const constrainedMediaCapacityKbps = mediaCapacityKbps(
     constrained?.capacityKbps || 0,
     manifest.protection,
@@ -219,13 +221,25 @@ export function analyze(
     const maximumBitrateKbps = manifest.video.adaptive.maximumBitrateKbps;
     const changeThresholdPct =
       manifest.video.adaptive.changeThresholdPct || 0;
-    const healthyLinkTargetKbps =
+    healthyLinkTargetKbps =
       (maximumBitrateKbps * (100 - changeThresholdPct)) / 100;
+    const baselineSamples = enriched.filter(
+      (sample) =>
+        sample.phase === "baseline" &&
+        Number.isFinite(sample.encoderTargetKbps) &&
+        sample.encoderTargetKbps > 0,
+    );
+    healthyLinkTargetRatio =
+      baselineSamples.length > 0
+        ? baselineSamples.filter(
+            (sample) => sample.encoderTargetKbps >= healthyLinkTargetKbps,
+          ).length / baselineSamples.length
+        : 0;
     assert(
       assertions,
-      (baseline?.medianEncoderTargetKbps || 0) >= healthyLinkTargetKbps,
+      healthyLinkTargetRatio >= 0.5,
       "healthy-link-quality-ceiling",
-      `baseline median encoder target reaches the ${maximumBitrateKbps} kbps adaptive ceiling within its ${changeThresholdPct}% control hysteresis`,
+      `the encoder spends at least half of the healthy baseline within ${changeThresholdPct}% of its ${maximumBitrateKbps} kbps adaptive ceiling`,
     );
   }
   const reductionThreshold = (baseline?.medianEncoderTargetKbps || 0) * 0.8;
@@ -680,6 +694,8 @@ export function analyze(
     candidatePairSwitches,
     congestionResponseRequired,
     constrainedMediaCapacityKbps,
+    healthyLinkTargetKbps,
+    healthyLinkTargetRatio,
     responseDelayMilliseconds: responseDelay,
     recoveryDelayMilliseconds: recoveryDelay,
     staleBitrateCallbacks: Math.max(
@@ -896,6 +912,15 @@ export function renderMarkdown(analysis, manifest) {
       : "NACK and RTX greater than zero"
     : "NACK greater than zero";
   const decisionRows = [
+    ...(Number.isFinite(analysis.healthyLinkTargetRatio)
+      ? [
+          [
+            "Healthy-link quality",
+            `${formatNumber(analysis.healthyLinkTargetRatio * 100, 1)}% of baseline at or above ${formatNumber(analysis.healthyLinkTargetKbps, 0)} kbps`,
+            "at least 50% of baseline",
+          ],
+        ]
+      : []),
     [
       "Shaper activation",
       capacityIsolation === null

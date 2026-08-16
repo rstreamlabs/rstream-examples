@@ -571,6 +571,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     ).passed,
     true,
   );
+  assert.equal(ceilingResult.healthyLinkTargetRatio, 1);
   const cappedResult = analyze(samples, {
     ...manifest,
     video: {
@@ -589,6 +590,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     ).passed,
     false,
   );
+  assert.equal(cappedResult.healthyLinkTargetRatio, 0);
   const pathLimitedRelayResult = analyze(samples, {
     ...manifest,
     networkPath: { icePolicy: "relay", kind: "relay" },
