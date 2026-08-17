@@ -12,15 +12,18 @@ destination_port=""
 transport_protocol=""
 match_destination_port=""
 queue_limit_packets=""
+conditioning_capacity_kbps=""
 capacity_step_one_kbps=""
 capacity_step_two_kbps=""
 capacity_step_three_kbps=""
 capacity_kbps=""
 transition_step_seconds=""
+conditioning_seconds=""
 constrained_steady_seconds=""
 impaired_seconds=""
 recovery_capacity_kbps=""
 recovery_drain_seconds=""
+recovery_seconds=""
 shaping_initialized=0
 
 usage() {
@@ -29,10 +32,12 @@ usage() {
     '  --network-interface INTERFACE' \
     '  --destination-address ADDRESS --destination-port PORT' \
     '  --transport-protocol udp|tcp --match-destination-port true|false' \
-    '  --queue-limit-packets COUNT --capacity-step-one-kbps KBPS' \
+    '  --queue-limit-packets COUNT --conditioning-capacity-kbps KBPS' \
+    '  --capacity-step-one-kbps KBPS' \
     '  --capacity-step-two-kbps KBPS --capacity-step-three-kbps KBPS' \
     '  --capacity-kbps KBPS --transition-step-seconds SECONDS' \
-    '  --constrained-steady-seconds SECONDS --impaired-seconds SECONDS' \
+    '  --conditioning-seconds SECONDS --constrained-steady-seconds SECONDS' \
+    '  --impaired-seconds SECONDS --recovery-seconds SECONDS' \
     '  --recovery-capacity-kbps KBPS --recovery-drain-seconds SECONDS' >&2
 }
 
@@ -86,6 +91,11 @@ while [ "$#" -gt 0 ]; do
     queue_limit_packets="$2"
     shift 2
     ;;
+  --conditioning-capacity-kbps)
+    require_value "$@"
+    conditioning_capacity_kbps="$2"
+    shift 2
+    ;;
   --capacity-step-one-kbps)
     require_value "$@"
     capacity_step_one_kbps="$2"
@@ -111,6 +121,11 @@ while [ "$#" -gt 0 ]; do
     transition_step_seconds="$2"
     shift 2
     ;;
+  --conditioning-seconds)
+    require_value "$@"
+    conditioning_seconds="$2"
+    shift 2
+    ;;
   --constrained-steady-seconds)
     require_value "$@"
     constrained_steady_seconds="$2"
@@ -129,6 +144,11 @@ while [ "$#" -gt 0 ]; do
   --recovery-drain-seconds)
     require_value "$@"
     recovery_drain_seconds="$2"
+    shift 2
+    ;;
+  --recovery-seconds)
+    require_value "$@"
+    recovery_seconds="$2"
     shift 2
     ;;
   *)
@@ -190,13 +210,16 @@ esac
 for value in \
   "${destination_port}" \
   "${queue_limit_packets}" \
+  "${conditioning_capacity_kbps}" \
   "${capacity_step_one_kbps}" \
   "${capacity_step_two_kbps}" \
   "${capacity_step_three_kbps}" \
   "${capacity_kbps}" \
   "${transition_step_seconds}" \
+  "${conditioning_seconds}" \
   "${constrained_steady_seconds}" \
   "${impaired_seconds}" \
+  "${recovery_seconds}" \
   "${recovery_capacity_kbps}" \
   "${recovery_drain_seconds}"; do
   if ! positive_integer "${value}"; then
@@ -206,6 +229,10 @@ for value in \
 done
 if [ "${destination_port}" -gt 65535 ]; then
   printf 'destination port must be at most 65535\n' >&2
+  exit 2
+fi
+if [ "${constrained_steady_seconds}" -le "${transition_step_seconds}" ]; then
+  printf 'constrained steady duration must exceed one transition step\n' >&2
   exit 2
 fi
 
@@ -312,34 +339,57 @@ emit() {
 }
 
 mkdir -p "${evidence_directory}"
-apply_shaping "${capacity_step_one_kbps}" 40ms 10ms 0%
-capture constrained-step-1-start
+apply_shaping "${conditioning_capacity_kbps}" 0ms 0ms 0%
+emit conditioning-started
+capture conditioning-start
+"${sleep_command}" "${conditioning_seconds}"
+capture conditioning
+require_shaped_traffic conditioning
+
+apply_shaping "${capacity_step_one_kbps}" 0ms 0ms 0%
 emit constrained-started
+capture constrained-step-1-start
 "${sleep_command}" "${transition_step_seconds}"
 capture constrained-step-1
 require_shaped_traffic constrained-step-1
-apply_shaping "${capacity_step_two_kbps}" 50ms 10ms 0%
+apply_shaping "${capacity_step_two_kbps}" 0ms 0ms 0%
+emit constrained-step-2-started
 capture constrained-step-2-start
 "${sleep_command}" "${transition_step_seconds}"
 capture constrained-step-2
-apply_shaping "${capacity_step_three_kbps}" 65ms 15ms 0%
+apply_shaping "${capacity_step_three_kbps}" 0ms 0ms 0%
+emit constrained-step-3-started
 capture constrained-step-3-start
 "${sleep_command}" "${transition_step_seconds}"
 capture constrained-step-3
-apply_shaping "${capacity_kbps}" 80ms 20ms 0%
+apply_shaping "${capacity_kbps}" 0ms 0ms 0%
+emit constrained-steady-started
+"${sleep_command}" "${transition_step_seconds}"
 capture constrained-steady-start
-"${sleep_command}" "${constrained_steady_seconds}"
+"${sleep_command}" "$((constrained_steady_seconds - transition_step_seconds))"
 capture constrained-steady
 apply_shaping "${capacity_kbps}" 120ms 30ms 2%
-capture impaired-start
 emit impaired-started
+capture impaired-start
 "${sleep_command}" "${impaired_seconds}"
 capture impaired
+
+apply_shaping "${capacity_kbps}" 0ms 0ms 0%
+emit recovery-started
+capture recovery-settle-start
+"${sleep_command}" "${transition_step_seconds}"
+capture recovery-settle
+apply_shaping "${conditioning_capacity_kbps}" 0ms 0ms 0%
+emit recovery-capacity-started
+capture recovery-capacity-start
+"${sleep_command}" "$((recovery_seconds - transition_step_seconds))"
+capture recovery-capacity
+
 apply_shaping "${recovery_capacity_kbps}" 0ms 0ms 0%
-capture recovery-drain-start
 emit recovery-drain-started
+capture recovery-drain-start
 "${sleep_command}" "${recovery_drain_seconds}"
 capture recovery-drain
 require_shaped_traffic recovery-drain
 clear_shaping
-emit recovery-started
+emit recovery-complete

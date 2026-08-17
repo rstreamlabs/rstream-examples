@@ -18,7 +18,10 @@ test("accepts a full profile that closes the direct/relay quality gap", () => {
   const markdown = renderComparisonMarkdown(result);
   assert.match(markdown, /full protection profile/);
   assert.match(markdown, /2 FlexFEC repair packets per 4 media packets/);
-  assert.match(renderComparisonSVG(result), /Decoded output/);
+  const svg = renderComparisonSVG(result);
+  assert.match(svg, /Decoded output/);
+  assert.match(svg, /20 fps gate/);
+  assert.match(svg, /Whiskers show the minimum and maximum/);
 });
 
 test("rejects an incomplete or degraded full relay profile", () => {

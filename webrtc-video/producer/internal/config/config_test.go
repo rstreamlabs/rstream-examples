@@ -19,6 +19,38 @@ func TestDefaultConfigIsValid(t *testing.T) {
 	if got := cfg.TunnelTransportMode(); got != "auto" {
 		t.Fatalf("default tunnel transport = %q, want auto", got)
 	}
+	if cfg.Metrics.Enabled {
+		t.Fatal("metrics must be disabled by default")
+	}
+	if cfg.Metrics.Listen != DefaultMetricsListen {
+		t.Fatalf("default metrics listen = %q, want %q", cfg.Metrics.Listen, DefaultMetricsListen)
+	}
+}
+
+func TestMetricsListenValidation(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		listen string
+	}{
+		{name: "empty", listen: ""},
+		{name: "missing port", listen: "127.0.0.1"},
+		{name: "invalid port", listen: "127.0.0.1:not-a-port"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			cfg := Default()
+			cfg.Metrics.Enabled = true
+			cfg.Metrics.Listen = testCase.listen
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("expected invalid metrics listener to fail validation")
+			}
+		})
+	}
+	cfg := Default()
+	cfg.Metrics.Enabled = true
+	cfg.Metrics.Listen = "127.0.0.1:0"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("valid metrics listener: %v", err)
+	}
 }
 
 func TestLoadLegacyTunnelTransport(t *testing.T) {
@@ -253,7 +285,7 @@ func TestAdaptiveBackendRejectsInvalidChangeThresholds(t *testing.T) {
 	}
 }
 
-func TestMaximumSafeAdaptiveDecreaseThresholdTracksRepairOverhead(t *testing.T) {
+func TestMaximumSafeAdaptiveDecreaseThresholdPreservesBurstHeadroom(t *testing.T) {
 	for _, testCase := range []struct {
 		name          string
 		flexFEC       bool
@@ -262,10 +294,10 @@ func TestMaximumSafeAdaptiveDecreaseThresholdTracksRepairOverhead(t *testing.T) 
 		want          int
 	}{
 		{name: "without proactive repair", want: 33},
-		{name: "one repair per five media packets", flexFEC: true, mediaPackets: 5, repairPackets: 1, want: 20},
-		{name: "two repairs per five media packets", flexFEC: true, mediaPackets: 5, repairPackets: 2, want: 6},
-		{name: "two repairs per four media packets", flexFEC: true, mediaPackets: 4, repairPackets: 2, want: 0},
-		{name: "repair exceeds pacing headroom", flexFEC: true, mediaPackets: 4, repairPackets: 3, want: 0},
+		{name: "one repair per five media packets", flexFEC: true, mediaPackets: 5, repairPackets: 1, want: 33},
+		{name: "two repairs per five media packets", flexFEC: true, mediaPackets: 5, repairPackets: 2, want: 33},
+		{name: "two repairs per four media packets", flexFEC: true, mediaPackets: 4, repairPackets: 2, want: 33},
+		{name: "repair exceeds media headroom", flexFEC: true, mediaPackets: 4, repairPackets: 3, want: 33},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			cfg := Default()
@@ -279,7 +311,7 @@ func TestMaximumSafeAdaptiveDecreaseThresholdTracksRepairOverhead(t *testing.T) 
 	}
 }
 
-func TestAdaptiveBackendRejectsDecreaseThresholdAbovePacingHeadroom(t *testing.T) {
+func TestAdaptiveBackendRejectsDecreaseThresholdAboveBurstHeadroom(t *testing.T) {
 	cfg := Default()
 	cfg.Media.Mode = MediaModePerViewer
 	cfg.WebRTC.Adaptive.Enabled = true
@@ -287,36 +319,13 @@ func TestAdaptiveBackendRejectsDecreaseThresholdAbovePacingHeadroom(t *testing.T
 	cfg.WebRTC.Interceptors.FlexFEC = true
 	cfg.WebRTC.Interceptors.FlexFECMediaPackets = 4
 	cfg.WebRTC.Interceptors.FlexFECRepairPackets = 2
-	cfg.WebRTC.Adaptive.TWCCGCC.DecreaseThresholdPct = 5
-	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "must be at most 0") {
+	cfg.WebRTC.Adaptive.TWCCGCC.DecreaseThresholdPct = 34
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "must be at most 33") {
 		t.Fatalf("expected pacing-headroom validation error, got %v", err)
 	}
-	cfg.WebRTC.Adaptive.TWCCGCC.DecreaseThresholdPct = 0
+	cfg.WebRTC.Adaptive.TWCCGCC.DecreaseThresholdPct = 33
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected immediate decreases to fit the pacing envelope, got %v", err)
-	}
-}
-
-func TestAdaptiveBackendRejectsInvalidIncreaseLimits(t *testing.T) {
-	for _, testCase := range []struct {
-		name  string
-		apply func(*WebRTCTWCCGCCBackendConfig)
-	}{
-		{name: "zero increase percentage", apply: func(cfg *WebRTCTWCCGCCBackendConfig) { cfg.MaxIncreasePct = 0 }},
-		{name: "increase percentage above 100", apply: func(cfg *WebRTCTWCCGCCBackendConfig) { cfg.MaxIncreasePct = 101 }},
-		{name: "zero increase step", apply: func(cfg *WebRTCTWCCGCCBackendConfig) { cfg.MaxIncreaseStepKbps = 0 }},
-		{name: "negative increase step", apply: func(cfg *WebRTCTWCCGCCBackendConfig) { cfg.MaxIncreaseStepKbps = -1 }},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			cfg := Default()
-			cfg.Media.Mode = MediaModePerViewer
-			cfg.WebRTC.Adaptive.Enabled = true
-			cfg.WebRTC.Adaptive.Backend = AdaptiveBackendTWCCGCC
-			testCase.apply(&cfg.WebRTC.Adaptive.TWCCGCC)
-			if err := cfg.Validate(); err == nil {
-				t.Fatal("expected invalid increase limit to fail validation")
-			}
-		})
 	}
 }
 

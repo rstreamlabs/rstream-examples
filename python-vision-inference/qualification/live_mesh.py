@@ -31,6 +31,7 @@ import device
 from live_helpers import (
     CLOSE_TIMEOUT,
     before_deadline,
+    detection_signature,
     loopback_ready_path,
     remaining,
     stop_process_group,
@@ -239,6 +240,7 @@ async def infer(
         "inferenceMS": round(infer_ms, 3),
         "detectionCount": len(detections),
         "labels": sorted(str(item["label"]) for item in detections),
+        "detectionSignatureSha256": detection_signature(detections),
     }
     return result
 
@@ -497,8 +499,7 @@ async def run(args: argparse.Namespace) -> dict[str, object]:
             await close_stream(fallback)
             streams.remove(fallback)
             signatures = {
-                (result["detectionCount"], tuple(result["labels"]))
-                for result in results
+                result["detectionSignatureSha256"] for result in results
             }
             if len(signatures) != 1:
                 raise ValueError("identical frames produced inconsistent detections")
@@ -561,6 +562,7 @@ async def run(args: argparse.Namespace) -> dict[str, object]:
         },
         "detectionCount": results[0]["detectionCount"],
         "labels": sorted(set(results[0]["labels"])),
+        "detectionSignatureSha256": results[0]["detectionSignatureSha256"],
         "violations": threshold_violations(
             args,
             rstream_p95=rstream_p95,

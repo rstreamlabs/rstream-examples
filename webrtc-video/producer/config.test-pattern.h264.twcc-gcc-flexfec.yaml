@@ -22,8 +22,8 @@ webrtc:
     nack: true
     rtx: true
     flexFEC: true
-    flexFECMediaPackets: 4
-    flexFECRepairPackets: 2
+    flexFECMediaPackets: 5
+    flexFECRepairPackets: 1
   adaptive:
     enabled: true
     backend: twcc-gcc
@@ -33,8 +33,6 @@ webrtc:
       updateInterval: 2s
       changeThresholdPct: 10
       decreaseThresholdPct: 0
-      maxIncreasePct: 15
-      maxIncreaseStepKbps: 500
       maxIncreaseLossPct: 1
       increaseHoldAfterLoss: 5s
   video:

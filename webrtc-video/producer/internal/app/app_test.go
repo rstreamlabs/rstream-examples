@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -201,6 +203,75 @@ func TestRunSkipsLocalServerWhenViewerDisabled(t *testing.T) {
 	}
 }
 
+func TestRunKeepsMetricsOffThePublishedApplicationHandler(t *testing.T) {
+	cfg := config.Default()
+	cfg.Web.Viewer.Enabled = false
+	cfg.Tunnel.Enabled = false
+	cfg.Server.Listen = unusedLoopbackAddress(t)
+	cfg.Metrics.Enabled = true
+	cfg.Metrics.Listen = unusedLoopbackAddress(t)
+	app := newTestApp(cfg)
+	app.metrics = http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		_, _ = response.Write([]byte("producer metrics"))
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- app.Run(ctx)
+	}()
+	metricsBody := waitForHTTPBody(t, "http://"+cfg.Metrics.Listen+"/metrics")
+	if metricsBody != "producer metrics" {
+		t.Fatalf("metrics body = %q, want producer metrics", metricsBody)
+	}
+	response, err := http.Get("http://" + cfg.Server.Listen + "/metrics")
+	if err != nil {
+		t.Fatalf("request application metrics path: %v", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("application metrics status = %d, want 404", response.StatusCode)
+	}
+	cancel()
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("expected clean shutdown, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for shutdown")
+	}
+}
+
+func TestRunFailsBeforeOpeningTunnelWhenMetricsListenerIsUnavailable(t *testing.T) {
+	occupiedListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = occupiedListener.Close() }()
+	cfg := config.Default()
+	cfg.Web.Viewer.Enabled = false
+	cfg.Metrics.Enabled = true
+	cfg.Metrics.Listen = occupiedListener.Addr().String()
+	app := newTestApp(cfg)
+	tunnelOpened := false
+	app.openTunnel = func(
+		context.Context,
+		config.Config,
+		*logs.Logger,
+		tunnel.OpenOptions,
+	) (tunnelManager, error) {
+		tunnelOpened = true
+		return nil, errors.New("unexpected tunnel open")
+	}
+	err = app.Run(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "failed to listen for metrics") {
+		t.Fatalf("Run() error = %v, want metrics listener failure", err)
+	}
+	if tunnelOpened {
+		t.Fatal("tunnel was opened after metrics listener failure")
+	}
+}
+
 func newTestApp(cfg config.Config) *App {
 	logHub := logs.NewHub(16)
 	logger := logs.NewLogger(logHub, false)
@@ -229,4 +300,37 @@ func currentPublicURL(app *App) *string {
 	app.infoMu.RLock()
 	defer app.infoMu.RUnlock()
 	return app.info.PublicURL
+}
+
+func unusedLoopbackAddress(t *testing.T) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("allocate loopback address: %v", err)
+	}
+	address := listener.Addr().String()
+	if err := listener.Close(); err != nil {
+		t.Fatalf("release loopback address: %v", err)
+	}
+	return address
+}
+
+func waitForHTTPBody(t *testing.T, url string) string {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		response, err := http.Get(url)
+		if err == nil {
+			body, readErr := io.ReadAll(response.Body)
+			_ = response.Body.Close()
+			if readErr != nil {
+				t.Fatalf("read %s: %v", url, readErr)
+			}
+			return string(body)
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s: %v", url, err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }

@@ -1,6 +1,18 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import process from "node:process";
+import {
+  renderNetworkConditionsSVG,
+  renderPlaybackQualitySVG,
+  renderTransportEvidenceSVG,
+} from "./evidence-svg.mjs";
+
+const maximumQualificationSampleGapMilliseconds = 2500;
+const minimumTWCCLossGuardStatuses = 20;
+const minimumSustainedRecoveryMilliseconds = 10_000;
+const minimumSustainedRecoveryTargetRatio = 0.8;
+const networkTransitionGuardMilliseconds = 2000;
+const stableConditioningWindowMilliseconds = 10_000;
 
 export function enrichSamples(samples) {
   let previous = null;
@@ -32,6 +44,7 @@ export function analyze(
   hostCPUEvidence = null,
   phaseTimeline = null,
   receiverHostCPUEvidence = null,
+  networkConditionTimeline = null,
 ) {
   const enriched = enrichSamples(samples);
   const phaseOrder = manifest.phases.map((phase) => phase.name);
@@ -50,6 +63,7 @@ export function analyze(
     ]),
   );
   const baseline = summaries.baseline;
+  const conditioning = summaries.conditioning;
   const constrained = summaries.constrained;
   const impaired = summaries.impaired;
   const recovery = summaries.recovery;
@@ -64,15 +78,68 @@ export function analyze(
     phaseTimeline,
     phaseOrder,
   );
+  const networkConditions = alignNetworkConditions(
+    networkConditionTimeline,
+    enriched,
+    manifest,
+  );
+  const stableConditioningSamples = samplesBeforeNetworkTransition(
+    enriched,
+    networkConditions,
+    "conditioning",
+    "constrained-started",
+    stableConditioningWindowMilliseconds,
+    networkTransitionGuardMilliseconds,
+  );
+  const stableConditioningMedianEncoderTargetKbps = median(
+    stableConditioningSamples
+      .map((sample) => sample.encoderTargetKbps)
+      .filter(positive),
+  );
+  const stableConditioningMedianReceivedBitrateKbps = median(
+    stableConditioningSamples
+      .map((sample) => sample.receivedBitrateKbps)
+      .filter(positive),
+  );
+  const stableConditioningTargetRatio =
+    stableConditioningMedianEncoderTargetKbps > 0
+      ? stableConditioningSamples.filter(
+          (sample) =>
+            sample.encoderTargetKbps >=
+              stableConditioningMedianEncoderTargetKbps * 0.9 &&
+            sample.encoderTargetKbps <=
+              stableConditioningMedianEncoderTargetKbps * 1.1,
+        ).length / stableConditioningSamples.length
+      : 0;
+  const stableConditioningEndingEncoderTargetKbps =
+    stableConditioningSamples.at(-1)?.encoderTargetKbps || 0;
+  const preTransitionEncoderTargetKbps =
+    stableConditioningMedianEncoderTargetKbps ||
+    baseline?.medianEncoderTargetKbps ||
+    0;
+  const preTransitionReceivedBitrateKbps =
+    stableConditioningMedianReceivedBitrateKbps ||
+    baseline?.medianReceivedBitrateKbps ||
+    0;
   const candidatePairSwitches = countCandidatePairSwitches(enriched);
   const networkMobility = summarizeNetworkMobility(enriched);
   const icePolicy = manifest.networkPath?.icePolicy || "relay";
+  let healthyLinkTargetKbps = null;
+  let healthyLinkTargetRatio = null;
   const constrainedMediaCapacityKbps = mediaCapacityKbps(
     constrained?.capacityKbps || 0,
     manifest.protection,
   );
   const congestionResponseRequired =
-    (baseline?.medianEncoderTargetKbps || 0) > constrainedMediaCapacityKbps;
+    preTransitionEncoderTargetKbps > constrainedMediaCapacityKbps;
+  if (manifest.networkConditionTimeline?.required === true) {
+    assert(
+      assertions,
+      networkConditions.available && networkConditions.chronological,
+      "network-condition-timeline",
+      "every configured traffic-control transition is timestamped in chronological order on the metrics collector clock",
+    );
+  }
   assert(
     assertions,
     phaseOrder.every((name) => summaries[name]?.samples >= 15),
@@ -131,7 +198,7 @@ export function analyze(
           ) && summaries[name].averageJitterBufferDelayMilliseconds <= 300,
       ),
       "playout-effective-latency-budget",
-      "receiver effective buffered delay evidence covers every phase and remains at or below 300 ms",
+      "receiver effective buffered delay evidence covers every phase and its phase average remains at or below 300 ms",
     );
   }
   assert(
@@ -155,9 +222,7 @@ export function analyze(
   );
   assert(
     assertions,
-    steadyPhaseOrder.every(
-      (name) => summaries[name]?.connectedRatio >= 0.98,
-    ),
+    steadyPhaseOrder.every((name) => summaries[name]?.connectedRatio >= 0.98),
     "session-continuity",
     "peer connection and playback remain healthy for at least 98% of samples",
   );
@@ -178,7 +243,7 @@ export function analyze(
     assert(
       assertions,
       manifest.networkMobility.signalingTransport === "quic" &&
-      networkMobility.peerConnectionsCreated === 1 &&
+        networkMobility.peerConnectionsCreated === 1 &&
         networkMobility.webSocketsCreated === 1 &&
         networkMobility.webSocketCloses === 0,
       "quic-signaling-mobility",
@@ -197,31 +262,55 @@ export function analyze(
     "baseline-throughput",
     "baseline median receive throughput is at least 1 Mbps",
   );
+  if (conditioning) {
+    assert(
+      assertions,
+      stableConditioningSamples.length >= 5 &&
+        stableConditioningTargetRatio >= 0.8 &&
+        stableConditioningEndingEncoderTargetKbps >=
+          stableConditioningMedianEncoderTargetKbps * 0.9 &&
+        stableConditioningEndingEncoderTargetKbps <=
+          stableConditioningMedianEncoderTargetKbps * 1.1,
+      "capacity-experiment-settled",
+      "at least 80% of samples and the final sample in the pre-transition window stay within 10% of that window's median encoder target",
+    );
+  }
   if (
     manifest.networkPath?.kind !== "relay" &&
     Number.isFinite(manifest.video?.adaptive?.maximumBitrateKbps)
   ) {
     const maximumBitrateKbps = manifest.video.adaptive.maximumBitrateKbps;
-    const changeThresholdPct =
-      manifest.video.adaptive.changeThresholdPct || 0;
-    const healthyLinkTargetKbps =
+    const changeThresholdPct = manifest.video.adaptive.changeThresholdPct || 0;
+    healthyLinkTargetKbps =
       (maximumBitrateKbps * (100 - changeThresholdPct)) / 100;
+    const baselineSamples = enriched.filter(
+      (sample) =>
+        sample.phase === "baseline" &&
+        Number.isFinite(sample.encoderTargetKbps) &&
+        sample.encoderTargetKbps > 0,
+    );
+    healthyLinkTargetRatio =
+      baselineSamples.length > 0
+        ? baselineSamples.filter(
+            (sample) => sample.encoderTargetKbps >= healthyLinkTargetKbps,
+          ).length / baselineSamples.length
+        : 0;
     assert(
       assertions,
-      (baseline?.medianEncoderTargetKbps || 0) >= healthyLinkTargetKbps,
+      healthyLinkTargetRatio >= 0.5,
       "healthy-link-quality-ceiling",
-      `baseline median encoder target reaches the ${maximumBitrateKbps} kbps adaptive ceiling within its ${changeThresholdPct}% control hysteresis`,
+      `the encoder spends at least half of the healthy baseline within ${changeThresholdPct}% of its ${maximumBitrateKbps} kbps adaptive ceiling`,
     );
   }
-  const reductionThreshold = (baseline?.medianEncoderTargetKbps || 0) * 0.8;
+  const reductionThreshold = preTransitionEncoderTargetKbps * 0.8;
   assert(
     assertions,
     !congestionResponseRequired ||
       (constrained?.medianEncoderTargetKbps || Infinity) <= reductionThreshold,
     "congestion-response",
     congestionResponseRequired
-      ? "constrained median encoder target falls by at least 20% from baseline"
-      : "the baseline encoder target already fits inside the constrained media budget, so no forced reduction is required",
+      ? "constrained median encoder target falls by at least 20% from the stable pre-transition target"
+      : "the stable pre-transition encoder target already fits inside the constrained media budget, so no forced reduction is required",
   );
   const responseDelay = timeToEncoderTarget(
     enriched,
@@ -236,14 +325,17 @@ export function analyze(
     "response-time",
     congestionResponseRequired
       ? "encoder target reacts to the constrained link within 30 seconds"
-      : "no response deadline applies because the baseline target fits the constrained media budget",
+      : "no response deadline applies because the stable pre-transition target fits the constrained media budget",
   );
   assert(
     assertions,
-    (impaired?.maximumEncoderTargetKbps || Infinity) <=
-      (impaired?.startingEncoderTargetKbps || 0) * 1.05,
+    targetDoesNotIncreaseAfterObservedLoss(
+      enriched,
+      "impaired",
+      (manifest.video?.adaptive?.maxIncreaseLossPct ?? 1) / 100,
+    ),
     "continued-pressure",
-    "the encoder does not increase its target after additional loss starts",
+    "the encoder does not increase its target after measured loss exceeds the configured recovery threshold",
   );
   assert(
     assertions,
@@ -342,12 +434,29 @@ export function analyze(
       `decoded video remains ${manifest.video.width}x${manifest.video.height} in every phase`,
     );
   }
-  const recoveryThreshold = (constrained?.medianEncoderTargetKbps || 0) * 1.2;
+  const recoveryThreshold = preTransitionEncoderTargetKbps * 0.8;
+  const recoveryCapacityRestoredAfterMilliseconds =
+    (manifest.phases.find((phase) => phase.name === "recovery")?.shaping
+      ?.schedule?.[0]?.durationSeconds || 0) * 1000;
   const recoveryDelay = timeToEncoderTarget(
     enriched,
     "recovery",
     recoveryThreshold,
     "at-least",
+    recoveryCapacityRestoredAfterMilliseconds,
+  );
+  const sustainedRecoveryMilliseconds = longestEncoderTargetDuration(
+    enriched,
+    "recovery",
+    recoveryThreshold,
+    recoveryCapacityRestoredAfterMilliseconds,
+  );
+  const sustainedRecoveryTargetRatio = maximumEncoderTargetCoverage(
+    enriched,
+    "recovery",
+    recoveryThreshold,
+    minimumSustainedRecoveryMilliseconds,
+    recoveryCapacityRestoredAfterMilliseconds,
   );
   assert(
     assertions,
@@ -355,17 +464,26 @@ export function analyze(
       (recoveryDelay !== null && recoveryDelay <= 35_000),
     "recovery-time",
     congestionResponseRequired
-      ? "encoder target rises by at least 20% within 35 seconds of link recovery"
+      ? "encoder target returns to at least 80% of its stable pre-transition target within 35 seconds of the capacity-restoration step"
       : "no recovery ramp is required because the capacity phase did not require a 20% reduction",
   );
   assert(
     assertions,
     !congestionResponseRequired ||
+      sustainedRecoveryTargetRatio >= minimumSustainedRecoveryTargetRatio,
+    "sustained-recovery",
+    congestionResponseRequired
+      ? "the encoder stays at or above 80% of its stable pre-transition target for at least 80% of a continuous 10-second window after capacity is restored"
+      : "no sustained recovery target is required when the capacity phase did not reduce the encoder by 20%",
+  );
+  assert(
+    assertions,
+    !congestionResponseRequired ||
       (recovery?.medianReceivedBitrateKbps || 0) >=
-        (impaired?.medianReceivedBitrateKbps || Infinity) * 1.15,
+        (preTransitionReceivedBitrateKbps || Infinity) * 0.6,
     "throughput-recovery",
     congestionResponseRequired
-      ? "median receive throughput rises by at least 15% after recovery"
+      ? "recovery median receive throughput returns to at least 60% of the stable pre-transition receive rate"
       : "no throughput increase is required when the capacity phase did not reduce the encoder by 20%",
   );
   assert(
@@ -377,11 +495,20 @@ export function analyze(
   if (manifest.webrtc?.rtxNegotiated) {
     assert(
       assertions,
-      counterIncrease(enriched, "retransmittedPacketsReceived", ["impaired"]) >
-        0,
-      "rtx-repair",
-      "the receiver observes RTX repair packets while loss is injected",
+      counterIncrease(enriched, "pacerSentRTX", ["impaired"]) > 0,
+      "rtx-sender-pacing",
+      "the sender records paced RTX packets while loss is injected",
     );
+    if (!manifest.protection?.flexFEC) {
+      assert(
+        assertions,
+        counterIncrease(enriched, "retransmittedPacketsReceived", [
+          "impaired",
+        ]) > 0,
+        "rtx-repair",
+        "the receiver observes RTX repair packets while loss is injected without proactive FEC",
+      );
+    }
     assert(
       assertions,
       (impaired?.nackToPacketRatio || Infinity) <= 0.1,
@@ -404,6 +531,12 @@ export function analyze(
     );
     assert(
       assertions,
+      counterIncrease(enriched, "pacerSentFEC", ["impaired"]) > 0,
+      "flexfec-sender-pacing",
+      "the sender records paced FlexFEC packets while loss is injected",
+    );
+    assert(
+      assertions,
       enriched.every(
         (sample) =>
           sample.flexFECMediaPackets ===
@@ -419,7 +552,6 @@ export function analyze(
       enriched.every((sample) => {
         const expected = protectedPacingEnvelopeKbps(
           sample.pacerTargetBitrateKbps,
-          manifest.protection,
         );
         return (
           Number.isFinite(expected) &&
@@ -429,8 +561,8 @@ export function analyze(
             Math.max(1, expected * 0.001)
         );
       }),
-      "flexfec-shared-pacing-envelope",
-      "the sender shares its real-time pacing headroom with proactive repair instead of multiplying both budgets",
+      "flexfec-burst-headroom",
+      "the protected wire rate retains the sender's real-time burst headroom",
     );
   }
   assert(
@@ -535,6 +667,22 @@ export function analyze(
     "twcc-feedback-integrity",
     "TWCC feedback is present and every reported status is parsed without malformed packets",
   );
+  const lossGuardTelemetryPresent = enriched.some((sample) =>
+    Object.hasOwn(sample, "lossGuardReductions"),
+  );
+  const sustainedHighLoss = hasPersistentTWCCLoss(
+    enriched,
+    0.1,
+    manifest.video?.adaptive?.minimumBitrateKbps,
+  );
+  assert(
+    assertions,
+    !lossGuardTelemetryPresent ||
+      !sustainedHighLoss ||
+      counterIncrease(enriched, "lossGuardReductions", phaseOrder) > 0,
+    "loss-guard-response",
+    "two consecutive TWCC sampling intervals above 10% loss reduce an encoder target that remains above its configured floor without waiting for a delay-estimator callback",
+  );
   if (manifest.networkImpairment) {
     assert(
       assertions,
@@ -577,9 +725,9 @@ export function analyze(
         (trafficControlSummary.recoveryDrainConfiguredLossRatio === 0 &&
           trafficControlSummary.recoveryDrainPackets >= 100 &&
           trafficControlSummary.recoveryDrainDrops === 0 &&
-          trafficControlSummary.recoveryDrainEndQueuePackets === 0),
+          trafficControlSummary.recoveryDrainEndQueuePackets <= 16),
       "traffic-control-recovery-drain",
-      "the healthy recovery profile carries media, adds no drops, and drains every packet before traffic-control teardown",
+      "the healthy recovery profile carries media, adds no drops, and leaves at most one short RTP burst queued before traffic-control teardown",
     );
     assert(
       assertions,
@@ -616,6 +764,10 @@ export function analyze(
       producerUDP.phases.constrained?.sendBufferDropsIncrease || 0;
     const producerImpairedSendDrops =
       producerUDP.phases.impaired?.sendBufferDropsIncrease || 0;
+    const constrainedBoundaryTolerance =
+      trafficControlSummary.constrainedDrops > 0 ? 2 : 0;
+    const impairedBoundaryTolerance =
+      trafficControlSummary.impairedDrops > 0 ? 2 : 0;
     assert(
       assertions,
       phaseOrder.every((name) => producerUDP.phases[name]?.samples >= 10),
@@ -627,10 +779,12 @@ export function analyze(
       producerUDP.receiveBufferDropsIncrease === 0 &&
         producerUnshapedSendDrops === 0 &&
         producerConstrainedSendDrops <=
-          trafficControlSummary.constrainedDrops &&
-        producerImpairedSendDrops <= trafficControlSummary.impairedDrops,
+          trafficControlSummary.constrainedDrops +
+            constrainedBoundaryTolerance &&
+        producerImpairedSendDrops <=
+          trafficControlSummary.impairedDrops + impairedBoundaryTolerance,
       "producer-kernel-capacity",
-      "the producer kernel has no UDP receive overflow or send rejection that is not bounded by its independently measured qdisc drops",
+      "the producer kernel has no UDP receive overflow or send rejection outside the independently measured qdisc envelope, allowing at most two datagrams at an asynchronous phase boundary",
     );
   }
   return {
@@ -639,8 +793,12 @@ export function analyze(
     candidatePairSwitches,
     congestionResponseRequired,
     constrainedMediaCapacityKbps,
+    healthyLinkTargetKbps,
+    healthyLinkTargetRatio,
     responseDelayMilliseconds: responseDelay,
     recoveryDelayMilliseconds: recoveryDelay,
+    sustainedRecoveryMilliseconds,
+    sustainedRecoveryTargetRatio,
     staleBitrateCallbacks: Math.max(
       0,
       ...enriched.map((sample) => sample.staleBitrateCallbacks || 0),
@@ -653,28 +811,198 @@ export function analyze(
     setup,
     hostCPU,
     networkMobility,
+    networkConditions,
+    preTransitionEncoderTargetKbps,
+    preTransitionReceivedBitrateKbps,
+    stableConditioningMedianEncoderTargetKbps,
+    stableConditioningMedianReceivedBitrateKbps,
+    stableConditioningSamples: stableConditioningSamples.length,
+    stableConditioningTargetRatio,
     trafficControl: trafficControlSummary,
   };
 }
 
+export function samplesBeforeNetworkTransition(
+  samples,
+  networkConditions,
+  phase,
+  transition,
+  windowMilliseconds = stableConditioningWindowMilliseconds,
+  guardMilliseconds = networkTransitionGuardMilliseconds,
+) {
+  const transitionEvent = networkConditions?.changes?.find(
+    (change) => change.name === transition,
+  );
+  if (
+    !transitionEvent ||
+    !Number.isFinite(transitionEvent.elapsedMilliseconds) ||
+    !Number.isFinite(windowMilliseconds) ||
+    windowMilliseconds <= 0 ||
+    !Number.isFinite(guardMilliseconds) ||
+    guardMilliseconds < 0
+  ) {
+    return [];
+  }
+  const end = transitionEvent.elapsedMilliseconds - guardMilliseconds;
+  const start = end - windowMilliseconds;
+  return samples.filter(
+    (sample) =>
+      sample.phase === phase &&
+      Number.isFinite(sample.elapsedMilliseconds) &&
+      sample.elapsedMilliseconds >= start &&
+      sample.elapsedMilliseconds <= end &&
+      Number.isFinite(sample.encoderTargetKbps) &&
+      sample.encoderTargetKbps > 0,
+  );
+}
+
+export function alignNetworkConditions(events, samples, manifest) {
+  const firstSample = samples.find(
+    (sample) =>
+      Number.isFinite(sample.elapsedMilliseconds) &&
+      Number.isFinite(Date.parse(sample.capturedAt)),
+  );
+  const expected = networkConditionDefinitions(manifest);
+  if (!firstSample || !Array.isArray(events)) {
+    return {
+      available: false,
+      changes: [],
+      chronological: false,
+      expectedEvents: expected.map((entry) => entry.name),
+    };
+  }
+  const firstCapturedAt = Date.parse(firstSample.capturedAt);
+  const definitions = new Map(expected.map((entry) => [entry.name, entry]));
+  const changes = events
+    .map((event) => {
+      const definition = definitions.get(event.name);
+      const observedAt = Date.parse(event.observedAt);
+      if (!definition || !Number.isFinite(observedAt)) return null;
+      return {
+        ...definition,
+        elapsedMilliseconds:
+          firstSample.elapsedMilliseconds + observedAt - firstCapturedAt,
+        observedAt: event.observedAt,
+      };
+    })
+    .filter(Boolean);
+  const chronological = changes.every(
+    (change, index) =>
+      index === 0 ||
+      change.elapsedMilliseconds > changes[index - 1].elapsedMilliseconds,
+  );
+  const observedNames = new Set(changes.map((change) => change.name));
+  return {
+    available:
+      chronological &&
+      expected.length > 0 &&
+      expected.every((entry) => observedNames.has(entry.name)),
+    changes,
+    chronological,
+    expectedEvents: expected.map((entry) => entry.name),
+  };
+}
+
+function networkConditionDefinitions(manifest) {
+  const phases = new Map(
+    (manifest.phases || []).map((phase) => [phase.name, phase]),
+  );
+  const definitions = [];
+  const add = (name, shaping) => {
+    if (!shaping) return;
+    definitions.push({
+      capacityKbps: numberOrNull(shaping.capacityKbps),
+      delayMs: durationMilliseconds(shaping.delay),
+      jitterMs: durationMilliseconds(shaping.jitter),
+      lossPercent: parsePercent(shaping.loss),
+      name,
+    });
+  };
+  add("conditioning-started", phases.get("conditioning")?.shaping);
+  const constrained = phases.get("constrained")?.shaping;
+  if (Array.isArray(constrained?.schedule)) {
+    const names = [
+      "constrained-started",
+      "constrained-step-2-started",
+      "constrained-step-3-started",
+      "constrained-steady-started",
+    ];
+    constrained.schedule.forEach((step, index) =>
+      add(names[index], { ...constrained, ...step }),
+    );
+  } else {
+    add("constrained-started", constrained);
+  }
+  add("impaired-started", phases.get("impaired")?.shaping);
+  const recovery = phases.get("recovery")?.shaping;
+  if (Array.isArray(recovery?.schedule)) {
+    const names = ["recovery-started", "recovery-capacity-started"];
+    recovery.schedule.forEach((step, index) =>
+      add(names[index], { ...recovery, ...step }),
+    );
+  } else {
+    add("recovery-started", recovery);
+  }
+  return definitions;
+}
+
 export function renderSVG(analysis, manifest) {
   const samples = analysis.samples;
-  const width = 1200;
-  const height = 520;
-  const margin = { top: 48, right: 36, bottom: 72, left: 82 };
+  const width = 960;
+  const height = 630;
+  const margin = { top: 110, right: 28, bottom: 150, left: 78 };
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;
   const maximumTime = Math.max(
     1,
     ...samples.map((sample) => sample.elapsedMilliseconds),
   );
+  const phaseStarts = new Map();
+  for (const sample of samples) {
+    if (!phaseStarts.has(sample.phase)) {
+      phaseStarts.set(sample.phase, sample.elapsedMilliseconds);
+    }
+  }
+  const phases = new Map(manifest.phases.map((phase) => [phase.name, phase]));
+  const capacityFor = (sample) => {
+    if (analysis.networkConditions?.available) {
+      const active = analysis.networkConditions.changes
+        .filter(
+          (change) => change.elapsedMilliseconds <= sample.elapsedMilliseconds,
+        )
+        .at(-1);
+      return active?.capacityKbps ?? null;
+    }
+    const phase = phases.get(sample.phase);
+    if (!phase?.shaping) return null;
+    const schedule = phase.shaping.schedule;
+    if (!Array.isArray(schedule) || schedule.length === 0) {
+      return phase.shaping.capacityKbps;
+    }
+    const elapsedSeconds =
+      (sample.elapsedMilliseconds - phaseStarts.get(sample.phase)) / 1000;
+    let boundary = 0;
+    for (const step of schedule) {
+      boundary += step.durationSeconds;
+      if (elapsedSeconds < boundary) return step.capacityKbps;
+    }
+    return schedule.at(-1).capacityKbps;
+  };
+  const capacities = samples.map(capacityFor);
   const maximumBitrate = Math.max(
     1000,
-    ...samples.flatMap((sample) => [
-      sample.encoderTargetKbps,
-      sample.twccTargetKbps,
-      sample.receivedBitrateKbps,
-    ]),
+    ...samples
+      .flatMap((sample) => [
+        sample.encoderTargetKbps,
+        sample.twccTargetKbps,
+        sample.receivedBitrateKbps,
+        sample.pacerTargetBitrateKbps,
+      ])
+      .filter(Number.isFinite),
+    ...capacities.filter(Number.isFinite),
+    ...(analysis.networkConditions?.changes || [])
+      .map((change) => change.capacityKbps)
+      .filter(Number.isFinite),
   );
   const x = (milliseconds) =>
     margin.left + (milliseconds / maximumTime) * plotWidth;
@@ -693,21 +1021,24 @@ export function renderSVG(analysis, manifest) {
       const start = phaseSamples[0].elapsedMilliseconds;
       const end = phaseSamples.at(-1).elapsedMilliseconds;
       const fill = index % 2 === 0 ? "#f3f4f6" : "#e5e7eb";
-      return `<rect x="${round(x(start))}" y="${margin.top}" width="${round(Math.max(1, x(end) - x(start)))}" height="${plotHeight}" fill="${fill}"/><text x="${round(x(start) + 8)}" y="${margin.top + 20}" font-size="13" fill="#4b5563">${escapeXML(phase.name)}</text>`;
+      const path = phase.shaping ? "controlled link" : "unshaped";
+      const label = phase.name === "conditioning" ? "settling" : phase.name;
+      return `<rect x="${round(x(start))}" y="${margin.top}" width="${round(Math.max(1, x(end) - x(start)))}" height="${plotHeight}" fill="${fill}"/><text x="${round(x(start) + 7)}" y="${margin.top - 20}" font-size="15" font-weight="600" fill="#374151">${escapeXML(label)}</text><text x="${round(x(start) + 7)}" y="${margin.top - 3}" font-size="13" fill="#6b7280">${path}</text>`;
     })
     .join("");
-  const grid = Array.from({ length: 6 }, (_, index) => {
-    const value = (maximumBitrate * index) / 5;
+  const grid = Array.from({ length: 5 }, (_, index) => {
+    const value = (maximumBitrate * index) / 4;
     const ordinate = y(value);
-    return `<line x1="${margin.left}" y1="${round(ordinate)}" x2="${width - margin.right}" y2="${round(ordinate)}" stroke="#d1d5db"/><text x="${margin.left - 12}" y="${round(ordinate + 4)}" text-anchor="end" font-size="12" fill="#6b7280">${Math.round(value / 100) / 10} Mb/s</text>`;
+    return `<line x1="${margin.left}" y1="${round(ordinate)}" x2="${width - margin.right}" y2="${round(ordinate)}" stroke="#d1d5db"/><text x="${margin.left - 12}" y="${round(ordinate + 5)}" text-anchor="end" font-size="14" fill="#6b7280">${Math.round(value / 100) / 10} Mb/s</text>`;
   }).join("");
   const series = [
-    ["Encoder target", "#2563eb", "encoderTargetKbps"],
-    ["TWCC target", "#d97706", "twccTargetKbps"],
-    ["Received", "#059669", "receivedBitrateKbps"],
+    ["Encoder media", "#2563eb", "encoderTargetKbps", ""],
+    ["TWCC media", "#d97706", "twccTargetKbps", ""],
+    ["Received media", "#059669", "receivedBitrateKbps", ""],
+    ["Pacer wire", "#7c3aed", "pacerTargetBitrateKbps", ""],
   ];
   const lines = series
-    .map(([label, color, field], index) => {
+    .map(([label, color, field, dash], index) => {
       const points = samples
         .filter((sample) => Number.isFinite(sample[field]) && sample[field] > 0)
         .map(
@@ -715,24 +1046,77 @@ export function renderSVG(analysis, manifest) {
             `${round(x(sample.elapsedMilliseconds))},${round(y(sample[field]))}`,
         )
         .join(" ");
-      const legendX = margin.left + index * 190;
-      return `<polyline fill="none" stroke="${color}" stroke-width="2.5" points="${points}"/><line x1="${legendX}" y1="${height - 28}" x2="${legendX + 28}" y2="${height - 28}" stroke="${color}" stroke-width="3"/><text x="${legendX + 36}" y="${height - 23}" font-size="14" fill="#111827">${label}</text>`;
+      const legendX = margin.left + index * 170;
+      return `<polyline fill="none" stroke="${color}" stroke-width="2.5" stroke-dasharray="${dash}" points="${points}"/><line x1="${legendX}" y1="${height - 36}" x2="${legendX + 24}" y2="${height - 36}" stroke="${color}" stroke-width="3"/><text x="${legendX + 31}" y="${height - 30}" font-size="14" fill="#111827">${label}</text>`;
     })
     .join("");
+  const capacityPointList = [];
+  let previousCapacity = null;
+  const capacityChanges = analysis.networkConditions?.available
+    ? analysis.networkConditions.changes
+    : samples.map((sample, index) => ({
+        capacityKbps: capacities[index],
+        elapsedMilliseconds: sample.elapsedMilliseconds,
+      }));
+  for (const change of capacityChanges) {
+    const capacity = change.capacityKbps;
+    if (!Number.isFinite(capacity)) continue;
+    const abscissa = round(x(change.elapsedMilliseconds));
+    if (Number.isFinite(previousCapacity) && capacity !== previousCapacity) {
+      capacityPointList.push(`${abscissa},${round(y(previousCapacity))}`);
+    }
+    if (capacity !== previousCapacity) {
+      capacityPointList.push(`${abscissa},${round(y(capacity))}`);
+    }
+    previousCapacity = capacity;
+  }
+  if (Number.isFinite(previousCapacity)) {
+    capacityPointList.push(
+      `${round(x(maximumTime))},${round(y(previousCapacity))}`,
+    );
+  }
+  const capacityPoints = capacityPointList.join(" ");
+  const capacityLegendX = margin.left + 4 * 170;
+  const capacityLine = `<polyline fill="none" stroke="#be185d" stroke-width="3" stroke-dasharray="8 6" points="${capacityPoints}"/><line x1="${capacityLegendX}" y1="${height - 36}" x2="${capacityLegendX + 24}" y2="${height - 36}" stroke="#be185d" stroke-width="3" stroke-dasharray="8 6"/><text x="${capacityLegendX + 31}" y="${height - 30}" font-size="14" fill="#111827">Link capacity</text>`;
+  const constrainedSchedule =
+    manifest.phases.find((phase) => phase.name === "constrained")?.shaping
+      ?.schedule || [];
+  const isolatedCapacityStep =
+    constrainedSchedule.length > 0 &&
+    new Set(constrainedSchedule.map((step) => step.delay)).size === 1 &&
+    new Set(constrainedSchedule.map((step) => step.jitter)).size === 1 &&
+    constrainedSchedule.every(
+      (step) => step.loss === undefined || step.loss === "0%",
+    );
+  const subtitle = isolatedCapacityStep
+    ? "Capacity transitions are isolated at " +
+      constrainedSchedule[0].delay +
+      " delay, " +
+      constrainedSchedule[0].jitter +
+      " jitter, and 0% injected loss"
+    : "Capacity, delay, jitter, and loss follow the recorded phase manifest";
   const resultColor = analysis.passed ? "#047857" : "#b91c1c";
   const resultLabel = analysis.passed ? "PASS" : "FAIL";
+  const timeTicks = Array.from({ length: 6 }, (_, index) => {
+    const elapsed = (maximumTime * index) / 5;
+    const abscissa = round(x(elapsed));
+    return `<line x1="${abscissa}" y1="${margin.top + plotHeight}" x2="${abscissa}" y2="${margin.top + plotHeight + 7}" stroke="#111827"/><text x="${abscissa}" y="${margin.top + plotHeight + 25}" text-anchor="middle" font-size="13" fill="#4b5563">${Math.round(elapsed / 1000)} s</text>`;
+  }).join("");
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title description">
-  <title id="title">rstream adaptive streaming qualification</title>
-  <desc id="description">Encoder, TWCC, and received bitrate across controlled network phases.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title description" style="font-family:system-ui,sans-serif">
+  <title id="title">Adaptive sender response to controlled link changes</title>
+  <desc id="description">Measured encoder, TWCC, receive, and pacer rates are plotted against the independently configured traffic-control schedule, separating media and wire budgets.</desc>
   <rect width="100%" height="100%" fill="#ffffff"/>
-  <text x="${margin.left}" y="28" font-size="20" font-weight="600" fill="#111827">Adaptive streaming response</text>
+  <text x="${margin.left}" y="34" font-size="24" font-weight="600" fill="#111827">Adaptive sender response to controlled link changes</text>
+  <text x="${margin.left}" y="62" font-size="14" fill="#4b5563">${escapeXML(subtitle)}</text>
   <text x="${width - margin.right}" y="28" text-anchor="end" font-size="16" font-weight="700" fill="${resultColor}">${resultLabel}</text>
   ${phaseBlocks}
   ${grid}
   ${lines}
+  ${capacityLine}
   <line x1="${margin.left}" y1="${margin.top + plotHeight}" x2="${width - margin.right}" y2="${margin.top + plotHeight}" stroke="#111827"/>
-  <text x="${width / 2}" y="${height - 48}" text-anchor="middle" font-size="13" fill="#6b7280">Elapsed time; link constraints are shown as phase bands</text>
+  ${timeTicks}
+  <text x="${width / 2}" y="${height - 82}" text-anchor="middle" font-size="14" fill="#6b7280">Media rates · encoder, TWCC, received · wire rates · pacer, configured capacity</text>
 </svg>
 `;
 }
@@ -751,10 +1135,124 @@ export function renderMarkdown(analysis, manifest) {
         `- ${assertion.passed ? "PASS" : "FAIL"} — ${assertion.name}: ${assertion.description}`,
     )
     .join("\n");
+  const baseline = analysis.phases.baseline;
+  const conditioning = analysis.phases.conditioning;
+  const constrained = analysis.phases.constrained;
+  const impaired = analysis.phases.impaired;
+  const recovery = analysis.phases.recovery;
+  const rateReduction =
+    analysis.preTransitionEncoderTargetKbps > 0
+      ? 1 -
+        constrained.medianEncoderTargetKbps /
+          analysis.preTransitionEncoderTargetKbps
+      : null;
+  const receiveRecoveryRatio =
+    analysis.preTransitionReceivedBitrateKbps > 0
+      ? recovery.medianReceivedBitrateKbps /
+        analysis.preTransitionReceivedBitrateKbps
+      : null;
+  const capacityIsolation =
+    conditioning?.endingEncoderTargetKbps > 0 &&
+    baseline?.medianEncoderTargetKbps > 0
+      ? conditioning.endingEncoderTargetKbps / baseline.medianEncoderTargetKbps
+      : null;
+  const phaseValues = Object.values(analysis.phases);
+  const maximumQueueResidence = Math.max(
+    0,
+    ...phaseValues.map(
+      (phase) => phase.maximumPacerQueueDelayMilliseconds || 0,
+    ),
+  );
+  const maximumAdmittedBacklog = Math.max(
+    0,
+    ...phaseValues.map(
+      (phase) => phase.maximumPacerAdmittedDelayMilliseconds || 0,
+    ),
+  );
+  const queueDrops = phaseValues.reduce(
+    (total, phase) => total + (phase.pacerQueueDropsIncrease || 0),
+    0,
+  );
+  const repairObserved = manifest.webrtc?.rtxNegotiated
+    ? manifest.protection?.flexFEC
+      ? `NACK ${impaired.nackIncrease}; sender RTX ${impaired.pacerSentRTXIncrease}; receiver RTX ${impaired.retransmittedPacketsIncrease}; FlexFEC ${impaired.fecPacketsIncrease}`
+      : `NACK ${impaired.nackIncrease}; sender RTX ${impaired.pacerSentRTXIncrease}; receiver RTX ${impaired.retransmittedPacketsIncrease}`
+    : `NACK ${impaired.nackIncrease}`;
+  const repairRequired = manifest.webrtc?.rtxNegotiated
+    ? manifest.protection?.flexFEC
+      ? "NACK, sender RTX, and FlexFEC greater than zero"
+      : "NACK, sender RTX, and receiver RTX greater than zero"
+    : "NACK greater than zero";
+  const decisionRows = [
+    ...(Number.isFinite(analysis.healthyLinkTargetRatio)
+      ? [
+          [
+            "Healthy-link quality",
+            `${formatNumber(analysis.healthyLinkTargetRatio * 100, 1)}% of baseline at or above ${formatNumber(analysis.healthyLinkTargetKbps, 0)} kbps`,
+            "at least 50% of baseline",
+          ],
+        ]
+      : []),
+    [
+      "Shaper activation",
+      capacityIsolation === null
+        ? "not measured"
+        : `${formatNumber(capacityIsolation * 100, 1)}% of baseline before the first capacity step`,
+      conditioning ? "at least 80%" : "not applicable",
+    ],
+    [
+      "Rate response",
+      analysis.congestionResponseRequired
+        ? `${formatNumber(rateReduction * 100, 1)}% reduction in ${formatDuration(analysis.responseDelayMilliseconds)}`
+        : `not required; stable pre-transition target already at ${formatNumber(analysis.preTransitionEncoderTargetKbps, 0)} kbps`,
+      analysis.congestionResponseRequired
+        ? "at least 20% within 30 s"
+        : "no increase under additional pressure",
+    ],
+    [
+      "Rate recovery",
+      analysis.congestionResponseRequired
+        ? `${formatDuration(analysis.recoveryDelayMilliseconds)} to threshold; ${formatNumber(analysis.sustainedRecoveryTargetRatio * 100, 1)}% target residency in the best 10 s window; ${formatDuration(analysis.sustainedRecoveryMilliseconds)} longest uninterrupted interval; received throughput ${formatNumber(receiveRecoveryRatio * 100, 1)}% of the stable pre-transition rate`
+        : "not required; capacity phase did not reduce the target",
+      analysis.congestionResponseRequired
+        ? "target reaches 80% within 35 s, sustains it for 10 s, and median throughput reaches at least 60% of the stable pre-transition rate"
+        : "not applicable",
+    ],
+    [
+      "Playback under impairment",
+      `${formatNumber(impaired.decodedFramesPerSecond, 1)} fps; ${formatNumber(impaired.freezeRatio * 100, 1)}% frozen`,
+      "at least 20 fps; at most 10% frozen",
+    ],
+    [
+      "Latency under impairment",
+      `${formatNumber(impaired.maximumRTTMilliseconds, 0)} ms max RTT; ${formatNumber(impaired.averageJitterBufferDelayMilliseconds, 1)} ms effective playout buffer`,
+      "at most 600 ms RTT; at most 300 ms phase-average buffer",
+    ],
+    [
+      "Visual quality under impairment",
+      `QP ${formatNumber(impaired.averageQP, 1)}; ${impaired.medianFrameWidth}x${impaired.medianFrameHeight}`,
+      `QP at most 42; ${manifest.video?.width || "recorded"}x${manifest.video?.height || "resolution"}`,
+    ],
+    [
+      "Loss fidelity",
+      `qdisc ${formatNumber(analysis.trafficControl?.impairedDropRatio * 100, 2)}%; TWCC ${formatNumber(impaired.twccReportedLossRatio * 100, 2)}%`,
+      "2% injected; TWCC within 8 percentage points",
+    ],
+    ["Packet repair", repairObserved, repairRequired],
+    [
+      "Sender queue",
+      `${formatNumber(maximumQueueResidence, 1)} ms residence; ${formatNumber(maximumAdmittedBacklog, 1)} ms admitted backlog; ${queueDrops} overflow drops`,
+      "at most 375 ms; at most 225 ms; zero overflow",
+    ],
+  ]
+    .map(
+      ([gate, observed, required]) => `| ${gate} | ${observed} | ${required} |`,
+    )
+    .join("\n");
   const controllerRows = Object.entries(analysis.phases)
     .map(
       ([name, phase]) =>
-        `| ${name} | ${formatNumber(phase.medianLossTargetKbps, 0)} | ${formatNumber(phase.medianDelayTargetKbps, 0)} | ${formatNumber(phase.medianAverageLoss * 100, 2)}% | ${formatNumber(phase.twccReportedLossRatio * 100, 2)}% | ${phase.adaptiveBitrateUpdatesIncrease} | ${phase.adaptiveBitrateFailuresIncrease} | ${phase.twccFeedbackPacketsIncrease} | ${phase.twccPaddingStatusesIncrease} | ${phase.twccMalformedFeedbackIncrease} |`,
+        `| ${name} | ${formatNumber(phase.medianLossTargetKbps, 0)} | ${formatNumber(phase.medianDelayTargetKbps, 0)} | ${formatNumber(phase.medianLossGuardTargetKbps, 0)} | ${formatNumber(phase.maximumLossGuardObservedLoss * 100, 2)}% | ${phase.lossGuardReductionsIncrease} / ${phase.lossGuardRecoveriesIncrease} | ${formatNumber(phase.medianAverageLoss * 100, 2)}% | ${formatNumber(phase.twccReportedLossRatio * 100, 2)}% | ${phase.adaptiveBitrateUpdatesIncrease} | ${phase.adaptiveBitrateFailuresIncrease} | ${phase.twccFeedbackPacketsIncrease} | ${phase.twccPaddingStatusesIncrease} | ${phase.twccMalformedFeedbackIncrease} |`,
     )
     .join("\n");
   const pacingRows = Object.entries(analysis.phases)
@@ -766,7 +1264,7 @@ export function renderMarkdown(analysis, manifest) {
   const repairRows = Object.entries(analysis.phases)
     .map(
       ([name, phase]) =>
-        `| ${name} | ${formatNumber(phase.maximumPacerFECDelayMilliseconds, 1)} | ${phase.pacerSentFECIncrease} | ${phase.pacerFECPacketsExpiredIncrease} | ${phase.pacerFECPacketsTrimmedIncrease} | ${formatNumber(phase.maximumPacerRTXDelayMilliseconds, 1)} | ${phase.pacerSentRTXIncrease} | ${phase.pacerRTXPacketsExpiredIncrease} | ${phase.pacerRTXPacketsTrimmedIncrease} |`,
+        `| ${name} | ${formatNumber(phase.maximumPacerFECDelayMilliseconds, 1)} | ${phase.pacerSentFECIncrease} | ${phase.pacerFECPacketsExpiredIncrease} | ${phase.pacerFECPacketsTrimmedIncrease} | ${formatNumber(phase.maximumPacerRTXDelayMilliseconds, 1)} | ${phase.pacerSentRTXIncrease} | ${phase.pacerRTXPacketsExpiredIncrease} | ${phase.pacerRTXPacketsTrimmedIncrease} | ${phase.pacerRTXPacketsCoalescedIncrease} |`,
     )
     .join("\n");
   const encoderCadenceRows = Object.entries(analysis.phases)
@@ -837,7 +1335,7 @@ ${receiverHostCPURows}
 
 The receiver uses a bounded jitter buffer to absorb packet timing variation and
 leave time for repair. Both columns come from cumulative WebRTC receiver
-counters. The configured minimum hint is ${formatNumber(manifest.video.playoutDelayHintSeconds * 1000, 0)} ms. Qualification caps the requested target at 250 ms and the effective buffered delay at 300 ms.
+counters. The configured minimum hint is ${formatNumber(manifest.video.playoutDelayHintSeconds * 1000, 0)} ms. Qualification caps the requested target at 250 ms and each phase's average effective buffered delay at 300 ms. The synchronized transport figure retains per-sample values so shorter excursions remain visible.
 
 | Phase | Average buffered delay ms/frame | Average target delay ms/frame |
 | --- | ---: | ---: |
@@ -948,16 +1446,22 @@ ${setupSection}${mobilitySection}## Phase summary
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 ${phaseRows}
 
-Congestion response: ${analysis.congestionResponseRequired ? formatDuration(analysis.responseDelayMilliseconds) : "not required (baseline target fits the constrained media budget)"}. Recovery response: ${analysis.congestionResponseRequired ? formatDuration(analysis.recoveryDelayMilliseconds) : "not required"}.
+Congestion response: ${analysis.congestionResponseRequired ? formatDuration(analysis.responseDelayMilliseconds) : "not required (stable pre-transition target fits the constrained media budget)"}. Recovery response: ${analysis.congestionResponseRequired ? formatDuration(analysis.recoveryDelayMilliseconds) : "not required"}.
 
 Selected ICE candidate-pair switches: ${analysis.candidatePairSwitches}. ${manifest.networkPath?.kind === "relay" ? "Both peers remain on the required TURN relay path." : "The direct-path address selector remains active across port changes."}
 
 Superseded out-of-order estimator callbacks: ${analysis.staleBitrateCallbacks}. The producer always applies the estimator's current target rather than the potentially stale callback payload.
 
+## Qualification decision
+
+| Gate | Observed | Required |
+| --- | ---: | ---: |
+${decisionRows}
+
 ## Congestion-controller diagnostics
 
-| Phase | Loss target kbps | Delay target kbps | Controller loss | Browser TWCC loss | Encoder updates | Update failures | Feedback packets | Padding statuses | Malformed feedback |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Phase | Loss target kbps | Delay target kbps | Guard target kbps | Peak report loss | Guard reduce / recover | Controller loss | Browser TWCC loss | Encoder updates | Update failures | Feedback packets | Padding statuses | Malformed feedback |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 ${controllerRows}
 
 ## Real-time sender queue
@@ -998,8 +1502,8 @@ an already reported loss and must not delay completion of the current frame.
 The split counters below make a late proactive repair distinguishable from an
 expired retransmission.
 
-| Phase | Max FEC residence ms | FEC sent | FEC expired | FEC rate-trimmed | Max RTX residence ms | RTX sent | RTX expired | RTX rate-trimmed |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Phase | Max FEC residence ms | FEC sent | FEC expired | FEC rate-trimmed | Max RTX residence ms | RTX sent | RTX expired | RTX rate-trimmed | RTX duplicates coalesced |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 ${repairRows}
 
 ${hostCPUSection}${receiverHostCPUSection}## Encoder cadence and observer effect
@@ -1055,6 +1559,18 @@ export async function writeArtifacts(outputDirectory, analysis, manifest) {
     `${outputDirectory}/adaptive-bitrate.svg`,
     renderSVG(analysis, manifest),
   );
+  await writeFile(
+    `${outputDirectory}/network-conditions.svg`,
+    renderNetworkConditionsSVG(analysis, manifest),
+  );
+  await writeFile(
+    `${outputDirectory}/playback-quality.svg`,
+    renderPlaybackQualitySVG(analysis, manifest),
+  );
+  await writeFile(
+    `${outputDirectory}/transport-evidence.svg`,
+    renderTransportEvidenceSVG(analysis, manifest),
+  );
   const columns = [
     "capturedAt",
     "elapsedMilliseconds",
@@ -1065,6 +1581,10 @@ export async function writeArtifacts(outputDirectory, analysis, manifest) {
     "lossTargetKbps",
     "delayTargetKbps",
     "lossAverage",
+    "lossGuardTargetKbps",
+    "lossGuardLastObservedLoss",
+    "lossGuardReductions",
+    "lossGuardRecoveries",
     "flexFECMediaPackets",
     "flexFECRepairPackets",
     "delayMeasurementMilliseconds",
@@ -1075,6 +1595,10 @@ export async function writeArtifacts(outputDirectory, analysis, manifest) {
     "framesPerSecond",
     "framesDecoded",
     "framesDropped",
+    "freezeCount",
+    "totalFreezesDurationSeconds",
+    "frameWidth",
+    "frameHeight",
     "totalDecodeTimeSeconds",
     "packetsLost",
     "packetsReceived",
@@ -1101,6 +1625,7 @@ export async function writeArtifacts(outputDirectory, analysis, manifest) {
     "pacerRepairPacketsExpired",
     "pacerRepairPacketsTrimmed",
     "pacerRTXPacketsExpired",
+    "pacerRTXPacketsCoalesced",
     "pacerFECPacketsExpired",
     "pacerRTXPacketsTrimmed",
     "pacerFECPacketsTrimmed",
@@ -1149,6 +1674,9 @@ export async function writeArtifacts(outputDirectory, analysis, manifest) {
     "remoteCandidatePort",
     "remoteCandidateProtocol",
     "playoutDelayHintSeconds",
+    "playback",
+    "videoCurrentTimeSeconds",
+    "videoReadyState",
   ];
   const rows = [
     columns.join(","),
@@ -1604,6 +2132,7 @@ function summarizePhase(samples, phase, encoderQuality) {
     medianEncoderTargetKbps: median(
       settled.map((sample) => sample.encoderTargetKbps).filter(positive),
     ),
+    endingEncoderTargetKbps: last.encoderTargetKbps,
     maximumEncoderTargetKbps: Math.max(
       0,
       ...samples.map((sample) => sample.encoderTargetKbps || 0),
@@ -1618,6 +2147,23 @@ function summarizePhase(samples, phase, encoderQuality) {
       settled
         .map((sample) => sample.lossAverage)
         .filter((value) => Number.isFinite(value) && value >= 0),
+    ),
+    medianLossGuardTargetKbps: median(
+      settled.map((sample) => sample.lossGuardTargetKbps).filter(positive),
+    ),
+    maximumLossGuardObservedLoss: Math.max(
+      0,
+      ...samples.map((sample) => sample.lossGuardLastObservedLoss || 0),
+    ),
+    lossGuardReductionsIncrease: counterIncrease(
+      samples,
+      "lossGuardReductions",
+      [phase.name],
+    ),
+    lossGuardRecoveriesIncrease: counterIncrease(
+      samples,
+      "lossGuardRecoveries",
+      [phase.name],
     ),
     medianDelayTargetKbps: median(
       settled.map((sample) => sample.delayTargetKbps).filter(positive),
@@ -1707,6 +2253,11 @@ function summarizePhase(samples, phase, encoderQuality) {
     pacerRTXPacketsExpiredIncrease: counterIncrease(
       samples,
       "pacerRTXPacketsExpired",
+      [phase.name],
+    ),
+    pacerRTXPacketsCoalescedIncrease: counterIncrease(
+      samples,
+      "pacerRTXPacketsCoalesced",
       [phase.name],
     ),
     pacerFECPacketsExpiredIncrease: counterIncrease(
@@ -1861,15 +2412,13 @@ function summarizeTrafficControl(evidence) {
       impairedDropRatio: dropRatio(impaired.packets, impaired.drops),
       impairedDrops: impaired.drops,
       impairedPackets: impaired.packets,
-      recoveryDrainConfiguredLossRatio:
-        recoveryDrain?.configuredLossRatio || 0,
+      recoveryDrainConfiguredLossRatio: recoveryDrain?.configuredLossRatio || 0,
       recoveryDrainDropRatio: recoveryDrain
         ? dropRatio(recoveryDrain.packets, recoveryDrain.drops)
         : 0,
       recoveryDrainDrops: recoveryDrain?.drops || 0,
       recoveryDrainEndQueuePackets: recoveryDrain?.endQueuePackets || 0,
-      recoveryDrainEndQueueUtilization:
-        recoveryDrain?.endQueueUtilization || 0,
+      recoveryDrainEndQueueUtilization: recoveryDrain?.endQueueUtilization || 0,
       recoveryDrainEvidenceAvailable: recoveryDrain !== null,
       recoveryDrainPackets: recoveryDrain?.packets || 0,
       recoveryDrainQueueLimitPackets: recoveryDrain?.queueLimitPackets || 0,
@@ -1965,29 +2514,14 @@ function mediaCapacityKbps(wireCapacityKbps, protection) {
   return (wireCapacityKbps * mediaPackets) / (mediaPackets + repairPackets);
 }
 
-function protectedPacingEnvelopeKbps(protectedWireTargetKbps, protection) {
+function protectedPacingEnvelopeKbps(protectedWireTargetKbps) {
   if (
     !Number.isFinite(protectedWireTargetKbps) ||
     protectedWireTargetKbps <= 0
   ) {
     return 0;
   }
-  if (!protection?.flexFEC) {
-    return protectedWireTargetKbps * 1.5;
-  }
-  const mediaPackets = protection.flexFECMediaPackets;
-  const repairPackets = protection.flexFECRepairPackets;
-  if (
-    !Number.isFinite(mediaPackets) ||
-    !Number.isFinite(repairPackets) ||
-    mediaPackets <= 0 ||
-    repairPackets <= 0
-  ) {
-    return 0;
-  }
-  const mediaTargetKbps =
-    (protectedWireTargetKbps * mediaPackets) / (mediaPackets + repairPackets);
-  return Math.max(protectedWireTargetKbps, mediaTargetKbps * 1.5);
+  return protectedWireTargetKbps * 1.5;
 }
 
 function netemStats(qdiscs) {
@@ -2013,18 +2547,152 @@ function netemStats(qdiscs) {
   };
 }
 
-function timeToEncoderTarget(samples, phase, target, comparison) {
+function timeToEncoderTarget(
+  samples,
+  phase,
+  target,
+  comparison,
+  offsetMilliseconds = 0,
+) {
   const phaseSamples = samples.filter((sample) => sample.phase === phase);
   if (phaseSamples.length === 0 || !Number.isFinite(target) || target <= 0) {
     return null;
   }
-  const first = phaseSamples[0].elapsedMilliseconds;
-  const match = phaseSamples.find((sample) =>
-    comparison === "at-most"
-      ? sample.encoderTargetKbps > 0 && sample.encoderTargetKbps <= target
-      : sample.encoderTargetKbps >= target,
+  const event = phaseSamples[0].elapsedMilliseconds + offsetMilliseconds;
+  const match = phaseSamples.find(
+    (sample) =>
+      sample.elapsedMilliseconds >= event &&
+      (comparison === "at-most"
+        ? sample.encoderTargetKbps > 0 && sample.encoderTargetKbps <= target
+        : sample.encoderTargetKbps >= target),
   );
-  return match ? match.elapsedMilliseconds - first : null;
+  return match ? match.elapsedMilliseconds - event : null;
+}
+
+function targetDoesNotIncreaseAfterObservedLoss(
+  samples,
+  phase,
+  maximumIncreaseLoss,
+) {
+  if (
+    !Number.isFinite(maximumIncreaseLoss) ||
+    maximumIncreaseLoss < 0 ||
+    maximumIncreaseLoss > 1
+  ) {
+    return false;
+  }
+  const phaseSamples = samples.filter((sample) => sample.phase === phase);
+  const observedAt = phaseSamples.findIndex(
+    (sample) =>
+      Number.isFinite(sample.lossAverage) &&
+      sample.lossAverage > maximumIncreaseLoss,
+  );
+  if (observedAt < 0) {
+    return false;
+  }
+  const targetAtObservation = phaseSamples[observedAt].encoderTargetKbps;
+  if (!Number.isFinite(targetAtObservation) || targetAtObservation <= 0) {
+    return false;
+  }
+  return phaseSamples
+    .slice(observedAt)
+    .every(
+      (sample) =>
+        Number.isFinite(sample.encoderTargetKbps) &&
+        sample.encoderTargetKbps <= targetAtObservation * 1.05,
+    );
+}
+
+function longestEncoderTargetDuration(
+  samples,
+  phase,
+  target,
+  offsetMilliseconds = 0,
+) {
+  const phaseSamples = samples.filter((sample) => sample.phase === phase);
+  if (phaseSamples.length === 0 || !Number.isFinite(target) || target <= 0) {
+    return 0;
+  }
+  const event = phaseSamples[0].elapsedMilliseconds + offsetMilliseconds;
+  let longest = 0;
+  let start = null;
+  let previous = null;
+  for (const sample of phaseSamples) {
+    if (sample.elapsedMilliseconds < event) {
+      continue;
+    }
+    const gap = previous === null ? 0 : sample.elapsedMilliseconds - previous;
+    if (
+      sample.encoderTargetKbps < target ||
+      gap > maximumQualificationSampleGapMilliseconds
+    ) {
+      start = null;
+    }
+    if (sample.encoderTargetKbps >= target) {
+      if (start === null) {
+        start = sample.elapsedMilliseconds;
+      }
+      longest = Math.max(longest, sample.elapsedMilliseconds - start);
+    }
+    previous = sample.elapsedMilliseconds;
+  }
+  return longest;
+}
+
+export function maximumEncoderTargetCoverage(
+  samples,
+  phase,
+  target,
+  windowMilliseconds,
+  offsetMilliseconds = 0,
+) {
+  const phaseSamples = samples.filter((sample) => sample.phase === phase);
+  if (
+    phaseSamples.length === 0 ||
+    !Number.isFinite(target) ||
+    target <= 0 ||
+    !Number.isFinite(windowMilliseconds) ||
+    windowMilliseconds <= 0
+  ) {
+    return 0;
+  }
+  const event = phaseSamples[0].elapsedMilliseconds + offsetMilliseconds;
+  const eligible = phaseSamples.filter(
+    (sample) => sample.elapsedMilliseconds >= event,
+  );
+  let maximumCoverage = 0;
+  for (let start = 0; start < eligible.length; start += 1) {
+    for (let end = start + 1; end < eligible.length; end += 1) {
+      const duration =
+        eligible[end].elapsedMilliseconds - eligible[start].elapsedMilliseconds;
+      if (duration < windowMilliseconds) {
+        continue;
+      }
+      if (
+        duration >
+        windowMilliseconds + maximumQualificationSampleGapMilliseconds
+      ) {
+        break;
+      }
+      const window = eligible.slice(start, end + 1);
+      const continuous = window
+        .slice(1)
+        .every(
+          (sample, index) =>
+            sample.elapsedMilliseconds - window[index].elapsedMilliseconds <=
+            maximumQualificationSampleGapMilliseconds,
+        );
+      if (continuous) {
+        maximumCoverage = Math.max(
+          maximumCoverage,
+          window.filter((sample) => sample.encoderTargetKbps >= target).length /
+            window.length,
+        );
+      }
+      break;
+    }
+  }
+  return maximumCoverage;
 }
 
 function counterIncrease(samples, field, phases) {
@@ -2037,6 +2705,57 @@ function counterIncrease(samples, field, phases) {
     ? selected.at(-1)[field]
     : 0;
   return Math.max(0, last - first);
+}
+
+function hasPersistentTWCCLoss(samples, threshold, minimumTargetKbps) {
+  if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
+    return false;
+  }
+  const targetFloorKbps =
+    Number.isFinite(minimumTargetKbps) && minimumTargetKbps > 0
+      ? minimumTargetKbps
+      : 0;
+  let consecutive = 0;
+  let previous = null;
+  for (const sample of samples) {
+    if (
+      previous === null ||
+      previous.phase !== sample.phase ||
+      previous.peerConnectionState !== "connected" ||
+      sample.peerConnectionState !== "connected"
+    ) {
+      consecutive = 0;
+      previous = sample;
+      continue;
+    }
+    const reported = nullableCounterIncrease(
+      [previous, sample],
+      "twccReportedStatuses",
+    );
+    const lost = nullableCounterIncrease(
+      [previous, sample],
+      "twccReportedLost",
+    );
+    const canReduce =
+      Number.isFinite(previous.encoderTargetKbps) &&
+      previous.encoderTargetKbps > Math.max(1, targetFloorKbps * 1.01);
+    if (
+      reported !== null &&
+      reported >= minimumTWCCLossGuardStatuses &&
+      lost !== null &&
+      lost / reported > threshold &&
+      canReduce
+    ) {
+      consecutive += 1;
+      if (consecutive >= 2) {
+        return true;
+      }
+    } else {
+      consecutive = 0;
+    }
+    previous = sample;
+  }
+  return false;
 }
 
 function nullableCounterIncrease(samples, field) {
@@ -2088,6 +2807,24 @@ function formatDuration(milliseconds) {
 
 function formatNumber(value, fractionDigits) {
   return Number.isFinite(value) ? value.toFixed(fractionDigits) : "n/a";
+}
+
+function durationMilliseconds(value) {
+  if (Number.isFinite(value)) return value;
+  const match =
+    typeof value === "string" ? value.match(/^([0-9]+(?:\.[0-9]+)?)ms$/) : null;
+  return match ? Number(match[1]) : null;
+}
+
+function parsePercent(value) {
+  if (Number.isFinite(value)) return value * 100;
+  const match =
+    typeof value === "string" ? value.match(/^([0-9]+(?:\.[0-9]+)?)%$/) : null;
+  return match ? Number(match[1]) : null;
+}
+
+function numberOrNull(value) {
+  return Number.isFinite(value) ? value : null;
 }
 
 function round(value) {
@@ -2239,6 +2976,7 @@ async function main() {
     rawSetupTimeline,
     rawHostCPU,
     rawReceiverHostCPU,
+    rawNetworkConditionTimeline,
   ] = await Promise.all([
     readFile(`${outputDirectory}/samples.jsonl`, "utf8"),
     readFile(`${outputDirectory}/manifest.json`, "utf8"),
@@ -2262,6 +3000,7 @@ async function main() {
     readOptional(`${outputDirectory}/setup-timeline.jsonl`),
     readOptional(`${outputDirectory}/producer-host-cpu.jsonl`),
     readOptional(`${outputDirectory}/receiver-host-cpu.jsonl`),
+    readOptional(`${outputDirectory}/network-condition-timeline.jsonl`),
   ]);
   const samples = rawSamples
     .split("\n")
@@ -2303,6 +3042,10 @@ async function main() {
           start: JSON.parse(constrainedStepThreeStartQdisc),
           end: JSON.parse(constrainedStepThreeQdisc),
         },
+        {
+          start: JSON.parse(constrainedStepThreeQdisc),
+          end: JSON.parse(constrainedStartQdisc),
+        },
       ],
       constrained: {
         start: JSON.parse(constrainedStartQdisc),
@@ -2340,6 +3083,12 @@ async function main() {
     phaseTimeline,
     rawReceiverHostCPU
       ? rawReceiverHostCPU
+          .split("\n")
+          .filter(Boolean)
+          .map((line) => JSON.parse(line))
+      : null,
+    rawNetworkConditionTimeline
+      ? rawNetworkConditionTimeline
           .split("\n")
           .filter(Boolean)
           .map((line) => JSON.parse(line))

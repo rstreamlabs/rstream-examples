@@ -120,18 +120,49 @@ test("runs impairment timing inside the producer namespace", async () => {
     fileURLToPath(new URL("../run.sh", import.meta.url)),
     "utf8",
   );
+  const trafficControlScript = await readFile(
+    fileURLToPath(new URL("../traffic-control.sh", import.meta.url)),
+    "utf8",
+  );
+  assert.match(runScript, /RSTREAM_QUALIFICATION_CONDITIONING_SECONDS:-30/);
   assert.match(runScript, /start_traffic_control/);
   assert.match(
     runScript,
-    /wait_for_traffic_control_event constrained-started 15/,
+    /wait_for_traffic_control_event conditioning-started 15/,
   );
   assert.match(
     runScript,
-    /wait_for_traffic_control_event impaired-started \$\(\(constrained_seconds \+ 15\)\)/,
+    /wait_for_traffic_control_event constrained-started \$\(\(conditioning_seconds \+ 15\)\)/,
+  );
+  for (const event of [
+    "constrained-step-2-started",
+    "constrained-step-3-started",
+    "constrained-steady-started",
+  ]) {
+    assert.match(
+      runScript,
+      new RegExp(
+        `wait_for_traffic_control_event ${event} \\$\\(\\(transition_step_seconds \\+ 15\\)\\)`,
+      ),
+    );
+    assert.match(trafficControlScript, new RegExp(`emit ${event}`));
+  }
+  assert.match(
+    runScript,
+    /wait_for_traffic_control_event impaired-started \$\(\(constrained_steady_seconds \+ 15\)\)/,
   );
   assert.match(
     runScript,
-    /wait_for_traffic_control_event recovery-started \\\n\s+\$\(\(impaired_seconds \+ recovery_drain_seconds \+ 15\)\)/,
+    /wait_for_traffic_control_event recovery-started \$\(\(impaired_seconds \+ 15\)\)/,
+  );
+  assert.match(
+    runScript,
+    /wait_for_traffic_control_event recovery-capacity-started \$\(\(transition_step_seconds \+ 15\)\)/,
+  );
+  assert.match(trafficControlScript, /emit recovery-capacity-started/);
+  assert.match(
+    runScript,
+    /--conditioning-capacity-kbps "\$\{conditioning_capacity_kbps\}"/,
   );
   assert.match(
     runScript,
@@ -143,8 +174,10 @@ test("runs impairment timing inside the producer namespace", async () => {
   );
   assert.match(
     runScript,
-    /write_phase recovery '\{\}'\s+wait_for_traffic_control\s+hold_phase recovery "\$\{recovery_seconds\}"/,
+    /write_phase recovery[\s\S]+wait_for_traffic_control_event recovery-capacity-started[\s\S]+wait_for_traffic_control_event recovery-drain-started[\s\S]+write_phase drain[\s\S]+wait_for_traffic_control/,
   );
+  assert.match(runScript, /network-condition-timeline\.jsonl/);
+  assert.match(runScript, /precisionMilliseconds: 100/);
   assert.match(runScript, /capture_network_evidence/);
   assert.match(
     runScript,
@@ -156,6 +189,18 @@ test("runs impairment timing inside the producer namespace", async () => {
   );
   assert.doesNotMatch(runScript, /capture_qdisc\(\)/);
   assert.doesNotMatch(runScript, /apply_shaping\(\)/);
+  for (const [event, capture] of [
+    ["conditioning-started", "conditioning-start"],
+    ["constrained-started", "constrained-step-1-start"],
+    ["impaired-started", "impaired-start"],
+    ["recovery-capacity-started", "recovery-capacity-start"],
+  ]) {
+    assert.ok(
+      trafficControlScript.indexOf(`emit ${event}`) <
+        trafficControlScript.indexOf(`capture ${capture}`),
+      `${event} must be emitted before its diagnostic capture`,
+    );
+  }
 });
 
 test("passes and records the configured FlexFEC protection ratio", async () => {
@@ -163,8 +208,12 @@ test("passes and records the configured FlexFEC protection ratio", async () => {
     fileURLToPath(new URL("../run.sh", import.meta.url)),
     "utf8",
   );
-  assert.match(runScript, /RSTREAM_QUALIFICATION_FLEXFEC_MEDIA_PACKETS:-4/);
-  assert.match(runScript, /RSTREAM_QUALIFICATION_FLEXFEC_REPAIR_PACKETS:-2/);
+  const collector = await readFile(
+    fileURLToPath(new URL("../collect.mjs", import.meta.url)),
+    "utf8",
+  );
+  assert.match(runScript, /RSTREAM_QUALIFICATION_FLEXFEC_MEDIA_PACKETS:-5/);
+  assert.match(runScript, /RSTREAM_QUALIFICATION_FLEXFEC_REPAIR_PACKETS:-1/);
   assert.match(
     runScript,
     /"-flex-fec-media-packets=\$\{flexfec_media_packets\}"/,
@@ -186,6 +235,7 @@ test("passes and records the configured FlexFEC protection ratio", async () => {
     /if \[\[ "\$\{flexfec_enabled\}" == "true" \]\]; then\n+    producer_config_path="\$\{producer_directory\}\/config\.test-pattern\.h264\.twcc-gcc-flexfec\.yaml"/,
   );
   assert.match(runScript, /-producer-config "\$\{producer_config_path\}"/);
+  assert.match(collector, /pacerSentFEC: bandwidth\?\.pacerSentFEC \|\| 0/);
   assert.doesNotMatch(
     runScript,
     /-producer-config "\$\{producer_directory\}\/config\.test-pattern\.h264\.twcc-gcc\.yaml"/,
@@ -242,7 +292,7 @@ test("keeps one qualification path when the producer uses another Docker daemon"
   assert.match(runScript, /RSTREAM_QUALIFICATION_PRODUCER_DOCKER_HOST:-/);
   assert.match(
     runScript,
-    /RSTREAM_QUALIFICATION_PLAYOUT_DELAY_HINT_SECONDS:-0/,
+    /RSTREAM_QUALIFICATION_PLAYOUT_DELAY_HINT_SECONDS:-0\.2/,
   );
   assert.match(runScript, /--playout-delay-hint-seconds/);
   assert.match(runScript, /producer_docker build/);

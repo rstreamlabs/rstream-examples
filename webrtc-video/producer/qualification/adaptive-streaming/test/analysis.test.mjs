@@ -1,14 +1,256 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  alignNetworkConditions,
   analyze,
+  maximumEncoderTargetCoverage,
   parseEncoderQuality,
   renderMarkdown,
   renderSVG,
+  samplesBeforeNetworkTransition,
   summarizeHostCPU,
   summarizeNetworkMobility,
   summarizeSetup,
 } from "../lib/analysis.mjs";
+import {
+  renderNetworkConditionsSVG,
+  renderPlaybackQualitySVG,
+  renderTransportEvidenceSVG,
+} from "../lib/evidence-svg.mjs";
+
+test("aligns link changes to observed collector timestamps", () => {
+  const startedAt = Date.parse("2026-08-16T10:00:00.000Z");
+  const samples = [
+    {
+      capturedAt: new Date(startedAt).toISOString(),
+      elapsedMilliseconds: 1000,
+    },
+    {
+      capturedAt: new Date(startedAt + 60_000).toISOString(),
+      elapsedMilliseconds: 61_000,
+    },
+  ];
+  const events = [
+    ["conditioning-started", 5000],
+    ["constrained-started", 10_000],
+    ["constrained-step-2-started", 15_000],
+    ["constrained-step-3-started", 20_000],
+    ["constrained-steady-started", 25_000],
+    ["impaired-started", 30_000],
+    ["recovery-started", 40_000],
+    ["recovery-capacity-started", 45_000],
+  ].map(([name, offset]) => ({
+    name,
+    observedAt: new Date(startedAt + offset).toISOString(),
+  }));
+  const manifest = {
+    phases: [
+      {
+        name: "conditioning",
+        shaping: {
+          capacityKbps: 32_000,
+          delay: "0ms",
+          jitter: "0ms",
+          loss: "0%",
+        },
+      },
+      {
+        name: "constrained",
+        shaping: {
+          schedule: [16_000, 12_000, 8000, 4000].map((capacityKbps) => ({
+            capacityKbps,
+            delay: "0ms",
+            jitter: "0ms",
+            loss: "0%",
+          })),
+        },
+      },
+      {
+        name: "impaired",
+        shaping: {
+          capacityKbps: 4000,
+          delay: "120ms",
+          jitter: "30ms",
+          loss: "2%",
+        },
+      },
+      {
+        name: "recovery",
+        shaping: {
+          schedule: [4000, 32_000].map((capacityKbps) => ({
+            capacityKbps,
+            delay: "0ms",
+            jitter: "0ms",
+            loss: "0%",
+          })),
+        },
+      },
+    ],
+  };
+  const timeline = alignNetworkConditions(events, samples, manifest);
+  assert.equal(timeline.available, true);
+  assert.deepEqual(
+    timeline.changes.map((change) => change.elapsedMilliseconds),
+    [6000, 11_000, 16_000, 21_000, 26_000, 31_000, 41_000, 46_000],
+  );
+  assert.equal(timeline.changes[4].capacityKbps, 4000);
+  assert.equal(timeline.changes[5].lossPercent, 2);
+  const chart = renderNetworkConditionsSVG(
+    { networkConditions: timeline, passed: true, samples },
+    manifest,
+  );
+  assert.match(
+    chart,
+    /Applied capacity · 32 → 16 → 12 → 8\.0 → 4\.0 → 32 Mb\/s/,
+  );
+  assert.match(
+    chart,
+    /Impaired interval · 120 ms one-way delay · 30 ms jitter · 2\.0% random loss/,
+  );
+  assert.match(chart, />0 s<\/text>/);
+  assert.equal(
+    alignNetworkConditions(events.slice(0, -1), samples, manifest).available,
+    false,
+  );
+});
+
+test("separates a stable conditioning window from the next link transition", () => {
+  const samples = Array.from({ length: 16 }, (_, index) => ({
+    elapsedMilliseconds: index * 1000,
+    encoderTargetKbps: index === 14 ? 4000 : 8000,
+    phase: "conditioning",
+  }));
+  const networkConditions = {
+    changes: [{ elapsedMilliseconds: 15_000, name: "constrained-started" }],
+  };
+  const stable = samplesBeforeNetworkTransition(
+    samples,
+    networkConditions,
+    "conditioning",
+    "constrained-started",
+    10_000,
+    2000,
+  );
+  assert.deepEqual(
+    stable.map((sample) => sample.elapsedMilliseconds),
+    [3000, 4000, 5000, 6000, 7000, 8000, 9000, 10_000, 11_000, 12_000, 13_000],
+  );
+  assert.ok(stable.every((sample) => sample.encoderTargetKbps === 8000));
+  assert.deepEqual(
+    samplesBeforeNetworkTransition(
+      samples,
+      { changes: [] },
+      "conditioning",
+      "constrained-started",
+    ),
+    [],
+  );
+});
+
+test("uses the settled controlled path as the congestion reference", () => {
+  const startedAt = Date.parse("2026-08-16T10:00:00.000Z");
+  const definitions = [
+    ["baseline", 8000, 8000, null],
+    ["conditioning", 4400, 4400, 32_000],
+    ["constrained", 3000, 3000, 4000],
+    ["impaired", 2800, 2800, 4000],
+    ["recovery", 4000, 4000, 32_000],
+  ];
+  let bytesReceived = 0;
+  let elapsedMilliseconds = 0;
+  const samples = definitions.flatMap(
+    ([phase, encoderTargetKbps, receivedKbps]) =>
+      Array.from({ length: 15 }, () => {
+        elapsedMilliseconds += 1000;
+        bytesReceived += (receivedKbps * 1000) / 8;
+        return {
+          bytesReceived,
+          capturedAt: new Date(startedAt + elapsedMilliseconds).toISOString(),
+          elapsedMilliseconds,
+          encoderTargetKbps,
+          phase,
+          twccTargetKbps: encoderTargetKbps,
+        };
+      }),
+  );
+  const manifest = {
+    phases: definitions.map(([name, , , capacityKbps]) => ({
+      name,
+      shaping: capacityKbps ? { capacityKbps } : null,
+    })),
+  };
+  const result = analyze(
+    samples,
+    manifest,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    [
+      {
+        name: "conditioning-started",
+        observedAt: new Date(startedAt + 16_000).toISOString(),
+      },
+      {
+        name: "constrained-started",
+        observedAt: new Date(startedAt + 31_000).toISOString(),
+      },
+    ],
+  );
+  assert.equal(result.stableConditioningMedianEncoderTargetKbps, 4400);
+  assert.equal(result.preTransitionEncoderTargetKbps, 4400);
+  assert.equal(result.congestionResponseRequired, true);
+  for (const name of [
+    "capacity-experiment-settled",
+    "congestion-response",
+    "recovery-time",
+    "sustained-recovery",
+    "throughput-recovery",
+  ]) {
+    assert.equal(
+      result.assertions.find((assertion) => assertion.name === name).passed,
+      true,
+      name,
+    );
+  }
+});
+
+test("measures recovery residency without hiding sustained oscillation", () => {
+  const samples = Array.from({ length: 11 }, (_, index) => ({
+    elapsedMilliseconds: index * 1000,
+    encoderTargetKbps: index === 8 || index === 9 ? 5000 : 8000,
+    phase: "recovery",
+  }));
+  assert.equal(
+    maximumEncoderTargetCoverage(samples, "recovery", 6400, 10_000),
+    9 / 11,
+  );
+  assert.ok(
+    maximumEncoderTargetCoverage(
+      Array.from({ length: 31 }, (_, index) => ({
+        elapsedMilliseconds: index * 1000,
+        encoderTargetKbps: index % 2 === 0 ? 8000 : 5000,
+        phase: "recovery",
+      })),
+      "recovery",
+      6400,
+      10_000,
+    ) < 0.8,
+  );
+  assert.equal(
+    maximumEncoderTargetCoverage(
+      samples.slice(0, 10),
+      "recovery",
+      6400,
+      10_000,
+    ),
+    0,
+  );
+});
 
 test("separates image builds from service establishment", () => {
   const setup = summarizeSetup([
@@ -437,6 +679,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
   let jitterBufferEmittedCount = 0;
   let jitterBufferTargetDelaySeconds = 0;
   let retransmittedPacketsReceived = 0;
+  let pacerSentRTX = 0;
   let totalDecodeTimeSeconds = 0;
   for (const [phase, encoderTargetKbps, receivedBitrateKbps] of phases) {
     for (let index = 0; index < 20; index += 1) {
@@ -454,6 +697,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
       packetsReceived += 100;
       if (phase === "impaired") {
         retransmittedPacketsReceived += 1;
+        pacerSentRTX += 1;
       }
       samples.push({
         bytesReceived,
@@ -468,12 +712,15 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
         jitterBufferDelaySeconds,
         jitterBufferEmittedCount,
         jitterBufferTargetDelaySeconds,
+        lossAverage: phase === "impaired" ? 0.02 : 0,
         localCandidateType: "relay",
         localCandidatePort: elapsedMilliseconds < 50_000 ? 50_000 : 50_001,
         localCandidateProtocol: "udp",
         nackCount,
         packetsReceived,
         peerConnectionState: "connected",
+        pacerSentRTX,
+        pacerTargetBitrateKbps: encoderTargetKbps,
         phase,
         playback: "Playing",
         remoteCandidateType: "relay",
@@ -516,13 +763,50 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     ],
   });
   assert.equal(result.passed, true, JSON.stringify(result.assertions, null, 2));
-  assert.match(renderSVG(result, manifest), /Adaptive streaming response/);
+  const chart = renderSVG(result, manifest);
+  assert.match(chart, /Adaptive sender response to controlled link changes/);
+  assert.match(chart, /Encoder media/);
+  assert.match(chart, /TWCC media/);
+  assert.match(chart, /Received media/);
+  assert.match(chart, /Pacer wire/);
+  assert.match(chart, /Link capacity/);
+  assert.match(chart, /y="548"[^>]*>Media rates/);
+  assert.match(chart, /stroke="#be185d"[^>]+points="[^"]+"/);
+  assert.match(chart, /stroke="#7c3aed"[^>]+points="[^"]+"/);
+  const networkConditions = renderNetworkConditionsSVG(result, manifest);
+  assert.match(networkConditions, /Controlled network conditions/);
+  assert.match(networkConditions, /Injected random loss/);
+  const playbackQuality = renderPlaybackQualitySVG(result, manifest);
+  assert.match(playbackQuality, /Decoded frame rate/);
+  assert.match(playbackQuality, /Freeze duration/);
+  assert.match(playbackQuality, /H\.264 QP/);
+  assert.match(playbackQuality, />35 fps</);
+  assert.match(playbackQuality, />0\.1 s</);
+  assert.match(playbackQuality, />51 QP</);
+  const transportEvidence = renderTransportEvidenceSVG(result, manifest);
+  assert.match(transportEvidence, /NACK \/ RTX/);
+  assert.match(transportEvidence, /FlexFEC received/);
+  assert.match(transportEvidence, /Injected \/ TWCC loss/);
+  assert.match(transportEvidence, /300 ms phase-average buffer limit/);
+  assert.match(transportEvidence, />[0-9]+ packets</);
+  assert.match(transportEvidence, />5\.0 %</);
+  assert.ok(
+    (transportEvidence.match(/stroke="#059669"/g) || []).length > 6,
+    "phase-boundary counter gaps must render as separate line segments",
+  );
+  const report = renderMarkdown(result, {
+    ...manifest,
+    networkImpairment: { scope: "producer-turn-transport" },
+  });
   assert.match(
-    renderMarkdown(result, {
-      ...manifest,
-      networkImpairment: { scope: "producer-turn-transport" },
-    }),
+    report,
     /Media, TURN permissions, and TURN channel traffic share/,
+  );
+  assert.match(report, /## Qualification decision/);
+  assert.match(report, /\| Shaper activation \| not measured \|/);
+  assert.match(
+    report,
+    /\| Packet repair \| NACK [0-9]+; sender RTX [0-9]+; receiver RTX [0-9]+ \|/,
   );
   assert.equal(result.trafficControl.impairedDropRatio, 40 / 2040);
   assert.equal(result.candidatePairSwitches, 1);
@@ -535,6 +819,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
         minimumBitrateKbps: 2000,
         maximumBitrateKbps: 5500,
         changeThresholdPct: 10,
+        maxIncreaseLossPct: 1,
       },
     },
   });
@@ -544,6 +829,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     ).passed,
     true,
   );
+  assert.equal(ceilingResult.healthyLinkTargetRatio, 1);
   const cappedResult = analyze(samples, {
     ...manifest,
     video: {
@@ -553,6 +839,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
         minimumBitrateKbps: 2000,
         maximumBitrateKbps: 6000,
         changeThresholdPct: 10,
+        maxIncreaseLossPct: 1,
       },
     },
   });
@@ -562,6 +849,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     ).passed,
     false,
   );
+  assert.equal(cappedResult.healthyLinkTargetRatio, 0);
   const pathLimitedRelayResult = analyze(samples, {
     ...manifest,
     networkPath: { icePolicy: "relay", kind: "relay" },
@@ -572,6 +860,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
         minimumBitrateKbps: 2000,
         maximumBitrateKbps: 8000,
         changeThresholdPct: 10,
+        maxIncreaseLossPct: 1,
       },
     },
   });
@@ -711,6 +1000,103 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     recoveryFromLossResult.assertions.find(
       (assertion) => assertion.name === "throughput-recovery",
     ).passed,
+    false,
+  );
+  let recoveredBytes = 0;
+  const recoveredStream = samples.map((sample) => {
+    const receivedKbps = {
+      warmup: 4200,
+      baseline: 4000,
+      constrained: 3000,
+      impaired: 1500,
+      recovery: 3000,
+    }[sample.phase];
+    recoveredBytes += (receivedKbps * 1000) / 8;
+    return { ...sample, bytesReceived: recoveredBytes };
+  });
+  const recoveredStreamResult = analyze(recoveredStream, manifest);
+  assert.equal(
+    recoveredStreamResult.assertions.find(
+      (assertion) => assertion.name === "throughput-recovery",
+    ).passed,
+    true,
+  );
+  const incompleteRateRecovery = analyze(
+    samples.map((sample) => ({
+      ...sample,
+      encoderTargetKbps:
+        sample.phase === "recovery" ? 3000 : sample.encoderTargetKbps,
+    })),
+    manifest,
+  );
+  assert.equal(
+    incompleteRateRecovery.assertions.find(
+      (assertion) => assertion.name === "sustained-recovery",
+    ).passed,
+    false,
+  );
+  let lateRecoveryIndex = 0;
+  const lateNetworkDegradation = analyze(
+    samples.map((sample) => {
+      if (sample.phase !== "recovery") {
+        return sample;
+      }
+      lateRecoveryIndex += 1;
+      return {
+        ...sample,
+        encoderTargetKbps: lateRecoveryIndex <= 12 ? 4000 : 3000,
+      };
+    }),
+    manifest,
+  );
+  assert.equal(
+    lateNetworkDegradation.assertions.find(
+      (assertion) => assertion.name === "sustained-recovery",
+    ).passed,
+    true,
+  );
+  let transientRecoveryIndex = 0;
+  const transientRecoverySpike = analyze(
+    samples.map((sample) => {
+      if (sample.phase !== "recovery") {
+        return sample;
+      }
+      transientRecoveryIndex += 1;
+      return {
+        ...sample,
+        encoderTargetKbps: transientRecoveryIndex === 10 ? 4000 : 3000,
+      };
+    }),
+    manifest,
+  );
+  assert.equal(
+    transientRecoverySpike.assertions.find(
+      (assertion) => assertion.name === "sustained-recovery",
+    ).passed,
+    false,
+  );
+  let boundedRecoveryCorrectionIndex = 0;
+  const boundedRecoveryCorrection = analyze(
+    samples.map((sample) => {
+      if (sample.phase !== "recovery") {
+        return sample;
+      }
+      boundedRecoveryCorrectionIndex += 1;
+      return {
+        ...sample,
+        encoderTargetKbps:
+          boundedRecoveryCorrectionIndex === 8 ||
+          boundedRecoveryCorrectionIndex === 9
+            ? 3000
+            : 4000,
+      };
+    }),
+    manifest,
+  );
+  assert.equal(
+    boundedRecoveryCorrection.assertions.find(
+      (assertion) => assertion.name === "sustained-recovery",
+    ).passed,
     true,
   );
 
@@ -839,6 +1225,39 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     ).passed,
     true,
   );
+  const producerLossOutsideBoundaryTolerance = analyze(
+    samples,
+    manifest,
+    {
+      constrained: {
+        start: [{ kind: "netem", drops: 0, packets: 0 }],
+        end: [{ kind: "netem", drops: 5, packets: 1_000 }],
+      },
+      impaired: {
+        start: [{ kind: "netem", drops: 10, packets: 1_000 }],
+        end: [
+          {
+            kind: "netem",
+            drops: 50,
+            packets: 2_000,
+            options: { "loss-random": { loss: 0.02 } },
+          },
+        ],
+      },
+    },
+    null,
+    receiverSamples,
+    producerSamples.map((sample, index) => ({
+      ...sample,
+      sendBufferDrops: index >= 60 ? 28 : index >= 40 ? 8 : 0,
+    })),
+  );
+  assert.equal(
+    producerLossOutsideBoundaryTolerance.assertions.find(
+      (assertion) => assertion.name === "producer-kernel-capacity",
+    ).passed,
+    false,
+  );
   const receiverOverflow = analyze(
     samples,
     manifest,
@@ -914,7 +1333,15 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     },
     recoveryDrain: {
       start: [{ kind: "netem", drops: 20, packets: 2_000, qlen: 100 }],
-      end: [{ kind: "netem", drops: 21, packets: 3_000, qlen: 1 }],
+      end: [
+        {
+          kind: "netem",
+          drops: 20,
+          packets: 3_000,
+          qlen: 32,
+          options: { limit: 256 },
+        },
+      ],
     },
   });
   assert.equal(
@@ -922,6 +1349,41 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
       (assertion) => assertion.name === "traffic-control-recovery-drain",
     ).passed,
     false,
+  );
+  const boundedActiveRecoveryQueue = analyze(samples, manifest, {
+    constrained: {
+      start: [{ kind: "netem", drops: 0, packets: 0 }],
+      end: [{ kind: "netem", drops: 0, packets: 1_000 }],
+    },
+    impaired: {
+      start: [{ kind: "netem", drops: 0, packets: 1_000 }],
+      end: [
+        {
+          kind: "netem",
+          drops: 20,
+          packets: 2_000,
+          options: { "loss-random": { loss: 0.02 } },
+        },
+      ],
+    },
+    recoveryDrain: {
+      start: [{ kind: "netem", drops: 20, packets: 2_000, qlen: 8 }],
+      end: [
+        {
+          kind: "netem",
+          drops: 20,
+          packets: 3_000,
+          qlen: 8,
+          options: { limit: 256 },
+        },
+      ],
+    },
+  });
+  assert.equal(
+    boundedActiveRecoveryQueue.assertions.find(
+      (assertion) => assertion.name === "traffic-control-recovery-drain",
+    ).passed,
+    true,
   );
 
   const boundedWithAdmissionDrops = analyze(
@@ -1109,6 +1571,51 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     ).passed,
     false,
   );
+  const highLossWithoutGuardResponse = analyze(
+    samples.map((sample, index) => ({
+      ...sample,
+      lossGuardReductions: 0,
+      twccReportedLost: index * 20,
+      twccReportedStatuses: index * 100,
+    })),
+    manifest,
+  );
+  assert.equal(
+    highLossWithoutGuardResponse.assertions.find(
+      (assertion) => assertion.name === "loss-guard-response",
+    ).passed,
+    false,
+  );
+  const highLossWithGuardResponse = analyze(
+    samples.map((sample, index) => ({
+      ...sample,
+      lossGuardReductions: index === 0 ? 0 : 1,
+      twccReportedLost: index * 20,
+      twccReportedStatuses: index * 100,
+    })),
+    manifest,
+  );
+  assert.equal(
+    highLossWithGuardResponse.assertions.find(
+      (assertion) => assertion.name === "loss-guard-response",
+    ).passed,
+    true,
+  );
+  const isolatedLossBurst = analyze(
+    samples.map((sample, index) => ({
+      ...sample,
+      lossGuardReductions: 0,
+      twccReportedLost: index < 40 ? 0 : 20,
+      twccReportedStatuses: index * 100,
+    })),
+    manifest,
+  );
+  assert.equal(
+    isolatedLossBurst.assertions.find(
+      (assertion) => assertion.name === "loss-guard-response",
+    ).passed,
+    true,
+  );
   assert.equal(
     brokenTWCC.assertions.find(
       (assertion) => assertion.name === "twcc-loss-fidelity",
@@ -1153,17 +1660,20 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
   );
 
   let fecPacketsReceived = 0;
+  let pacerSentFEC = 0;
   const fecSamples = samples.map((sample) => {
     if (sample.phase === "impaired") {
       fecPacketsReceived += 1;
+      pacerSentFEC += 1;
     }
     return {
       ...sample,
       fecPacketsReceived,
       flexFECMediaPackets: 5,
       flexFECRepairPackets: 1,
+      pacerSentFEC,
       pacerTargetBitrateKbps: sample.twccTargetKbps * 1.2,
-      pacerPacingBitrateKbps: sample.twccTargetKbps * 1.5,
+      pacerPacingBitrateKbps: sample.twccTargetKbps * 1.8,
     };
   });
   const fecResult = analyze(
@@ -1190,10 +1700,34 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     },
   );
   assert.equal(fecResult.passed, true, JSON.stringify(fecResult.assertions));
-  const multipliedPacingBudgets = analyze(
+  assert.equal(
+    fecResult.assertions.find(
+      (assertion) => assertion.name === "flexfec-sender-pacing",
+    ).passed,
+    true,
+  );
+  const missingSenderFEC = analyze(
+    fecSamples.map((sample) => ({ ...sample, pacerSentFEC: 0 })),
+    {
+      ...manifest,
+      protection: {
+        flexFEC: true,
+        flexFECMediaPackets: 5,
+        flexFECRepairPackets: 1,
+      },
+      webrtc: { flexFECNegotiated: true, rtxNegotiated: true },
+    },
+  );
+  assert.equal(
+    missingSenderFEC.assertions.find(
+      (assertion) => assertion.name === "flexfec-sender-pacing",
+    ).passed,
+    false,
+  );
+  const collapsedPacingHeadroom = analyze(
     fecSamples.map((sample) => ({
       ...sample,
-      pacerPacingBitrateKbps: sample.pacerTargetBitrateKbps * 1.5,
+      pacerPacingBitrateKbps: sample.twccTargetKbps * 1.5,
     })),
     {
       ...manifest,
@@ -1206,10 +1740,37 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     },
   );
   assert.equal(
-    multipliedPacingBudgets.assertions.find(
-      (assertion) => assertion.name === "flexfec-shared-pacing-envelope",
+    collapsedPacingHeadroom.assertions.find(
+      (assertion) => assertion.name === "flexfec-burst-headroom",
     ).passed,
     false,
+  );
+  const proactiveRepairWinsTheRace = analyze(
+    fecSamples.map((sample) => ({
+      ...sample,
+      retransmittedPacketsReceived: 0,
+    })),
+    {
+      ...manifest,
+      protection: {
+        flexFEC: true,
+        flexFECMediaPackets: 5,
+        flexFECRepairPackets: 1,
+      },
+      webrtc: { flexFECNegotiated: true, rtxNegotiated: true },
+    },
+  );
+  assert.equal(
+    proactiveRepairWinsTheRace.assertions.some(
+      (assertion) => assertion.name === "rtx-repair",
+    ),
+    false,
+  );
+  assert.equal(
+    proactiveRepairWinsTheRace.assertions.find(
+      (assertion) => assertion.name === "rtx-sender-pacing",
+    ).passed,
+    true,
   );
   const mismatchedFEC = analyze(
     fecSamples.map((sample) => ({
@@ -1447,6 +2008,12 @@ test("rejects negotiated RTX when loss produces no repair packets", () => {
     webrtc: { rtxNegotiated: true },
   });
   assert.equal(result.passed, false);
+  assert.equal(
+    result.assertions.find(
+      (assertion) => assertion.name === "rtx-sender-pacing",
+    ).passed,
+    false,
+  );
   assert.equal(
     result.assertions.find((assertion) => assertion.name === "rtx-repair")
       .passed,

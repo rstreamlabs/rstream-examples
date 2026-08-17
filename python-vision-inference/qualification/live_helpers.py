@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
+import json
 import os
 import signal
 import subprocess
@@ -14,6 +16,34 @@ from typing import TypeVar
 
 CLOSE_TIMEOUT = 5.0
 T = TypeVar("T")
+
+
+def detection_signature(detections: list[dict[str, object]]) -> str:
+    """Hash labels, scores, and boxes without retaining the detections."""
+    canonical = []
+    for detection in detections:
+        box = detection["box"]
+        canonical.append(
+            {
+                "box": [round(float(value), 3) for value in box],
+                "confidence": round(float(detection["confidence"]), 6),
+                "label": str(detection["label"]),
+            }
+        )
+    canonical.sort(
+        key=lambda item: (
+            item["label"],
+            item["box"],
+            item["confidence"],
+        )
+    )
+    encoded = json.dumps(
+        canonical,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def loopback_ready_path(output: Path, run_id: str) -> Path:

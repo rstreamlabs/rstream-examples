@@ -25,6 +25,7 @@ type GStreamerFactory struct {
 	sinkName            string
 	initialBitrateKbps  int
 	logger              *logs.Logger
+	stats               *sourceStats
 }
 
 type GStreamerSource struct {
@@ -35,6 +36,7 @@ type GStreamerSource struct {
 	busDone  chan struct{}
 	stopBus  context.CancelFunc
 	failOnce sync.Once
+	stats    *sourceStats
 	mu       sync.RWMutex
 	subs     map[chan AccessUnit]struct{}
 	started  bool
@@ -64,11 +66,26 @@ func NewGStreamerFactory(
 		sinkName:            sinkName,
 		initialBitrateKbps:  initialBitrateKbps,
 		logger:              logger,
+		stats:               &sourceStats{},
 	}
 }
 
 func (f *GStreamerFactory) New() (Source, error) {
-	return NewGStreamerSource(f.pipelineDescription, f.sinkName, f.initialBitrateKbps, f.logger)
+	source, err := newGStreamerSource(
+		f.pipelineDescription,
+		f.sinkName,
+		f.initialBitrateKbps,
+		f.logger,
+		f.stats,
+	)
+	if err != nil {
+		f.stats.pipelineCreateErrors.Add(1)
+	}
+	return source, err
+}
+
+func (f *GStreamerFactory) StatsSnapshot() SourceStats {
+	return f.stats.snapshot()
 }
 
 func NewGStreamerSource(
@@ -76,6 +93,22 @@ func NewGStreamerSource(
 	sinkName string,
 	initialBitrateKbps int,
 	logger *logs.Logger,
+) (*GStreamerSource, error) {
+	return newGStreamerSource(
+		pipelineDescription,
+		sinkName,
+		initialBitrateKbps,
+		logger,
+		&sourceStats{},
+	)
+}
+
+func newGStreamerSource(
+	pipelineDescription,
+	sinkName string,
+	initialBitrateKbps int,
+	logger *logs.Logger,
+	stats *sourceStats,
 ) (*GStreamerSource, error) {
 	gstInitOnce.Do(func() {
 		gst.Init(nil)
@@ -103,7 +136,9 @@ func NewGStreamerSource(
 		encoder:  encoderController,
 		busDone:  make(chan struct{}),
 		subs:     make(map[chan AccessUnit]struct{}),
+		stats:    stats,
 	}
+	stats.sources.Add(1)
 	busCtx, cancel := context.WithCancel(context.Background())
 	source.stopBus = cancel
 	go source.watchBus(busCtx)
@@ -119,6 +154,7 @@ func NewGStreamerSource(
 			}
 			data, duration, ok := extractAccessUnit(sample)
 			if !ok {
+				stats.sampleExtractionErrors.Add(1)
 				return gst.FlowError
 			}
 			source.publish(AccessUnit{
@@ -236,16 +272,28 @@ func (s *GStreamerSource) Close() error {
 		delete(s.subs, ch)
 	}
 	s.mu.Unlock()
+	s.stats.sources.Add(-1)
 	return closeErr
 }
 
 func (s *GStreamerSource) publish(unit AccessUnit) {
+	s.stats.encodedBytes.Add(uint64(len(unit.Data)))
+	s.stats.encodedFrames.Add(1)
+	if unit.Duration > 0 {
+		s.stats.encodedMediaNanoseconds.Add(uint64(unit.Duration))
+	}
+	s.stats.lastEncodedFrameUnixNano.Store(time.Now().UnixNano())
+	if unit.KeyFrame {
+		s.stats.encodedKeyFrames.Add(1)
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for ch := range s.subs {
 		select {
 		case ch <- unit:
 		default:
+			s.stats.deliveryDroppedBytes.Add(uint64(len(unit.Data)))
+			s.stats.deliveryDroppedFrames.Add(1)
 		}
 	}
 }
@@ -309,6 +357,7 @@ func (s *GStreamerSource) fail(err error) {
 		}
 		s.started = false
 		s.failed = err
+		s.stats.pipelineErrors.Add(1)
 		subs := make([]chan AccessUnit, 0, len(s.subs))
 		for ch := range s.subs {
 			subs = append(subs, ch)

@@ -32,8 +32,15 @@ type pacedPacket struct {
 	size            int
 	writer          interceptor.RTPWriter
 	repair          repairKind
+	retransmission  retransmissionKey
+	tracksRTX       bool
 	trackTWCC       bool
 	twccID          uint8
+}
+
+type retransmissionKey struct {
+	ssrc             uint32
+	originalSequence uint16
 }
 
 type pacedStream struct {
@@ -102,6 +109,7 @@ type tokenBucketPacer struct {
 	repairPacketsExpired                     atomic.Uint64
 	repairPacketsTrimmed                     atomic.Uint64
 	retransmissionPacketsExpired             atomic.Uint64
+	retransmissionPacketsCoalesced           atomic.Uint64
 	forwardErrorCorrectionPacketsExpired     atomic.Uint64
 	retransmissionPacketsTrimmed             atomic.Uint64
 	forwardErrorCorrectionPacketsTrimmed     atomic.Uint64
@@ -110,12 +118,17 @@ type tokenBucketPacer struct {
 	packetizationBitrate                     atomic.Int64
 	rateDecreasePending                      atomic.Bool
 	sentPrimary                              atomic.Uint64
+	sentPrimaryBytes                         atomic.Uint64
 	sentRepair                               atomic.Uint64
 	sentRetransmission                       atomic.Uint64
+	sentRetransmissionBytes                  atomic.Uint64
 	sentForwardErrorCorrection               atomic.Uint64
+	sentForwardErrorCorrectionBytes          atomic.Uint64
 	transportSequence                        atomic.Uint32
 	writersMu                                sync.RWMutex
 	writers                                  map[uint32]pacedStream
+	retransmissionMu                         sync.Mutex
+	pendingRetransmissions                   map[retransmissionKey]struct{}
 }
 
 const (
@@ -152,6 +165,7 @@ func newTokenBucketPacer(
 		rateChanged:                 make(chan struct{}, 1),
 		queueSlots:                  make(chan struct{}, queueSize),
 		writers:                     make(map[uint32]pacedStream),
+		pendingRetransmissions:      make(map[retransmissionKey]struct{}),
 	}
 	pacer.targetBitrate.Store(int64(initialBitrate))
 	pacer.payloadPool.New = func() any {
@@ -254,6 +268,13 @@ func (p *tokenBucketPacer) Write(
 		p.queueDrops.Add(1)
 		return 0, errPacerQueueFull
 	}
+	packetSize := header.MarshalSize() + len(payload)
+	retransmission, tracksRTX := retransmissionIdentity(header, payload, stream.repair)
+	if tracksRTX && !p.reserveRetransmission(retransmission) {
+		<-p.queueSlots
+		p.retransmissionPacketsCoalesced.Add(1)
+		return packetSize, nil
+	}
 	buffer := p.payloadPool.Get().(*[]byte)
 	if cap(*buffer) < len(payload) {
 		*buffer = make([]byte, len(payload))
@@ -271,9 +292,11 @@ func (p *tokenBucketPacer) Write(
 		enqueuedAt:      time.Now(),
 		header:          header.Clone(),
 		payload:         buffer,
-		size:            header.MarshalSize() + len(payload),
+		size:            packetSize,
 		writer:          stream.writer,
 		repair:          stream.repair,
+		retransmission:  retransmission,
+		tracksRTX:       tracksRTX,
 		trackTWCC:       stream.trackTWCC,
 		twccID:          stream.twccID,
 	}
@@ -482,17 +505,19 @@ func (p *tokenBucketPacer) run() {
 				p.discardQueuedPackets()
 				continue
 			}
-			if _, err := pending.writer.Write(
+			written, err := pending.writer.Write(
 				&pending.header,
 				(*pending.payload)[:len(*pending.payload)],
 				pending.attributes,
-			); err != nil {
+			)
+			if err != nil {
 				p.recordError(fmt.Errorf("paced RTP write failed: %w", err))
 				p.discardQueuedPackets()
 			} else if pending.repair != repairKindNone {
-				p.recordRepairSent(pending.repair)
+				p.recordRepairSent(pending.repair, written)
 			} else {
 				p.sentPrimary.Add(1)
+				p.sentPrimaryBytes.Add(uint64(max(0, written)))
 			}
 			switch pending.repair {
 			case repairKindNone:
@@ -605,6 +630,9 @@ func (p *tokenBucketPacer) maximumBurstBytesAtRate(bytesPerSecond float64) float
 }
 
 func (p *tokenBucketPacer) release(packet *pacedPacket) {
+	if packet.tracksRTX {
+		p.releaseRetransmission(packet.retransmission)
+	}
 	switch packet.repair {
 	case repairKindRetransmission:
 		p.queuedRetransmissionServiceNs.Add(-packet.serviceNs)
@@ -748,14 +776,48 @@ func (p *tokenBucketPacer) Stats() map[string]any {
 		"pacerRepairPacketsExpired":                               p.repairPacketsExpired.Load(),
 		"pacerRepairPacketsTrimmed":                               p.repairPacketsTrimmed.Load(),
 		"pacerRetransmissionPacketsExpired":                       p.retransmissionPacketsExpired.Load(),
+		"pacerRetransmissionPacketsCoalesced":                     p.retransmissionPacketsCoalesced.Load(),
 		"pacerForwardErrorCorrectionPacketsExpired":               p.forwardErrorCorrectionPacketsExpired.Load(),
 		"pacerRetransmissionPacketsTrimmed":                       p.retransmissionPacketsTrimmed.Load(),
 		"pacerForwardErrorCorrectionPacketsTrimmed":               p.forwardErrorCorrectionPacketsTrimmed.Load(),
 		"pacerSentPrimary":                                        p.sentPrimary.Load(),
+		"pacerSentPrimaryBytes":                                   p.sentPrimaryBytes.Load(),
 		"pacerSentRepair":                                         p.sentRepair.Load(),
 		"pacerSentRetransmission":                                 p.sentRetransmission.Load(),
+		"pacerSentRetransmissionBytes":                            p.sentRetransmissionBytes.Load(),
 		"pacerSentForwardErrorCorrection":                         p.sentForwardErrorCorrection.Load(),
+		"pacerSentForwardErrorCorrectionBytes":                    p.sentForwardErrorCorrectionBytes.Load(),
 	}
+}
+
+func retransmissionIdentity(
+	header *rtp.Header,
+	payload []byte,
+	kind repairKind,
+) (retransmissionKey, bool) {
+	if kind != repairKindRetransmission || len(payload) < 2 {
+		return retransmissionKey{}, false
+	}
+	return retransmissionKey{
+		ssrc:             header.SSRC,
+		originalSequence: binary.BigEndian.Uint16(payload[:2]),
+	}, true
+}
+
+func (p *tokenBucketPacer) reserveRetransmission(key retransmissionKey) bool {
+	p.retransmissionMu.Lock()
+	defer p.retransmissionMu.Unlock()
+	if _, exists := p.pendingRetransmissions[key]; exists {
+		return false
+	}
+	p.pendingRetransmissions[key] = struct{}{}
+	return true
+}
+
+func (p *tokenBucketPacer) releaseRetransmission(key retransmissionKey) {
+	p.retransmissionMu.Lock()
+	delete(p.pendingRetransmissions, key)
+	p.retransmissionMu.Unlock()
 }
 
 func (p *tokenBucketPacer) scheduledQueueDelay() time.Duration {
@@ -867,13 +929,15 @@ func (p *tokenBucketPacer) recordRepairTrim(kind repairKind) {
 	}
 }
 
-func (p *tokenBucketPacer) recordRepairSent(kind repairKind) {
+func (p *tokenBucketPacer) recordRepairSent(kind repairKind, bytes int) {
 	p.sentRepair.Add(1)
 	switch kind {
 	case repairKindRetransmission:
 		p.sentRetransmission.Add(1)
+		p.sentRetransmissionBytes.Add(uint64(max(0, bytes)))
 	case repairKindForwardErrorCorrection:
 		p.sentForwardErrorCorrection.Add(1)
+		p.sentForwardErrorCorrectionBytes.Add(uint64(max(0, bytes)))
 	}
 }
 

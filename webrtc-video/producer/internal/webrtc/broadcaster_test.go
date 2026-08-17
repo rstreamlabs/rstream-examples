@@ -143,16 +143,21 @@ func (s *fakeSource) Close() error {
 
 func TestSnapshotBandwidthStatsPreservesControllerSignals(t *testing.T) {
 	stats := snapshotBandwidthStats(fakeBandwidthEstimator{stats: map[string]any{
-		"lossTargetBitrate":    1_500_000,
-		"averageLoss":          0.025,
-		"flexFECMediaPackets":  uint32(5),
-		"flexFECRepairPackets": uint32(2),
-		"delayTargetBitrate":   2_400_000,
-		"delayMeasurement":     12.5,
-		"delayEstimate":        10.25,
-		"delayThreshold":       15.75,
-		"usage":                "overusing",
-		"state":                "decrease",
+		"lossTargetBitrate":         1_500_000,
+		"averageLoss":               0.025,
+		"flexFECMediaPackets":       uint32(5),
+		"flexFECRepairPackets":      uint32(2),
+		"delayTargetBitrate":        2_400_000,
+		"delayMeasurement":          12.5,
+		"delayEstimate":             10.25,
+		"delayThreshold":            15.75,
+		"usage":                     "overusing",
+		"state":                     "decrease",
+		"lossGuardActive":           true,
+		"lossGuardTargetBitrate":    2_000_000,
+		"lossGuardLastObservedLoss": 0.2,
+		"lossGuardReductions":       uint64(3),
+		"lossGuardRecoveries":       uint64(1),
 	}})
 	if stats == nil {
 		t.Fatal("expected bandwidth diagnostics")
@@ -168,6 +173,11 @@ func TestSnapshotBandwidthStatsPreservesControllerSignals(t *testing.T) {
 	}
 	if stats.Usage != "overusing" || stats.State != "decrease" {
 		t.Fatalf("unexpected controller state diagnostics: %+v", stats)
+	}
+	if !stats.LossGuardActive || stats.LossGuardTargetBitrateBps != 2_000_000 ||
+		stats.LossGuardLastObservedLoss != 0.2 || stats.LossGuardReductions != 3 ||
+		stats.LossGuardRecoveries != 1 {
+		t.Fatalf("unexpected loss guard diagnostics: %+v", stats)
 	}
 }
 

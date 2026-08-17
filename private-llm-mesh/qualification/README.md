@@ -1,11 +1,9 @@
 # Private LLM mesh qualification
 
-This optional pack qualifies the claims made by the sample without adding any
-steps to its normal quickstart. The default run uses a real local GGUF model and
-checks the web application, native worker, routing policy, bounded admission,
-mid-generation cancellation, concurrent shutdown, and race safety. A live mode
-adds the complete browser-server-rstream-worker path against an already running
-mesh.
+This pack tests the worker pool at two boundaries. The local profile exercises
+the application and worker with a pinned GGUF model. The live profile drives
+the same UI stream used by the browser through Next.js, scoped-token minting,
+rstream, and multiple independent workers.
 
 ## Local qualification
 
@@ -30,9 +28,8 @@ Acceptance requires all of the following:
   detector;
 - no credential-shaped value in the resulting evidence.
 
-The local profile proves application and worker semantics. It deliberately does
-not claim that a deployed rstream route, a specific network, or a remote worker
-fleet was exercised.
+The local profile qualifies application and worker semantics. Deployed routing
+and worker-pool behavior belong to the live profile.
 
 ## Live mesh qualification
 
@@ -50,32 +47,33 @@ python3 qualification/run.py \
   --max-worker-share 0.65
 ```
 
-The live driver validates every UI stream rather than treating HTTP 200 as
-success. A response must identify its worker, contain text or tool output, end
-with the protocol terminator, and contain no error part. It records no prompt or
-model output. The default failure allowance is zero; latency ceilings are
-environment-specific and become mandatory when passed with
-`--max-ttft-p95-ms` and `--max-total-p95-ms`.
+The live driver parses every UI stream. A response passes only when it identifies
+its worker, contains text or structured tool output, ends with the protocol
+terminator, and contains no error part. The default profile allows no failed
+turn, requires at least two workers, and caps the largest worker share at 65%.
+Latency ceilings become verdict gates when supplied with `--max-ttft-p95-ms`
+and `--max-total-p95-ms`; otherwise the report records latency without treating
+it as a portable SLO.
 
 Pre-start worker loss is safe to retry against another eligible worker. Once a
-model request has started, the app intentionally does not replay it: an agent
-turn may already have executed a tool, so automatic replay could duplicate an
-external side effect. A managed kill/recovery phase will be considered complete
-only when its controlling harness owns the worker processes; manually killing a
-worker is useful exploration but is not publishable evidence.
+model request has started, the app does not replay it because an agent turn may
+already have executed a tool. A fully automated loss-and-recovery gate requires
+the harness to own the worker processes and timestamp their lifecycle. The
+current committed record uses controlled stop and restart boundaries and is
+explicitly limited to routing behavior within those phases.
 
 ## Reading the evidence
 
-`report.md` leads with the verdict and exact scope. `commands.svg` makes slow or
-failed gates visible at a glance. When live mode is enabled,
-`live-latency.svg` and `live-workers.svg` show the latency percentiles and worker
-distribution, while `live.json` retains every per-turn timing and error. The
-manifest pins the repository revision, dirty state, model hash, host/runtime
+`report.md` states the scope, method, thresholds, and result. In a lifecycle
+record, `worker-lifecycle.svg` plots every successful turn against the worker
+that served it across the baseline, degraded, and recovery phases. `live.json`,
+`degraded.json`, and `recovery.json` retain the worker attribution and timing for
+each turn. The manifest pins the repository revision, model hash, runtime
 versions, parameters, and thresholds.
 
 A report from a dirty worktree is diagnostic only. Commit-worthy evidence must
 be rerun on the clean revision it claims to qualify.
 
 Compact results from clean runs live in [`evidence/`](evidence). They retain the
-model hash, runtime manifest, thresholds, aggregate turn data, and charts while
-keeping prompts, model output, credentials, and raw process logs local.
+model hash, runtime manifest, thresholds, per-turn measurements, and the useful
+lifecycle view while keeping prompts and model output outside the repository.

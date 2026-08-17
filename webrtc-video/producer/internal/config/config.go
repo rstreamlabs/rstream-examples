@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,6 +51,7 @@ const (
 
 const (
 	DefaultServerListen          = "127.0.0.1:8080"
+	DefaultMetricsListen         = "127.0.0.1:9090"
 	DefaultTunnelName            = "webrtc-video-producer"
 	DefaultTURNTTL               = "10m"
 	DefaultProvisioningTimeout   = "10s"
@@ -65,6 +68,7 @@ const (
 
 type Config struct {
 	Server  ServerConfig  `yaml:"server"`
+	Metrics MetricsConfig `yaml:"metrics"`
 	Web     WebConfig     `yaml:"web"`
 	Tunnel  TunnelConfig  `yaml:"tunnel"`
 	TURN    TURNConfig    `yaml:"turn"`
@@ -75,6 +79,11 @@ type Config struct {
 
 type ServerConfig struct {
 	Listen string `yaml:"listen"`
+}
+
+type MetricsConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Listen  string `yaml:"listen"`
 }
 
 type WebConfig struct {
@@ -163,8 +172,6 @@ type WebRTCTWCCGCCBackendConfig struct {
 	UpdateInterval        string  `yaml:"updateInterval"`
 	ChangeThresholdPct    int     `yaml:"changeThresholdPct"`
 	DecreaseThresholdPct  int     `yaml:"decreaseThresholdPct"`
-	MaxIncreasePct        int     `yaml:"maxIncreasePct"`
-	MaxIncreaseStepKbps   int     `yaml:"maxIncreaseStepKbps"`
 	MaxIncreaseLossPct    float64 `yaml:"maxIncreaseLossPct"`
 	IncreaseHoldAfterLoss string  `yaml:"increaseHoldAfterLoss"`
 }
@@ -183,6 +190,9 @@ func Default() Config {
 	return Config{
 		Server: ServerConfig{
 			Listen: DefaultServerListen,
+		},
+		Metrics: MetricsConfig{
+			Listen: DefaultMetricsListen,
 		},
 		Web: WebConfig{
 			Viewer: WebViewerConfig{
@@ -237,8 +247,6 @@ func Default() Config {
 					UpdateInterval:        "1s",
 					ChangeThresholdPct:    10,
 					DecreaseThresholdPct:  5,
-					MaxIncreasePct:        15,
-					MaxIncreaseStepKbps:   500,
 					MaxIncreaseLossPct:    1,
 					IncreaseHoldAfterLoss: DefaultIncreaseHoldAfterLoss,
 				},
@@ -278,6 +286,19 @@ func Load(path string) (Config, error) {
 func (c Config) Validate() error {
 	if strings.TrimSpace(c.Server.Listen) == "" {
 		return errors.New("server listen address is required")
+	}
+	if c.Metrics.Enabled {
+		metricsListen := strings.TrimSpace(c.Metrics.Listen)
+		if metricsListen == "" {
+			return errors.New("metrics listen address is required when metrics are enabled")
+		}
+		_, port, err := net.SplitHostPort(metricsListen)
+		if err != nil {
+			return fmt.Errorf("invalid metrics listen address %q: %w", c.Metrics.Listen, err)
+		}
+		if _, err := strconv.ParseUint(port, 10, 16); err != nil {
+			return fmt.Errorf("invalid metrics listen port %q", port)
+		}
 	}
 	if strings.TrimSpace(c.Media.Pipeline) == "" {
 		return errors.New("media pipeline is required")
@@ -431,13 +452,6 @@ func (c Config) Validate() error {
 				maximumDecreaseThreshold,
 			)
 		}
-		if c.WebRTC.Adaptive.TWCCGCC.MaxIncreasePct <= 0 ||
-			c.WebRTC.Adaptive.TWCCGCC.MaxIncreasePct > 100 {
-			return errors.New("webrtc adaptive twccGCC maxIncreasePct must be greater than 0 and at most 100")
-		}
-		if c.WebRTC.Adaptive.TWCCGCC.MaxIncreaseStepKbps <= 0 {
-			return errors.New("webrtc adaptive twccGCC maxIncreaseStepKbps must be greater than 0")
-		}
 		if math.IsNaN(c.WebRTC.Adaptive.TWCCGCC.MaxIncreaseLossPct) ||
 			math.IsInf(c.WebRTC.Adaptive.TWCCGCC.MaxIncreaseLossPct, 0) ||
 			c.WebRTC.Adaptive.TWCCGCC.MaxIncreaseLossPct < 0 ||
@@ -560,16 +574,7 @@ func (c Config) FlexFECRepairPackets() uint32 {
 }
 
 func (c Config) MaxSafeAdaptiveDecreaseThresholdPct() int {
-	protectedWireFactor := 1.0
-	if c.WebRTC.Interceptors.FlexFEC {
-		mediaPackets := float64(c.FlexFECMediaPackets())
-		repairPackets := float64(c.FlexFECRepairPackets())
-		if mediaPackets > 0 && repairPackets > 0 {
-			protectedWireFactor = (mediaPackets + repairPackets) / mediaPackets
-		}
-	}
-	pacingEnvelopeFactor := math.Max(RealTimePacingFactor, protectedWireFactor)
-	availableFraction := 1 - protectedWireFactor/pacingEnvelopeFactor
+	availableFraction := 1 - 1/RealTimePacingFactor
 	if availableFraction <= 0 {
 		return 0
 	}

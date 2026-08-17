@@ -1,0 +1,26 @@
+{
+  "runId": "3cb8bd09",
+  "referencePayloadBytes": 36083,
+  "candidateOrder": [
+    "vision-route-3cb8bd09-remote",
+    "vision-route-3cb8bd09-local"
+  ],
+  "legacyChoice": "vision-route-3cb8bd09-remote",
+  "latencyAwareChoice": "vision-route-3cb8bd09-local",
+  "observations": {
+    "vision-route-3cb8bd09-remote": {
+      "engineRegion": "us-east-1",
+      "establishmentMS": 849.633,
+      "roundTripP50MS": 398.324,
+      "roundTripP95MS": 450.3
+    },
+    "vision-route-3cb8bd09-local": {
+      "engineRegion": "eu-west-3",
+      "establishmentMS": 277.904,
+      "roundTripP50MS": 148.85,
+      "roundTripP95MS": 170.71
+    }
+  },
+  "measuredMedianRTTGainMS": 249.474,
+  "violations": []
+}

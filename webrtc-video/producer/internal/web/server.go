@@ -139,6 +139,7 @@ func (s *Server) handleAPIStatus(w http.ResponseWriter, _ *http.Request) {
 func (s *Server) handleAPITURN(w http.ResponseWriter, r *http.Request) {
 	credentials, err := s.createTURN(r.Context())
 	if err != nil {
+		s.logger.Error("TURN credential request failed: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": err.Error(),
 		})

@@ -140,8 +140,10 @@ export async function oneTurn({
   timeoutMS,
   signal,
   index,
+  timelineStarted = performance.now(),
 }) {
   const started = performance.now();
+  const startedAtMS = started - timelineStarted;
   const timeout = AbortSignal.timeout(timeoutMS);
   const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
   const body = {
@@ -172,6 +174,8 @@ export async function oneTurn({
       index,
       ok: true,
       worker: stream.worker,
+      startedAtMS,
+      completedAtMS: performance.now() - timelineStarted,
       ttftMS: stream.ttft,
       totalMS: performance.now() - started,
     };
@@ -179,6 +183,8 @@ export async function oneTurn({
     return {
       index,
       ok: false,
+      startedAtMS,
+      completedAtMS: performance.now() - timelineStarted,
       error: error instanceof Error ? error.message : String(error),
       totalMS: performance.now() - started,
     };
@@ -397,6 +403,7 @@ export async function main(argv = process.argv.slice(2)) {
         timeoutMS,
         signal: controller.signal,
         index,
+        timelineStarted: started,
       });
       results.push(result);
       process.stdout.write(result.ok ? "." : "x");

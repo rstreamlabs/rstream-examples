@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   consumeUIStream,
+  oneTurn,
   parseArgs,
   percentile,
   summarize,
@@ -58,6 +59,36 @@ test("consumeUIStream rejects truncated successful-looking streams", async () =>
     'data: {"type":"text-delta","delta":"partial"}\n\n',
   );
   await assert.rejects(consumeUIStream(body), /without \[DONE\]/);
+});
+
+test("oneTurn records monotonic workload-relative timing", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(
+      stream(
+        'data: {"type":"start","messageMetadata":{"worker":"worker-a"}}\n\n',
+        'data: {"type":"text-delta","delta":"ok"}\n\n',
+        "data: [DONE]\n\n",
+      ),
+      { status: 200 },
+    );
+  try {
+    const timelineStarted = performance.now() - 25;
+    const result = await oneTurn({
+      baseURL: "https://example.invalid",
+      model: "model",
+      prompt: "prompt",
+      timeoutMS: 1_000,
+      index: 3,
+      timelineStarted,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.index, 3);
+    assert.ok(result.startedAtMS >= 20);
+    assert.ok(result.completedAtMS >= result.startedAtMS);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("summarize enforces failures, worker count, fairness, and latency", () => {

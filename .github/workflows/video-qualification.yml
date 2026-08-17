@@ -27,12 +27,12 @@ on:
       flexfec_media_packets:
         description: Media packets per FlexFEC protection group
         required: true
-        default: "4"
+        default: "5"
         type: string
       flexfec_repair_packets:
         description: FlexFEC repair packets per protection group
         required: true
-        default: "2"
+        default: "1"
         type: string
       mobility:
         description: Exercise producer-side network migration
@@ -52,16 +52,12 @@ jobs:
     name: ${{ inputs.path }} ${{ inputs.protection }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    env:
-      RSTREAM_QUALIFICATION_API_URL: ${{ vars.RSTREAM_QUALIFICATION_API_URL }}
-      RSTREAM_QUALIFICATION_ENGINE: ${{ vars.RSTREAM_QUALIFICATION_ENGINE }}
-      RSTREAM_QUALIFICATION_PROJECT_ENDPOINT: ${{ vars.RSTREAM_QUALIFICATION_PROJECT_ENDPOINT }}
     steps:
       - name: Check out the tested revision
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: webrtc-video/producer/go.mod
           cache-dependency-path: webrtc-video/producer/go.sum
@@ -70,13 +66,12 @@ jobs:
         shell: bash
         env:
           RSTREAM_AUTHENTICATION_TOKEN: ${{ secrets.RSTREAM_QUALIFICATION_TOKEN }}
+          RSTREAM_QUALIFICATION_CONFIG_B64: ${{ secrets.RSTREAM_QUALIFICATION_CONFIG_B64 }}
         run: |
           set -euo pipefail
           for name in \
             RSTREAM_AUTHENTICATION_TOKEN \
-            RSTREAM_QUALIFICATION_API_URL \
-            RSTREAM_QUALIFICATION_ENGINE \
-            RSTREAM_QUALIFICATION_PROJECT_ENDPOINT; do
+            RSTREAM_QUALIFICATION_CONFIG_B64; do
             if [[ -z "${!name:-}" ]]; then
               printf 'Missing required qualification setting: %s\n' "$name" >&2
               exit 1
@@ -95,6 +90,7 @@ jobs:
           INPUT_PATH: ${{ inputs.path }}
           INPUT_PROTECTION: ${{ inputs.protection }}
           RSTREAM_AUTHENTICATION_TOKEN: ${{ secrets.RSTREAM_QUALIFICATION_TOKEN }}
+          RSTREAM_QUALIFICATION_CONFIG_B64: ${{ secrets.RSTREAM_QUALIFICATION_CONFIG_B64 }}
         run: |
           set -euo pipefail
           config_directory="$(mktemp -d)"
@@ -102,17 +98,13 @@ jobs:
           output_directory="${RUNNER_TEMP}/video-qualification"
           mkdir -p "$output_directory"
           chmod 700 "$config_directory" "$runtime_directory" "$output_directory"
-          cat >"${config_directory}/config.yaml" <<EOF
-          version: 1
-          defaults:
-            context:
-              name: qualification
-          contexts:
-            - name: qualification
-              apiUrl: ${RSTREAM_QUALIFICATION_API_URL}
-              engine: ${RSTREAM_QUALIFICATION_ENGINE}
-              projectEndpoint: ${RSTREAM_QUALIFICATION_PROJECT_ENDPOINT}
-          EOF
+          printf '%s' "$RSTREAM_QUALIFICATION_CONFIG_B64" \
+            | base64 --decode >"${config_directory}/config.yaml"
+          chmod 600 "${config_directory}/config.yaml"
+          if [[ ! -s "${config_directory}/config.yaml" ]]; then
+            printf 'Decoded qualification config is empty.\n' >&2
+            exit 1
+          fi
           mobility=off
           if [[ "$INPUT_MOBILITY" == "true" ]]; then
             mobility=producer
@@ -164,7 +156,7 @@ jobs:
 
       - name: Upload the complete evidence bundle
         if: always() && steps.runtime.outcome == 'success'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: video-${{ inputs.path }}-${{ inputs.protection }}-${{ github.run_id }}
           path: ${{ steps.runtime.outputs.output_directory }}

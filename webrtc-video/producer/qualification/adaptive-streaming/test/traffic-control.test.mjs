@@ -57,6 +57,8 @@ function argumentsFor(evidenceDirectory) {
     "true",
     "--queue-limit-packets",
     "256",
+    "--conditioning-capacity-kbps",
+    "32000",
     "--capacity-step-one-kbps",
     "16000",
     "--capacity-step-two-kbps",
@@ -67,10 +69,14 @@ function argumentsFor(evidenceDirectory) {
     "4000",
     "--transition-step-seconds",
     "5",
+    "--conditioning-seconds",
+    "20",
     "--constrained-steady-seconds",
     "30",
     "--impaired-seconds",
     "35",
+    "--recovery-seconds",
+    "45",
     "--recovery-capacity-kbps",
     "100000",
     "--recovery-drain-seconds",
@@ -94,16 +100,24 @@ test("runs one in-namespace impairment schedule and retains every snapshot", asy
   });
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(result.stdout.trim().split("\n"), [
+    "conditioning-started",
     "constrained-started",
+    "constrained-step-2-started",
+    "constrained-step-3-started",
+    "constrained-steady-started",
     "impaired-started",
-    "recovery-drain-started",
     "recovery-started",
+    "recovery-capacity-started",
+    "recovery-drain-started",
+    "recovery-complete",
   ]);
   assert.deepEqual(
     (await readFile(runtime.sleepLog, "utf8")).trim().split("\n"),
-    ["5", "5", "5", "30", "35", "1"],
+    ["20", "5", "5", "5", "5", "25", "35", "5", "40", "1"],
   );
   const names = [
+    "conditioning-start",
+    "conditioning",
     "constrained-step-1-start",
     "constrained-step-1",
     "constrained-step-2-start",
@@ -114,6 +128,10 @@ test("runs one in-namespace impairment schedule and retains every snapshot", asy
     "constrained-steady",
     "impaired-start",
     "impaired",
+    "recovery-settle-start",
+    "recovery-settle",
+    "recovery-capacity-start",
+    "recovery-capacity",
     "recovery-drain-start",
     "recovery-drain",
   ];
@@ -131,6 +149,10 @@ test("runs one in-namespace impairment schedule and retains every snapshot", asy
   assert.match(tcLog, /match ip dst 192\.0\.2\.10\/32/);
   assert.match(tcLog, /match ip dport 3478 0xffff/);
   assert.match(tcLog, /netem limit 256 rate 4000kbit/);
+  assert.match(tcLog, /rate 32000kbit delay 0ms loss random 0%/);
+  assert.match(tcLog, /rate 16000kbit delay 0ms loss random 0%/);
+  assert.match(tcLog, /rate 12000kbit delay 0ms loss random 0%/);
+  assert.match(tcLog, /rate 8000kbit delay 0ms loss random 0%/);
   assert.match(tcLog, /delay 120ms 30ms distribution normal loss random 2%/);
   assert.match(tcLog, /netem limit 256 rate 100000kbit/);
   assert.match(tcLog, /delay 0ms loss random 0%/);
@@ -155,6 +177,27 @@ test("rejects malformed input before touching traffic control", async (t) => {
   });
   assert.equal(result.status, 2);
   assert.match(result.stderr, /address family must be 4 or 6/);
+  await assert.rejects(readFile(runtime.tcLog, "utf8"), /ENOENT/);
+});
+
+test("reserves a measured steady interval after the final capacity step", async (t) => {
+  const runtime = await prepareRuntime();
+  t.after(() => rm(runtime.directory, { force: true, recursive: true }));
+  const evidence = join(runtime.directory, "evidence");
+  const args = argumentsFor(evidence);
+  args[args.indexOf("--constrained-steady-seconds") + 1] = "5";
+  const result = spawnSync("sh", args, {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      RSTREAM_SLEEP_COMMAND: runtime.fakeSleep,
+      RSTREAM_TC_COMMAND: runtime.fakeTC,
+      RSTREAM_TEST_SLEEP_LOG: runtime.sleepLog,
+      RSTREAM_TEST_TC_LOG: runtime.tcLog,
+    },
+  });
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /steady duration must exceed one transition/);
   await assert.rejects(readFile(runtime.tcLog, "utf8"), /ENOENT/);
 });
 
@@ -221,7 +264,7 @@ test("removes shaping when the scheduler is interrupted", async (t) => {
   let stderr = "";
   child.stdout.on("data", (chunk) => {
     stdout += chunk;
-    if (stdout.includes("constrained-started")) {
+    if (stdout.includes("conditioning-started")) {
       child.kill("SIGTERM");
     }
   });

@@ -131,16 +131,19 @@ The application is stateless. Client credentials and the authentication configur
 
 ## Qualification
 
-The quickstart above remains the normal usage path. The optional
-[`qualification/`](qualification) pack separately exercises capacity-aware
-routing, bounded queueing, cancellation, concurrent shutdown, a real GGUF model,
-race safety, stream integrity, and—when pointed at a running app—the complete
-rstream mesh. It emits raw JSON and logs plus Markdown and SVG evidence pinned
-to the tested revision and model hash.
+The [`qualification/`](qualification) pack tests the routing and lifecycle
+claims against a real GGUF model. Its local profile runs admission,
+cancellation, concurrent shutdown, model behavior, and scheduler invariants
+under Go's race detector. Its live profile validates the complete UI stream
+through Next.js, scoped-token minting, rstream, and the selected llama.cpp
+worker.
 
 The published [`d7a9dc4` evidence pack](qualification/evidence/d7a9dc4/report.md)
 records 60/60 successful concurrent turns across two real Qwen3 workers with an
 exact 30/30 distribution. A controlled degraded run completed 20/20 turns on
 the surviving worker, and the recovery run completed 20/20 with the restored
 pool split 10/10. The same revision passes the real-model race, bounded
-admission, cancellation, shutdown, routing, web, and dependency gates.
+admission, cancellation, shutdown, routing, web, and dependency gates. The
+worker stop and restart boundaries in this record were controlled by the
+operator; the record proves routing during each phase but does not claim a
+measured automatic failure-detection interval.

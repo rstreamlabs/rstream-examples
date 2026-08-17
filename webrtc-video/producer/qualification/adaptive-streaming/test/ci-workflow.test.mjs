@@ -19,12 +19,17 @@ test("keeps qualification credentials out of the reusable workflow", async () =>
   );
   assert.match(
     workflow,
+    /RSTREAM_QUALIFICATION_CONFIG_B64: \$\{\{ secrets\.RSTREAM_QUALIFICATION_CONFIG_B64 \}\}/,
+  );
+  assert.match(workflow, /base64 --decode/);
+  assert.doesNotMatch(workflow, /\$\{\{ vars\./);
+  assert.match(
+    workflow,
     /RSTREAM_QUALIFICATION_PREPARED_RUNTIME_DIRECTORY: \$\{\{ steps\.runtime\.outputs\.runtime_directory \}\}/,
   );
-  assert.doesNotMatch(
-    workflow.match(/jobs:\n[\s\S]*?steps:/)?.[0] || "",
-    /RSTREAM_AUTHENTICATION_TOKEN/,
-  );
+  const jobHeader = workflow.match(/jobs:\n[\s\S]*?steps:/)?.[0] || "";
+  assert.doesNotMatch(jobHeader, /RSTREAM_AUTHENTICATION_TOKEN/);
+  assert.doesNotMatch(jobHeader, /RSTREAM_QUALIFICATION_CONFIG_B64/);
 });
 
 test("pins external actions and preserves failed-run evidence", async () => {

@@ -1,9 +1,46 @@
 # Distributed Vision qualification
 
-This optional pack verifies the reference implementation beyond its normal
-quickstart. The guide remains focused on running a device and a worker; the
-qualification profile adds bounded stress, real YOLO inference, exact model and
-media hashes, raw logs, JSON measurements, and dependency-free SVG charts.
+This pack tests the inference path from the model mutex to multi-worker
+selection and recovery. It uses a pinned YOLO model and reference video so a
+result can be compared across code changes without changing the workload.
+
+## Method
+
+The local profile validates framing, frame/result correlation, malformed input,
+worker admission, registry updates, selection, capture teardown, and
+cancellation while inference is running in an executor. It then benchmarks the
+exact decoded reference frame on the selected accelerator.
+
+The live profile starts two independently registered workers with two session
+slots each. It fills the pool, checks explicit overload rejection, releases a
+slot, and verifies that capacity becomes usable again. It opens an inference
+stream on worker A, stops that worker, waits for the existing stream to report
+EOF, and sends the same frame to worker B. The failover verdict requires an
+identical canonical signature covering labels, confidence scores, and bounding
+boxes from the surviving worker.
+
+The regional profile holds capacity equal and presents the remote worker first.
+Both sessions are established concurrently; the selector must choose the lower
+measured establishment time. A separate framed echo checks byte equality and
+latency across five payload sizes.
+
+## Acceptance gates
+
+- Every functional, race, lifecycle, and malformed-input test passes.
+- Cancellation cannot release the model mutex while the executor still owns
+  YOLO; the reference run repeats this race 250 times.
+- Bounded capacity rejects the excess session and accepts a new session after a
+  slot is released.
+- Worker loss is observed on the existing stream, and the same frame returns
+  from the surviving worker with identical detections inside the configured
+  failover budget.
+- Transport probes preserve every byte at every payload size.
+- Equal-capacity regional selection chooses the lower measured establishment
+  latency.
+- Model p95, model throughput, live RTT, failover, and reference-payload
+  transport overhead become hard gates when their command-line budgets are
+  set. The larger payload profile always gates byte equality and records its
+  latency as a scaling observation.
 
 ## Local model and lifecycle profile
 
@@ -16,20 +53,6 @@ python3 qualification/run.py \
   --media /absolute/path/reference.mp4
 ```
 
-The runner verifies:
-
-- TypeScript type safety, Python imports, and every worker, device, and framing
-  regression test;
-- bounded worker admission and explicit overload rejection;
-- 100 cancellation races proving that an executor thread cannot outlive the
-  model mutex that protects YOLO;
-- registry failure, worker cooldown, power-of-two selection, rendezvous
-  distribution, duplicate responses, malformed protocol messages, and capture
-  teardown;
-- detections from the exact real model and media, sequential latency, and
-  serialized concurrent throughput;
-- absence of credential-shaped values in the evidence.
-
 Optional environment-specific thresholds turn latency observations into gates:
 
 ```bash
@@ -40,14 +63,14 @@ python3 qualification/run.py \
   --min-throughput-fps 12
 ```
 
-Do not copy those example thresholds blindly. Select them for the exact model,
-accelerator, input size, and service objective recorded by the environment.
+Choose these thresholds for the exact model, accelerator, input size, and
+service objective recorded by the environment.
 
-## Reading the evidence
+## Review the evidence
 
 Each run creates a private directory under `qualification/results/`. Start with
-`report.md`: it states the verdict and scope, links every raw log, and embeds
-command-duration and model-latency charts. `manifest.json` pins the repository
+`report.md`: it states the method, acceptance gates, and measured result, then
+links each underlying log. `manifest.json` pins the repository
 revision, dirty state, model and media hashes, host, tool versions, parameters,
 and thresholds. `model-benchmark.json` contains the machine-readable latency,
 throughput, detections, and violations.
@@ -55,11 +78,8 @@ throughput, detections, and violations.
 Model identities exposed through worker labels and the session protocol are
 basenames rather than filesystem paths.
 
-This local profile does not qualify discovery or data transit through a
-deployed rstream environment. Add `--live` to exercise two independently
-managed workers through the configured rstream context, concurrent sessions,
-explicit saturation, recovery, abrupt worker loss, registry removal, byte-exact
-transport scaling, and measured failover:
+Add `--live` to exercise discovery and data transit through two independently
+managed workers in the configured rstream project:
 
 ```bash
 python3 qualification/run.py \
@@ -87,7 +107,8 @@ The worker still selects by normalized available capacity first. Latency only
 breaks a tie between equally loaded candidates, so a nearby saturated worker
 does not beat an idle remote worker. This keeps the reference architecture
 decentralized and its quickstart unchanged while avoiding arbitrary remote
-selection. The report embeds the live/failover and regional before/after charts.
+selection. The report plots the failover timeline and the measured regional
+comparison.
 
 A dirty report is diagnostic only; release evidence must be rerun from the
 clean commit it names. Thresholds are disabled unless supplied because their
@@ -108,7 +129,6 @@ requests, 62 live mesh frames, capacity saturation and recovery, abrupt worker
 loss, failover, 30 repetitions across five transport payload sizes, and
 regional selection.
 
-Together, the report, measurements, and generated figures make the routing and
-performance claims independently reviewable. They qualify that commit on the
-recorded hardware and network path; they demonstrate reproducibility and
-protect against regressions but do not define a public cross-environment SLO.
+The report and sibling JSON files qualify that commit on the recorded hardware
+and network path. The configured budgets are regression gates for that
+environment, not a public cross-environment SLO.

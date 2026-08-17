@@ -480,6 +480,14 @@ async function collectSample(activePage) {
       localCandidateProtocol: localCandidate?.protocol || "",
       localCandidateType: localCandidate?.candidateType || "",
       lossAverage: bandwidth?.averageLoss ?? null,
+      lossGuardActive: bandwidth?.lossGuardActive || false,
+      lossGuardTargetKbps: bandwidth?.lossGuardTargetBitrateBps
+        ? bandwidth.lossGuardTargetBitrateBps / 1000
+        : 0,
+      lossGuardLastObservedLoss:
+        bandwidth?.lossGuardLastObservedLoss ?? null,
+      lossGuardReductions: bandwidth?.lossGuardReductions || 0,
+      lossGuardRecoveries: bandwidth?.lossGuardRecoveries || 0,
       flexFECMediaPackets: bandwidth?.flexFECMediaPackets || 0,
       flexFECRepairPackets: bandwidth?.flexFECRepairPackets || 0,
       lossTargetKbps: bandwidth?.lossTargetBitrateBps
@@ -514,6 +522,7 @@ async function collectSample(activePage) {
       pacerRepairPacketsExpired: bandwidth?.pacerRepairPacketsExpired || 0,
       pacerRepairPacketsTrimmed: bandwidth?.pacerRepairPacketsTrimmed || 0,
       pacerRTXPacketsExpired: bandwidth?.pacerRTXPacketsExpired || 0,
+      pacerRTXPacketsCoalesced: bandwidth?.pacerRTXPacketsCoalesced || 0,
       pacerFECPacketsExpired: bandwidth?.pacerFECPacketsExpired || 0,
       pacerRTXPacketsTrimmed: bandwidth?.pacerRTXPacketsTrimmed || 0,
       pacerFECPacketsTrimmed: bandwidth?.pacerFECPacketsTrimmed || 0,
@@ -521,6 +530,7 @@ async function collectSample(activePage) {
       pacerSentPrimary: bandwidth?.pacerSentPrimary || 0,
       pacerSentRepair: bandwidth?.pacerSentRepair || 0,
       pacerSentRTX: bandwidth?.pacerSentRTX || 0,
+      pacerSentFEC: bandwidth?.pacerSentFEC || 0,
       adaptiveBitrateUpdates: sessionStats?.adaptiveBitrateUpdates || 0,
       adaptiveBitrateFailures: sessionStats?.adaptiveBitrateFailures || 0,
       staleBitrateCallbacks: bandwidth?.staleBitrateCallbacks || 0,

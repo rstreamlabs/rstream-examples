@@ -156,6 +156,138 @@ func TestAssociatedEstimatorDoesNotCountTransportFeedbackPaddingAsLoss(t *testin
 	}
 }
 
+func TestAssociatedEstimatorAppliesPersistentHighLossWithoutDelayCallback(t *testing.T) {
+	delegate := &recordingPacer{}
+	pacer := wrapMinimumBitratePacer(delegate, 2_000_000)
+	underlying, err := gcc.NewSendSideBWE(
+		gcc.SendSideBWEInitialBitrate(8_000_000),
+		gcc.SendSideBWEMinBitrate(2_000_000),
+		gcc.SendSideBWEMaxBitrate(8_000_000),
+		gcc.SendSideBWEPacer(pacer),
+	)
+	if err != nil {
+		t.Fatalf("create bandwidth estimator: %v", err)
+	}
+	estimator := &associatedStreamBandwidthEstimator{
+		SendSideBWE:         underlying,
+		minimumMediaBitrate: 2_000_000,
+		maximumMediaBitrate: 8_000_000,
+		lossGuard:           newFeedbackLossGuard(2_000_000),
+		pacer:               pacer,
+	}
+	callbackTargets := make(chan int, 4)
+	estimator.OnTargetBitrateChange(func(bitrate int) {
+		callbackTargets <- bitrate
+	})
+	t.Cleanup(func() {
+		if err := estimator.Close(); err != nil {
+			t.Errorf("close bandwidth estimator: %v", err)
+		}
+	})
+	writer := estimator.AddStream(
+		&interceptor.StreamInfo{
+			SSRC: 42,
+			RTPHeaderExtensions: []interceptor.RTPHeaderExtension{
+				{URI: transportCCHeaderExtensionURI, ID: 1},
+			},
+		},
+		interceptor.RTPWriterFunc(func(
+			header *rtp.Header,
+			payload []byte,
+			_ interceptor.Attributes,
+		) (int, error) {
+			return header.MarshalSize() + len(payload), nil
+		}),
+	)
+	writeTransportPackets(t, writer, 0, 200)
+	for index, base := range []uint16{0, 100} {
+		if err := estimator.WriteRTCP(
+			[]rtcp.Packet{transportCCFeedbackWithLoss(base, uint8(index))},
+			nil,
+		); err != nil {
+			t.Fatalf("process high-loss feedback %d: %v", index, err)
+		}
+	}
+	if target := estimator.GetTargetBitrate(); target >= 8_000_000 {
+		t.Fatalf("guarded target = %d, want an immediate reduction", target)
+	}
+	lastCallbackTarget := 0
+drainCallbacks:
+	for {
+		select {
+		case lastCallbackTarget = <-callbackTargets:
+		default:
+			break drainCallbacks
+		}
+	}
+	if lastCallbackTarget == 0 || lastCallbackTarget >= 8_000_000 {
+		t.Fatalf("last callback target = %d, want an immediate reduction", lastCallbackTarget)
+	}
+	delegate.mu.Lock()
+	lastPacerTarget := delegate.bitrates[len(delegate.bitrates)-1]
+	delegate.mu.Unlock()
+	if lastPacerTarget >= 8_000_000 {
+		t.Fatalf("pacer target = %d, want an immediate reduction", lastPacerTarget)
+	}
+	stats := estimator.GetStats()
+	if reductions, ok := stats["lossGuardReductions"].(uint64); !ok || reductions == 0 {
+		t.Fatalf("loss guard reductions = %v, want at least one", stats["lossGuardReductions"])
+	}
+}
+
+func writeTransportPackets(
+	t *testing.T,
+	writer interceptor.RTPWriter,
+	first uint16,
+	count int,
+) {
+	t.Helper()
+	for offset := 0; offset < count; offset++ {
+		sequence := first + uint16(offset)
+		extension, err := (rtp.TransportCCExtension{TransportSequence: sequence}).Marshal()
+		if err != nil {
+			t.Fatalf("marshal transport sequence %d: %v", sequence, err)
+		}
+		header := &rtp.Header{SSRC: 42, SequenceNumber: sequence}
+		if err := header.SetExtension(1, extension); err != nil {
+			t.Fatalf("set transport sequence %d: %v", sequence, err)
+		}
+		if _, err := writer.Write(header, []byte{1}, nil); err != nil {
+			t.Fatalf("write packet %d: %v", sequence, err)
+		}
+	}
+}
+
+func transportCCFeedbackWithLoss(base uint16, feedbackCount uint8) *rtcp.TransportLayerCC {
+	deltas := make([]*rtcp.RecvDelta, 0, 80)
+	for index := 0; index < 80; index++ {
+		deltas = append(deltas, &rtcp.RecvDelta{
+			Type:  rtcp.TypeTCCPacketReceivedSmallDelta,
+			Delta: 250,
+		})
+	}
+	return &rtcp.TransportLayerCC{
+		BaseSequenceNumber: base,
+		PacketStatusCount:  100,
+		FbPktCount:         feedbackCount,
+		PacketChunks: []rtcp.PacketStatusChunk{
+			&rtcp.RunLengthChunk{
+				PacketStatusSymbol: rtcp.TypeTCCPacketReceivedSmallDelta,
+				RunLength:          40,
+			},
+			&rtcp.RunLengthChunk{
+				PacketStatusSymbol: rtcp.TypeTCCPacketNotReceived,
+				RunLength:          20,
+			},
+			&rtcp.RunLengthChunk{
+				PacketStatusSymbol: rtcp.TypeTCCPacketReceivedSmallDelta,
+				RunLength:          40,
+			},
+		},
+		RecvDeltas: deltas,
+	}
+}
+
 func transportCCFeedbackWithPadding() *rtcp.TransportLayerCC {
 	return &rtcp.TransportLayerCC{
 		BaseSequenceNumber: 0,

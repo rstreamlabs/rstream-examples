@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "corrections": [
+    {
+      "runId": 31987507811,
+      "url": "https://github.com/rstreamlabs/rstream-examples/actions/runs/31987507811",
+      "runtimeRevision": "ca8a308907aaa5661954af81d10f04bd8e5f52bb",
+      "originalAnalyzerRevision": "ca8a308907aaa5661954af81d10f04bd8e5f52bb",
+      "correctedAnalyzerRevision": "b7d23457262f45b82b879f2a76099c513e0d8753",
+      "affectedAssertion": "loss-guard-response",
+      "originalVerdict": "fail",
+      "correctedVerdict": "pass",
+      "finding": "The producer interface switch created one 98.34% TWCC sampling interval followed by zero-loss intervals. The original assertion used the phase aggregate as evidence of persistent loss even though the loss guard deliberately requires persistence.",
+      "correction": "Persistent high loss now means two consecutive connected TWCC sampling intervals above 10% while the encoder target remains above its configured floor. Regression tests distinguish an isolated path-switch burst from persistent loss.",
+      "runtimeChanged": false
+    }
+  ]
+}

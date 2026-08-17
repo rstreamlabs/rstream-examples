@@ -343,6 +343,88 @@ func TestTokenBucketPacerPrioritizesRepairWithoutReorderingQueuedMedia(t *testin
 	}
 }
 
+func TestTokenBucketPacerCoalescesOnlyPendingRetransmissions(t *testing.T) {
+	pacer := newTokenBucketPacer(10_000_000, 1, 64)
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	written := make(chan uint32, 3)
+	var first sync.Once
+	writer := interceptor.RTPWriterFunc(func(
+		header *rtp.Header,
+		payload []byte,
+		_ interceptor.Attributes,
+	) (int, error) {
+		first.Do(func() {
+			close(entered)
+			<-release
+		})
+		written <- header.SSRC
+		return header.MarshalSize() + len(payload), nil
+	})
+	pacer.AddStream(10, writer)
+	pacer.AddStream(11, writer)
+	pacer.markRetransmissionStream(11)
+	if _, err := pacer.Write(&rtp.Header{SSRC: 10, Marker: true}, []byte{1}, nil); err != nil {
+		t.Fatalf("queue primary packet: %v", err)
+	}
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("writer did not receive the primary packet")
+	}
+	const writers = 32
+	start := make(chan struct{})
+	var done sync.WaitGroup
+	done.Add(writers)
+	for range writers {
+		go func() {
+			defer done.Done()
+			<-start
+			if _, err := pacer.Write(
+				&rtp.Header{SSRC: 11},
+				[]byte{0x12, 0x34, 1},
+				nil,
+			); err != nil {
+				t.Errorf("queue duplicate retransmission: %v", err)
+			}
+		}()
+	}
+	close(start)
+	done.Wait()
+	if got := pacer.Stats()["pacerRetransmissionPacketsCoalesced"]; got != uint64(writers-1) {
+		t.Fatalf("coalesced retransmissions = %v, want %d", got, writers-1)
+	}
+	close(release)
+	for _, expected := range []uint32{10, 11} {
+		select {
+		case actual := <-written:
+			if actual != expected {
+				t.Fatalf("written SSRC = %d, want %d", actual, expected)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("timed out waiting for SSRC %d", expected)
+		}
+	}
+	if _, err := pacer.Write(
+		&rtp.Header{SSRC: 11},
+		[]byte{0x12, 0x34, 2},
+		nil,
+	); err != nil {
+		t.Fatalf("queue retransmission after prior delivery: %v", err)
+	}
+	select {
+	case actual := <-written:
+		if actual != 11 {
+			t.Fatalf("written SSRC = %d, want 11", actual)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("a retransmission for the same packet was not accepted after prior delivery")
+	}
+	if err := pacer.Close(); err != nil {
+		t.Fatalf("close pacer: %v", err)
+	}
+}
+
 func TestTokenBucketPacerDoesNotInterleaveRepairInsidePrimaryFrame(t *testing.T) {
 	pacer := newTokenBucketPacer(10_000_000, 1, 16)
 	entered := make(chan struct{})
@@ -470,6 +552,9 @@ func TestTokenBucketPacerSendsFECImmediatelyAfterItsProtectedGroup(t *testing.T)
 	stats := pacer.Stats()
 	if sent, _ := stats["pacerSentForwardErrorCorrection"].(uint64); sent != 1 {
 		t.Fatalf("sent FEC packets = %d, want 1", sent)
+	}
+	if sent, _ := stats["pacerSentForwardErrorCorrectionBytes"].(uint64); sent == 0 {
+		t.Fatal("sent FEC bytes = 0, want a positive wire byte count")
 	}
 	if sent, _ := stats["pacerSentRetransmission"].(uint64); sent != 0 {
 		t.Fatalf("sent RTX packets = %d, want 0", sent)
@@ -1077,7 +1162,10 @@ func TestTokenBucketPacerBoundsRepairWorkAheadOfNewMedia(t *testing.T) {
 		t.Fatal("writer did not receive the leading media")
 	}
 	for sequence := uint16(0); sequence < 100; sequence++ {
-		if _, err := pacer.Write(&rtp.Header{SSRC: 11, SequenceNumber: sequence}, make([]byte, 1200), nil); err != nil {
+		payload := make([]byte, 1200)
+		payload[0] = byte(sequence >> 8)
+		payload[1] = byte(sequence)
+		if _, err := pacer.Write(&rtp.Header{SSRC: 11, SequenceNumber: sequence}, payload, nil); err != nil {
 			t.Fatalf("queue repair packet %d: %v", sequence, err)
 		}
 	}

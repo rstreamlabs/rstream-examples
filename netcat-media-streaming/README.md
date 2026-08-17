@@ -94,19 +94,20 @@ direct MPEG-TS and shared MediaMTX/RTSP variants.
 
 ## Qualification
 
-The quick starts above remain the normal way to use the sample. The separate
-[`qualification/`](./qualification/) pack exercises finite streams, exact frame
-counts, Go/C++ netcat interoperability, datagram termination, RTCP feedback,
-injected loss, packet repair, and graceful process teardown. It retains a
-versioned manifest and compact results without making the interactive example
-harder to follow.
+The [`qualification/`](./qualification/) pack replaces the live sources with
+finite 300-frame inputs and checks the decoded result, not just process exit.
+It crosses FFmpeg and GStreamer with the Go and C++ netcat implementations,
+parses RTP sequence numbers, injects packet loss ahead of the tunnel, and
+verifies the RTCP/NACK repair path. Process teardown and unexpected media
+warnings are part of the verdict.
 
 The published [`156e96a` evidence pack](./qualification/evidence/156e96a/report.md)
 records a clean run across every profile: 300 decoded frames in all four
 reliable Go/C++ and FFmpeg/GStreamer combinations, 1,221/1,221 RTP packets and
 300/300 reference-identical frames in both datagram profiles, 300/300 frames
 after RTCP/NACK repair at 1% injected loss, and 300/300 frames through each RTSP
-bridge.
+bridge. The clean best-effort result establishes fidelity on the recorded path;
+the injected-loss profile is the evidence for packet repair.
 
 ```bash
 make qualify

@@ -47,8 +47,8 @@ impairment_scope=""
 path_kind="${RSTREAM_QUALIFICATION_PATH:-relay}"
 protection_profile="${RSTREAM_QUALIFICATION_PROTECTION:-nack-rtx}"
 flexfec_enabled=false
-flexfec_media_packets="${RSTREAM_QUALIFICATION_FLEXFEC_MEDIA_PACKETS:-4}"
-flexfec_repair_packets="${RSTREAM_QUALIFICATION_FLEXFEC_REPAIR_PACKETS:-2}"
+flexfec_media_packets="${RSTREAM_QUALIFICATION_FLEXFEC_MEDIA_PACKETS:-5}"
+flexfec_repair_packets="${RSTREAM_QUALIFICATION_FLEXFEC_REPAIR_PACKETS:-1}"
 warmup_seconds="${RSTREAM_QUALIFICATION_WARMUP_SECONDS:-20}"
 baseline_seconds="${RSTREAM_QUALIFICATION_BASELINE_SECONDS:-25}"
 constrained_seconds="${RSTREAM_QUALIFICATION_CONSTRAINED_SECONDS:-45}"
@@ -58,6 +58,7 @@ recovery_drain_seconds="${RSTREAM_QUALIFICATION_RECOVERY_DRAIN_SECONDS:-1}"
 mobility_seconds="${RSTREAM_QUALIFICATION_MOBILITY_SECONDS:-30}"
 mobility_mode="${RSTREAM_QUALIFICATION_MOBILITY:-off}"
 transition_step_seconds="${RSTREAM_QUALIFICATION_TRANSITION_STEP_SECONDS:-5}"
+conditioning_seconds="${RSTREAM_QUALIFICATION_CONDITIONING_SECONDS:-30}"
 capacity_kbps="${RSTREAM_QUALIFICATION_CAPACITY_KBPS:-4000}"
 queue_limit_packets="${RSTREAM_QUALIFICATION_QUEUE_LIMIT_PACKETS:-256}"
 docker_pull="${RSTREAM_QUALIFICATION_DOCKER_PULL:-always}"
@@ -67,7 +68,7 @@ prepare_context_binary="${RSTREAM_QUALIFICATION_PREPARE_CONTEXT_BINARY:-}"
 prepared_runtime_directory="${RSTREAM_QUALIFICATION_PREPARED_RUNTIME_DIRECTORY:-}"
 pion_log_debug="${RSTREAM_QUALIFICATION_PION_LOG_DEBUG:-}"
 encoder_debug="${RSTREAM_QUALIFICATION_ENCODER_DEBUG:-true}"
-playout_delay_hint_seconds="${RSTREAM_QUALIFICATION_PLAYOUT_DELAY_HINT_SECONDS:-0}"
+playout_delay_hint_seconds="${RSTREAM_QUALIFICATION_PLAYOUT_DELAY_HINT_SECONDS:-0.2}"
 turn_transport="${RSTREAM_QUALIFICATION_TURN_TRANSPORT:-}"
 producer_turn_policy="${RSTREAM_QUALIFICATION_PRODUCER_TURN_POLICY:-}"
 if [[ -z "${producer_turn_policy}" ]]; then
@@ -318,19 +319,37 @@ start_traffic_control() {
     --transport-protocol "${media_destination_protocol}" \
     --match-destination-port "${match_destination_port}" \
     --queue-limit-packets "${queue_limit_packets}" \
+    --conditioning-capacity-kbps "${conditioning_capacity_kbps}" \
     --capacity-step-one-kbps "${capacity_step_one_kbps}" \
     --capacity-step-two-kbps "${capacity_step_two_kbps}" \
     --capacity-step-three-kbps "${capacity_step_three_kbps}" \
     --capacity-kbps "${capacity_kbps}" \
     --transition-step-seconds "${transition_step_seconds}" \
+    --conditioning-seconds "${conditioning_seconds}" \
     --constrained-steady-seconds "${constrained_steady_seconds}" \
     --impaired-seconds "${impaired_seconds}" \
+    --recovery-seconds "${recovery_seconds}" \
     --recovery-capacity-kbps "${recovery_capacity_kbps}" \
     --recovery-drain-seconds "${recovery_drain_seconds}" \
     <"${script_directory}/traffic-control.sh" \
     >"${output_directory}/traffic-control-events.log" \
     2>"${output_directory}/traffic-control.log" &
   traffic_control_pid=$!
+}
+
+record_traffic_control_event() {
+  local event="$1"
+  local timeline="${output_directory}/network-condition-timeline.jsonl"
+  local observed_at
+  if [[ -s "${timeline}" ]] && jq -e --arg event "${event}" \
+    'select(.name == $event)' "${timeline}" >/dev/null; then
+    return
+  fi
+  observed_at="$(node -e 'process.stdout.write(new Date().toISOString())')"
+  jq -cn \
+    --arg name "${event}" \
+    --arg observed_at "${observed_at}" \
+    '{name: $name, observedAt: $observed_at}' >>"${timeline}"
 }
 
 wait_for_traffic_control_event() {
@@ -351,8 +370,20 @@ wait_for_traffic_control_event() {
       printf 'timed out waiting for traffic-control event %s\n' "${event}" >&2
       return 1
     fi
+    if [[ -n "${collector_pid}" ]] && ! kill -0 "${collector_pid}" 2>/dev/null; then
+      local collector_status=0
+      wait "${collector_pid}" || collector_status=$?
+      collector_pid=""
+      printf 'collector exited before traffic-control event %s (status %s)\n' \
+        "${event}" "${collector_status}" >&2
+      if ((collector_status == 0)); then
+        collector_status=1
+      fi
+      return "${collector_status}"
+    fi
     sleep 0.1
   done
+  record_traffic_control_event "${event}"
 }
 
 wait_for_traffic_control() {
@@ -418,6 +449,8 @@ capture_network_evidence() {
     tar -C "${output_directory}" -xf -
   local expected
   for expected in \
+    qdisc-conditioning-start.json \
+    qdisc-conditioning.json \
     qdisc-constrained-step-1-start.json \
     qdisc-constrained-step-1.json \
     qdisc-constrained-step-2-start.json \
@@ -428,6 +461,12 @@ capture_network_evidence() {
     qdisc-constrained-steady.json \
     qdisc-impaired-start.json \
     qdisc-impaired.json \
+    qdisc-recovery-settle-start.json \
+    qdisc-recovery-settle.json \
+    qdisc-recovery-capacity-start.json \
+    qdisc-recovery-capacity.json \
+    filter-conditioning-start.json \
+    filter-conditioning.json \
     filter-constrained-step-1-start.json \
     filter-constrained-step-1.json \
     filter-constrained-step-2-start.json \
@@ -438,6 +477,10 @@ capture_network_evidence() {
     filter-constrained-steady.json \
     filter-impaired-start.json \
     filter-impaired.json \
+    filter-recovery-settle-start.json \
+    filter-recovery-settle.json \
+    filter-recovery-capacity-start.json \
+    filter-recovery-capacity.json \
     qdisc-recovery-drain-start.json \
     qdisc-recovery-drain.json \
     filter-recovery-drain-start.json \
@@ -647,7 +690,8 @@ for duration in \
   "${recovery_seconds}" \
   "${recovery_drain_seconds}" \
   "${mobility_seconds}" \
-  "${transition_step_seconds}"; do
+  "${transition_step_seconds}" \
+  "${conditioning_seconds}"; do
   if ! positive_integer "${duration}"; then
     printf 'qualification phase durations must be positive integers, got %s\n' "${duration}" >&2
     exit 1
@@ -674,6 +718,7 @@ impaired_seconds=$((10#${impaired_seconds}))
 recovery_seconds=$((10#${recovery_seconds}))
 recovery_drain_seconds=$((10#${recovery_drain_seconds}))
 transition_step_seconds=$((10#${transition_step_seconds}))
+conditioning_seconds=$((10#${conditioning_seconds}))
 if ! positive_integer "${capacity_kbps}"; then
   printf 'RSTREAM_QUALIFICATION_CAPACITY_KBPS must be an integer of at least 600, got %s\n' \
     "${capacity_kbps}" >&2
@@ -702,6 +747,10 @@ capacity_step_three_kbps=$((capacity_kbps * 2))
 constrained_steady_seconds=$((constrained_seconds - 3 * transition_step_seconds))
 if ((constrained_steady_seconds < 15)); then
   printf 'constrained phase must leave at least 15 steady seconds after its three transition steps\n' >&2
+  exit 1
+fi
+if ((recovery_seconds <= transition_step_seconds)); then
+  printf 'recovery phase must be longer than its stabilization step\n' >&2
   exit 1
 fi
 if [[ -e "${output_directory}" ]] && [[ -n "$(find "${output_directory}" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
@@ -749,6 +798,7 @@ initial_bitrate_kbps="$(sed -nE 's/^[[:space:]]*initialBitrateKbps:[[:space:]]*(
 minimum_bitrate_kbps="$(sed -nE 's/^[[:space:]]*minBitrateKbps:[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' "${effective_config_path}")"
 maximum_bitrate_kbps="$(sed -nE 's/^[[:space:]]*maxBitrateKbps:[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' "${effective_config_path}")"
 change_threshold_pct="$(sed -nE 's/^[[:space:]]*changeThresholdPct:[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' "${effective_config_path}")"
+max_increase_loss_pct="$(sed -nE 's/^[[:space:]]*maxIncreaseLossPct:[[:space:]]*([0-9]+([.][0-9]+)?)[[:space:]]*$/\1/p' "${effective_config_path}")"
 for adaptive_value in \
   "${initial_bitrate_kbps}" \
   "${minimum_bitrate_kbps}" \
@@ -760,12 +810,22 @@ for adaptive_value in \
     exit 1
   fi
 done
+if ! [[ "${max_increase_loss_pct}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+  printf 'qualification runtime is missing maxIncreaseLossPct in %s\n' \
+    "${effective_config_path}" >&2
+  exit 1
+fi
 if ((minimum_bitrate_kbps <= 0 || initial_bitrate_kbps < minimum_bitrate_kbps || maximum_bitrate_kbps < initial_bitrate_kbps || change_threshold_pct > 50)); then
   printf 'qualification runtime has an invalid adaptive bitrate envelope in %s\n' \
     "${effective_config_path}" >&2
   exit 1
 fi
 recovery_capacity_kbps=$((maximum_bitrate_kbps * 20))
+conditioning_capacity_kbps=$((maximum_bitrate_kbps * 4))
+minimum_conditioning_capacity_kbps=$((capacity_step_one_kbps * 2))
+if ((conditioning_capacity_kbps < minimum_conditioning_capacity_kbps)); then
+  conditioning_capacity_kbps="${minimum_conditioning_capacity_kbps}"
+fi
 
 printf 'Building qualification producer image %s\n' "${image_tag}"
 record_setup_milestone producer-build-started
@@ -841,7 +901,9 @@ jq -n \
   --argjson mobility_seconds "${mobility_seconds}" \
   --arg mobility_mode "${mobility_mode}" \
   --argjson transition_step "${transition_step_seconds}" \
+  --argjson conditioning "${conditioning_seconds}" \
   --argjson capacity "${capacity_kbps}" \
+  --argjson conditioning_capacity "${conditioning_capacity_kbps}" \
   --argjson queue_limit "${queue_limit_packets}" \
   --argjson capacity_step_one "${capacity_step_one_kbps}" \
   --argjson capacity_step_two "${capacity_step_two_kbps}" \
@@ -851,6 +913,7 @@ jq -n \
   --argjson minimum_bitrate "${minimum_bitrate_kbps}" \
   --argjson maximum_bitrate "${maximum_bitrate_kbps}" \
   --argjson change_threshold "${change_threshold_pct}" \
+  --arg max_increase_loss "${max_increase_loss_pct}" \
   '{
     generatedAt: $generated_at,
     git: {revision: $revision, producerTree: $producer_tree, dirty: $dirty},
@@ -869,6 +932,11 @@ jq -n \
       description: (if $path_kind == "relay" then "rstream managed TURN over the published producer tunnel" else "direct WebRTC over an isolated Docker bridge" end),
       turnTransport: (if $turn_transport == "" then null else $turn_transport end),
       producerTURNPolicy: $producer_turn_policy
+    },
+    networkConditionTimeline: {
+      required: true,
+      clock: "metrics-collector",
+      precisionMilliseconds: 100
     },
     runtime: {
       dockerVersion: $docker_version,
@@ -889,7 +957,8 @@ jq -n \
         initialBitrateKbps: $initial_bitrate,
         minimumBitrateKbps: $minimum_bitrate,
         maximumBitrateKbps: $maximum_bitrate,
-        changeThresholdPct: $change_threshold
+        changeThresholdPct: $change_threshold,
+        maxIncreaseLossPct: ($max_increase_loss | tonumber)
       }
     },
     networkMobility: (if $mobility_mode == "producer" then {
@@ -904,9 +973,10 @@ jq -n \
     ] + (if $mobility_mode == "producer" then [
       {name: "mobility", durationSeconds: $mobility_seconds, shaping: null}
     ] else [] end) + [
-      {name: "constrained", durationSeconds: $constrained, shaping: {discipline: "selective-prio+netem", scope: (if $path_kind == "relay" then "producer-turn-transport" else "peer-webrtc-transport-address" end), capacityKbps: $capacity, queueLimitPackets: $queue_limit, loss: "0%", schedule: [{durationSeconds: $transition_step, capacityKbps: $capacity_step_one, delay: "40ms", jitter: "10ms"}, {durationSeconds: $transition_step, capacityKbps: $capacity_step_two, delay: "50ms", jitter: "10ms"}, {durationSeconds: $transition_step, capacityKbps: $capacity_step_three, delay: "65ms", jitter: "15ms"}, {durationSeconds: ($constrained - 3 * $transition_step), capacityKbps: $capacity, delay: "80ms", jitter: "20ms"}]}},
+      {name: "conditioning", durationSeconds: $conditioning, shaping: {discipline: "selective-prio+netem", scope: (if $path_kind == "relay" then "producer-turn-transport" else "peer-webrtc-transport-address" end), capacityKbps: $conditioning_capacity, queueLimitPackets: $queue_limit, delay: "0ms", jitter: "0ms", loss: "0%", purpose: "settle traffic-control activation without constraining the reference stream"}},
+      {name: "constrained", durationSeconds: $constrained, shaping: {discipline: "selective-prio+netem", scope: (if $path_kind == "relay" then "producer-turn-transport" else "peer-webrtc-transport-address" end), capacityKbps: $capacity, queueLimitPackets: $queue_limit, loss: "0%", schedule: [{durationSeconds: $transition_step, capacityKbps: $capacity_step_one, delay: "0ms", jitter: "0ms"}, {durationSeconds: $transition_step, capacityKbps: $capacity_step_two, delay: "0ms", jitter: "0ms"}, {durationSeconds: $transition_step, capacityKbps: $capacity_step_three, delay: "0ms", jitter: "0ms"}, {durationSeconds: ($constrained - 3 * $transition_step), capacityKbps: $capacity, delay: "0ms", jitter: "0ms"}]}},
       {name: "impaired", durationSeconds: $impaired, shaping: {discipline: "selective-prio+netem", scope: (if $path_kind == "relay" then "producer-turn-transport" else "peer-webrtc-transport-address" end), capacityKbps: $capacity, queueLimitPackets: $queue_limit, delay: "120ms", jitter: "30ms", loss: "2%"}},
-      {name: "recovery", durationSeconds: $recovery, shaping: null}
+      {name: "recovery", durationSeconds: $recovery, shaping: {discipline: "selective-prio+netem", scope: (if $path_kind == "relay" then "producer-turn-transport" else "peer-webrtc-transport-address" end), capacityKbps: $conditioning_capacity, queueLimitPackets: $queue_limit, loss: "0%", schedule: [{durationSeconds: $transition_step, capacityKbps: $capacity, delay: "0ms", jitter: "0ms"}, {durationSeconds: ($recovery - $transition_step), capacityKbps: $conditioning_capacity, delay: "0ms", jitter: "0ms"}]}}
     ])
   }' >"${output_directory}/manifest.json"
 
@@ -1219,17 +1289,25 @@ if [[ "${mobility_mode}" == "producer" ]]; then
   hold_phase mobility "${mobility_seconds}"
 fi
 start_traffic_control
-wait_for_traffic_control_event constrained-started 15
+wait_for_traffic_control_event conditioning-started 15
+write_phase conditioning \
+  "$(jq -cn --argjson capacity "${conditioning_capacity_kbps}" --argjson queue_limit "${queue_limit_packets}" --arg scope "${impairment_scope}" '{capacityKbps: $capacity, delay: "0ms", jitter: "0ms", loss: "0%", queueLimitPackets: $queue_limit, scope: $scope, purpose: "settle traffic-control activation without constraining the reference stream"}')"
+wait_for_traffic_control_event constrained-started $((conditioning_seconds + 15))
 write_phase constrained \
-  "$(jq -cn --argjson one "${capacity_step_one_kbps}" --argjson two "${capacity_step_two_kbps}" --argjson three "${capacity_step_three_kbps}" --argjson steady "${capacity_kbps}" --argjson queue_limit "${queue_limit_packets}" --arg scope "${impairment_scope}" '{schedule: [{capacityKbps: $one, delay: "40ms", jitter: "10ms"}, {capacityKbps: $two, delay: "50ms", jitter: "10ms"}, {capacityKbps: $three, delay: "65ms", jitter: "15ms"}, {capacityKbps: $steady, delay: "80ms", jitter: "20ms"}], loss: "0%", queueLimitPackets: $queue_limit, scope: $scope}')"
-wait_for_traffic_control_event impaired-started $((constrained_seconds + 15))
+  "$(jq -cn --argjson one "${capacity_step_one_kbps}" --argjson two "${capacity_step_two_kbps}" --argjson three "${capacity_step_three_kbps}" --argjson steady "${capacity_kbps}" --argjson step "${transition_step_seconds}" --argjson duration "${constrained_seconds}" --argjson queue_limit "${queue_limit_packets}" --arg scope "${impairment_scope}" '{schedule: [{durationSeconds: $step, capacityKbps: $one, delay: "0ms", jitter: "0ms"}, {durationSeconds: $step, capacityKbps: $two, delay: "0ms", jitter: "0ms"}, {durationSeconds: $step, capacityKbps: $three, delay: "0ms", jitter: "0ms"}, {durationSeconds: ($duration - 3 * $step), capacityKbps: $steady, delay: "0ms", jitter: "0ms"}], loss: "0%", queueLimitPackets: $queue_limit, scope: $scope}')"
+wait_for_traffic_control_event constrained-step-2-started $((transition_step_seconds + 15))
+wait_for_traffic_control_event constrained-step-3-started $((transition_step_seconds + 15))
+wait_for_traffic_control_event constrained-steady-started $((transition_step_seconds + 15))
+wait_for_traffic_control_event impaired-started $((constrained_steady_seconds + 15))
 write_phase impaired \
   "$(jq -cn --argjson capacity "${capacity_kbps}" --argjson queue_limit "${queue_limit_packets}" --arg scope "${impairment_scope}" '{capacityKbps: $capacity, delay: "120ms", jitter: "30ms", loss: "2%", queueLimitPackets: $queue_limit, scope: $scope}')"
-wait_for_traffic_control_event recovery-started \
-  $((impaired_seconds + recovery_drain_seconds + 15))
-write_phase recovery '{}'
+wait_for_traffic_control_event recovery-started $((impaired_seconds + 15))
+write_phase recovery \
+  "$(jq -cn --argjson constrained "${capacity_kbps}" --argjson restored "${conditioning_capacity_kbps}" --argjson step "${transition_step_seconds}" --argjson duration "${recovery_seconds}" --argjson queue_limit "${queue_limit_packets}" --arg scope "${impairment_scope}" '{schedule: [{durationSeconds: $step, capacityKbps: $constrained, delay: "0ms", jitter: "0ms"}, {durationSeconds: ($duration - $step), capacityKbps: $restored, delay: "0ms", jitter: "0ms"}], loss: "0%", queueLimitPackets: $queue_limit, scope: $scope}')"
+wait_for_traffic_control_event recovery-capacity-started $((transition_step_seconds + 15))
+wait_for_traffic_control_event recovery-drain-started $((recovery_seconds - transition_step_seconds + 15))
+write_phase drain '{"purpose":"drain shaped packets before qdisc teardown"}'
 wait_for_traffic_control
-hold_phase recovery "${recovery_seconds}"
 # The collector exits as soon as it observes the complete phase. Stop the
 # namespace sampler first so Docker cannot terminate it while its container is
 # exiting and turn a successful qualification into an unanalysed status 137.

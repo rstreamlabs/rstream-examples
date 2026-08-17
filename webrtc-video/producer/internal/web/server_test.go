@@ -81,6 +81,43 @@ func TestViewerFaviconDoesNotCreateABrowserConsoleError(t *testing.T) {
 	}
 }
 
+func TestAPITURNFailureIsLoggedAndReturned(t *testing.T) {
+	hub := logs.NewHub(16)
+	server := NewServer(
+		logs.NewLogger(hub, false),
+		hub,
+		func(context.Context) (*rstream.TURNCredentials, error) {
+			return nil, errors.New("credential backend unavailable")
+		},
+		func(context.Context, func(rtc.SignalMessage) error) (*rtc.Session, error) {
+			return nil, errors.New("not implemented")
+		},
+	)
+	req := httptest.NewRequest(http.MethodGet, "/api/turn", nil)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusInternalServerError {
+		t.Fatalf("TURN status = %d, want %d", res.Code, http.StatusInternalServerError)
+	}
+	var body map[string]string
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatalf("decode TURN error response: %v", err)
+	}
+	if body["error"] != "credential backend unavailable" {
+		t.Fatalf("TURN error = %q, want backend failure", body["error"])
+	}
+	entries := hub.Recent()
+	if len(entries) != 1 {
+		t.Fatalf("log entries = %d, want 1", len(entries))
+	}
+	if entries[0].Level != "error" {
+		t.Fatalf("log level = %q, want error", entries[0].Level)
+	}
+	if entries[0].Message != "TURN credential request failed: credential backend unavailable" {
+		t.Fatalf("log message = %q", entries[0].Message)
+	}
+}
+
 func TestSameOriginAllowsBrowserViewerOrigin(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "https://viewer.example/ws", nil)
 	req.Host = "viewer.example"

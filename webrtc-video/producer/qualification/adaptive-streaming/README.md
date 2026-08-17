@@ -1,11 +1,9 @@
 # Adaptive streaming qualification
 
 This qualification pack measures the adaptive H.264 sender under changing
-bandwidth, latency, and packet loss. It then compares the rstream TURN path with
-an isolated direct reference exposed to the same media impairment.
-
-The quick start remains a config copy plus `make build`. This pack adds the
-repeatable, longer-running evidence used to qualify a release.
+bandwidth, latency, and packet loss. It compares a managed rstream TURN path
+with an isolated direct reference, then moves the active producer between two
+interfaces to qualify Trickle ICE and ICE restart on the recovered session.
 
 ## What the harness measures
 
@@ -43,13 +41,26 @@ also records shorter runtime pauses that aggregate CPU counters cannot expose,
 including pauses of a local container VM.
 
 The impairment schedule runs as one process inside the producer network
-namespace. It applies each capacity step, captures the matching qdisc counters,
-then transitions to a zero-delay, zero-loss recovery profile whose capacity is
-20 times the configured encoder ceiling. During this one-second transition,
-the profile drains packets already held by the impaired qdisc and proves that
-the drain added no drops. Traffic control is then removed before the recovery
-event starts the unshaped measurement. Deleting a populated qdisc would create
-an artificial loss burst and misclassify teardown as transport recovery.
+namespace. It first holds a 32 Mbit/s profile with no added delay, jitter, or
+random loss long enough for the controller to settle after qdisc activation.
+The final ten seconds before the first capacity step define the causal
+reference for that run. At least 80% of those samples and the final sample must
+stay within 10% of the window's median encoder target. Congestion reduction and
+recovery are measured from that stable target, while the earlier unshaped
+baseline remains the healthy-link quality reference. A real relay may therefore
+settle below an initial access-link peak without turning that peak into an
+artificial recovery requirement.
+The capacity experiment then changes only the rate while the path steps through
+16, 12, 8, and 4 Mbit/s. Additional delay, jitter, and loss begin in a separate
+phase.
+
+Recovery follows the same discipline. It first removes loss, delay, and jitter
+while capacity remains at 4 Mbit/s, then raises capacity to 32 Mbit/s. The
+measured response time starts at that second event.
+After the recovery measurement, a zero-delay, zero-loss drain profile with
+capacity 20 times the encoder ceiling empties the qdisc before teardown.
+Deleting a populated qdisc would create an artificial loss burst and
+misclassify teardown as transport recovery.
 Docker API latency remains outside the measured phase durations, including
 when the producer runs on a separate daemon. An interruption removes the qdisc
 before the container is cleaned up.
@@ -63,15 +74,16 @@ key-frame reserve, actual packet residence time, and prospective sustained-rate
 backlog. These signals make the latency bound, sequence continuity, and egress
 rate directly verifiable.
 
-The link moves through five phases:
+The link moves through six measured phases:
 
-| Phase       | Media path                                               |
-| ----------- | -------------------------------------------------------- |
-| warmup      | unshaped                                                 |
-| baseline    | unshaped reference                                       |
-| constrained | 16, 12, 8, then 4 Mbit/s; 40–80 ms delay; no random loss |
-| impaired    | 4 Mbit/s; 120 ms delay; 30 ms jitter; 2% random loss     |
-| recovery    | unshaped after a measured one-second queue drain          |
+| Phase        | Media path                                                 |
+| ------------ | ---------------------------------------------------------- |
+| warmup       | unshaped reference                                         |
+| baseline     | unshaped quality ceiling                                   |
+| conditioning | 30 s at 32 Mbit/s; no delay, jitter, or random loss        |
+| constrained  | 16, 12, 8, then 4 Mbit/s; no delay, jitter, or random loss |
+| impaired     | 4 Mbit/s; 120 ms delay; 30 ms jitter; 2% random loss       |
+| recovery     | 4 then 32 Mbit/s; no delay, jitter, or random loss         |
 
 For a direct run, the Linux traffic-control filter applies to outbound UDP on
 the isolated producer-to-browser address. It deliberately does not pin the
@@ -121,8 +133,9 @@ The harness supports two path kinds:
 It also supports two protection profiles:
 
 - `nack-rtx` uses reactive NACK feedback and RTX retransmissions.
-- `nack-rtx-flexfec` adds proactive FlexFEC-03 protection at two repair packets
-  per four media packets.
+- `nack-rtx-flexfec` adds proactive FlexFEC-03 protection. Its default is one
+  repair packet per five media packets; ratio overrides support explicit stress
+  comparisons.
 
 ### Symmetric relay qualification
 
@@ -134,39 +147,45 @@ exact flow being impaired. Transport fallback has its own qualification path;
 the video comparison measures one selected route rather than an opportunistic
 ICE outcome.
 
-FlexFEC is not free capacity. GCC estimates the media rate acknowledged through
-TWCC, and the pacer converts that target into a wire budget that includes the
-configured repair ratio. With the reference `2/4` profile, a 1.5 Mbit/s wire
-budget provides 1 Mbit/s to media before RTP, UDP, IP, and occasional RTX
-overhead. At the qualified 4 Mbit/s wire point the theoretical media share is
-about 2.67 Mbit/s; the 2 Mbit/s encoder floor leaves measured room for
-packetization, paced repair, and transient overshoot. Chromium does not
-acknowledge the FlexFEC stream through TWCC, so those packets remain outside
-GCC's loss and received-rate calculations while the pacer still accounts for
-their wire cost.
+FlexFEC is not free capacity. GCC controls the complete paced wire budget, and
+the producer derives the encoder's media share after reserving the configured
+repair ratio. With the reference `1/5` profile, a 1.2 Mbit/s wire budget
+provides 1 Mbit/s to media before RTP, UDP, IP, and occasional RTX overhead. At
+the qualified 4 Mbit/s wire point the theoretical media share is about 3.33
+Mbit/s; the 2 Mbit/s encoder floor leaves measured room for packetization,
+reactive repair, and transient overshoot. Chromium does not acknowledge the
+FlexFEC stream through TWCC, so those packets remain outside GCC's loss and
+received-rate calculations while remaining inside its capacity budget.
 
-The sender uses one real-time envelope for media bursts and repair. It takes
-the larger of the protected wire target and 1.5 times the media target; it does
-not multiply the FlexFEC overhead by another 1.5. For the reference `2/4`
-profile those values are equal. Every recorded sample carries both the
-protected target and the effective pacing envelope, and the qualification
-fails if their relationship diverges from the configured protection ratio.
+The sender uses one real-time envelope for media bursts and repair. Its
+sustained target is GCC's complete wire budget; the token bucket permits short
+bursts at 1.5 times that rate without changing the long-term allowance. Every
+recorded sample carries the media target, wire target, and pacing envelope, and
+the qualification fails if their relationship diverges from the configured
+protection ratio.
+
+Pion's delay and loss estimators remain the primary congestion controller. A
+bounded feedback-loss guard closes one coordination gap between them: two
+consecutive valid TWCC reports above 10% loss reduce the current media target
+immediately, even if the delay estimator has not emitted a new callback. The
+guard ignores reports with fewer than 20 statuses and isolated spikes. After a
+second of reports below 2% loss, its cap rises in 5% steps every 200 ms until
+Pion's target takes over again. This prevents a transient queue from becoming a
+loss/RTX/FlexFEC amplification loop without replacing GCC's normal bandwidth
+estimate. The phase report exposes the guard target, peak reported loss, and
+every reduction and recovery.
 
 Encoder hysteresis cannot spend the same headroom twice. Startup validation
 therefore derives the largest safe decrease threshold from the selected repair
-ratio and the shared pacing envelope. The reference `2/4` profile uses immediate
-decreases because its repair traffic consumes the full 1.5x envelope. A lighter
-`2/5` profile leaves a six-percent safe threshold; a five-percent setting
-absorbs estimator noise without allowing the encoder to overdrive the pacer.
+ratio and the shared pacing envelope. The qualified profiles use immediate
+decreases; the `2/4` stress ratio consumes the complete 1.5× allowance, while
+the default `1/5` ratio retains margin for packetization and reactive repair.
 
-Pion distributes the protected media packets across the repair packets with an
-interleaved XOR map. The two repairs in the reference profile therefore cover
-two independent two-packet groups; they do not recover any arbitrary pair of
-losses in the four-packet window. The shorter groups were selected after an
-immediate A/B run under the same 2% loss profile reduced NACK and RTX activity
-by about 10% and frozen time by about 40% compared with `2/5`. The complete
-matrix still has to pass because a single favorable run is evidence for the
-choice, not its release verdict.
+Pion distributes protected media packets across independent XOR groups when a
+profile uses several repair packets. In the `2/4` stress profile, each repair
+covers one two-packet group; the pair does not recover any arbitrary two losses
+in the complete four-packet window. This topology is recorded with the ratio so
+the stress result cannot be misread as a generic two-loss guarantee.
 
 Packet repair and playback buffering solve different parts of continuity.
 NACK/RTX and FlexFEC recover missing media; the receiver jitter buffer absorbs
@@ -175,8 +194,8 @@ The runner can set Chromium's minimum receiver hint with
 `RSTREAM_QUALIFICATION_PLAYOUT_DELAY_HINT_SECONDS`. It records both the
 configured hint and the receiver's effective target delay. The target must stay
 below 250 ms, so a smooth result cannot be obtained by hiding several seconds
-of latency in the player. The release default is zero until repeated direct and
-relay evidence establishes a better operating point.
+of latency in the player. The qualification profile requests 200 ms and still
+requires the measured target to remain below 250 ms.
 
 ## Run one scenario
 
@@ -293,8 +312,8 @@ fails unless:
 - every expected run produced a summary from the same clean producer tree;
 - every full direct run forces a congestion response, while every relay run
   receives valid TWCC feedback and does not increase its encoder target under
-  additional pressure; a relay whose pre-existing path is already below the
-  shaper budget is not required to manufacture a 20% target change;
+  additional pressure; a relay whose stable pre-transition target already fits
+  the shaper budget is not required to manufacture a 20% target change;
 - every full-profile direct and relay run passes its per-run criteria;
 - relay median output remains at least 20 fps and frozen time at most 10%;
 - every full-profile run exposes valid timestamped x264 QP telemetry and relay
@@ -312,25 +331,36 @@ the end-to-end TURN evidence.
 `comparison.md` is the human report, `comparison.json` is the automation
 verdict, and `comparison.svg` is the compact visual suitable for the guide.
 
-The default 4 Mbit/s wire capacity is the qualified operating point for this
-specific 1080p30 H.264 profile with NACK, RTX, and optional `2/4` FlexFEC. The
-encoder has a 2 Mbit/s media floor: lower targets kept frames flowing but drove
-x264 to QP 49–51, which is not acceptable evidence of healthy video. A 3
-Mbit/s wire test then overloaded the steady qdisc once repair traffic was
-included, while 3.5 Mbit/s remained marginal on frozen time. The 4 Mbit/s point
-is the first tested budget that preserved quantization, bounded freezes, and
-the independent loss budget in both direct and relay diagnostics. Production
-H.264 examples use the same 2 Mbit/s quality floor. Override the test capacity
-with `RSTREAM_QUALIFICATION_CAPACITY_KBPS`; the manifest records it and the
-matrix rejects runs that do not use one identical profile.
+The matrix uses one 4 Mbit/s wire bottleneck for the default `1/5` profile and
+the explicit `2/4` stress comparison. The encoder has a 2 Mbit/s media floor:
+lower targets kept frames flowing but drove x264 to QP 49–51, which is not
+acceptable evidence of healthy video. Four Mbit/s leaves the default profile
+room for packetization and RTX while still forcing a measurable downshift, and
+it gives the stress ratio a deliberately tighter repair budget. This is the
+qualified test point, not a universal minimum for every camera or link.
+Production H.264 examples use the same 2 Mbit/s quality floor. Override the
+test capacity with `RSTREAM_QUALIFICATION_CAPACITY_KBPS`; the manifest records
+it and the matrix rejects runs that do not use one identical profile.
 
 ## Read one result
 
-Start with `summary.md` and `adaptive-bitrate.svg`. The phase table shows
-continuity, received payload, link use, controller/encoder targets, decoded
-frame rate, average H.264 QP, decode cost, frozen time, NACKs, RTX, FEC, and
-maximum RTT. The curve should show the sender reducing its target when the media
-budget requires it and recovering after shaping disappears.
+Start with the qualification-decision table in `summary.md`. It places the
+observed value beside each release threshold. The four synchronized figures
+then establish how that verdict was reached:
+
+- `network-conditions.svg` records the independently applied capacity, delay,
+  jitter, and random-loss schedule;
+- `adaptive-bitrate.svg` aligns that schedule with TWCC, the encoder target,
+  and received media;
+- `playback-quality.svg` exposes decoded frame rate, browser-reported freezes,
+  and encoder quantization;
+- `transport-evidence.svg` follows RTT, sender-queue residence, playout
+  buffering, NACK/RTX, FlexFEC, and TWCC loss.
+
+The capacity experiment keeps delay, jitter, and random loss at zero, so its
+rate response has one controlled cause. The following impairment phase holds
+capacity at 4 Mbit/s while adding delay, jitter, and loss. Its results qualify
+continuity and repair, independently of the capacity downshift.
 
 The setup timeline deliberately separates Docker builds from service
 establishment. Its connection duration starts immediately before the producer
@@ -345,8 +375,9 @@ The acceptance checks reject, among other cases:
 - missing host scheduling evidence, sustained hypervisor steal time, or a
   runtime pause longer than 350 ms between 250 ms heartbeat samples;
 - excessive frozen time or low decoded frame rate;
-- missing jitter-buffer evidence, a requested target above 250 ms, or an
-  effective buffered delay above 300 ms;
+- missing jitter-buffer evidence, a requested target above 250 ms, or a phase
+  whose average effective buffered delay exceeds 300 ms; per-sample values
+  remain visible in the transport figure;
 - missing quality telemetry, excessive H.264 quantization, or a resolution
   change hidden behind a healthy frame count;
 - encoder cadence with a p99 gap above 50 ms, any gap above 200 ms, or more
@@ -372,6 +403,13 @@ The raw investigation set is `samples.jsonl`, `receiver-udp.jsonl`,
 qdisc/filter JSON, and producer/browser logs. One run proves one pinned tree on
 one recorded machine; release claims use the repeated matrix and should be
 regenerated on each target architecture.
+
+A relay run also measures the qualification host's real access link. An ICE
+outage, severe unshaped packet loss, excessive loaded latency, or a baseline
+that cannot sustain the profile's minimum wire budget invalidates that run.
+The failure remains useful diagnostic evidence, but it is not converted into a
+release claim. Repeat the scenario from a stable qualification host and compare
+the direct reference, the unshaped relay baseline, and the shaped intervals.
 
 For a targeted Pion subsystem investigation, pass a comma-separated debug scope
 without changing the reference configuration, for example

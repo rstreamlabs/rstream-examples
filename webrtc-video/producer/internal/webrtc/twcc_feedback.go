@@ -11,12 +11,23 @@ func (e *associatedStreamBandwidthEstimator) WriteRTCP(
 ) error {
 	normalized := packets
 	copied := false
+	type lossObservation struct {
+		reported int
+		lost     int
+	}
+	observations := make([]lossObservation, 0, len(packets))
 	for index, packet := range packets {
 		feedback, ok := packet.(*rtcp.TransportLayerCC)
 		if !ok {
 			continue
 		}
-		e.recordTransportCCFeedback(feedback)
+		reported, lost, valid := e.recordTransportCCFeedback(feedback)
+		if valid {
+			observations = append(observations, lossObservation{
+				reported: reported,
+				lost:     lost,
+			})
+		}
 		trimmed, changed := trimTransportCCPadding(feedback)
 		if !changed {
 			continue
@@ -27,21 +38,38 @@ func (e *associatedStreamBandwidthEstimator) WriteRTCP(
 		}
 		normalized[index] = trimmed
 	}
-	return e.SendSideBWE.WriteRTCP(normalized, attributes)
+	if err := e.SendSideBWE.WriteRTCP(normalized, attributes); err != nil {
+		return err
+	}
+	if e.lossGuard == nil {
+		return nil
+	}
+	for _, observation := range observations {
+		target, changed := e.lossGuard.observe(
+			observation.reported,
+			observation.lost,
+			e.effectiveMediaBitrate(mediaBitrate(e.SendSideBWE.GetTargetBitrate(), e.protection)),
+		)
+		if changed {
+			e.deliverEffectiveBitrate(target)
+		}
+	}
+	return nil
 }
 
 func (e *associatedStreamBandwidthEstimator) recordTransportCCFeedback(
 	feedback *rtcp.TransportLayerCC,
-) {
+) (reported int, lost int, valid bool) {
 	reported, lost, padding, valid := transportCCStatusCounts(feedback)
 	e.twccFeedbackPackets.Add(1)
 	if !valid {
 		e.twccMalformedFeedback.Add(1)
-		return
+		return 0, 0, false
 	}
 	e.twccReportedStatuses.Add(uint64(reported))
 	e.twccReportedLost.Add(uint64(lost))
 	e.twccPaddingStatuses.Add(uint64(padding))
+	return reported, lost, true
 }
 
 func transportCCStatusCounts(

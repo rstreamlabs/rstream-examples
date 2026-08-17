@@ -12,6 +12,7 @@ import live_helpers
 from benchmark_model import percentile, validate_args
 from live_helpers import (
     before_deadline,
+    detection_signature,
     loopback_ready_path,
     stop_process_group,
     threshold_violations,
@@ -60,6 +61,26 @@ class BenchmarkHelpersTest(unittest.TestCase):
 
 
 class LiveQualificationHelpersTest(unittest.TestCase):
+    def test_detection_signature_covers_boxes_scores_and_labels(self) -> None:
+        baseline = [
+            {"box": [1.0, 2.0, 3.0, 4.0], "confidence": 0.9, "label": "car"},
+            {"box": [5.0, 6.0, 7.0, 8.0], "confidence": 0.8, "label": "bus"},
+        ]
+        self.assertEqual(
+            detection_signature(baseline),
+            detection_signature(list(reversed(baseline))),
+        )
+        for changed in (
+            [{**baseline[0], "box": [1.0, 2.0, 3.1, 4.0]}, baseline[1]],
+            [{**baseline[0], "confidence": 0.89}, baseline[1]],
+            [{**baseline[0], "label": "truck"}, baseline[1]],
+        ):
+            with self.subTest(changed=changed):
+                self.assertNotEqual(
+                    detection_signature(baseline),
+                    detection_signature(changed),
+                )
+
     def test_personal_profile_paths_are_removed_from_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -258,10 +279,13 @@ class RenderReportTest(unittest.TestCase):
             self.assertIn("Regional worker selection", report)
             self.assertIn("performance observational", report)
             self.assertIn("not an SLO pass", report)
-            self.assertTrue((root / "commands.svg").is_file())
+            self.assertFalse((root / "commands.svg").exists())
             self.assertTrue((root / "model-latency.svg").is_file())
-            self.assertTrue((root / "live-latency.svg").is_file())
+            self.assertTrue((root / "failover-timeline.svg").is_file())
             self.assertTrue((root / "regional-routing.svg").is_file())
+            timeline = (root / "failover-timeline.svg").read_text(encoding="utf-8")
+            self.assertIn("EOF 12.0 ms", timeline)
+            self.assertIn("worker B result 25.0 ms", timeline)
 
     def test_missing_benchmark_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

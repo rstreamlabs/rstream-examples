@@ -76,6 +76,11 @@ type BandwidthStats struct {
 	DelayThresholdMs             float64 `json:"delayThresholdMs"`
 	Usage                        string  `json:"usage"`
 	State                        string  `json:"state"`
+	LossGuardActive              bool    `json:"lossGuardActive"`
+	LossGuardTargetBitrateBps    int     `json:"lossGuardTargetBitrateBps"`
+	LossGuardLastObservedLoss    float64 `json:"lossGuardLastObservedLoss"`
+	LossGuardReductions          uint64  `json:"lossGuardReductions"`
+	LossGuardRecoveries          uint64  `json:"lossGuardRecoveries"`
 	PacerTargetBitrateBps        int     `json:"pacerTargetBitrateBps"`
 	PacerPacingBitrateBps        int     `json:"pacerPacingBitrateBps"`
 	PacerQueuePackets            int     `json:"pacerQueuePackets"`
@@ -94,13 +99,17 @@ type BandwidthStats struct {
 	PacerRepairPacketsExpired    uint64  `json:"pacerRepairPacketsExpired"`
 	PacerRepairPacketsTrimmed    uint64  `json:"pacerRepairPacketsTrimmed"`
 	PacerRTXPacketsExpired       uint64  `json:"pacerRTXPacketsExpired"`
+	PacerRTXPacketsCoalesced     uint64  `json:"pacerRTXPacketsCoalesced"`
 	PacerFECPacketsExpired       uint64  `json:"pacerFECPacketsExpired"`
 	PacerRTXPacketsTrimmed       uint64  `json:"pacerRTXPacketsTrimmed"`
 	PacerFECPacketsTrimmed       uint64  `json:"pacerFECPacketsTrimmed"`
 	PacerSentPrimary             uint64  `json:"pacerSentPrimary"`
+	PacerSentPrimaryBytes        uint64  `json:"pacerSentPrimaryBytes"`
 	PacerSentRepair              uint64  `json:"pacerSentRepair"`
 	PacerSentRTX                 uint64  `json:"pacerSentRTX"`
+	PacerSentRTXBytes            uint64  `json:"pacerSentRTXBytes"`
 	PacerSentFEC                 uint64  `json:"pacerSentFEC"`
+	PacerSentFECBytes            uint64  `json:"pacerSentFECBytes"`
 	StaleBitrateCallbacks        uint64  `json:"staleBitrateCallbacks"`
 	TWCCFeedbackPackets          uint64  `json:"twccFeedbackPackets"`
 	TWCCMalformedFeedback        uint64  `json:"twccMalformedFeedback"`
@@ -125,6 +134,7 @@ type Broadcaster struct {
 	maxViewers    int
 	mu            sync.Mutex
 	sessions      map[string]*Session
+	retired       producerTotals
 	opening       int
 	closed        bool
 }
@@ -295,10 +305,7 @@ func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) 
 		},
 	}
 	session.onClose = func(reason string) {
-		b.mu.Lock()
-		delete(b.sessions, session.id)
-		count := len(b.sessions)
-		b.mu.Unlock()
+		count := b.retireSession(session)
 		b.logger.Info("Viewer %s closed: %s (active viewers: %d)", session.id, reason, count)
 	}
 	session.trackSelectedICEPath()
@@ -793,6 +800,11 @@ func snapshotBandwidthStats(estimator bandwidthEstimator) *BandwidthStats {
 	stats.DelayThresholdMs, _ = raw["delayThreshold"].(float64)
 	stats.Usage, _ = raw["usage"].(string)
 	stats.State, _ = raw["state"].(string)
+	stats.LossGuardActive, _ = raw["lossGuardActive"].(bool)
+	stats.LossGuardTargetBitrateBps, _ = raw["lossGuardTargetBitrate"].(int)
+	stats.LossGuardLastObservedLoss, _ = raw["lossGuardLastObservedLoss"].(float64)
+	stats.LossGuardReductions, _ = raw["lossGuardReductions"].(uint64)
+	stats.LossGuardRecoveries, _ = raw["lossGuardRecoveries"].(uint64)
 	stats.PacerTargetBitrateBps, _ = raw["pacerTargetBitrateBps"].(int)
 	stats.PacerPacingBitrateBps, _ = raw["pacerPacingBitrateBps"].(int)
 	stats.PacerQueuePackets, _ = raw["pacerQueuePackets"].(int)
@@ -811,13 +823,17 @@ func snapshotBandwidthStats(estimator bandwidthEstimator) *BandwidthStats {
 	stats.PacerRepairPacketsExpired, _ = raw["pacerRepairPacketsExpired"].(uint64)
 	stats.PacerRepairPacketsTrimmed, _ = raw["pacerRepairPacketsTrimmed"].(uint64)
 	stats.PacerRTXPacketsExpired, _ = raw["pacerRetransmissionPacketsExpired"].(uint64)
+	stats.PacerRTXPacketsCoalesced, _ = raw["pacerRetransmissionPacketsCoalesced"].(uint64)
 	stats.PacerFECPacketsExpired, _ = raw["pacerForwardErrorCorrectionPacketsExpired"].(uint64)
 	stats.PacerRTXPacketsTrimmed, _ = raw["pacerRetransmissionPacketsTrimmed"].(uint64)
 	stats.PacerFECPacketsTrimmed, _ = raw["pacerForwardErrorCorrectionPacketsTrimmed"].(uint64)
 	stats.PacerSentPrimary, _ = raw["pacerSentPrimary"].(uint64)
+	stats.PacerSentPrimaryBytes, _ = raw["pacerSentPrimaryBytes"].(uint64)
 	stats.PacerSentRepair, _ = raw["pacerSentRepair"].(uint64)
 	stats.PacerSentRTX, _ = raw["pacerSentRetransmission"].(uint64)
+	stats.PacerSentRTXBytes, _ = raw["pacerSentRetransmissionBytes"].(uint64)
 	stats.PacerSentFEC, _ = raw["pacerSentForwardErrorCorrection"].(uint64)
+	stats.PacerSentFECBytes, _ = raw["pacerSentForwardErrorCorrectionBytes"].(uint64)
 	stats.StaleBitrateCallbacks, _ = raw["staleBitrateCallbacks"].(uint64)
 	stats.TWCCFeedbackPackets, _ = raw["twccFeedbackPackets"].(uint64)
 	stats.TWCCMalformedFeedback, _ = raw["twccMalformedFeedback"].(uint64)

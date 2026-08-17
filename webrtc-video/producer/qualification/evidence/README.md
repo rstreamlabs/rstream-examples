@@ -9,12 +9,27 @@ multi-megabyte diagnostic logs generated during execution:
 - `metrics.csv` contains the one-second time series used by the analyzer;
 - `summary.json` exposes every machine-readable assertion;
 - `summary.md` provides the complete human-readable report;
-- `adaptive-bitrate.svg` plots the encoder, congestion-controller, and received
-  bitrate across the test phases.
+- `adaptive-bitrate.svg` aligns applied link capacity with the TWCC estimate,
+  encoder target, and received bitrate;
+- `network-conditions.svg` records the applied capacity, delay, jitter, and
+  random-loss transitions on the metrics collector clock;
+- `playback-quality.svg` shows decoded frame rate, frozen intervals, and H.264
+  quantization against their acceptance limits;
+- `transport-evidence.svg` aligns RTT, buffering, sender queues, NACK/RTX,
+  FlexFEC, and observed loss with the same phase timeline.
 
-The current reference pack is [`6706cfd`](./6706cfd/report.md). Its direct,
-rstream relay, and QUIC/ICE mobility runs all use the same producer source and
-pinned browser image.
+The link transitions are timestamped when the qualification controller observes
+each traffic-control event. Charts therefore use measured transition instants
+instead of reconstructing them from nominal phase durations.
+
+The current reference pack is [`ca8a308`](./ca8a308/report.md). Its comparison
+matrix repeats the direct and rstream relay paths three times with NACK/RTX and
+with the release NACK/RTX/FlexFEC profile. A separate QUIC/ICE mobility record
+keeps the producer revision, browser image, and media profile fixed. Its
+preserved time series was re-evaluated after a regression-tested analyzer
+correction; the original and corrected verdicts are recorded explicitly. Runs
+that miss a declared pre-transition condition are recorded separately and never
+enter the comparison.
 
 ## Reproducing a pack
 
