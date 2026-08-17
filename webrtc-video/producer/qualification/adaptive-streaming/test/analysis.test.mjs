@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   alignNetworkConditions,
   analyze,
+  maximumEncoderTargetCoverage,
   parseEncoderQuality,
   renderMarkdown,
   renderSVG,
@@ -143,6 +144,39 @@ test("separates a stable conditioning window from the next link transition", () 
       "constrained-started",
     ),
     [],
+  );
+});
+
+test("measures recovery residency without hiding sustained oscillation", () => {
+  const samples = Array.from({ length: 11 }, (_, index) => ({
+    elapsedMilliseconds: index * 1000,
+    encoderTargetKbps: index === 8 || index === 9 ? 5000 : 8000,
+    phase: "recovery",
+  }));
+  assert.equal(
+    maximumEncoderTargetCoverage(samples, "recovery", 6400, 10_000),
+    9 / 11,
+  );
+  assert.ok(
+    maximumEncoderTargetCoverage(
+      Array.from({ length: 31 }, (_, index) => ({
+        elapsedMilliseconds: index * 1000,
+        encoderTargetKbps: index % 2 === 0 ? 8000 : 5000,
+        phase: "recovery",
+      })),
+      "recovery",
+      6400,
+      10_000,
+    ) < 0.8,
+  );
+  assert.equal(
+    maximumEncoderTargetCoverage(
+      samples.slice(0, 10),
+      "recovery",
+      6400,
+      10_000,
+    ),
+    0,
   );
 });
 
@@ -968,6 +1002,30 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
       (assertion) => assertion.name === "sustained-recovery",
     ).passed,
     false,
+  );
+  let boundedRecoveryCorrectionIndex = 0;
+  const boundedRecoveryCorrection = analyze(
+    samples.map((sample) => {
+      if (sample.phase !== "recovery") {
+        return sample;
+      }
+      boundedRecoveryCorrectionIndex += 1;
+      return {
+        ...sample,
+        encoderTargetKbps:
+          boundedRecoveryCorrectionIndex === 8 ||
+          boundedRecoveryCorrectionIndex === 9
+            ? 3000
+            : 4000,
+      };
+    }),
+    manifest,
+  );
+  assert.equal(
+    boundedRecoveryCorrection.assertions.find(
+      (assertion) => assertion.name === "sustained-recovery",
+    ).passed,
+    true,
   );
 
   const receiverSamples = samples.map((sample, index) => ({
