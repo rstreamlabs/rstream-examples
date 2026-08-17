@@ -231,6 +231,10 @@ if [ "${destination_port}" -gt 65535 ]; then
   printf 'destination port must be at most 65535\n' >&2
   exit 2
 fi
+if [ "${constrained_steady_seconds}" -le "${transition_step_seconds}" ]; then
+  printf 'constrained steady duration must exceed one transition step\n' >&2
+  exit 2
+fi
 
 clear_shaping() {
   if [ "${shaping_initialized}" -eq 1 ]; then
@@ -360,8 +364,9 @@ capture constrained-step-3-start
 capture constrained-step-3
 apply_shaping "${capacity_kbps}" 0ms 0ms 0%
 emit constrained-steady-started
+"${sleep_command}" "${transition_step_seconds}"
 capture constrained-steady-start
-"${sleep_command}" "${constrained_steady_seconds}"
+"${sleep_command}" "$((constrained_steady_seconds - transition_step_seconds))"
 capture constrained-steady
 apply_shaping "${capacity_kbps}" 120ms 30ms 2%
 emit impaired-started

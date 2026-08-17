@@ -29,6 +29,7 @@ type ProducerStats struct {
 	PacerRepairPacketsExpired     uint64
 	PacerRepairPacketsTrimmed     uint64
 	PacerRTXPacketsExpired        uint64
+	PacerRTXPacketsCoalesced      uint64
 	PacerFECPacketsExpired        uint64
 	PacerRTXPacketsTrimmed        uint64
 	PacerFECPacketsTrimmed        uint64
@@ -157,6 +158,7 @@ func addProducerTotals(producer *ProducerStats, totals producerTotals) {
 	producer.PacerRepairPacketsExpired += bandwidth.PacerRepairPacketsExpired
 	producer.PacerRepairPacketsTrimmed += bandwidth.PacerRepairPacketsTrimmed
 	producer.PacerRTXPacketsExpired += bandwidth.PacerRTXPacketsExpired
+	producer.PacerRTXPacketsCoalesced += bandwidth.PacerRTXPacketsCoalesced
 	producer.PacerFECPacketsExpired += bandwidth.PacerFECPacketsExpired
 	producer.PacerRTXPacketsTrimmed += bandwidth.PacerRTXPacketsTrimmed
 	producer.PacerFECPacketsTrimmed += bandwidth.PacerFECPacketsTrimmed
@@ -184,6 +186,7 @@ func addBandwidthCounters(target *BandwidthStats, source BandwidthStats) {
 	target.PacerRepairPacketsExpired += source.PacerRepairPacketsExpired
 	target.PacerRepairPacketsTrimmed += source.PacerRepairPacketsTrimmed
 	target.PacerRTXPacketsExpired += source.PacerRTXPacketsExpired
+	target.PacerRTXPacketsCoalesced += source.PacerRTXPacketsCoalesced
 	target.PacerFECPacketsExpired += source.PacerFECPacketsExpired
 	target.PacerRTXPacketsTrimmed += source.PacerRTXPacketsTrimmed
 	target.PacerFECPacketsTrimmed += source.PacerFECPacketsTrimmed

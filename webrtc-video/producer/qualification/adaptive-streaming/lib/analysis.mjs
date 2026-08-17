@@ -1234,7 +1234,7 @@ export function renderMarkdown(analysis, manifest) {
   const repairRows = Object.entries(analysis.phases)
     .map(
       ([name, phase]) =>
-        `| ${name} | ${formatNumber(phase.maximumPacerFECDelayMilliseconds, 1)} | ${phase.pacerSentFECIncrease} | ${phase.pacerFECPacketsExpiredIncrease} | ${phase.pacerFECPacketsTrimmedIncrease} | ${formatNumber(phase.maximumPacerRTXDelayMilliseconds, 1)} | ${phase.pacerSentRTXIncrease} | ${phase.pacerRTXPacketsExpiredIncrease} | ${phase.pacerRTXPacketsTrimmedIncrease} |`,
+        `| ${name} | ${formatNumber(phase.maximumPacerFECDelayMilliseconds, 1)} | ${phase.pacerSentFECIncrease} | ${phase.pacerFECPacketsExpiredIncrease} | ${phase.pacerFECPacketsTrimmedIncrease} | ${formatNumber(phase.maximumPacerRTXDelayMilliseconds, 1)} | ${phase.pacerSentRTXIncrease} | ${phase.pacerRTXPacketsExpiredIncrease} | ${phase.pacerRTXPacketsTrimmedIncrease} | ${phase.pacerRTXPacketsCoalescedIncrease} |`,
     )
     .join("\n");
   const encoderCadenceRows = Object.entries(analysis.phases)
@@ -1472,8 +1472,8 @@ an already reported loss and must not delay completion of the current frame.
 The split counters below make a late proactive repair distinguishable from an
 expired retransmission.
 
-| Phase | Max FEC residence ms | FEC sent | FEC expired | FEC rate-trimmed | Max RTX residence ms | RTX sent | RTX expired | RTX rate-trimmed |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Phase | Max FEC residence ms | FEC sent | FEC expired | FEC rate-trimmed | Max RTX residence ms | RTX sent | RTX expired | RTX rate-trimmed | RTX duplicates coalesced |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 ${repairRows}
 
 ${hostCPUSection}${receiverHostCPUSection}## Encoder cadence and observer effect
@@ -1595,6 +1595,7 @@ export async function writeArtifacts(outputDirectory, analysis, manifest) {
     "pacerRepairPacketsExpired",
     "pacerRepairPacketsTrimmed",
     "pacerRTXPacketsExpired",
+    "pacerRTXPacketsCoalesced",
     "pacerFECPacketsExpired",
     "pacerRTXPacketsTrimmed",
     "pacerFECPacketsTrimmed",
@@ -2222,6 +2223,11 @@ function summarizePhase(samples, phase, encoderQuality) {
     pacerRTXPacketsExpiredIncrease: counterIncrease(
       samples,
       "pacerRTXPacketsExpired",
+      [phase.name],
+    ),
+    pacerRTXPacketsCoalescedIncrease: counterIncrease(
+      samples,
+      "pacerRTXPacketsCoalesced",
       [phase.name],
     ),
     pacerFECPacketsExpiredIncrease: counterIncrease(
@@ -2954,6 +2960,10 @@ async function main() {
         {
           start: JSON.parse(constrainedStepThreeStartQdisc),
           end: JSON.parse(constrainedStepThreeQdisc),
+        },
+        {
+          start: JSON.parse(constrainedStepThreeQdisc),
+          end: JSON.parse(constrainedStartQdisc),
         },
       ],
       constrained: {

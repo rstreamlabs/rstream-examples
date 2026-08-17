@@ -24,6 +24,7 @@ func TestProducerMetricsRemainMonotonicAfterSessionRetirement(t *testing.T) {
 			"pacerMediaFramesDropped":                   uint64(4),
 			"pacerMediaBytesDropped":                    uint64(5),
 			"pacerRetransmissionPacketsExpired":         uint64(6),
+			"pacerRetransmissionPacketsCoalesced":       uint64(26),
 			"pacerForwardErrorCorrectionPacketsExpired": uint64(7),
 			"pacerRetransmissionPacketsTrimmed":         uint64(8),
 			"pacerForwardErrorCorrectionPacketsTrimmed": uint64(9),
@@ -66,7 +67,8 @@ func TestProducerMetricsRemainMonotonicAfterSessionRetirement(t *testing.T) {
 	if active.EstimatedBitrateBps != 3_000_000 || active.EncoderTargetBitrateBps != 2_500_000 {
 		t.Fatalf("unexpected bitrate metrics: %+v", active)
 	}
-	if active.TWCCReportedStatuses != 18 || active.RecoveryKeyFrameRequests != 21 {
+	if active.TWCCReportedStatuses != 18 || active.RecoveryKeyFrameRequests != 21 ||
+		active.PacerRTXPacketsCoalesced != 26 {
 		t.Fatalf("unexpected active counters: %+v", active)
 	}
 	if active.PacerSentPrimaryBytes != 1000 || active.PacerSentRTXBytes != 1100 || active.PacerSentFECBytes != 1200 {

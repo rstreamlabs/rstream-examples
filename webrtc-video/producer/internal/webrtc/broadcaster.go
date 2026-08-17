@@ -99,6 +99,7 @@ type BandwidthStats struct {
 	PacerRepairPacketsExpired    uint64  `json:"pacerRepairPacketsExpired"`
 	PacerRepairPacketsTrimmed    uint64  `json:"pacerRepairPacketsTrimmed"`
 	PacerRTXPacketsExpired       uint64  `json:"pacerRTXPacketsExpired"`
+	PacerRTXPacketsCoalesced     uint64  `json:"pacerRTXPacketsCoalesced"`
 	PacerFECPacketsExpired       uint64  `json:"pacerFECPacketsExpired"`
 	PacerRTXPacketsTrimmed       uint64  `json:"pacerRTXPacketsTrimmed"`
 	PacerFECPacketsTrimmed       uint64  `json:"pacerFECPacketsTrimmed"`
@@ -822,6 +823,7 @@ func snapshotBandwidthStats(estimator bandwidthEstimator) *BandwidthStats {
 	stats.PacerRepairPacketsExpired, _ = raw["pacerRepairPacketsExpired"].(uint64)
 	stats.PacerRepairPacketsTrimmed, _ = raw["pacerRepairPacketsTrimmed"].(uint64)
 	stats.PacerRTXPacketsExpired, _ = raw["pacerRetransmissionPacketsExpired"].(uint64)
+	stats.PacerRTXPacketsCoalesced, _ = raw["pacerRetransmissionPacketsCoalesced"].(uint64)
 	stats.PacerFECPacketsExpired, _ = raw["pacerForwardErrorCorrectionPacketsExpired"].(uint64)
 	stats.PacerRTXPacketsTrimmed, _ = raw["pacerRetransmissionPacketsTrimmed"].(uint64)
 	stats.PacerFECPacketsTrimmed, _ = raw["pacerForwardErrorCorrectionPacketsTrimmed"].(uint64)
