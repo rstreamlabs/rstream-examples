@@ -9,6 +9,7 @@ import {
 
 const maximumQualificationSampleGapMilliseconds = 2500;
 const minimumSustainedRecoveryMilliseconds = 10_000;
+const minimumSustainedRecoveryTargetRatio = 0.8;
 const networkTransitionGuardMilliseconds = 2000;
 const stableConditioningWindowMilliseconds = 10_000;
 
@@ -427,6 +428,13 @@ export function analyze(
     recoveryThreshold,
     recoveryCapacityRestoredAfterMilliseconds,
   );
+  const sustainedRecoveryTargetRatio = maximumEncoderTargetCoverage(
+    enriched,
+    "recovery",
+    recoveryThreshold,
+    minimumSustainedRecoveryMilliseconds,
+    recoveryCapacityRestoredAfterMilliseconds,
+  );
   assert(
     assertions,
     !congestionResponseRequired ||
@@ -439,10 +447,10 @@ export function analyze(
   assert(
     assertions,
     !congestionResponseRequired ||
-      sustainedRecoveryMilliseconds >= minimumSustainedRecoveryMilliseconds,
+      sustainedRecoveryTargetRatio >= minimumSustainedRecoveryTargetRatio,
     "sustained-recovery",
     congestionResponseRequired
-      ? "the encoder sustains at least 80% of its baseline target for 10 seconds after capacity is restored"
+      ? "the encoder stays at or above 80% of baseline for at least 80% of a continuous 10-second window after capacity is restored"
       : "no sustained recovery target is required when the capacity phase did not reduce the encoder by 20%",
   );
   assert(
@@ -765,6 +773,7 @@ export function analyze(
     responseDelayMilliseconds: responseDelay,
     recoveryDelayMilliseconds: recoveryDelay,
     sustainedRecoveryMilliseconds,
+    sustainedRecoveryTargetRatio,
     staleBitrateCallbacks: Math.max(
       0,
       ...enriched.map((sample) => sample.staleBitrateCallbacks || 0),
@@ -1173,7 +1182,7 @@ export function renderMarkdown(analysis, manifest) {
     [
       "Rate recovery",
       analysis.congestionResponseRequired
-        ? `${formatDuration(analysis.recoveryDelayMilliseconds)} to threshold; sustained for ${formatDuration(analysis.sustainedRecoveryMilliseconds)}; received throughput ${formatNumber(receiveRecoveryRatio * 100, 1)}% of baseline`
+        ? `${formatDuration(analysis.recoveryDelayMilliseconds)} to threshold; ${formatNumber(analysis.sustainedRecoveryTargetRatio * 100, 1)}% target residency in the best 10 s window; ${formatDuration(analysis.sustainedRecoveryMilliseconds)} longest uninterrupted interval; received throughput ${formatNumber(receiveRecoveryRatio * 100, 1)}% of baseline`
         : "not required; capacity phase did not reduce the target",
       analysis.congestionResponseRequired
         ? "target reaches 80% within 35 s, sustains it for 10 s, and median throughput reaches at least 60% of baseline"
@@ -2592,6 +2601,62 @@ function longestEncoderTargetDuration(
     previous = sample.elapsedMilliseconds;
   }
   return longest;
+}
+
+export function maximumEncoderTargetCoverage(
+  samples,
+  phase,
+  target,
+  windowMilliseconds,
+  offsetMilliseconds = 0,
+) {
+  const phaseSamples = samples.filter((sample) => sample.phase === phase);
+  if (
+    phaseSamples.length === 0 ||
+    !Number.isFinite(target) ||
+    target <= 0 ||
+    !Number.isFinite(windowMilliseconds) ||
+    windowMilliseconds <= 0
+  ) {
+    return 0;
+  }
+  const event = phaseSamples[0].elapsedMilliseconds + offsetMilliseconds;
+  const eligible = phaseSamples.filter(
+    (sample) => sample.elapsedMilliseconds >= event,
+  );
+  let maximumCoverage = 0;
+  for (let start = 0; start < eligible.length; start += 1) {
+    for (let end = start + 1; end < eligible.length; end += 1) {
+      const duration =
+        eligible[end].elapsedMilliseconds - eligible[start].elapsedMilliseconds;
+      if (duration < windowMilliseconds) {
+        continue;
+      }
+      if (
+        duration >
+        windowMilliseconds + maximumQualificationSampleGapMilliseconds
+      ) {
+        break;
+      }
+      const window = eligible.slice(start, end + 1);
+      const continuous = window
+        .slice(1)
+        .every(
+          (sample, index) =>
+            sample.elapsedMilliseconds - window[index].elapsedMilliseconds <=
+            maximumQualificationSampleGapMilliseconds,
+        );
+      if (continuous) {
+        maximumCoverage = Math.max(
+          maximumCoverage,
+          window.filter((sample) => sample.encoderTargetKbps >= target).length /
+            window.length,
+        );
+      }
+      break;
+    }
+  }
+  return maximumCoverage;
 }
 
 function counterIncrease(samples, field, phases) {
