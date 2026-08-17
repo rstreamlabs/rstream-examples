@@ -43,6 +43,13 @@ including pauses of a local container VM.
 The impairment schedule runs as one process inside the producer network
 namespace. It first holds a 32 Mbit/s profile with no added delay, jitter, or
 random loss long enough for the controller to settle after qdisc activation.
+The final ten seconds before the first capacity step define the causal
+reference for that run. At least 80% of those samples and the final sample must
+stay within 10% of the window's median encoder target. Congestion reduction and
+recovery are measured from that stable target, while the earlier unshaped
+baseline remains the healthy-link quality reference. A real relay may therefore
+settle below an initial access-link peak without turning that peak into an
+artificial recovery requirement.
 The capacity experiment then changes only the rate while the path steps through
 16, 12, 8, and 4 Mbit/s. Additional delay, jitter, and loss begin in a separate
 phase.
@@ -305,8 +312,8 @@ fails unless:
 - every expected run produced a summary from the same clean producer tree;
 - every full direct run forces a congestion response, while every relay run
   receives valid TWCC feedback and does not increase its encoder target under
-  additional pressure; a relay whose pre-existing path is already below the
-  shaper budget is not required to manufacture a 20% target change;
+  additional pressure; a relay whose stable pre-transition target already fits
+  the shaper budget is not required to manufacture a 20% target change;
 - every full-profile direct and relay run passes its per-run criteria;
 - relay median output remains at least 20 fps and frozen time at most 10%;
 - every full-profile run exposes valid timestamped x264 QP telemetry and relay

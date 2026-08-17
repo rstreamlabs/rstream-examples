@@ -90,18 +90,36 @@ export function analyze(
     stableConditioningWindowMilliseconds,
     networkTransitionGuardMilliseconds,
   );
-  const stableConditioningTargetRatio =
-    baseline?.medianEncoderTargetKbps && stableConditioningSamples.length > 0
-      ? stableConditioningSamples.filter(
-          (sample) =>
-            sample.encoderTargetKbps >= baseline.medianEncoderTargetKbps * 0.8,
-        ).length / stableConditioningSamples.length
-      : 0;
   const stableConditioningMedianEncoderTargetKbps = median(
     stableConditioningSamples
       .map((sample) => sample.encoderTargetKbps)
       .filter(positive),
   );
+  const stableConditioningMedianReceivedBitrateKbps = median(
+    stableConditioningSamples
+      .map((sample) => sample.receivedBitrateKbps)
+      .filter(positive),
+  );
+  const stableConditioningTargetRatio =
+    stableConditioningMedianEncoderTargetKbps > 0
+      ? stableConditioningSamples.filter(
+          (sample) =>
+            sample.encoderTargetKbps >=
+              stableConditioningMedianEncoderTargetKbps * 0.9 &&
+            sample.encoderTargetKbps <=
+              stableConditioningMedianEncoderTargetKbps * 1.1,
+        ).length / stableConditioningSamples.length
+      : 0;
+  const stableConditioningEndingEncoderTargetKbps =
+    stableConditioningSamples.at(-1)?.encoderTargetKbps || 0;
+  const preTransitionEncoderTargetKbps =
+    stableConditioningMedianEncoderTargetKbps ||
+    baseline?.medianEncoderTargetKbps ||
+    0;
+  const preTransitionReceivedBitrateKbps =
+    stableConditioningMedianReceivedBitrateKbps ||
+    baseline?.medianReceivedBitrateKbps ||
+    0;
   const candidatePairSwitches = countCandidatePairSwitches(enriched);
   const networkMobility = summarizeNetworkMobility(enriched);
   const icePolicy = manifest.networkPath?.icePolicy || "relay";
@@ -112,7 +130,7 @@ export function analyze(
     manifest.protection,
   );
   const congestionResponseRequired =
-    (baseline?.medianEncoderTargetKbps || 0) > constrainedMediaCapacityKbps;
+    preTransitionEncoderTargetKbps > constrainedMediaCapacityKbps;
   if (manifest.networkConditionTimeline?.required === true) {
     assert(
       assertions,
@@ -247,9 +265,13 @@ export function analyze(
     assert(
       assertions,
       stableConditioningSamples.length >= 5 &&
-        stableConditioningTargetRatio >= 0.8,
+        stableConditioningTargetRatio >= 0.8 &&
+        stableConditioningEndingEncoderTargetKbps >=
+          stableConditioningMedianEncoderTargetKbps * 0.9 &&
+        stableConditioningEndingEncoderTargetKbps <=
+          stableConditioningMedianEncoderTargetKbps * 1.1,
       "capacity-experiment-settled",
-      "at least 80% of samples in the stable pre-transition window sustain 80% of the baseline encoder target",
+      "at least 80% of samples and the final sample in the pre-transition window stay within 10% of that window's median encoder target",
     );
   }
   if (
@@ -279,15 +301,15 @@ export function analyze(
       `the encoder spends at least half of the healthy baseline within ${changeThresholdPct}% of its ${maximumBitrateKbps} kbps adaptive ceiling`,
     );
   }
-  const reductionThreshold = (baseline?.medianEncoderTargetKbps || 0) * 0.8;
+  const reductionThreshold = preTransitionEncoderTargetKbps * 0.8;
   assert(
     assertions,
     !congestionResponseRequired ||
       (constrained?.medianEncoderTargetKbps || Infinity) <= reductionThreshold,
     "congestion-response",
     congestionResponseRequired
-      ? "constrained median encoder target falls by at least 20% from baseline"
-      : "the baseline encoder target already fits inside the constrained media budget, so no forced reduction is required",
+      ? "constrained median encoder target falls by at least 20% from the stable pre-transition target"
+      : "the stable pre-transition encoder target already fits inside the constrained media budget, so no forced reduction is required",
   );
   const responseDelay = timeToEncoderTarget(
     enriched,
@@ -302,7 +324,7 @@ export function analyze(
     "response-time",
     congestionResponseRequired
       ? "encoder target reacts to the constrained link within 30 seconds"
-      : "no response deadline applies because the baseline target fits the constrained media budget",
+      : "no response deadline applies because the stable pre-transition target fits the constrained media budget",
   );
   assert(
     assertions,
@@ -411,7 +433,7 @@ export function analyze(
       `decoded video remains ${manifest.video.width}x${manifest.video.height} in every phase`,
     );
   }
-  const recoveryThreshold = (baseline?.medianEncoderTargetKbps || 0) * 0.8;
+  const recoveryThreshold = preTransitionEncoderTargetKbps * 0.8;
   const recoveryCapacityRestoredAfterMilliseconds =
     (manifest.phases.find((phase) => phase.name === "recovery")?.shaping
       ?.schedule?.[0]?.durationSeconds || 0) * 1000;
@@ -441,7 +463,7 @@ export function analyze(
       (recoveryDelay !== null && recoveryDelay <= 35_000),
     "recovery-time",
     congestionResponseRequired
-      ? "encoder target returns to at least 80% of its baseline within 35 seconds of the capacity-restoration step"
+      ? "encoder target returns to at least 80% of its stable pre-transition target within 35 seconds of the capacity-restoration step"
       : "no recovery ramp is required because the capacity phase did not require a 20% reduction",
   );
   assert(
@@ -450,17 +472,17 @@ export function analyze(
       sustainedRecoveryTargetRatio >= minimumSustainedRecoveryTargetRatio,
     "sustained-recovery",
     congestionResponseRequired
-      ? "the encoder stays at or above 80% of baseline for at least 80% of a continuous 10-second window after capacity is restored"
+      ? "the encoder stays at or above 80% of its stable pre-transition target for at least 80% of a continuous 10-second window after capacity is restored"
       : "no sustained recovery target is required when the capacity phase did not reduce the encoder by 20%",
   );
   assert(
     assertions,
     !congestionResponseRequired ||
       (recovery?.medianReceivedBitrateKbps || 0) >=
-        (baseline?.medianReceivedBitrateKbps || Infinity) * 0.6,
+        (preTransitionReceivedBitrateKbps || Infinity) * 0.6,
     "throughput-recovery",
     congestionResponseRequired
-      ? "recovery median receive throughput returns to at least 60% of baseline"
+      ? "recovery median receive throughput returns to at least 60% of the stable pre-transition receive rate"
       : "no throughput increase is required when the capacity phase did not reduce the encoder by 20%",
   );
   assert(
@@ -787,7 +809,10 @@ export function analyze(
     hostCPU,
     networkMobility,
     networkConditions,
+    preTransitionEncoderTargetKbps,
+    preTransitionReceivedBitrateKbps,
     stableConditioningMedianEncoderTargetKbps,
+    stableConditioningMedianReceivedBitrateKbps,
     stableConditioningSamples: stableConditioningSamples.length,
     stableConditioningTargetRatio,
     trafficControl: trafficControlSummary,
@@ -1113,13 +1138,15 @@ export function renderMarkdown(analysis, manifest) {
   const impaired = analysis.phases.impaired;
   const recovery = analysis.phases.recovery;
   const rateReduction =
-    baseline?.medianEncoderTargetKbps > 0
+    analysis.preTransitionEncoderTargetKbps > 0
       ? 1 -
-        constrained.medianEncoderTargetKbps / baseline.medianEncoderTargetKbps
+        constrained.medianEncoderTargetKbps /
+          analysis.preTransitionEncoderTargetKbps
       : null;
   const receiveRecoveryRatio =
-    baseline?.medianReceivedBitrateKbps > 0
-      ? recovery.medianReceivedBitrateKbps / baseline.medianReceivedBitrateKbps
+    analysis.preTransitionReceivedBitrateKbps > 0
+      ? recovery.medianReceivedBitrateKbps /
+        analysis.preTransitionReceivedBitrateKbps
       : null;
   const capacityIsolation =
     conditioning?.endingEncoderTargetKbps > 0 &&
@@ -1174,7 +1201,7 @@ export function renderMarkdown(analysis, manifest) {
       "Rate response",
       analysis.congestionResponseRequired
         ? `${formatNumber(rateReduction * 100, 1)}% reduction in ${formatDuration(analysis.responseDelayMilliseconds)}`
-        : `not required; baseline already at ${formatNumber(baseline.medianEncoderTargetKbps, 0)} kbps`,
+        : `not required; stable pre-transition target already at ${formatNumber(analysis.preTransitionEncoderTargetKbps, 0)} kbps`,
       analysis.congestionResponseRequired
         ? "at least 20% within 30 s"
         : "no increase under additional pressure",
@@ -1182,7 +1209,7 @@ export function renderMarkdown(analysis, manifest) {
     [
       "Rate recovery",
       analysis.congestionResponseRequired
-        ? `${formatDuration(analysis.recoveryDelayMilliseconds)} to threshold; ${formatNumber(analysis.sustainedRecoveryTargetRatio * 100, 1)}% target residency in the best 10 s window; ${formatDuration(analysis.sustainedRecoveryMilliseconds)} longest uninterrupted interval; received throughput ${formatNumber(receiveRecoveryRatio * 100, 1)}% of baseline`
+        ? `${formatDuration(analysis.recoveryDelayMilliseconds)} to threshold; ${formatNumber(analysis.sustainedRecoveryTargetRatio * 100, 1)}% target residency in the best 10 s window; ${formatDuration(analysis.sustainedRecoveryMilliseconds)} longest uninterrupted interval; received throughput ${formatNumber(receiveRecoveryRatio * 100, 1)}% of the stable pre-transition rate`
         : "not required; capacity phase did not reduce the target",
       analysis.congestionResponseRequired
         ? "target reaches 80% within 35 s, sustains it for 10 s, and median throughput reaches at least 60% of baseline"
@@ -1416,7 +1443,7 @@ ${setupSection}${mobilitySection}## Phase summary
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 ${phaseRows}
 
-Congestion response: ${analysis.congestionResponseRequired ? formatDuration(analysis.responseDelayMilliseconds) : "not required (baseline target fits the constrained media budget)"}. Recovery response: ${analysis.congestionResponseRequired ? formatDuration(analysis.recoveryDelayMilliseconds) : "not required"}.
+Congestion response: ${analysis.congestionResponseRequired ? formatDuration(analysis.responseDelayMilliseconds) : "not required (stable pre-transition target fits the constrained media budget)"}. Recovery response: ${analysis.congestionResponseRequired ? formatDuration(analysis.recoveryDelayMilliseconds) : "not required"}.
 
 Selected ICE candidate-pair switches: ${analysis.candidatePairSwitches}. ${manifest.networkPath?.kind === "relay" ? "Both peers remain on the required TURN relay path." : "The direct-path address selector remains active across port changes."}
 
