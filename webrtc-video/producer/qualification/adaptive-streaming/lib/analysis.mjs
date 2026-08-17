@@ -8,6 +8,7 @@ import {
 } from "./evidence-svg.mjs";
 
 const maximumQualificationSampleGapMilliseconds = 2500;
+const minimumTWCCLossGuardStatuses = 20;
 const minimumSustainedRecoveryMilliseconds = 10_000;
 const minimumSustainedRecoveryTargetRatio = 0.8;
 const networkTransitionGuardMilliseconds = 2000;
@@ -669,8 +670,10 @@ export function analyze(
   const lossGuardTelemetryPresent = enriched.some((sample) =>
     Object.hasOwn(sample, "lossGuardReductions"),
   );
-  const sustainedHighLoss = Object.values(summaries).some(
-    (phase) => (phase?.twccReportedLossRatio || 0) > 0.1,
+  const sustainedHighLoss = hasPersistentTWCCLoss(
+    enriched,
+    0.1,
+    manifest.video?.adaptive?.minimumBitrateKbps,
   );
   assert(
     assertions,
@@ -678,7 +681,7 @@ export function analyze(
       !sustainedHighLoss ||
       counterIncrease(enriched, "lossGuardReductions", phaseOrder) > 0,
     "loss-guard-response",
-    "persistent TWCC loss above 10% immediately reduces the sender target without waiting for a delay-estimator callback",
+    "two consecutive TWCC sampling intervals above 10% loss reduce an encoder target that remains above its configured floor without waiting for a delay-estimator callback",
   );
   if (manifest.networkImpairment) {
     assert(
@@ -1212,7 +1215,7 @@ export function renderMarkdown(analysis, manifest) {
         ? `${formatDuration(analysis.recoveryDelayMilliseconds)} to threshold; ${formatNumber(analysis.sustainedRecoveryTargetRatio * 100, 1)}% target residency in the best 10 s window; ${formatDuration(analysis.sustainedRecoveryMilliseconds)} longest uninterrupted interval; received throughput ${formatNumber(receiveRecoveryRatio * 100, 1)}% of the stable pre-transition rate`
         : "not required; capacity phase did not reduce the target",
       analysis.congestionResponseRequired
-        ? "target reaches 80% within 35 s, sustains it for 10 s, and median throughput reaches at least 60% of baseline"
+        ? "target reaches 80% within 35 s, sustains it for 10 s, and median throughput reaches at least 60% of the stable pre-transition rate"
         : "not applicable",
     ],
     [
@@ -2702,6 +2705,57 @@ function counterIncrease(samples, field, phases) {
     ? selected.at(-1)[field]
     : 0;
   return Math.max(0, last - first);
+}
+
+function hasPersistentTWCCLoss(samples, threshold, minimumTargetKbps) {
+  if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
+    return false;
+  }
+  const targetFloorKbps =
+    Number.isFinite(minimumTargetKbps) && minimumTargetKbps > 0
+      ? minimumTargetKbps
+      : 0;
+  let consecutive = 0;
+  let previous = null;
+  for (const sample of samples) {
+    if (
+      previous === null ||
+      previous.phase !== sample.phase ||
+      previous.peerConnectionState !== "connected" ||
+      sample.peerConnectionState !== "connected"
+    ) {
+      consecutive = 0;
+      previous = sample;
+      continue;
+    }
+    const reported = nullableCounterIncrease(
+      [previous, sample],
+      "twccReportedStatuses",
+    );
+    const lost = nullableCounterIncrease(
+      [previous, sample],
+      "twccReportedLost",
+    );
+    const canReduce =
+      Number.isFinite(previous.encoderTargetKbps) &&
+      previous.encoderTargetKbps > Math.max(1, targetFloorKbps * 1.01);
+    if (
+      reported !== null &&
+      reported >= minimumTWCCLossGuardStatuses &&
+      lost !== null &&
+      lost / reported > threshold &&
+      canReduce
+    ) {
+      consecutive += 1;
+      if (consecutive >= 2) {
+        return true;
+      }
+    } else {
+      consecutive = 0;
+    }
+    previous = sample;
+  }
+  return false;
 }
 
 function nullableCounterIncrease(samples, field) {

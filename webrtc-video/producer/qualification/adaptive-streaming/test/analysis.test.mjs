@@ -1601,6 +1601,21 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     ).passed,
     true,
   );
+  const isolatedLossBurst = analyze(
+    samples.map((sample, index) => ({
+      ...sample,
+      lossGuardReductions: 0,
+      twccReportedLost: index < 40 ? 0 : 20,
+      twccReportedStatuses: index * 100,
+    })),
+    manifest,
+  );
+  assert.equal(
+    isolatedLossBurst.assertions.find(
+      (assertion) => assertion.name === "loss-guard-response",
+    ).passed,
+    true,
+  );
   assert.equal(
     brokenTWCC.assertions.find(
       (assertion) => assertion.name === "twcc-loss-fidelity",
