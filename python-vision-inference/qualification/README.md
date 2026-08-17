@@ -37,8 +37,10 @@ latency across five payload sizes.
 - Transport probes preserve every byte at every payload size.
 - Equal-capacity regional selection chooses the lower measured establishment
   latency.
-- Model p95, model throughput, live RTT, failover, and transport overhead become
-  hard gates when their command-line budgets are set.
+- Model p95, model throughput, live RTT, failover, and reference-payload
+  transport overhead become hard gates when their command-line budgets are
+  set. The larger payload profile always gates byte equality and records its
+  latency as a scaling observation.
 
 ## Local model and lifecycle profile
 

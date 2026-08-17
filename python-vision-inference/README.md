@@ -150,11 +150,11 @@ failover passes only after the stream from worker A reports its failure and the
 same reference frame returns from worker B with identical labels, confidence
 scores, and bounding boxes.
 
-The latest [reference record](qualification/evidence/34aa947/report.md) measured
-failure detection at 110.64 ms and a complete result from the surviving worker
-at 694.13 ms. It also forced two equal-capacity workers into different regions
+The latest [reference record](qualification/evidence/7e512fe/report.md) measured
+failure detection at 75.29 ms and a complete result from the surviving worker
+at 586.46 ms. It also forced two equal-capacity workers into different regions
 and verified that the selector chose the lower measured session-establishment
-latency, saving 136.81 ms of median round-trip time in that run. The configured
+latency, saving 249.47 ms of median round-trip time in that run. The configured
 latency and throughput budgets qualify that recorded hardware and network path;
 deployments should set their own gates for the chosen model, accelerator, and
 regions.

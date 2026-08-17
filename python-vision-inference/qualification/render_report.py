@@ -246,7 +246,10 @@ def render(session_path: Path) -> bool:
                 "## Transport scaling",
                 "",
                 "The framed echo verifies byte equality and shows how payload size "
-                "changes round-trip latency on the same path.",
+                "changes round-trip latency on the same path. Byte integrity is a "
+                "verdict gate at every size; these scaling latencies are "
+                "observational. The configured transport budget applies to the "
+                "reference inference payload reported above.",
                 "",
                 "| Payload | Loopback p95 | rstream p50 | rstream p95 |",
                 "| ---: | ---: | ---: | ---: |",
@@ -352,7 +355,7 @@ def configured_performance_gates(parameters: dict[str, object]) -> list[str]:
         ("maxFailoverMS", "failover <= {value} ms"),
         (
             "maxTransportOverheadP95MS",
-            "transport overhead p95 <= {value} ms",
+            "reference-payload transport overhead p95 <= {value} ms",
         ),
     )
     result = []

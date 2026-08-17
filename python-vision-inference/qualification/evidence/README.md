@@ -12,3 +12,5 @@ and media are identified by cryptographic hashes.
 
 - [`34aa947`](34aa947/report.md) — distributed Vision model, transport,
   saturation, failover, and regional-selection qualification on staging.
+- [`7e512fe`](7e512fe/report.md) — stronger inference-result equivalence across
+  failover, plus the same model, transport, saturation, and regional gates.

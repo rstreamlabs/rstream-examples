@@ -1,0 +1,57 @@
+{
+  "requestedRegion": "auto",
+  "tunnelOwnerRegion": "eu-west-3",
+  "rows": [
+    {
+      "bytes": 1024,
+      "repetitions": 30,
+      "loopbackP50MS": 0.122,
+      "loopbackP95MS": 0.147,
+      "rstreamP50MS": 93.438,
+      "rstreamP95MS": 101.861,
+      "overheadP50MS": 93.316,
+      "overheadP95MS": 101.714
+    },
+    {
+      "bytes": 8192,
+      "repetitions": 30,
+      "loopbackP50MS": 0.127,
+      "loopbackP95MS": 0.181,
+      "rstreamP50MS": 109.408,
+      "rstreamP95MS": 121.774,
+      "overheadP50MS": 109.281,
+      "overheadP95MS": 121.593
+    },
+    {
+      "bytes": 36083,
+      "repetitions": 30,
+      "loopbackP50MS": 0.137,
+      "loopbackP95MS": 0.174,
+      "rstreamP50MS": 140.082,
+      "rstreamP95MS": 238.893,
+      "overheadP50MS": 139.945,
+      "overheadP95MS": 238.719
+    },
+    {
+      "bytes": 131072,
+      "repetitions": 30,
+      "loopbackP50MS": 0.174,
+      "loopbackP95MS": 0.194,
+      "rstreamP50MS": 203.048,
+      "rstreamP95MS": 228.496,
+      "overheadP50MS": 202.874,
+      "overheadP95MS": 228.302
+    },
+    {
+      "bytes": 524288,
+      "repetitions": 30,
+      "loopbackP50MS": 0.366,
+      "loopbackP95MS": 0.72,
+      "rstreamP50MS": 507.145,
+      "rstreamP95MS": 978.869,
+      "overheadP50MS": 506.779,
+      "overheadP95MS": 978.149
+    }
+  ],
+  "violations": []
+}

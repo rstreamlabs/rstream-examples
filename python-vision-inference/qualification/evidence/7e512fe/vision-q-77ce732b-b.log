@@ -1,0 +1,5 @@
+Worker ready: vision-q-77ce732b-b (yolov8n.pt, imgsz=640, Apple M1 Max [cpu], rstream region=eu-west-3)
+device session opened
+device session closed
+device session opened
+device session closed

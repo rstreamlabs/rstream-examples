@@ -1,0 +1,53 @@
+{
+  "runId": "77ce732b",
+  "workers": [
+    "vision-q-77ce732b-a",
+    "vision-q-77ce732b-b"
+  ],
+  "workerEngineRegions": {
+    "vision-q-77ce732b-a": "eu-west-3",
+    "vision-q-77ce732b-b": "eu-west-3"
+  },
+  "frames": 62,
+  "referencePayloadBytes": 36083,
+  "loopback": {
+    "startupMS": 1819.687,
+    "frames": 20,
+    "roundTripP50MS": 29.452,
+    "roundTripP95MS": 29.918
+  },
+  "inventoryStartupMS": 2143.341,
+  "capacityRejectionMS": 310.232,
+  "capacityRecoveryMS": 318.884,
+  "failureDetectionMS": 75.289,
+  "failureSignal": "eof",
+  "failoverMS": 586.463,
+  "inventoryRemovalMS": 152.559,
+  "roundTripMS": {
+    "p50": 153.228,
+    "p95": 194.628,
+    "max": 240.093
+  },
+  "sendDrainMS": {
+    "p50": 0.133,
+    "p95": 0.263
+  },
+  "responseWaitMS": {
+    "p50": 153.055,
+    "p95": 193.57
+  },
+  "transportOverheadP95MS": 164.71,
+  "inferenceMS": {
+    "p50": 30.4,
+    "p95": 37.9,
+    "max": 50.5
+  },
+  "detectionCount": 15,
+  "labels": [
+    "bus",
+    "car",
+    "truck"
+  ],
+  "detectionSignatureSha256": "b335f5050e9525972508a6176832778c178eba825086bc8f401bf3da20e26cf4",
+  "violations": []
+}
