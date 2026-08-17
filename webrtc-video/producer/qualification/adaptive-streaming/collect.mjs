@@ -522,6 +522,7 @@ async function collectSample(activePage) {
       pacerRepairPacketsExpired: bandwidth?.pacerRepairPacketsExpired || 0,
       pacerRepairPacketsTrimmed: bandwidth?.pacerRepairPacketsTrimmed || 0,
       pacerRTXPacketsExpired: bandwidth?.pacerRTXPacketsExpired || 0,
+      pacerRTXPacketsCoalesced: bandwidth?.pacerRTXPacketsCoalesced || 0,
       pacerFECPacketsExpired: bandwidth?.pacerFECPacketsExpired || 0,
       pacerRTXPacketsTrimmed: bandwidth?.pacerRTXPacketsTrimmed || 0,
       pacerFECPacketsTrimmed: bandwidth?.pacerFECPacketsTrimmed || 0,

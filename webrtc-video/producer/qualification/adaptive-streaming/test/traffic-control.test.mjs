@@ -113,7 +113,7 @@ test("runs one in-namespace impairment schedule and retains every snapshot", asy
   ]);
   assert.deepEqual(
     (await readFile(runtime.sleepLog, "utf8")).trim().split("\n"),
-    ["20", "5", "5", "5", "30", "35", "5", "40", "1"],
+    ["20", "5", "5", "5", "5", "25", "35", "5", "40", "1"],
   );
   const names = [
     "conditioning-start",
@@ -177,6 +177,27 @@ test("rejects malformed input before touching traffic control", async (t) => {
   });
   assert.equal(result.status, 2);
   assert.match(result.stderr, /address family must be 4 or 6/);
+  await assert.rejects(readFile(runtime.tcLog, "utf8"), /ENOENT/);
+});
+
+test("reserves a measured steady interval after the final capacity step", async (t) => {
+  const runtime = await prepareRuntime();
+  t.after(() => rm(runtime.directory, { force: true, recursive: true }));
+  const evidence = join(runtime.directory, "evidence");
+  const args = argumentsFor(evidence);
+  args[args.indexOf("--constrained-steady-seconds") + 1] = "5";
+  const result = spawnSync("sh", args, {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      RSTREAM_SLEEP_COMMAND: runtime.fakeSleep,
+      RSTREAM_TC_COMMAND: runtime.fakeTC,
+      RSTREAM_TEST_SLEEP_LOG: runtime.sleepLog,
+      RSTREAM_TEST_TC_LOG: runtime.tcLog,
+    },
+  });
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /steady duration must exceed one transition/);
   await assert.rejects(readFile(runtime.tcLog, "utf8"), /ENOENT/);
 });
 

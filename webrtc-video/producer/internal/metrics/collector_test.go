@@ -48,6 +48,7 @@ func TestCollectorExportsStableUnitsAndBoundedDimensions(t *testing.T) {
 		MaximumPacketLossRatio:      0.025,
 		MaximumDelayEstimateSeconds: 0.018,
 		PacerSentPrimaryBytes:       9000,
+		PacerRTXPacketsCoalesced:    7,
 		TWCCFeedbackPackets:         10,
 		TWCCReportedStatuses:        100,
 		TWCCReportedLost:            3,
@@ -72,6 +73,9 @@ func TestCollectorExportsStableUnitsAndBoundedDimensions(t *testing.T) {
 	}
 	if value := metricValue(t, families, namespace+"_pacer_sent_bytes_total", map[string]string{"kind": "primary"}); value != 9000 {
 		t.Fatalf("primary wire bytes = %f, want 9000", value)
+	}
+	if value := metricValue(t, families, namespace+"_pacer_repair_discarded_packets_total", map[string]string{"repair": "rtx", "reason": "coalesced"}); value != 7 {
+		t.Fatalf("coalesced RTX packets = %f, want 7", value)
 	}
 	if unit := metricUnit(t, families, namespace+"_twcc_estimated_available_bytes_per_second"); unit != "bytes_per_second" {
 		t.Fatalf("estimated throughput unit = %q, want bytes_per_second", unit)

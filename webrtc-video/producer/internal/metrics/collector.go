@@ -413,6 +413,7 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(c.pacerRepairPacketsDiscarded, prometheus.CounterValue, float64(producer.PacerFECPacketsExpired), "fec", "expired")
 	ch <- prometheus.MustNewConstMetric(c.pacerRepairPacketsDiscarded, prometheus.CounterValue, float64(producer.PacerRTXPacketsTrimmed), "rtx", "trimmed")
 	ch <- prometheus.MustNewConstMetric(c.pacerRepairPacketsDiscarded, prometheus.CounterValue, float64(producer.PacerFECPacketsTrimmed), "fec", "trimmed")
+	ch <- prometheus.MustNewConstMetric(c.pacerRepairPacketsDiscarded, prometheus.CounterValue, float64(producer.PacerRTXPacketsCoalesced), "rtx", "coalesced")
 	ch <- prometheus.MustNewConstMetric(c.pacerSentPackets, prometheus.CounterValue, float64(producer.PacerSentPrimary), "primary")
 	ch <- prometheus.MustNewConstMetric(c.pacerSentPackets, prometheus.CounterValue, float64(producer.PacerSentRTX), "rtx")
 	ch <- prometheus.MustNewConstMetric(c.pacerSentPackets, prometheus.CounterValue, float64(producer.PacerSentFEC), "fec")
