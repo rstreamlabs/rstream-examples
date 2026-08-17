@@ -3,7 +3,7 @@ import pathlib
 import tempfile
 import unittest
 
-from render_report import collect, render_bars
+from render_report import collect, render_markdown
 
 
 class RenderReportTest(unittest.TestCase):
@@ -24,7 +24,14 @@ class RenderReportTest(unittest.TestCase):
             (scenario / "rtp-analysis.json").write_text(
                 json.dumps(
                     {
-                        "receiver": {"deliveryPercent": 99.5},
+                        "receiver": {
+                            "deliveryPercent": 99.5,
+                            "deliveredSenderPackets": 99,
+                            "missingSenderPackets": 1,
+                            "duplicates": 0,
+                            "outOfOrderArrivals": 0,
+                        },
+                        "sender": {"uniquePackets": 100},
                         "thresholds": {"minimumPacketDeliveryPercent": 99},
                     }
                 ),
@@ -32,7 +39,12 @@ class RenderReportTest(unittest.TestCase):
             )
             (scenario / "frame-comparison.json").write_text(
                 json.dumps(
-                    {"identicalPercent": 98, "minimumIdenticalPercent": 90}
+                    {
+                        "identicalPercent": 98,
+                        "identicalFramesInOrder": 98,
+                        "referenceFrames": 100,
+                        "minimumIdenticalPercent": 90,
+                    }
                 ),
                 encoding="utf-8",
             )
@@ -41,15 +53,26 @@ class RenderReportTest(unittest.TestCase):
         self.assertEqual(results[0]["revision"], "abc")
         self.assertEqual(results[0]["packetDeliveryPercent"], 99.5)
         self.assertEqual(results[0]["identicalFramesPercent"], 98)
+        self.assertEqual(results[0]["deliveredPackets"], 99)
+        self.assertEqual(results[0]["identicalFrames"], 98)
 
-    def test_svg_escapes_labels_and_marks_failed_bar_red(self):
+    def test_markdown_explains_the_validation_method(self):
         with tempfile.TemporaryDirectory() as directory:
-            output = pathlib.Path(directory) / "chart.svg"
-            render_bars("A & B", [("unsafe <name>", 80, 90)], output)
-            svg = output.read_text(encoding="utf-8")
-        self.assertIn("A &amp; B", svg)
-        self.assertIn("unsafe &lt;name&gt;", svg)
-        self.assertIn("#ef4444", svg)
+            output = pathlib.Path(directory) / "report.md"
+            render_markdown(
+                [
+                    {
+                        "scenario": "best-effort",
+                        "summary": "PASS 300/300 frames",
+                        "revision": "abc",
+                        "dirty": False,
+                    }
+                ],
+                output,
+            )
+            report = output.read_text(encoding="utf-8")
+        self.assertIn("checked frame by frame", report)
+        self.assertIn("PASS 300/300 frames", report)
 
 
 if __name__ == "__main__":

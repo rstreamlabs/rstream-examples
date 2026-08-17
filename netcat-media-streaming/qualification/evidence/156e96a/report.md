@@ -1,34 +1,27 @@
-# Netcat media qualification — revision 156e96a
+# Netcat media qualification record
 
-The complete qualification passed on a clean checkout with rstream CLI 1.28.1
-and rstream-ncat 1.14.2. The run exercised finite, decoded video streams rather
-than process liveness alone.
+## Method
 
-![RTP packet delivery](packet-delivery.svg)
+Every scenario starts from a finite 300-frame source. Reliable and RTSP streams decode to raw I420 and are checked frame by frame against the source. Datagram scenarios also parse the RFC 4571-framed RTP stream, account for every sequence number, and compare decoded frames with the reference in order. The repair scenario removes one percent of RTP packets before rstream and checks every RTCP/NACK lookup together with the decoded output.
 
-![Reference-identical decoded frames](video-quality.svg)
+## Acceptance gates
 
-| Scenario | RTP delivery | Identical video frames | Revision | Working tree |
-| --- | ---: | ---: | --- | --- |
-| datagram-media-best-effort | 100.000% | 100.000% | `156e96a33b88` | clean |
-| datagram-media-guaranteed | 100.000% | 100.000% | `156e96a33b88` | clean |
-| reliable-media-matrix | — | — | `156e96a33b88` | clean |
-| rtcp-repair | — | — | `156e96a33b88` | clean |
-| rtsp-media-matrix | — | — | `156e96a33b88` | clean |
+- Reliable and RTSP paths decode all 300 frames.
+- Clean best-effort RTP delivers at least 99% of packets and 90% of reference-identical frames; guaranteed datagrams require 100% of both.
+- The injected-loss path decodes all 300 frames and satisfies every NACK lookup inside the repair window.
+- RTP analysis rejects malformed packets, timestamp regressions, and values outside the profile's duplicate or reordering budget.
+- Unknown warning or error lines and incomplete process teardown fail the run.
 
-The reliable matrix decoded 300/300 frames through all four FFmpeg/GStreamer
-and Go/C++ combinations. Both RTP profiles delivered 1,221/1,221 packets and
-decoded 300/300 reference-identical frames. With 1% packet loss injected before
-the tunnel, the bidirectional RTCP/NACK profile decoded 300/300 frames and
-satisfied all 258 retransmission requests. The Go and C++ RTSP bridges each
-decoded 300/300 frames from the same MediaMTX source. The log classifier found
-no unknown warning or error.
+## Recorded results
 
-The amber marker is the declared acceptance threshold. Best-effort RTP,
-guaranteed datagrams, and application-level RTCP repair remain separate because
-they make different latency and delivery trade-offs. A clean local run does not
-claim that best-effort delivery is lossless on every network; the injected-loss
-scenario is the evidence for the repair path.
+| Scenario | Observed result | Revision | Working tree |
+| --- | --- | --- | --- |
+| datagram-media-best-effort | PASS video quality identical_frames=300/300 identical=100.000% candidate_frames=300 altered_candidate_frames=0<br />PASS RTP packets=1221/1221 delivery=100.000% missing=0 duplicates=0 out_of_order=0 | `156e96a33b88` | clean |
+| datagram-media-guaranteed | PASS video quality identical_frames=300/300 identical=100.000% candidate_frames=300 altered_candidate_frames=0<br />PASS RTP packets=1221/1221 delivery=100.000% missing=0 duplicates=0 out_of_order=0 | `156e96a33b88` | clean |
+| reliable-media-matrix | PASS reliable media matrix: 4/4 scenarios passed | `156e96a33b88` | clean |
+| rtcp-repair | PASS RTCP repair frames=300/300 delivery=100.0% feedback_bytes=13590 requests=258 found=258 loss=0.01 | `156e96a33b88` | clean |
+| rtsp-media-matrix | PASS RTSP media matrix: Go and C++ bridges decoded 300 frames | `156e96a33b88` | clean |
 
-The scenario directories retain the runtime manifests and exact analyzer
-outputs. Regenerate the pack with `./qualification/run.sh`.
+Best-effort RTP, guaranteed datagrams, reliable byte streams, RTCP repair, and RTSP bridging remain separate verdicts because they exercise different delivery semantics. A clean best-effort run establishes fidelity on the recorded path; the injected-loss scenario establishes application-level repair.
+
+Regenerate with `./qualification/run.sh`. Only evidence produced from a clean, pinned working tree is suitable for publication.

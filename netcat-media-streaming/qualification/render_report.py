@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import argparse
-import html
 import json
 import pathlib
 
@@ -30,6 +29,11 @@ def collect(root: pathlib.Path) -> list[dict[str, object]]:
         if rtp_path.exists():
             rtp = load_json(rtp_path)
             result["packetDeliveryPercent"] = rtp["receiver"]["deliveryPercent"]
+            result["deliveredPackets"] = rtp["receiver"]["deliveredSenderPackets"]
+            result["sentPackets"] = rtp["sender"]["uniquePackets"]
+            result["missingPackets"] = rtp["receiver"]["missingSenderPackets"]
+            result["duplicatePackets"] = rtp["receiver"]["duplicates"]
+            result["outOfOrderPackets"] = rtp["receiver"]["outOfOrderArrivals"]
             result["packetThresholdPercent"] = rtp["thresholds"][
                 "minimumPacketDeliveryPercent"
             ]
@@ -37,6 +41,8 @@ def collect(root: pathlib.Path) -> list[dict[str, object]]:
         if quality_path.exists():
             quality = load_json(quality_path)
             result["identicalFramesPercent"] = quality["identicalPercent"]
+            result["identicalFrames"] = quality["identicalFramesInOrder"]
+            result["referenceFrames"] = quality["referenceFrames"]
             result["identicalFramesThresholdPercent"] = quality[
                 "minimumIdenticalPercent"
             ]
@@ -44,72 +50,43 @@ def collect(root: pathlib.Path) -> list[dict[str, object]]:
         if decoded_path.exists():
             decoded = load_json(decoded_path)
             result["decodedFramesPercent"] = decoded["deliveryPercent"]
+        summary_path = directory / "summary.txt"
+        if summary_path.exists():
+            result["summary"] = "<br />".join(
+                line.strip()
+                for line in summary_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            )
         results.append(result)
     return results
 
 
-def render_bars(
-    title: str,
-    rows: list[tuple[str, float, float | None]],
-    output: pathlib.Path,
-) -> None:
-    width = 900
-    left = 260
-    right = 120
-    top = 80
-    row_height = 72
-    chart_width = width - left - right
-    height = top + max(1, len(rows)) * row_height + 50
-    parts = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
-        '<rect width="100%" height="100%" fill="#111827" rx="16"/>',
-        f'<text x="32" y="42" fill="#f9fafb" font-family="system-ui,sans-serif" font-size="24" font-weight="700">{html.escape(title)}</text>',
-    ]
-    for index, (label, value, threshold) in enumerate(rows):
-        y = top + index * row_height
-        bar_width = max(0.0, min(100.0, value)) * chart_width / 100
-        passed = threshold is None or value >= threshold
-        color = "#22c55e" if passed else "#ef4444"
-        parts.extend(
-            [
-                f'<text x="32" y="{y + 23}" fill="#e5e7eb" font-family="system-ui,sans-serif" font-size="17">{html.escape(label)}</text>',
-                f'<rect x="{left}" y="{y}" width="{chart_width}" height="28" fill="#374151" rx="6"/>',
-                f'<rect x="{left}" y="{y}" width="{bar_width:.2f}" height="28" fill="{color}" rx="6"/>',
-                f'<text x="{left + chart_width + 12}" y="{y + 21}" fill="#f9fafb" font-family="ui-monospace,monospace" font-size="15">{value:.3f}%</text>',
-            ]
-        )
-        if threshold is not None:
-            threshold_x = left + threshold * chart_width / 100
-            parts.append(
-                f'<line x1="{threshold_x:.2f}" y1="{y - 5}" x2="{threshold_x:.2f}" y2="{y + 33}" stroke="#fbbf24" stroke-width="3"/>'
-            )
-    if not rows:
-        parts.append(
-            '<text x="32" y="100" fill="#9ca3af" font-family="system-ui,sans-serif" font-size="17">No applicable measurements</text>'
-        )
-    parts.append("</svg>\n")
-    output.write_text("\n".join(parts), encoding="utf-8")
-
-
 def render_markdown(results: list[dict[str, object]], output: pathlib.Path) -> None:
     lines = [
-        "# Netcat media qualification evidence",
+        "# Netcat media qualification record",
         "",
-        "![RTP packet delivery](packet-delivery.svg)",
+        "## Method",
         "",
-        "![Reference-identical decoded frames](video-quality.svg)",
+        "Every scenario starts from a finite 300-frame source. Reliable and RTSP streams decode to raw I420 and are checked frame by frame against the source. Datagram scenarios also parse the RFC 4571-framed RTP stream, account for every sequence number, and compare decoded frames with the reference in order. The repair scenario removes one percent of RTP packets before rstream and checks every RTCP/NACK lookup together with the decoded output.",
         "",
-        "| Scenario | RTP delivery | Identical video frames | Revision | Working tree |",
-        "| --- | ---: | ---: | --- | --- |",
+        "## Acceptance gates",
+        "",
+        "- Reliable and RTSP paths decode all 300 frames.",
+        "- Clean best-effort RTP delivers at least 99% of packets and 90% of reference-identical frames; guaranteed datagrams require 100% of both.",
+        "- The injected-loss path decodes all 300 frames and satisfies every NACK lookup inside the repair window.",
+        "- RTP analysis rejects malformed packets, timestamp regressions, and values outside the profile's duplicate or reordering budget.",
+        "- Unknown warning or error lines and incomplete process teardown fail the run.",
+        "",
+        "## Recorded results",
+        "",
+        "| Scenario | Observed result | Revision | Working tree |",
+        "| --- | --- | --- | --- |",
     ]
     for result in results:
-        packet = result.get("packetDeliveryPercent")
-        quality = result.get("identicalFramesPercent")
         lines.append(
-            "| {scenario} | {packet} | {quality} | `{revision}` | {dirty} |".format(
+            "| {scenario} | {summary} | `{revision}` | {dirty} |".format(
                 scenario=str(result["scenario"]),
-                packet=f"{packet:.3f}%" if isinstance(packet, (float, int)) else "—",
-                quality=f"{quality:.3f}%" if isinstance(quality, (float, int)) else "—",
+                summary=str(result.get("summary", "No analyzer summary")),
                 revision=str(result["revision"])[:12],
                 dirty="dirty" if result["dirty"] else "clean",
             )
@@ -117,7 +94,7 @@ def render_markdown(results: list[dict[str, object]], output: pathlib.Path) -> N
     lines.extend(
         [
             "",
-            "The amber marker is the declared acceptance threshold; red bars are below it. Best-effort, guaranteed-delivery and RTCP profiles intentionally remain separate because they make different latency and delivery trade-offs.",
+            "Best-effort RTP, guaranteed datagrams, reliable byte streams, RTCP repair, and RTSP bridging remain separate verdicts because they exercise different delivery semantics. A clean best-effort run establishes fidelity on the recorded path; the injected-loss scenario establishes application-level repair.",
             "",
             "Regenerate with `./qualification/run.sh`. Only evidence produced from a clean, pinned working tree is suitable for publication.",
             "",
@@ -131,30 +108,6 @@ def main() -> int:
     parser.add_argument("root", type=pathlib.Path)
     arguments = parser.parse_args()
     results = collect(arguments.root)
-    packet_rows = [
-        (
-            str(result["scenario"]),
-            float(result["packetDeliveryPercent"]),
-            float(result["packetThresholdPercent"]),
-        )
-        for result in results
-        if "packetDeliveryPercent" in result
-    ]
-    quality_rows = [
-        (
-            str(result["scenario"]),
-            float(result["identicalFramesPercent"]),
-            float(result["identicalFramesThresholdPercent"]),
-        )
-        for result in results
-        if "identicalFramesPercent" in result
-    ]
-    render_bars("RTP packet delivery", packet_rows, arguments.root / "packet-delivery.svg")
-    render_bars(
-        "Reference-identical decoded frames",
-        quality_rows,
-        arguments.root / "video-quality.svg",
-    )
     render_markdown(results, arguments.root / "report.md")
     return 0
 
