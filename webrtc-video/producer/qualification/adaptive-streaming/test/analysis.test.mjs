@@ -147,6 +147,78 @@ test("separates a stable conditioning window from the next link transition", () 
   );
 });
 
+test("uses the settled controlled path as the congestion reference", () => {
+  const startedAt = Date.parse("2026-08-16T10:00:00.000Z");
+  const definitions = [
+    ["baseline", 8000, 8000, null],
+    ["conditioning", 4400, 4400, 32_000],
+    ["constrained", 3000, 3000, 4000],
+    ["impaired", 2800, 2800, 4000],
+    ["recovery", 4000, 4000, 32_000],
+  ];
+  let bytesReceived = 0;
+  let elapsedMilliseconds = 0;
+  const samples = definitions.flatMap(
+    ([phase, encoderTargetKbps, receivedKbps]) =>
+      Array.from({ length: 15 }, () => {
+        elapsedMilliseconds += 1000;
+        bytesReceived += (receivedKbps * 1000) / 8;
+        return {
+          bytesReceived,
+          capturedAt: new Date(startedAt + elapsedMilliseconds).toISOString(),
+          elapsedMilliseconds,
+          encoderTargetKbps,
+          phase,
+          twccTargetKbps: encoderTargetKbps,
+        };
+      }),
+  );
+  const manifest = {
+    phases: definitions.map(([name, , , capacityKbps]) => ({
+      name,
+      shaping: capacityKbps ? { capacityKbps } : null,
+    })),
+  };
+  const result = analyze(
+    samples,
+    manifest,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    [
+      {
+        name: "conditioning-started",
+        observedAt: new Date(startedAt + 16_000).toISOString(),
+      },
+      {
+        name: "constrained-started",
+        observedAt: new Date(startedAt + 31_000).toISOString(),
+      },
+    ],
+  );
+  assert.equal(result.stableConditioningMedianEncoderTargetKbps, 4400);
+  assert.equal(result.preTransitionEncoderTargetKbps, 4400);
+  assert.equal(result.congestionResponseRequired, true);
+  for (const name of [
+    "capacity-experiment-settled",
+    "congestion-response",
+    "recovery-time",
+    "sustained-recovery",
+    "throughput-recovery",
+  ]) {
+    assert.equal(
+      result.assertions.find((assertion) => assertion.name === name).passed,
+      true,
+      name,
+    );
+  }
+});
+
 test("measures recovery residency without hiding sustained oscillation", () => {
   const samples = Array.from({ length: 11 }, (_, index) => ({
     elapsedMilliseconds: index * 1000,
