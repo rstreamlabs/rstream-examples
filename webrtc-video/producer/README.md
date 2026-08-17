@@ -11,6 +11,38 @@ Treat this repository as a reference base rather than a fixed product. The profi
 For a guided walkthrough of the architecture and the `rstream-go` integration,
 see [Build Adaptive Real-Time Video Streaming with WebRTC and rstream](https://rstream.io/guides/build-device-to-browser-webrtc-streaming-with-rstream).
 
+## One media core, three delivery paths
+
+This Go codebase is the device-side foundation for the complete video series.
+It owns capture, encoding, congestion control, pacing, packet repair, session
+recovery, and producer metrics. The surrounding control and distribution planes
+evolve without forking that implementation.
+
+The [standalone guide](https://rstream.io/guides/build-device-to-browser-webrtc-streaming-with-rstream)
+establishes the reference media path between one producer and one browser. The
+[Next.js guide](https://rstream.io/guides/integrate-webrtc-video-streaming-into-a-nextjs-platform-with-rstream)
+runs this producer in provisioning mode and adds device identity, viewer
+authorization, fleet state, and product policy. Signaling and media still
+terminate on the producer; Next.js does not proxy them.
+
+The MediaMTX guide will add a distribution adapter to the same codebase. One
+adaptive device upstream will feed MediaMTX, which can then serve several
+viewers without multiplying device uplink usage. Direct WebRTC remains
+available for one-to-one sessions and transport diagnosis; ICE still chooses
+direct or TURN connectivity for that session.
+
+Across all three shapes, the capture pipeline, encoder, adaptive controller,
+pacer, repair strategy, recovery logic, and producer metrics remain one
+implementation to operate and qualify. The control plane decides who may start
+or watch a stream. The distribution plane decides whether the encoded stream
+goes to one browser or to a fan-out tier.
+
+Fan-out creates two congestion domains. MediaMTX feedback drives this
+producer's shared upstream; each viewer has a separate downstream control loop.
+The MediaMTX integration will qualify feedback, retransmission, repair, and
+latency on both legs. Producer OpenMetrics describe the device uplink, while
+MediaMTX and browser telemetry describe viewer delivery.
+
 ## Integration paths
 
 This producer is the application-controlled path for products that combine
@@ -27,7 +59,7 @@ and recovery. Both paths use the same rstream network: the CLI keeps the
 integration compact, while the SDK exposes the controls required by a complete
 video product.
 
-## Architecture
+## Standalone path
 
 The local HTTP server serves the embedded page and the small API surface the page needs: signaling, TURN bootstrap, and status endpoints. On the media side, a GStreamer pipeline produces H.264 or AV1 access units and passes them to a WebRTC sender built on top of Pion. `rstream-go` publishes that local server through an HTTP tunnel and keeps the public URL available.
 
@@ -42,7 +74,7 @@ rstream login
 rstream project use <project-endpoint>
 ```
 
-For local development you need Go `1.26+`, a C compiler, `pkg-config`,
+For local development you need Go `1.26.6+`, a C compiler, `pkg-config`,
 and a GStreamer installation that includes the development files and the
 elements required by the selected pipeline. Node.js `20+` and npm are only
 required when building the embedded local viewer UI with `make build`,
@@ -177,10 +209,21 @@ scrape `http://127.0.0.1:9090/metrics` without adding a public endpoint. Bind a
 private interface only when the deployment deliberately collects metrics from
 another host.
 
+```yaml
+scrape_configs:
+  - job_name: video-producer
+    static_configs:
+      - targets: [127.0.0.1:9090]
+        labels:
+          producer: camera-01
+```
+
 The counters preserve producer lifetime totals when a viewer session closes,
 and the metric dimensions remain bounded: codec and enabled features describe
-the process, while no viewer or session identifier becomes a label. Useful
-queries include:
+the process, while no viewer or session identifier becomes a label. Fleet
+identity belongs to the collector target, as shown above, so application code
+never turns sessions into unbounded time-series dimensions. Useful queries
+include:
 
 ```promql
 # Encoder output in Mbit/s
@@ -196,12 +239,14 @@ sum(rate(rstream_video_producer_encoded_frames_total[1m]))
 time() - rstream_video_producer_last_encoded_frame_timestamp_seconds
 ```
 
-The current gauges expose the encoder and pacer targets, the TWCC estimate,
-packet-loss ratio, delay estimate, queue depth, queue delay, and active loss
-guards. Counters cover source backpressure, frame admission drops, adaptive
-updates, key-frame recovery, malformed feedback, RTX and FlexFEC traffic, and
-repair packets discarded before transmission. Each series includes its HELP,
-TYPE, and UNIT metadata in the OpenMetrics response.
+The current gauges separate the TWCC media estimate and encoder media target
+from the pacer's sustained wire budget and short-burst allowance. They also
+expose packet-loss ratio, delay estimate, queue depth, queue delay, and active
+loss guards. Counters cover source backpressure, frame admission drops,
+adaptive updates, key-frame recovery, malformed feedback, RTX and FlexFEC
+traffic, and repair packets discarded before transmission. The OpenMetrics
+response emits HELP and TYPE metadata for every family, plus UNIT metadata for
+values expressed in bytes, bytes per second, or seconds.
 
 ### Tunnel publication and authentication
 
@@ -314,14 +359,12 @@ On macOS webcam pipelines, keep `format=I420` before `av1enc`. That avoids forma
 `twcc` enables Transport-Wide Congestion Control feedback. `nack` enables packet-loss feedback. `rtx` enables retransmission payloads so those loss reports can actually be repaired. The reference profiles keep all three enabled because that combination is practical and broadly supported.
 
 `flexFEC` stays off in the quick-start profiles because proactive repair spends
-bandwidth even when a link is healthy. The loss-resilient reference enables it
-at two repair packets per four media packets. Pion interleaves the media across
-two independent XOR groups, so each repair can recover one missing packet in
-its own group; this is different from recovering any two losses in the complete
-window. Shorter groups reduced late reactive repair and visible freezes in the
-controlled loss comparison. The sender includes the 50% packet overhead in its
-wire-rate congestion budget rather than filling the link with encoder traffic
-and appending FEC on top.
+bandwidth even when a link is healthy. The loss-resilient reference enables one
+repair packet per five media packets and includes that 20% overhead in the
+sender's wire-rate congestion budget. A separate stress profile uses two repair
+packets per four media packets. Pion interleaves that profile across two
+independent XOR groups, so each repair can recover one missing packet in its own
+group; this is different from recovering any two losses in the complete window.
 
 GCC controls the complete paced wire budget. The producer derives the encoder's
 media share from that budget before applying a bitrate update, then schedules
@@ -424,18 +467,19 @@ the codec, frame cadence, resolution, CPU budget, or network envelope calls for
 a new qualification run. Each report records the Git revision that produced
 the result, so the measured trade-offs remain tied to an exact implementation.
 
-| Setting                |                                              Reference value | Reason and trade-off                                                                                                                                                                                                                                                                                                                                                                     |
-| ---------------------- | -----------------------------------------------------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frame size and cadence |                                          1920x1080 at 30 fps | Exercises a real live-video workload while remaining reproducible. If the link cannot sustain the quality floor, add a measured resolution/frame-rate ladder instead of compressing this fixed profile indefinitely.                                                                                                                                                                     |
-| x264 latency controls  |                       `zerolatency`, `veryfast`, `bframes=0` | Avoids frame reordering and deep encoder buffering. The `zerolatency` tune owns its internally coherent lookahead and threading choices; duplicating those private tune settings in the pipeline made the profile harder to reason about without establishing a measured benefit. A slower preset may improve compression, but it spends CPU and can add latency on constrained devices. |
-| Key-frame policy       |                               `key-int-max=60`, `scenecut=0` | Gives the qualification source a deterministic maximum two-second GOP at 30 fps, so recovery runs are comparable. Content-driven production encoders may re-enable scene cuts after measuring their key-frame bursts.                                                                                                                                                                    |
-| Encoder VBV            |                                                       250 ms | Bounds the encoder-side rate reservoir while retaining enough room for normal frame-size variation. It is one component of latency, not a promise that end-to-end delay is 250 ms.                                                                                                                                                                                                       |
-| Initial encoder target |                                                     5 Mbit/s | Starts 1080p with useful quality before TWCC has accumulated enough feedback. A high startup target can briefly overshoot a smaller access link, which is why the pacer still enforces the current wire budget.                                                                                                                                                                          |
-| Adaptive range         |                                                   2–8 Mbit/s | The 2 Mbit/s floor protects fixed 1080p quality observed through x264 QP; the ceiling bounds CPU and link demand. Operating below the floor calls for a source ladder, not a hidden quality collapse.                                                                                                                                                                                    |
-| Update hysteresis      |                      2 s, 10% increases, immediate decreases | Filters estimator noise while keeping the encoder aligned with the capacity granted by GCC. Decreases bypass the periodic update gate; increases follow GCC after the loss-recovery hold.                                                                                                                                                                                                |
-| Pacing and admission   | Shared 1.5x media envelope, 225 ms sustained-backlog ceiling | Media, proactive repair, and retransmissions share one pacing allowance. The admission ceiling preserves 150 ms of scheduling margin under the measured 375 ms packet-residence budget. Over-budget access units are rejected whole before RTP packetization.                                                                                                                            |
-| Repair scheduling      |        One repair packet per scheduling burst; 225 ms expiry | Gives RTX a prompt opportunity without starving current media, and discards a repair packet once its playback value is lower than the latency it would add.                                                                                                                                                                                                                              |
-| FlexFEC                |                     One repair packet per five media packets | Adds moderate proactive protection for lossy, higher-RTT paths where reactive RTX can arrive after the playout window. Stronger ratios remain explicit stress profiles; leave FlexFEC disabled when measured NACK/RTX recovery is sufficient or the link cannot afford the overhead.                                                                                                     |
+| Setting                |                                                       Reference value | Reason and trade-off                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------- | --------------------------------------------------------------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frame size and cadence |                                                   1920x1080 at 30 fps | Exercises a real live-video workload while remaining reproducible. If the link cannot sustain the quality floor, add a measured resolution/frame-rate ladder instead of compressing this fixed profile indefinitely.                                                                                                                                                                     |
+| x264 latency controls  |                                `zerolatency`, `veryfast`, `bframes=0` | Avoids frame reordering and deep encoder buffering. The `zerolatency` tune owns its internally coherent lookahead and threading choices; duplicating those private tune settings in the pipeline made the profile harder to reason about without establishing a measured benefit. A slower preset may improve compression, but it spends CPU and can add latency on constrained devices. |
+| Key-frame policy       |                                        `key-int-max=60`, `scenecut=0` | Gives the qualification source a deterministic maximum two-second GOP at 30 fps, so recovery runs are comparable. Content-driven production encoders may re-enable scene cuts after measuring their key-frame bursts.                                                                                                                                                                    |
+| Encoder VBV            |                                                                250 ms | Bounds the encoder-side rate reservoir while retaining enough room for normal frame-size variation. It is one component of latency, not a promise that end-to-end delay is 250 ms.                                                                                                                                                                                                       |
+| Initial encoder target |                                                              5 Mbit/s | Starts 1080p with useful quality before TWCC has accumulated enough feedback. A high startup target can briefly overshoot a smaller access link, which is why the pacer still enforces the current wire budget.                                                                                                                                                                          |
+| Adaptive range         |                                                            2–8 Mbit/s | The 2 Mbit/s floor protects fixed 1080p quality observed through x264 QP; the ceiling bounds CPU and link demand. Operating below the floor calls for a source ladder, not a hidden quality collapse.                                                                                                                                                                                    |
+| Update hysteresis      |                               2 s, 10% increases, immediate decreases | Filters optimistic estimator noise while keeping the encoder aligned with the protected-wire pacing budget. Decreases bypass the periodic increase gate; increases remain progressive.                                                                                                                                                                                                   |
+| Increase limit         |                                    15%, at most 500 kbit/s per update | Makes recovery progressive and observable instead of creating a large optimistic burst after congestion clears.                                                                                                                                                                                                                                                                          |
+| Pacing and admission   | 1.5x burst allowance over GCC's wire target, 225 ms admission ceiling | Media, proactive repair, and retransmissions share one sustained capacity budget. The bounded burst allowance drains encoded access units and timely repair without raising the long-term wire target. Over-budget access units are rejected whole before RTP packetization.                                                                                                             |
+| Repair scheduling      |                 One repair packet per scheduling burst; 225 ms expiry | Gives RTX a prompt opportunity without starving current media, and discards a repair packet once its playback value is lower than the latency it would add.                                                                                                                                                                                                                              |
+| FlexFEC                |                              One repair packet per five media packets | Adds moderate proactive protection for lossy, higher-RTT paths where reactive RTX can arrive after the playout window. Stronger ratios remain explicit stress profiles; leave FlexFEC disabled when measured NACK/RTX recovery is sufficient or the link cannot afford the overhead.                                                                                                     |
 
 With the 1080p30 H.264 reference settings, the sender starts at `5 Mbps` and may
 adapt within the `2–8 Mbps` range. Qualification showed that allowing the fixed
@@ -460,18 +504,17 @@ single `qualification/adaptive-streaming/run.sh` invocation remains useful
 while debugging one path/profile combination. The normal quick start does not
 require Docker or the qualification tooling.
 
-![Measured direct-path bitrate response](./qualification/evidence/6706cfd/direct-flexfec/adaptive-bitrate.svg)
+![Measured direct-path bitrate response](./qualification/evidence/ca8a308/direct-reference/adaptive-bitrate.svg)
 
-The [reference evidence pack](./qualification/evidence/6706cfd/report.md) keeps
-the selected direct, rstream relay, and producer-mobility runs from revision
-`6706cfd`. The direct path reached a 7.5 Mbit/s encoder target on the healthy
-link, adapted to 2 Mbit/s under the controlled 4 Mbit/s/120 ms/2% loss profile,
-then recovered to 5.5 Mbit/s with 30 fps and no measured freeze. The relay run
-kept 1080p near 30 fps and remained inside the 10% impaired-freeze budget. The
-mobility run changed the producer interface and source address, trickled a new
-candidate over QUIC signaling, switched the selected ICE pair, and recovered
-playback in 1.006 seconds without replacing the peer connection or closing the
-signaling WebSocket.
+The [reference evidence pack](./qualification/evidence/ca8a308/report.md) keeps
+the selected direct and rstream relay matrix, synchronized transport and
+playback time series, mobility record, machine-readable assertions, and every
+excluded run. The release profile passed three direct and three relay runs
+under the controlled 4 Mbit/s, 120 ms one-way delay, 30 ms jitter, and 2% loss
+profile. Its median impaired frame rate was 29.9 fps direct and 29.6 fps through
+the relay; median frozen time was 0.6% and 3.6% respectively. The record retains
+the NACK/RTX baseline failures as well as the measured improvement from bounded
+FlexFEC protection.
 
 The comparison does not equate frame delivery with visual quality. The pinned
 qualification encoder reports its per-frame H.264 quantization parameter (QP),

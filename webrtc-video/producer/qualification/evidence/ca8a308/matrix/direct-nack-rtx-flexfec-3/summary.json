@@ -1,0 +1,1200 @@
+{
+  "assertions": [
+    {
+      "description": "every configured traffic-control transition is timestamped in chronological order on the metrics collector clock",
+      "name": "network-condition-timeline",
+      "passed": true
+    },
+    {
+      "description": "every measured phase has at least 15 samples",
+      "name": "phase-sample-coverage",
+      "passed": true
+    },
+    {
+      "description": "producer host CPU evidence covers every phase, its p95 hypervisor steal time stays at or below 5%, and its 250 ms sampler never stalls for more than 350 ms",
+      "name": "producer-host-scheduler",
+      "passed": true
+    },
+    {
+      "description": "receiver host CPU evidence covers every phase, its p95 hypervisor steal time stays at or below 5%, and its 250 ms sampler never stalls for more than 350 ms",
+      "name": "receiver-host-scheduler",
+      "passed": true
+    },
+    {
+      "description": "receiver jitter-buffer target evidence covers every phase and remains at or below 250 ms",
+      "name": "playout-target-latency-budget",
+      "passed": true
+    },
+    {
+      "description": "receiver effective buffered delay evidence covers every phase and its phase average remains at or below 300 ms",
+      "name": "playout-effective-latency-budget",
+      "passed": true
+    },
+    {
+      "description": "every sample uses the direct Docker bridge path without TURN",
+      "name": "ice-path",
+      "passed": true
+    },
+    {
+      "description": "peer connection and playback remain healthy for at least 98% of samples",
+      "name": "session-continuity",
+      "passed": true
+    },
+    {
+      "description": "baseline median receive throughput is at least 1 Mbps",
+      "name": "baseline-throughput",
+      "passed": true
+    },
+    {
+      "description": "at least 80% of samples and the final sample in the pre-transition window stay within 10% of that window's median encoder target",
+      "name": "capacity-experiment-settled",
+      "passed": true
+    },
+    {
+      "description": "the encoder spends at least half of the healthy baseline within 10% of its 8000 kbps adaptive ceiling",
+      "name": "healthy-link-quality-ceiling",
+      "passed": true
+    },
+    {
+      "description": "constrained median encoder target falls by at least 20% from the stable pre-transition target",
+      "name": "congestion-response",
+      "passed": true
+    },
+    {
+      "description": "encoder target reacts to the constrained link within 30 seconds",
+      "name": "response-time",
+      "passed": true
+    },
+    {
+      "description": "the encoder does not increase its target after measured loss exceeds the configured recovery threshold",
+      "name": "continued-pressure",
+      "passed": true
+    },
+    {
+      "description": "median video payload uses at least 55% of constrained link capacity",
+      "name": "constrained-link-efficiency",
+      "passed": true
+    },
+    {
+      "description": "median received video remains at least 85% of the encoder target while loss is injected",
+      "name": "impaired-target-efficiency",
+      "passed": true
+    },
+    {
+      "description": "decoded-frame progress is visible in at least 95% of sample intervals",
+      "name": "decoder-activity",
+      "passed": true
+    },
+    {
+      "description": "baseline and recovery spend at most 2% of measured time frozen",
+      "name": "healthy-link-freezes",
+      "passed": true
+    },
+    {
+      "description": "each shaped phase spends at most 10% of measured time frozen",
+      "name": "impaired-link-freezes",
+      "passed": true
+    },
+    {
+      "description": "maximum RTT stays below 350 ms on unshaped links and 600 ms under the 120 ms one-way impairment",
+      "name": "interactive-latency-budget",
+      "passed": true
+    },
+    {
+      "description": "decoded output stays above 25 fps on healthy links and 20 fps while shaped",
+      "name": "decoded-frame-rate",
+      "passed": true
+    },
+    {
+      "description": "the pinned x264 encoder reports valid per-frame H.264 quantization data in every phase",
+      "name": "encoder-quality-telemetry",
+      "passed": true
+    },
+    {
+      "description": "the encoded source keeps p99 frame gaps at or below 50 ms, every gap at or below 200 ms, and late or catch-up intervals at or below 1% from baseline through recovery",
+      "name": "encoder-cadence",
+      "passed": true
+    },
+    {
+      "description": "impaired-link sender average H.264 QP stays at or below 42",
+      "name": "impaired-compression-quality",
+      "passed": true
+    },
+    {
+      "description": "decoded video remains 1920x1080 in every phase",
+      "name": "decoded-resolution",
+      "passed": true
+    },
+    {
+      "description": "encoder target returns to at least 80% of its stable pre-transition target within 35 seconds of the capacity-restoration step",
+      "name": "recovery-time",
+      "passed": true
+    },
+    {
+      "description": "the encoder stays at or above 80% of its stable pre-transition target for at least 80% of a continuous 10-second window after capacity is restored",
+      "name": "sustained-recovery",
+      "passed": true
+    },
+    {
+      "description": "recovery median receive throughput returns to at least 60% of the stable pre-transition receive rate",
+      "name": "throughput-recovery",
+      "passed": true
+    },
+    {
+      "description": "network impairment produces NACK feedback",
+      "name": "loss-feedback",
+      "passed": true
+    },
+    {
+      "description": "the sender records paced RTX packets while loss is injected",
+      "name": "rtx-sender-pacing",
+      "passed": true
+    },
+    {
+      "description": "NACK feedback remains below 10% of received packets during 2% injected loss",
+      "name": "repair-amplification",
+      "passed": true
+    },
+    {
+      "description": "the browser and producer negotiate the FlexFEC-03 protection stream",
+      "name": "flexfec-negotiation",
+      "passed": true
+    },
+    {
+      "description": "the receiver observes FlexFEC packets while loss is injected",
+      "name": "flexfec-repair",
+      "passed": true
+    },
+    {
+      "description": "the sender records paced FlexFEC packets while loss is injected",
+      "name": "flexfec-sender-pacing",
+      "passed": true
+    },
+    {
+      "description": "runtime telemetry matches the FlexFEC protection recorded by the manifest",
+      "name": "flexfec-configuration",
+      "passed": true
+    },
+    {
+      "description": "the protected wire rate retains the sender's real-time burst headroom",
+      "name": "flexfec-burst-headroom",
+      "passed": true
+    },
+    {
+      "description": "the browser keeps decoding frames throughout the scenario",
+      "name": "decoded-video",
+      "passed": true
+    },
+    {
+      "description": "the sender never overflows its packet queue, keeps actual packet residence within 375 ms, and admits no new media beyond 225 ms",
+      "name": "bounded-pacer-capacity",
+      "passed": true
+    },
+    {
+      "description": "every complete-frame admission drop requests a recovery key frame and encounters no encoder rejection",
+      "name": "pacer-recovery-keyframes",
+      "passed": true
+    },
+    {
+      "description": "receiver PLI feedback reaches the producer's encoder instead of being discarded",
+      "name": "rtcp-keyframe-feedback",
+      "passed": true
+    },
+    {
+      "description": "the producer parses every compound RTCP feedback datagram",
+      "name": "rtcp-feedback-integrity",
+      "passed": true
+    },
+    {
+      "description": "the encoder accepts every rate-limited adaptive bitrate reconfiguration",
+      "name": "adaptive-reconfiguration-integrity",
+      "passed": true
+    },
+    {
+      "description": "TWCC feedback is present and every reported status is parsed without malformed packets",
+      "name": "twcc-feedback-integrity",
+      "passed": true
+    },
+    {
+      "description": "persistent TWCC loss above 10% immediately reduces the sender target without waiting for a delay-estimator callback",
+      "name": "loss-guard-response",
+      "passed": true
+    },
+    {
+      "description": "the selective traffic-control branch handles the measured media flow",
+      "name": "selective-media-shaping",
+      "passed": true
+    },
+    {
+      "description": "the capacity phase has no random-loss injector configured",
+      "name": "capacity-profile-configuration",
+      "passed": true
+    },
+    {
+      "description": "the impaired phase configures exactly 2% random packet loss",
+      "name": "loss-profile-configuration",
+      "passed": true
+    },
+    {
+      "description": "capacity-step transients stay below 15%, and steady capacity plus random-loss phases stay below 5% drops",
+      "name": "traffic-control-drop-budget",
+      "passed": true
+    },
+    {
+      "description": "the shaped queue ends each steady interval below 75% occupancy, preventing a larger limit from hiding sustained bufferbloat",
+      "name": "traffic-control-queue-headroom",
+      "passed": true
+    },
+    {
+      "description": "the healthy recovery profile carries media, adds no drops, and leaves at most one short RTP burst queued before traffic-control teardown",
+      "name": "traffic-control-recovery-drain",
+      "passed": true
+    },
+    {
+      "description": "browser TWCC loss stays within eight percentage points of shaped-link drops, detecting transport-sequence accounting regressions",
+      "name": "twcc-loss-fidelity",
+      "passed": true
+    },
+    {
+      "description": "receiver-kernel UDP counters cover every measured phase",
+      "name": "receiver-udp-observability",
+      "passed": true
+    },
+    {
+      "description": "the receiver kernel drops no UDP datagram because its socket buffer is full",
+      "name": "receiver-kernel-capacity",
+      "passed": true
+    },
+    {
+      "description": "producer-kernel UDP counters cover every measured phase",
+      "name": "producer-udp-observability",
+      "passed": true
+    },
+    {
+      "description": "the producer kernel has no UDP receive overflow or send rejection outside the independently measured qdisc envelope, allowing at most two datagrams at an asynchronous phase boundary",
+      "name": "producer-kernel-capacity",
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "candidatePairSwitches": 0,
+  "congestionResponseRequired": true,
+  "constrainedMediaCapacityKbps": 3333.3333333333335,
+  "healthyLinkTargetKbps": 7200,
+  "healthyLinkTargetRatio": 1,
+  "responseDelayMilliseconds": 1006,
+  "recoveryDelayMilliseconds": 18110,
+  "sustainedRecoveryMilliseconds": 21110,
+  "sustainedRecoveryTargetRatio": 1,
+  "staleBitrateCallbacks": 2,
+  "phases": {
+    "warmup": {
+      "averageDecodeMilliseconds": 2.949139616055847,
+      "averageJitterBufferDelayMilliseconds": 189.26746596858638,
+      "averageJitterBufferTargetMilliseconds": 185.2198952879581,
+      "averageQP": 23.336185737976706,
+      "encoderBurstFrameRatio": 0,
+      "encoderFrameGapP99Milliseconds": 36.30100100000345,
+      "encoderFrameIntervals": 602,
+      "encoderLateFrameRatio": 0,
+      "encoderMaximumFrameGapMilliseconds": 37.77122600000075,
+      "capacityKbps": 0,
+      "capacityUtilization": 0,
+      "connectedRatio": 1,
+      "decodedFramesPerSecond": 30.00471278211237,
+      "decoderActiveRatio": 1,
+      "freezeDurationSeconds": 0,
+      "freezeRatio": 0,
+      "fecPacketsIncrease": 3226,
+      "maximumRTTMilliseconds": 2,
+      "medianEncoderTargetKbps": 8000,
+      "endingEncoderTargetKbps": 8000,
+      "maximumEncoderTargetKbps": 8000,
+      "medianFrameHeight": 1080,
+      "medianFrameWidth": 1920,
+      "medianAverageLoss": 0,
+      "medianLossGuardTargetKbps": 0,
+      "maximumLossGuardObservedLoss": 0,
+      "lossGuardReductionsIncrease": 0,
+      "lossGuardRecoveriesIncrease": 0,
+      "medianDelayTargetKbps": 8000,
+      "medianLossTargetKbps": 8000,
+      "medianReceivedBitrateKbps": 8857.719402985076,
+      "medianTWCCKbps": 8000,
+      "startingEncoderTargetKbps": 6200,
+      "nackIncrease": 0,
+      "nackToPacketRatio": 0,
+      "packetsLostIncrease": 0,
+      "packetsReceivedIncrease": 19359,
+      "maximumPacerQueuePackets": 12,
+      "maximumPacerQueueDelayMilliseconds": 36.840149,
+      "maximumPacerPrimaryDelayMilliseconds": 36.840149,
+      "maximumPacerRepairDelayMilliseconds": 34.710065,
+      "maximumPacerRTXDelayMilliseconds": 0,
+      "maximumPacerFECDelayMilliseconds": 34.710065,
+      "maximumPacerSustainedDelayMilliseconds": 44.969435,
+      "maximumPacerAdmittedDelayMilliseconds": 37.796666,
+      "maximumPacerKeyFrameReserveBytes": 68034,
+      "pacerMediaFrameDropsIncrease": 0,
+      "pacerMediaByteDropsIncrease": 0,
+      "pacerQueueDropsIncrease": 0,
+      "pacerRepairPacketsExpiredIncrease": 0,
+      "pacerRepairPacketsTrimmedIncrease": 0,
+      "pacerRTXPacketsExpiredIncrease": 0,
+      "pacerRTXPacketsCoalescedIncrease": 0,
+      "pacerFECPacketsExpiredIncrease": 0,
+      "pacerRTXPacketsTrimmedIncrease": 0,
+      "pacerFECPacketsTrimmedIncrease": 0,
+      "pacerSentPrimaryIncrease": 16046,
+      "pacerSentRepairIncrease": 3209,
+      "pacerSentRTXIncrease": 0,
+      "pacerSentFECIncrease": 3209,
+      "recoveryKeyFrameRequestsIncrease": 0,
+      "recoveryKeyFrameCoalescedIncrease": 0,
+      "recoveryKeyFrameFailuresIncrease": 0,
+      "rtcpKeyFrameRequestsIncrease": 0,
+      "rtcpMalformedFeedbackIncrease": 0,
+      "adaptiveBitrateUpdatesIncrease": 1,
+      "adaptiveBitrateFailuresIncrease": 0,
+      "twccFeedbackPacketsIncrease": 304,
+      "twccMalformedFeedbackIncrease": 0,
+      "twccPaddingStatusesIncrease": 0,
+      "twccReportedLostIncrease": 0,
+      "twccReportedStatusesIncrease": 16038,
+      "twccReportedLossRatio": 0,
+      "retransmittedPacketsIncrease": 0,
+      "encodedBytes": 18006392,
+      "encodedFrames": 603,
+      "samples": 20
+    },
+    "baseline": {
+      "averageDecodeMilliseconds": 2.891378453038673,
+      "averageJitterBufferDelayMilliseconds": 189.86741298342534,
+      "averageJitterBufferTargetMilliseconds": 185.60635359116026,
+      "averageQP": 23.065124835742445,
+      "encoderBurstFrameRatio": 0,
+      "encoderFrameGapP99Milliseconds": 36.41037199999846,
+      "encoderFrameIntervals": 760,
+      "encoderLateFrameRatio": 0,
+      "encoderMaximumFrameGapMilliseconds": 40.1998190000013,
+      "capacityKbps": 0,
+      "capacityUtilization": 0,
+      "connectedRatio": 1,
+      "decodedFramesPerSecond": 30.014095016996933,
+      "decoderActiveRatio": 1,
+      "freezeDurationSeconds": 0,
+      "freezeRatio": 0,
+      "fecPacketsIncrease": 4027,
+      "maximumRTTMilliseconds": 1,
+      "medianEncoderTargetKbps": 8000,
+      "endingEncoderTargetKbps": 8000,
+      "maximumEncoderTargetKbps": 8000,
+      "medianFrameHeight": 1080,
+      "medianFrameWidth": 1920,
+      "medianAverageLoss": 0,
+      "medianLossGuardTargetKbps": 0,
+      "maximumLossGuardObservedLoss": 0,
+      "lossGuardReductionsIncrease": 0,
+      "lossGuardRecoveriesIncrease": 0,
+      "medianDelayTargetKbps": 8000,
+      "medianLossTargetKbps": 8000,
+      "medianReceivedBitrateKbps": 8650.14342629482,
+      "medianTWCCKbps": 8000,
+      "startingEncoderTargetKbps": 8000,
+      "nackIncrease": 0,
+      "nackToPacketRatio": 0,
+      "packetsLostIncrease": 0,
+      "packetsReceivedIncrease": 24162,
+      "maximumPacerQueuePackets": 20,
+      "maximumPacerQueueDelayMilliseconds": 37.422243,
+      "maximumPacerPrimaryDelayMilliseconds": 37.422243,
+      "maximumPacerRepairDelayMilliseconds": 37.178405,
+      "maximumPacerRTXDelayMilliseconds": 0,
+      "maximumPacerFECDelayMilliseconds": 37.178405,
+      "maximumPacerSustainedDelayMilliseconds": 46.752211,
+      "maximumPacerAdmittedDelayMilliseconds": 37.861666,
+      "maximumPacerKeyFrameReserveBytes": 68151,
+      "pacerMediaFrameDropsIncrease": 0,
+      "pacerMediaByteDropsIncrease": 0,
+      "pacerQueueDropsIncrease": 0,
+      "pacerRepairPacketsExpiredIncrease": 0,
+      "pacerRepairPacketsTrimmedIncrease": 0,
+      "pacerRTXPacketsExpiredIncrease": 0,
+      "pacerRTXPacketsCoalescedIncrease": 0,
+      "pacerFECPacketsExpiredIncrease": 0,
+      "pacerRTXPacketsTrimmedIncrease": 0,
+      "pacerFECPacketsTrimmedIncrease": 0,
+      "pacerSentPrimaryIncrease": 20055,
+      "pacerSentRepairIncrease": 4011,
+      "pacerSentRTXIncrease": 0,
+      "pacerSentFECIncrease": 4011,
+      "recoveryKeyFrameRequestsIncrease": 0,
+      "recoveryKeyFrameCoalescedIncrease": 0,
+      "recoveryKeyFrameFailuresIncrease": 0,
+      "rtcpKeyFrameRequestsIncrease": 0,
+      "rtcpMalformedFeedbackIncrease": 0,
+      "adaptiveBitrateUpdatesIncrease": 0,
+      "adaptiveBitrateFailuresIncrease": 0,
+      "twccFeedbackPacketsIncrease": 384,
+      "twccMalformedFeedbackIncrease": 0,
+      "twccPaddingStatusesIncrease": 0,
+      "twccReportedLostIncrease": 0,
+      "twccReportedStatusesIncrease": 20053,
+      "twccReportedLossRatio": 0,
+      "retransmittedPacketsIncrease": 0,
+      "encodedBytes": 22159157,
+      "encodedFrames": 761,
+      "samples": 25
+    },
+    "conditioning": {
+      "averageDecodeMilliseconds": 2.943808,
+      "averageJitterBufferDelayMilliseconds": 189.8687005714286,
+      "averageJitterBufferTargetMilliseconds": 185.53257142857143,
+      "averageQP": 23.321076581576015,
+      "encoderBurstFrameRatio": 0,
+      "encoderFrameGapP99Milliseconds": 36.389023999996425,
+      "encoderFrameIntervals": 900,
+      "encoderLateFrameRatio": 0,
+      "encoderMaximumFrameGapMilliseconds": 38.20161499999813,
+      "capacityKbps": 32000,
+      "capacityUtilization": 0.27486990321751087,
+      "connectedRatio": 1,
+      "decodedFramesPerSecond": 30.006858710562415,
+      "decoderActiveRatio": 1,
+      "freezeDurationSeconds": 0,
+      "freezeRatio": 0,
+      "fecPacketsIncrease": 4932,
+      "maximumRTTMilliseconds": 5,
+      "medianEncoderTargetKbps": 8000,
+      "endingEncoderTargetKbps": 8000,
+      "maximumEncoderTargetKbps": 8000,
+      "medianFrameHeight": 1080,
+      "medianFrameWidth": 1920,
+      "medianAverageLoss": 0,
+      "medianLossGuardTargetKbps": 0,
+      "maximumLossGuardObservedLoss": 0,
+      "lossGuardReductionsIncrease": 0,
+      "lossGuardRecoveriesIncrease": 0,
+      "medianDelayTargetKbps": 8000,
+      "medianLossTargetKbps": 8000,
+      "medianReceivedBitrateKbps": 8795.836902960347,
+      "medianTWCCKbps": 8000,
+      "startingEncoderTargetKbps": 8000,
+      "nackIncrease": 0,
+      "nackToPacketRatio": 0,
+      "packetsLostIncrease": 0,
+      "packetsReceivedIncrease": 29595,
+      "maximumPacerQueuePackets": 12,
+      "maximumPacerQueueDelayMilliseconds": 37.422243,
+      "maximumPacerPrimaryDelayMilliseconds": 37.422243,
+      "maximumPacerRepairDelayMilliseconds": 37.178405,
+      "maximumPacerRTXDelayMilliseconds": 0,
+      "maximumPacerFECDelayMilliseconds": 37.178405,
+      "maximumPacerSustainedDelayMilliseconds": 46.752211,
+      "maximumPacerAdmittedDelayMilliseconds": 37.861666,
+      "maximumPacerKeyFrameReserveBytes": 67910,
+      "pacerMediaFrameDropsIncrease": 0,
+      "pacerMediaByteDropsIncrease": 0,
+      "pacerQueueDropsIncrease": 0,
+      "pacerRepairPacketsExpiredIncrease": 0,
+      "pacerRepairPacketsTrimmedIncrease": 0,
+      "pacerRTXPacketsExpiredIncrease": 0,
+      "pacerRTXPacketsCoalescedIncrease": 0,
+      "pacerFECPacketsExpiredIncrease": 0,
+      "pacerRTXPacketsTrimmedIncrease": 0,
+      "pacerFECPacketsTrimmedIncrease": 0,
+      "pacerSentPrimaryIncrease": 24488,
+      "pacerSentRepairIncrease": 4898,
+      "pacerSentRTXIncrease": 0,
+      "pacerSentFECIncrease": 4898,
+      "recoveryKeyFrameRequestsIncrease": 0,
+      "recoveryKeyFrameCoalescedIncrease": 0,
+      "recoveryKeyFrameFailuresIncrease": 0,
+      "rtcpKeyFrameRequestsIncrease": 0,
+      "rtcpMalformedFeedbackIncrease": 0,
+      "adaptiveBitrateUpdatesIncrease": 0,
+      "adaptiveBitrateFailuresIncrease": 0,
+      "twccFeedbackPacketsIncrease": 464,
+      "twccMalformedFeedbackIncrease": 0,
+      "twccPaddingStatusesIncrease": 0,
+      "twccReportedLostIncrease": 0,
+      "twccReportedStatusesIncrease": 24486,
+      "twccReportedLossRatio": 0,
+      "retransmittedPacketsIncrease": 0,
+      "encodedBytes": 26251539,
+      "encodedFrames": 901,
+      "samples": 30
+    },
+    "constrained": {
+      "averageDecodeMilliseconds": 2.598984174830444,
+      "averageJitterBufferDelayMilliseconds": 194.12610022607382,
+      "averageJitterBufferTargetMilliseconds": 185.76412961567442,
+      "averageQP": 29.692637037037084,
+      "encoderBurstFrameRatio": 0,
+      "encoderFrameGapP99Milliseconds": 36.52707800001372,
+      "encoderFrameIntervals": 1349,
+      "encoderLateFrameRatio": 0,
+      "encoderMaximumFrameGapMilliseconds": 38.11430899998231,
+      "capacityKbps": 4000,
+      "capacityUtilization": 0.6780633663366337,
+      "connectedRatio": 1,
+      "decodedFramesPerSecond": 29.994801202504465,
+      "decoderActiveRatio": 1,
+      "freezeDurationSeconds": 0,
+      "freezeRatio": 0,
+      "fecPacketsIncrease": 3288,
+      "maximumRTTMilliseconds": 15,
+      "medianEncoderTargetKbps": 2300,
+      "endingEncoderTargetKbps": 2000,
+      "maximumEncoderTargetKbps": 8000,
+      "medianFrameHeight": 1080,
+      "medianFrameWidth": 1920,
+      "medianAverageLoss": 0,
+      "medianLossGuardTargetKbps": 0,
+      "maximumLossGuardObservedLoss": 0,
+      "lossGuardReductionsIncrease": 0,
+      "lossGuardRecoveriesIncrease": 0,
+      "medianDelayTargetKbps": 2520.835,
+      "medianLossTargetKbps": 2516.828,
+      "medianReceivedBitrateKbps": 2712.2534653465345,
+      "medianTWCCKbps": 2500,
+      "startingEncoderTargetKbps": 8000,
+      "nackIncrease": 0,
+      "nackToPacketRatio": 0,
+      "packetsLostIncrease": 0,
+      "packetsReceivedIncrease": 19809,
+      "maximumPacerQueuePackets": 7,
+      "maximumPacerQueueDelayMilliseconds": 51.330642,
+      "maximumPacerPrimaryDelayMilliseconds": 51.330642,
+      "maximumPacerRepairDelayMilliseconds": 49.070632,
+      "maximumPacerRTXDelayMilliseconds": 0,
+      "maximumPacerFECDelayMilliseconds": 49.070632,
+      "maximumPacerSustainedDelayMilliseconds": 59.002202,
+      "maximumPacerAdmittedDelayMilliseconds": 49.734253,
+      "maximumPacerKeyFrameReserveBytes": 66681,
+      "pacerMediaFrameDropsIncrease": 0,
+      "pacerMediaByteDropsIncrease": 0,
+      "pacerQueueDropsIncrease": 0,
+      "pacerRepairPacketsExpiredIncrease": 0,
+      "pacerRepairPacketsTrimmedIncrease": 16,
+      "pacerRTXPacketsExpiredIncrease": 0,
+      "pacerRTXPacketsCoalescedIncrease": 0,
+      "pacerFECPacketsExpiredIncrease": 0,
+      "pacerRTXPacketsTrimmedIncrease": 0,
+      "pacerFECPacketsTrimmedIncrease": 16,
+      "pacerSentPrimaryIncrease": 16691,
+      "pacerSentRepairIncrease": 3322,
+      "pacerSentRTXIncrease": 0,
+      "pacerSentFECIncrease": 3322,
+      "recoveryKeyFrameRequestsIncrease": 0,
+      "recoveryKeyFrameCoalescedIncrease": 0,
+      "recoveryKeyFrameFailuresIncrease": 0,
+      "rtcpKeyFrameRequestsIncrease": 0,
+      "rtcpMalformedFeedbackIncrease": 0,
+      "adaptiveBitrateUpdatesIncrease": 24,
+      "adaptiveBitrateFailuresIncrease": 0,
+      "twccFeedbackPacketsIncrease": 704,
+      "twccMalformedFeedbackIncrease": 0,
+      "twccPaddingStatusesIncrease": 0,
+      "twccReportedLostIncrease": 0,
+      "twccReportedStatusesIncrease": 16719,
+      "twccReportedLossRatio": 0,
+      "retransmittedPacketsIncrease": 0,
+      "encodedBytes": 14761263,
+      "encodedFrames": 1350,
+      "samples": 45
+    },
+    "impaired": {
+      "averageDecodeMilliseconds": 2.1006901270772236,
+      "averageJitterBufferDelayMilliseconds": 185.31201466275664,
+      "averageJitterBufferTargetMilliseconds": 186.44965786901275,
+      "averageQP": 31.54908658420548,
+      "encoderBurstFrameRatio": 0,
+      "encoderFrameGapP99Milliseconds": 36.425187000015285,
+      "encoderFrameIntervals": 1050,
+      "encoderLateFrameRatio": 0,
+      "encoderMaximumFrameGapMilliseconds": 40.38077799999155,
+      "capacityKbps": 4000,
+      "capacityUtilization": 0.6070119284294235,
+      "connectedRatio": 1,
+      "decodedFramesPerSecond": 29.914904816211948,
+      "decoderActiveRatio": 1,
+      "freezeDurationSeconds": 0.205,
+      "freezeRatio": 0.005994677895721846,
+      "fecPacketsIncrease": 1962,
+      "maximumRTTMilliseconds": 195,
+      "medianEncoderTargetKbps": 2000,
+      "endingEncoderTargetKbps": 2000,
+      "maximumEncoderTargetKbps": 2000,
+      "medianFrameHeight": 1080,
+      "medianFrameWidth": 1920,
+      "medianAverageLoss": 0.011153790254262587,
+      "medianLossGuardTargetKbps": 2211.533,
+      "maximumLossGuardObservedLoss": 0.08695652173913043,
+      "lossGuardReductionsIncrease": 1,
+      "lossGuardRecoveriesIncrease": 3,
+      "medianDelayTargetKbps": 2261.502,
+      "medianLossTargetKbps": 2245.102,
+      "medianReceivedBitrateKbps": 2428.047713717694,
+      "medianTWCCKbps": 2200,
+      "startingEncoderTargetKbps": 2000,
+      "nackIncrease": 144,
+      "nackToPacketRatio": 0.012002000333388899,
+      "packetsLostIncrease": 170,
+      "packetsReceivedIncrease": 11998,
+      "maximumPacerQueuePackets": 5,
+      "maximumPacerQueueDelayMilliseconds": 51.330642,
+      "maximumPacerPrimaryDelayMilliseconds": 51.330642,
+      "maximumPacerRepairDelayMilliseconds": 49.070632,
+      "maximumPacerRTXDelayMilliseconds": 22.370402,
+      "maximumPacerFECDelayMilliseconds": 49.070632,
+      "maximumPacerSustainedDelayMilliseconds": 59.002202,
+      "maximumPacerAdmittedDelayMilliseconds": 49.734253,
+      "maximumPacerKeyFrameReserveBytes": 26632,
+      "pacerMediaFrameDropsIncrease": 0,
+      "pacerMediaByteDropsIncrease": 0,
+      "pacerQueueDropsIncrease": 0,
+      "pacerRepairPacketsExpiredIncrease": 0,
+      "pacerRepairPacketsTrimmedIncrease": 11,
+      "pacerRTXPacketsExpiredIncrease": 0,
+      "pacerRTXPacketsCoalescedIncrease": 0,
+      "pacerFECPacketsExpiredIncrease": 0,
+      "pacerRTXPacketsTrimmedIncrease": 0,
+      "pacerFECPacketsTrimmedIncrease": 11,
+      "pacerSentPrimaryIncrease": 10300,
+      "pacerSentRepairIncrease": 2200,
+      "pacerSentRTXIncrease": 151,
+      "pacerSentFECIncrease": 2049,
+      "recoveryKeyFrameRequestsIncrease": 0,
+      "recoveryKeyFrameCoalescedIncrease": 0,
+      "recoveryKeyFrameFailuresIncrease": 0,
+      "rtcpKeyFrameRequestsIncrease": 0,
+      "rtcpMalformedFeedbackIncrease": 0,
+      "adaptiveBitrateUpdatesIncrease": 0,
+      "adaptiveBitrateFailuresIncrease": 0,
+      "twccFeedbackPacketsIncrease": 555,
+      "twccMalformedFeedbackIncrease": 0,
+      "twccPaddingStatusesIncrease": 171,
+      "twccReportedLostIncrease": 182,
+      "twccReportedStatusesIncrease": 10367,
+      "twccReportedLossRatio": 0.017555705604321403,
+      "retransmittedPacketsIncrease": 137,
+      "encodedBytes": 8296118,
+      "encodedFrames": 1051,
+      "samples": 35
+    },
+    "recovery": {
+      "averageDecodeMilliseconds": 2.567455981941309,
+      "averageJitterBufferDelayMilliseconds": 206.23425733634318,
+      "averageJitterBufferTargetMilliseconds": 186.08728367193365,
+      "averageQP": 25.925384615384665,
+      "encoderBurstFrameRatio": 0,
+      "encoderFrameGapP99Milliseconds": 36.10649299999932,
+      "encoderFrameIntervals": 1351,
+      "encoderLateFrameRatio": 0,
+      "encoderMaximumFrameGapMilliseconds": 37.71641699998872,
+      "capacityKbps": 32000,
+      "capacityUtilization": 0.26285433266932273,
+      "connectedRatio": 1,
+      "decodedFramesPerSecond": 30.05427408412483,
+      "decoderActiveRatio": 1,
+      "freezeDurationSeconds": 0,
+      "freezeRatio": 0,
+      "fecPacketsIncrease": 5579,
+      "maximumRTTMilliseconds": 38,
+      "medianEncoderTargetKbps": 8000,
+      "endingEncoderTargetKbps": 8000,
+      "maximumEncoderTargetKbps": 8000,
+      "medianFrameHeight": 1080,
+      "medianFrameWidth": 1920,
+      "medianAverageLoss": 8.914078971656035e-60,
+      "medianLossGuardTargetKbps": 0,
+      "maximumLossGuardObservedLoss": 0,
+      "lossGuardReductionsIncrease": 0,
+      "lossGuardRecoveriesIncrease": 0,
+      "medianDelayTargetKbps": 8000,
+      "medianLossTargetKbps": 8000,
+      "medianReceivedBitrateKbps": 8411.338645418327,
+      "medianTWCCKbps": 8000,
+      "startingEncoderTargetKbps": 2000,
+      "nackIncrease": 0,
+      "nackToPacketRatio": 0,
+      "packetsLostIncrease": 0,
+      "packetsReceivedIncrease": 33519,
+      "maximumPacerQueuePackets": 10,
+      "maximumPacerQueueDelayMilliseconds": 51.330642,
+      "maximumPacerPrimaryDelayMilliseconds": 51.330642,
+      "maximumPacerRepairDelayMilliseconds": 50.886936,
+      "maximumPacerRTXDelayMilliseconds": 22.370402,
+      "maximumPacerFECDelayMilliseconds": 50.886936,
+      "maximumPacerSustainedDelayMilliseconds": 60.132312,
+      "maximumPacerAdmittedDelayMilliseconds": 49.734253,
+      "maximumPacerKeyFrameReserveBytes": 67614,
+      "pacerMediaFrameDropsIncrease": 0,
+      "pacerMediaByteDropsIncrease": 0,
+      "pacerQueueDropsIncrease": 0,
+      "pacerRepairPacketsExpiredIncrease": 0,
+      "pacerRepairPacketsTrimmedIncrease": 9,
+      "pacerRTXPacketsExpiredIncrease": 0,
+      "pacerRTXPacketsCoalescedIncrease": 0,
+      "pacerFECPacketsExpiredIncrease": 0,
+      "pacerRTXPacketsTrimmedIncrease": 0,
+      "pacerFECPacketsTrimmedIncrease": 9,
+      "pacerSentPrimaryIncrease": 27718,
+      "pacerSentRepairIncrease": 5535,
+      "pacerSentRTXIncrease": 0,
+      "pacerSentFECIncrease": 5535,
+      "recoveryKeyFrameRequestsIncrease": 1,
+      "recoveryKeyFrameCoalescedIncrease": 0,
+      "recoveryKeyFrameFailuresIncrease": 0,
+      "rtcpKeyFrameRequestsIncrease": 0,
+      "rtcpMalformedFeedbackIncrease": 0,
+      "adaptiveBitrateUpdatesIncrease": 9,
+      "adaptiveBitrateFailuresIncrease": 0,
+      "twccFeedbackPacketsIncrease": 704,
+      "twccMalformedFeedbackIncrease": 0,
+      "twccPaddingStatusesIncrease": 0,
+      "twccReportedLostIncrease": 0,
+      "twccReportedStatusesIncrease": 27691,
+      "twccReportedLossRatio": 0,
+      "retransmittedPacketsIncrease": 0,
+      "encodedBytes": 29339983,
+      "encodedFrames": 1352,
+      "samples": 45
+    }
+  },
+  "producerUDP": {
+    "available": true,
+    "phases": {
+      "warmup": {
+        "datagramsReceivedIncrease": 458,
+        "datagramsSentIncrease": 20225,
+        "inputErrorsIncrease": 0,
+        "noPortDropsIncrease": 0,
+        "receiveBufferDropsIncrease": 0,
+        "sendBufferDropsIncrease": 0,
+        "samples": 21
+      },
+      "baseline": {
+        "datagramsReceivedIncrease": 568,
+        "datagramsSentIncrease": 25132,
+        "inputErrorsIncrease": 0,
+        "noPortDropsIncrease": 0,
+        "receiveBufferDropsIncrease": 0,
+        "sendBufferDropsIncrease": 0,
+        "samples": 25
+      },
+      "conditioning": {
+        "datagramsReceivedIncrease": 682,
+        "datagramsSentIncrease": 30475,
+        "inputErrorsIncrease": 0,
+        "noPortDropsIncrease": 0,
+        "receiveBufferDropsIncrease": 0,
+        "sendBufferDropsIncrease": 0,
+        "samples": 30
+      },
+      "constrained": {
+        "datagramsReceivedIncrease": 1026,
+        "datagramsSentIncrease": 20550,
+        "inputErrorsIncrease": 0,
+        "noPortDropsIncrease": 0,
+        "receiveBufferDropsIncrease": 0,
+        "sendBufferDropsIncrease": 0,
+        "samples": 45
+      },
+      "impaired": {
+        "datagramsReceivedIncrease": 943,
+        "datagramsSentIncrease": 12566,
+        "inputErrorsIncrease": 0,
+        "noPortDropsIncrease": 0,
+        "receiveBufferDropsIncrease": 0,
+        "sendBufferDropsIncrease": 0,
+        "samples": 35
+      },
+      "recovery": {
+        "datagramsReceivedIncrease": 1029,
+        "datagramsSentIncrease": 33648,
+        "inputErrorsIncrease": 0,
+        "noPortDropsIncrease": 0,
+        "receiveBufferDropsIncrease": 0,
+        "sendBufferDropsIncrease": 0,
+        "samples": 45
+      }
+    },
+    "receiveBufferDropsIncrease": 0,
+    "sendBufferDropsIncrease": 0,
+    "source": "linux-docker-network-namespace"
+  },
+  "receiverUDP": {
+    "available": true,
+    "phases": {
+      "warmup": {
+        "datagramsReceivedIncrease": 20227,
+        "datagramsSentIncrease": 456,
+        "inputErrorsIncrease": 0,
+        "noPortDropsIncrease": 0,
+        "receiveBufferDropsIncrease": 0,
+        "sendBufferDropsIncrease": 0,
+        "samples": 20
+      },
+      "baseline": {
+        "datagramsReceivedIncrease": 25143,
+        "datagramsSentIncrease": 576,
+        "inputErrorsIncrease": 0,
+        "noPortDropsIncrease": 0,
+        "receiveBufferDropsIncrease": 0,
+        "sendBufferDropsIncrease": 0,
+        "samples": 25
+      },
+      "conditioning": {
+        "datagramsReceivedIncrease": 30499,
+        "datagramsSentIncrease": 694,
+        "inputErrorsIncrease": 0,
+        "noPortDropsIncrease": 0,
+        "receiveBufferDropsIncrease": 0,
+        "sendBufferDropsIncrease": 0,
+        "samples": 30
+      },
+      "constrained": {
+        "datagramsReceivedIncrease": 20604,
+        "datagramsSentIncrease": 1031,
+        "inputErrorsIncrease": 0,
+        "noPortDropsIncrease": 0,
+        "receiveBufferDropsIncrease": 0,
+        "sendBufferDropsIncrease": 0,
+        "samples": 45
+      },
+      "impaired": {
+        "datagramsReceivedIncrease": 12312,
+        "datagramsSentIncrease": 958,
+        "inputErrorsIncrease": 0,
+        "noPortDropsIncrease": 0,
+        "receiveBufferDropsIncrease": 0,
+        "sendBufferDropsIncrease": 0,
+        "samples": 35
+      },
+      "recovery": {
+        "datagramsReceivedIncrease": 33671,
+        "datagramsSentIncrease": 1033,
+        "inputErrorsIncrease": 0,
+        "noPortDropsIncrease": 0,
+        "receiveBufferDropsIncrease": 0,
+        "sendBufferDropsIncrease": 0,
+        "samples": 45
+      }
+    },
+    "receiveBufferDropsIncrease": 0,
+    "sendBufferDropsIncrease": 0,
+    "source": "linux-network-namespace"
+  },
+  "receiverHostCPU": {
+    "available": true,
+    "phases": {
+      "warmup": {
+        "activeMedianRatio": 0.25,
+        "samplingGapMaximumMilliseconds": 255,
+        "samplingGapP99Milliseconds": 255,
+        "samplingGapSamples": 79,
+        "samples": 79,
+        "stealMaximumRatio": 0,
+        "stealP95Ratio": 0
+      },
+      "baseline": {
+        "activeMedianRatio": 0.25,
+        "samplingGapMaximumMilliseconds": 254,
+        "samplingGapP99Milliseconds": 254,
+        "samplingGapSamples": 99,
+        "samples": 99,
+        "stealMaximumRatio": 0,
+        "stealP95Ratio": 0
+      },
+      "conditioning": {
+        "activeMedianRatio": 0.26262626262626265,
+        "samplingGapMaximumMilliseconds": 254,
+        "samplingGapP99Milliseconds": 253,
+        "samplingGapSamples": 119,
+        "samples": 119,
+        "stealMaximumRatio": 0,
+        "stealP95Ratio": 0
+      },
+      "constrained": {
+        "activeMedianRatio": 0.24242424242424243,
+        "samplingGapMaximumMilliseconds": 255,
+        "samplingGapP99Milliseconds": 254,
+        "samplingGapSamples": 177,
+        "samples": 177,
+        "stealMaximumRatio": 0,
+        "stealP95Ratio": 0
+      },
+      "impaired": {
+        "activeMedianRatio": 0.23232323232323232,
+        "samplingGapMaximumMilliseconds": 254,
+        "samplingGapP99Milliseconds": 254,
+        "samplingGapSamples": 139,
+        "samples": 139,
+        "stealMaximumRatio": 0,
+        "stealP95Ratio": 0
+      },
+      "recovery": {
+        "activeMedianRatio": 0.25252525252525254,
+        "samplingGapMaximumMilliseconds": 254,
+        "samplingGapP99Milliseconds": 254,
+        "samplingGapSamples": 177,
+        "samples": 177,
+        "stealMaximumRatio": 0,
+        "stealP95Ratio": 0
+      }
+    },
+    "source": "linux-proc-stat"
+  },
+  "setup": {
+    "available": true,
+    "connectionMilliseconds": 7399,
+    "milestones": [
+      {
+        "name": "runtime-prepared",
+        "observedAt": "2026-08-17T01:15:57.431Z",
+        "sincePreviousMilliseconds": null
+      },
+      {
+        "name": "producer-build-started",
+        "observedAt": "2026-08-17T01:15:57.552Z",
+        "sincePreviousMilliseconds": 121
+      },
+      {
+        "name": "producer-build-completed",
+        "observedAt": "2026-08-17T01:18:05.913Z",
+        "sincePreviousMilliseconds": 128361
+      },
+      {
+        "name": "browser-build-started",
+        "observedAt": "2026-08-17T01:18:05.980Z",
+        "sincePreviousMilliseconds": 67
+      },
+      {
+        "name": "browser-build-completed",
+        "observedAt": "2026-08-17T01:18:26.878Z",
+        "sincePreviousMilliseconds": 20898
+      },
+      {
+        "name": "connection-started",
+        "observedAt": "2026-08-17T01:18:26.907Z",
+        "sincePreviousMilliseconds": 29
+      },
+      {
+        "name": "producer-container-started",
+        "observedAt": "2026-08-17T01:18:27.164Z",
+        "sincePreviousMilliseconds": 257
+      },
+      {
+        "name": "producer-ready",
+        "observedAt": "2026-08-17T01:18:27.227Z",
+        "sincePreviousMilliseconds": 63
+      },
+      {
+        "name": "browser-container-started",
+        "observedAt": "2026-08-17T01:18:27.261Z",
+        "sincePreviousMilliseconds": 34
+      },
+      {
+        "name": "media-connected",
+        "observedAt": "2026-08-17T01:18:34.306Z",
+        "sincePreviousMilliseconds": 7045
+      }
+    ]
+  },
+  "hostCPU": {
+    "available": true,
+    "phases": {
+      "warmup": {
+        "activeMedianRatio": 0.25,
+        "samplingGapMaximumMilliseconds": 254,
+        "samplingGapP99Milliseconds": 254,
+        "samplingGapSamples": 79,
+        "samples": 79,
+        "stealMaximumRatio": 0,
+        "stealP95Ratio": 0
+      },
+      "baseline": {
+        "activeMedianRatio": 0.25,
+        "samplingGapMaximumMilliseconds": 254,
+        "samplingGapP99Milliseconds": 254,
+        "samplingGapSamples": 100,
+        "samples": 100,
+        "stealMaximumRatio": 0,
+        "stealP95Ratio": 0
+      },
+      "conditioning": {
+        "activeMedianRatio": 0.2653061224489796,
+        "samplingGapMaximumMilliseconds": 255,
+        "samplingGapP99Milliseconds": 254,
+        "samplingGapSamples": 118,
+        "samples": 118,
+        "stealMaximumRatio": 0,
+        "stealP95Ratio": 0
+      },
+      "constrained": {
+        "activeMedianRatio": 0.24752475247524752,
+        "samplingGapMaximumMilliseconds": 255,
+        "samplingGapP99Milliseconds": 255,
+        "samplingGapSamples": 178,
+        "samples": 178,
+        "stealMaximumRatio": 0,
+        "stealP95Ratio": 0
+      },
+      "impaired": {
+        "activeMedianRatio": 0.23645894001164822,
+        "samplingGapMaximumMilliseconds": 254,
+        "samplingGapP99Milliseconds": 254,
+        "samplingGapSamples": 138,
+        "samples": 138,
+        "stealMaximumRatio": 0,
+        "stealP95Ratio": 0
+      },
+      "recovery": {
+        "activeMedianRatio": 0.25252525252525254,
+        "samplingGapMaximumMilliseconds": 255,
+        "samplingGapP99Milliseconds": 254,
+        "samplingGapSamples": 178,
+        "samples": 178,
+        "stealMaximumRatio": 0,
+        "stealP95Ratio": 0
+      }
+    },
+    "source": "linux-proc-stat"
+  },
+  "networkMobility": {
+    "available": false,
+    "candidatePairSwitches": 0,
+    "iceRestartOffers": 0,
+    "maximumUnavailableMilliseconds": 0,
+    "peerConnectionsCreated": 0,
+    "trickledRemoteCandidates": 0,
+    "webSocketCloses": 0,
+    "webSocketsCreated": 0
+  },
+  "networkConditions": {
+    "available": true,
+    "changes": [
+      {
+        "capacityKbps": 32000,
+        "delayMs": 0,
+        "jitterMs": 0,
+        "lossPercent": 0,
+        "name": "conditioning-started",
+        "elapsedMilliseconds": 47043,
+        "observedAt": "2026-08-17T01:19:19.870Z"
+      },
+      {
+        "capacityKbps": 16000,
+        "delayMs": 0,
+        "jitterMs": 0,
+        "lossPercent": 0,
+        "name": "constrained-started",
+        "elapsedMilliseconds": 77055,
+        "observedAt": "2026-08-17T01:19:49.882Z"
+      },
+      {
+        "capacityKbps": 12000,
+        "delayMs": 0,
+        "jitterMs": 0,
+        "lossPercent": 0,
+        "name": "constrained-step-2-started",
+        "elapsedMilliseconds": 82070,
+        "observedAt": "2026-08-17T01:19:54.897Z"
+      },
+      {
+        "capacityKbps": 8000,
+        "delayMs": 0,
+        "jitterMs": 0,
+        "lossPercent": 0,
+        "name": "constrained-step-3-started",
+        "elapsedMilliseconds": 87046,
+        "observedAt": "2026-08-17T01:19:59.873Z"
+      },
+      {
+        "capacityKbps": 4000,
+        "delayMs": 0,
+        "jitterMs": 0,
+        "lossPercent": 0,
+        "name": "constrained-steady-started",
+        "elapsedMilliseconds": 92120,
+        "observedAt": "2026-08-17T01:20:04.947Z"
+      },
+      {
+        "capacityKbps": 4000,
+        "delayMs": 120,
+        "jitterMs": 30,
+        "lossPercent": 2,
+        "name": "impaired-started",
+        "elapsedMilliseconds": 122075,
+        "observedAt": "2026-08-17T01:20:34.902Z"
+      },
+      {
+        "capacityKbps": 4000,
+        "delayMs": 0,
+        "jitterMs": 0,
+        "lossPercent": 0,
+        "name": "recovery-started",
+        "elapsedMilliseconds": 157109,
+        "observedAt": "2026-08-17T01:21:09.936Z"
+      },
+      {
+        "capacityKbps": 32000,
+        "delayMs": 0,
+        "jitterMs": 0,
+        "lossPercent": 0,
+        "name": "recovery-capacity-started",
+        "elapsedMilliseconds": 162116,
+        "observedAt": "2026-08-17T01:21:14.943Z"
+      }
+    ],
+    "chronological": true,
+    "expectedEvents": [
+      "conditioning-started",
+      "constrained-started",
+      "constrained-step-2-started",
+      "constrained-step-3-started",
+      "constrained-steady-started",
+      "impaired-started",
+      "recovery-started",
+      "recovery-capacity-started"
+    ]
+  },
+  "preTransitionEncoderTargetKbps": 8000,
+  "preTransitionReceivedBitrateKbps": 8659.032922860844,
+  "stableConditioningMedianEncoderTargetKbps": 8000,
+  "stableConditioningMedianReceivedBitrateKbps": 8659.032922860844,
+  "stableConditioningSamples": 10,
+  "stableConditioningTargetRatio": 1,
+  "trafficControl": {
+    "constrainedConfiguredLossRatio": 0,
+    "constrainedEndQueuePackets": 0,
+    "constrainedEndQueueUtilization": 0,
+    "constrainedQueueLimitPackets": 256,
+    "constrainedDropRatio": 0,
+    "constrainedDrops": 0,
+    "constrainedPackets": 20387,
+    "constrainedSteadyDropRatio": 0,
+    "constrainedSteadyDrops": 0,
+    "constrainedSteadyPackets": 9314,
+    "constrainedTransitionDropRatio": 0,
+    "constrainedTransitionDrops": 0,
+    "constrainedTransitionPackets": 11073,
+    "impairedConfiguredLossRatio": 0.02,
+    "impairedEndQueuePackets": 62,
+    "impairedEndQueueUtilization": 0.2421875,
+    "impairedQueueLimitPackets": 256,
+    "impairedDropRatio": 0.017576096508748102,
+    "impairedDrops": 220,
+    "impairedPackets": 12297,
+    "recoveryDrainConfiguredLossRatio": 0,
+    "recoveryDrainDropRatio": 0,
+    "recoveryDrainDrops": 0,
+    "recoveryDrainEndQueuePackets": 0,
+    "recoveryDrainEndQueueUtilization": 0,
+    "recoveryDrainEvidenceAvailable": true,
+    "recoveryDrainPackets": 994,
+    "recoveryDrainQueueLimitPackets": 256
+  }
+}

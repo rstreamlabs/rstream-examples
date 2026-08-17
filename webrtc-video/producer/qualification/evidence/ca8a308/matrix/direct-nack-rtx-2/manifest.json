@@ -1,0 +1,443 @@
+{
+  "generatedAt": "2026-08-17T01:18:29Z",
+  "git": {
+    "revision": "ca8a308907aaa5661954af81d10f04bd8e5f52bb",
+    "producerTree": "716cb8351b7a200e6460acbbd9a1952816628812",
+    "dirty": false
+  },
+  "producerImage": "sha256:72724d8c92a20d61a1138f012b1b2e79f58a4ef498c4e932ce777ac4b1d2172b",
+  "protection": {
+    "profile": "nack-rtx",
+    "nack": true,
+    "rtx": true,
+    "flexFEC": false,
+    "flexFECMediaPackets": 0,
+    "flexFECRepairPackets": 0
+  },
+  "networkPath": {
+    "kind": "direct",
+    "icePolicy": "direct",
+    "description": "direct WebRTC over an isolated Docker bridge",
+    "turnTransport": null,
+    "producerTURNPolicy": "disabled"
+  },
+  "networkConditionTimeline": {
+    "required": true,
+    "clock": "metrics-collector",
+    "precisionMilliseconds": 100
+  },
+  "runtime": {
+    "dockerVersion": "28.0.4",
+    "operatingSystem": "linux",
+    "kernelRelease": "6.17.0-1022-azure",
+    "architecture": "x86_64",
+    "logicalCPUs": 4,
+    "memoryBytes": 16766414848,
+    "producerLocation": "local-docker-daemon"
+  },
+  "video": {
+    "codec": "H264",
+    "width": 1920,
+    "height": 1080,
+    "framesPerSecond": 30,
+    "playoutDelayHintSeconds": 0.2,
+    "adaptive": {
+      "initialBitrateKbps": 5000,
+      "minimumBitrateKbps": 2000,
+      "maximumBitrateKbps": 8000,
+      "changeThresholdPct": 10,
+      "maxIncreaseLossPct": 1
+    }
+  },
+  "networkMobility": null,
+  "phases": [
+    {
+      "name": "warmup",
+      "durationSeconds": 20,
+      "shaping": null
+    },
+    {
+      "name": "baseline",
+      "durationSeconds": 25,
+      "shaping": null
+    },
+    {
+      "name": "conditioning",
+      "durationSeconds": 30,
+      "shaping": {
+        "discipline": "selective-prio+netem",
+        "scope": "peer-webrtc-transport-address",
+        "capacityKbps": 32000,
+        "queueLimitPackets": 256,
+        "delay": "0ms",
+        "jitter": "0ms",
+        "loss": "0%",
+        "purpose": "settle traffic-control activation without constraining the reference stream"
+      }
+    },
+    {
+      "name": "constrained",
+      "durationSeconds": 45,
+      "shaping": {
+        "discipline": "selective-prio+netem",
+        "scope": "peer-webrtc-transport-address",
+        "capacityKbps": 4000,
+        "queueLimitPackets": 256,
+        "loss": "0%",
+        "schedule": [
+          {
+            "durationSeconds": 5,
+            "capacityKbps": 16000,
+            "delay": "0ms",
+            "jitter": "0ms"
+          },
+          {
+            "durationSeconds": 5,
+            "capacityKbps": 12000,
+            "delay": "0ms",
+            "jitter": "0ms"
+          },
+          {
+            "durationSeconds": 5,
+            "capacityKbps": 8000,
+            "delay": "0ms",
+            "jitter": "0ms"
+          },
+          {
+            "durationSeconds": 30,
+            "capacityKbps": 4000,
+            "delay": "0ms",
+            "jitter": "0ms"
+          }
+        ]
+      }
+    },
+    {
+      "name": "impaired",
+      "durationSeconds": 35,
+      "shaping": {
+        "discipline": "selective-prio+netem",
+        "scope": "peer-webrtc-transport-address",
+        "capacityKbps": 4000,
+        "queueLimitPackets": 256,
+        "delay": "120ms",
+        "jitter": "30ms",
+        "loss": "2%"
+      }
+    },
+    {
+      "name": "recovery",
+      "durationSeconds": 45,
+      "shaping": {
+        "discipline": "selective-prio+netem",
+        "scope": "peer-webrtc-transport-address",
+        "capacityKbps": 32000,
+        "queueLimitPackets": 256,
+        "loss": "0%",
+        "schedule": [
+          {
+            "durationSeconds": 5,
+            "capacityKbps": 4000,
+            "delay": "0ms",
+            "jitter": "0ms"
+          },
+          {
+            "durationSeconds": 40,
+            "capacityKbps": 32000,
+            "delay": "0ms",
+            "jitter": "0ms"
+          }
+        ]
+      }
+    }
+  ],
+  "browserImage": "sha256:5164218a7eb6256b77492bf214bfee16287b014dd55b79a1a761fa653727e41e",
+  "browserRuntime": {
+    "dockerVersion": "28.0.4",
+    "operatingSystem": "linux",
+    "kernelRelease": "6.17.0-1022-azure",
+    "architecture": "x86_64",
+    "logicalCPUs": 4,
+    "memoryBytes": 16766414848
+  },
+  "webrtc": {
+    "codecs": [
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/VP8",
+        "payloadType": 96,
+        "sdpFmtpLine": ""
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/rtx",
+        "payloadType": 97,
+        "sdpFmtpLine": "apt=96"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/VP9",
+        "payloadType": 98,
+        "sdpFmtpLine": "profile-id=0"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/rtx",
+        "payloadType": 99,
+        "sdpFmtpLine": "apt=98"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/VP9",
+        "payloadType": 100,
+        "sdpFmtpLine": "profile-id=2"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/rtx",
+        "payloadType": 101,
+        "sdpFmtpLine": "apt=100"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/VP9",
+        "payloadType": 35,
+        "sdpFmtpLine": "profile-id=1"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/rtx",
+        "payloadType": 36,
+        "sdpFmtpLine": "apt=35"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/VP9",
+        "payloadType": 37,
+        "sdpFmtpLine": "profile-id=3"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/rtx",
+        "payloadType": 38,
+        "sdpFmtpLine": "apt=37"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/H264",
+        "payloadType": 102,
+        "sdpFmtpLine": "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/rtx",
+        "payloadType": 103,
+        "sdpFmtpLine": "apt=102"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/H264",
+        "payloadType": 104,
+        "sdpFmtpLine": "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42001f"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/rtx",
+        "payloadType": 107,
+        "sdpFmtpLine": "apt=104"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/H264",
+        "payloadType": 108,
+        "sdpFmtpLine": "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/rtx",
+        "payloadType": 109,
+        "sdpFmtpLine": "apt=108"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/H264",
+        "payloadType": 114,
+        "sdpFmtpLine": "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42e01f"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/rtx",
+        "payloadType": 115,
+        "sdpFmtpLine": "apt=114"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/H264",
+        "payloadType": 116,
+        "sdpFmtpLine": "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=4d001f"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/rtx",
+        "payloadType": 117,
+        "sdpFmtpLine": "apt=116"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/H264",
+        "payloadType": 39,
+        "sdpFmtpLine": "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=4d001f"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/rtx",
+        "payloadType": 40,
+        "sdpFmtpLine": "apt=39"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/H264",
+        "payloadType": 41,
+        "sdpFmtpLine": "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=f4001f"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/rtx",
+        "payloadType": 42,
+        "sdpFmtpLine": "apt=41"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/H264",
+        "payloadType": 43,
+        "sdpFmtpLine": "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=f4001f"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/rtx",
+        "payloadType": 44,
+        "sdpFmtpLine": "apt=43"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/AV1",
+        "payloadType": 45,
+        "sdpFmtpLine": "level-idx=5;profile=0;tier=0"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/rtx",
+        "payloadType": 46,
+        "sdpFmtpLine": "apt=45"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/AV1",
+        "payloadType": 47,
+        "sdpFmtpLine": "level-idx=5;profile=1;tier=0"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/rtx",
+        "payloadType": 48,
+        "sdpFmtpLine": "apt=47"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/red",
+        "payloadType": 118,
+        "sdpFmtpLine": ""
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/rtx",
+        "payloadType": 119,
+        "sdpFmtpLine": "apt=118"
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/ulpfec",
+        "payloadType": 120,
+        "sdpFmtpLine": ""
+      },
+      {
+        "channels": null,
+        "clockRate": 90000,
+        "mimeType": "video/flexfec-03",
+        "payloadType": 49,
+        "sdpFmtpLine": "repair-window=10000000"
+      }
+    ],
+    "flexFECNegotiated": true,
+    "rtxNegotiated": true,
+    "transceivers": [
+      {
+        "currentDirection": "recvonly",
+        "direction": "recvonly",
+        "kind": "video",
+        "mid": "0"
+      }
+    ]
+  },
+  "networkImpairment": {
+    "direction": "producer-to-viewer",
+    "scope": "peer-webrtc-transport-address",
+    "resolvedTarget": {
+      "address": "172.18.0.3",
+      "family": 4,
+      "port": 46853,
+      "protocol": "udp",
+      "matchDestinationPort": false,
+      "relayProtocol": null,
+      "scope": "peer-webrtc-transport-address",
+      "source": "docker-bridge"
+    },
+    "destination": {
+      "address": "172.18.0.3",
+      "family": 4,
+      "port": 46853,
+      "protocol": "udp"
+    },
+    "matchDestinationPort": false,
+    "recoveryDrain": {
+      "capacityKbps": 160000,
+      "delay": "0ms",
+      "durationSeconds": 1,
+      "jitter": "0ms",
+      "loss": "0%"
+    }
+  }
+}

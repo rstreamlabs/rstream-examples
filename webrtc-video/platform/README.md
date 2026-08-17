@@ -4,11 +4,27 @@ This example shows how a third-party Next.js application can integrate `rstream`
 
 The application owns the device inventory, authentication, device secrets, producer provisioning, viewer authorization, and demo data lifecycle. `rstream` remains the tunnel, TURN, token, and real-time tunnel state layer behind that product API.
 
-This is the platform counterpart to `../producer`. The producer code is the same reference WebRTC streamer, but it runs in provisioning mode and receives all rstream material from this product backend.
+This control plane builds the Go code from `../producer` in provisioning mode,
+with the embedded viewer omitted from the deployment binary. Capture, encoding,
+adaptation, repair, recovery, and metrics remain in that producer; this
+application supplies short-lived rstream material and owns the viewer
+entrypoint.
 
 If you want a guided walkthrough of the architecture and the JavaScript SDK integration, see the associated guide: [Build a Next.js WebRTC Video Platform with rstream](https://rstream.io/guides/integrate-webrtc-video-streaming-into-a-nextjs-platform-with-rstream).
 
-## Architecture
+## One media core across the video series
+
+The [standalone producer](../producer/) remains the media application throughout
+the video series. This Next.js code adds the product boundary around it;
+capture, encoding, congestion control, repair, recovery, and OpenMetrics stay
+together in the same Go source tree and device process.
+
+The series keeps those responsibilities stable across three delivery paths:
+
+1. one producer and one browser for the standalone and diagnostic path;
+2. this Next.js control plane around the same one-to-one media session;
+3. a MediaMTX distribution adapter that sends one device upstream to several
+   viewers while preserving direct WebRTC as an option.
 
 The producer receives only two product-level values:
 
@@ -26,6 +42,18 @@ Browser viewers never receive the producer secret. When a signed viewer URL is n
 The dashboard uses `@rstreamlabs/react` to watch tunnel state in real time. The device list is still stored in PostgreSQL, but online/offline state is read from rstream tunnel state.
 
 The app also exposes `POST /api/rstream/webhook`. rstream signs lifecycle events for this endpoint, the app verifies them with the JavaScript SDK, and tunnel lifecycle events update the device presence timestamps from the labels attached to the short-lived producer token. `tunnel.created` records when the device came online, and `tunnel.deleted` records when it was last seen before going offline.
+
+Producer OpenMetrics stay on the device boundary. Enable the private metrics
+listener in `../producer/config.provisioning.h264.yaml` and let a collector on
+the device or edge host scrape it; the Next.js application does not proxy the
+metrics endpoint. The producer README documents the complete series and useful
+queries.
+
+The MediaMTX distribution path introduces a second congestion domain. The
+producer controls and reports the shared device upstream; MediaMTX and browser
+telemetry describe viewer delivery. The third guide will qualify feedback,
+repair, latency, and recovery on both legs so each metric retains a precise
+operational meaning.
 
 ## Stack
 

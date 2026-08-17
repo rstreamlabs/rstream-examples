@@ -276,55 +276,99 @@ The full profile means adaptive TWCC/GCC plus NACK, RTX, and ${result.protection
 }
 
 export function renderComparisonSVG(result) {
-  const groups = expectedGroups.map(([path, profile]) => ({
-    label: `${path} ${profile === "nack-rtx" ? "NACK+RTX" : "+FlexFEC"}`,
+  const colors = ["#475569", "#d97706", "#2563eb", "#059669"];
+  const groups = expectedGroups.map(([path, profile], index) => ({
+    color: colors[index],
+    label: `${path === "direct" ? "Direct" : "Relay"} ${profile === "nack-rtx" ? "base" : "full"}`,
     summary: result.groups[groupKey(path, profile)],
   }));
+  const panels = [
+    {
+      field: "impairedFPS",
+      format: (value) => value.toFixed(1),
+      gate: 20,
+      gateLabel: "20 fps gate",
+      maximum: 30,
+      title: "Decoded output",
+      unit: "fps · higher is better",
+    },
+    {
+      field: "impairedAverageQP",
+      format: (value) => value.toFixed(1),
+      gate: 42,
+      gateLabel: "QP 42 gate",
+      maximum: 51,
+      title: "H.264 quantization",
+      unit: "average QP · lower is better",
+    },
+    {
+      field: "impairedFreezeRatio",
+      format: (value) => `${(value * 100).toFixed(1)}%`,
+      gate: 0.1,
+      gateLabel: "10% gate",
+      maximum: 0.35,
+      title: "Frozen time",
+      unit: "share of phase · lower is better",
+    },
+  ];
   const width = 1200;
-  const height = 520;
-  const panelWidth = 310;
-  const panelGap = 75;
-  const startX = 55;
-  const baselineY = 430;
-  const plotHeight = 310;
-  const gap = 14;
-  const barWidth = (panelWidth - gap * (groups.length - 1)) / groups.length;
-  const bars = (field, maximum, panelOffset, color) =>
-    groups
-      .map((group, index) => {
-        const value = group.summary[field].median;
-        const barHeight = Math.max(
-          0,
-          Math.min(plotHeight, (value / maximum) * plotHeight),
-        );
-        const x = startX + panelOffset + index * (barWidth + gap);
-        const y = baselineY - barHeight;
-        const rendered =
-          field === "impairedFPS"
-            ? value.toFixed(1)
-            : field === "impairedFreezeRatio"
-              ? `${(value * 100).toFixed(1)}%`
-              : value.toFixed(1);
-        return `<rect x="${round(x)}" y="${round(y)}" width="${round(barWidth)}" height="${round(barHeight)}" rx="5" fill="${color}"/><text x="${round(x + barWidth / 2)}" y="${round(y - 10)}" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">${rendered}</text><text transform="translate(${round(x + barWidth / 2)} ${baselineY + 18}) rotate(24)" text-anchor="start" font-size="12" fill="#374151">${escapeXML(group.label)}</text>`;
+  const height = 620;
+  const startX = 45;
+  const panelWidth = 330;
+  const panelGap = 55;
+  const plotTop = 145;
+  const baselineY = 475;
+  const plotHeight = baselineY - plotTop;
+  const barWidth = 56;
+  const barGap = 21;
+  const panel = (definition, index) => {
+    const x = startX + index * (panelWidth + panelGap);
+    const scale = (value) =>
+      baselineY -
+      Math.max(
+        0,
+        Math.min(plotHeight, (value / definition.maximum) * plotHeight),
+      );
+    const gateY = scale(definition.gate);
+    const bars = groups
+      .map((group, groupIndex) => {
+        const distribution = group.summary[definition.field];
+        const barX = x + 10 + groupIndex * (barWidth + barGap);
+        const centerX = barX + barWidth / 2;
+        const medianY = scale(distribution.median);
+        const maximumY = scale(distribution.maximum);
+        const minimumY = scale(distribution.minimum);
+        const [pathLabel, profileLabel] = group.label.split(" ");
+        return `<rect x="${round(barX)}" y="${round(medianY)}" width="${barWidth}" height="${round(baselineY - medianY)}" rx="5" fill="${group.color}" fill-opacity="0.88"/>
+    <line x1="${round(centerX)}" y1="${round(maximumY)}" x2="${round(centerX)}" y2="${round(minimumY)}" stroke="#0f172a" stroke-width="2"/>
+    <line x1="${round(centerX - 8)}" y1="${round(maximumY)}" x2="${round(centerX + 8)}" y2="${round(maximumY)}" stroke="#0f172a" stroke-width="2"/>
+    <line x1="${round(centerX - 8)}" y1="${round(minimumY)}" x2="${round(centerX + 8)}" y2="${round(minimumY)}" stroke="#0f172a" stroke-width="2"/>
+    <text x="${round(centerX)}" y="${round(Math.min(medianY, maximumY) - 10)}" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">${definition.format(distribution.median)}</text>
+    <text x="${round(centerX)}" y="502" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">${pathLabel}</text>
+    <text x="${round(centerX)}" y="519" text-anchor="middle" font-size="12" fill="#475569">${profileLabel}</text>`;
       })
-      .join("");
+      .join("\n    ");
+    return `<text x="${x}" y="104" font-size="18" font-weight="700" fill="#0f172a">${definition.title}</text>
+  <text x="${x}" y="127" font-size="13" fill="#475569">${definition.unit}</text>
+  <line x1="${x}" y1="${baselineY}" x2="${x + panelWidth}" y2="${baselineY}" stroke="#94a3b8"/>
+  <line x1="${x}" y1="${round(gateY)}" x2="${x + panelWidth}" y2="${round(gateY)}" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <rect x="${x + panelWidth - 90}" y="${round(gateY - 18)}" width="90" height="18" fill="#ffffff"/>
+  <text x="${x + panelWidth - 4}" y="${round(gateY - 5)}" text-anchor="end" font-size="12" font-weight="600" fill="#b91c1c">${definition.gateLabel}</text>
+  ${bars}`;
+  };
   const passColor = result.passed ? "#047857" : "#b91c1c";
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title description">
   <title id="title">Adaptive streaming direct and rstream comparison</title>
-  <desc id="description">Decoded frames per second, H.264 quantization, and frozen-time percentage for direct and rstream paths under identical impairment.</desc>
+  <desc id="description">Median decoded frames per second, H.264 quantization, and frozen-time percentage with minimum and maximum whiskers across three direct and three rstream relay runs per protection profile.</desc>
   <rect width="100%" height="100%" fill="#ffffff"/>
-  <text x="${startX}" y="34" font-size="22" font-weight="700" fill="#111827">Adaptive video under ${escapeXML(result.impairment?.loss || "unknown loss")}, ${escapeXML(result.impairment?.delay || "unknown delay")}, and ${escapeXML(formatCapacity(result.impairment?.capacityKbps))}</text>
-  <text x="${width - 60}" y="34" text-anchor="end" font-size="17" font-weight="700" fill="${passColor}">${result.passed ? "PASS" : "FAIL"}</text>
-  <text x="${startX}" y="86" font-size="17" font-weight="600" fill="#111827">Decoded output (fps, higher is better)</text>
-  <line x1="${startX}" y1="${baselineY}" x2="${startX + panelWidth}" y2="${baselineY}" stroke="#111827"/>
-  ${bars("impairedFPS", 30, 0, "#2563eb")}
-  <text x="${startX + panelWidth + panelGap}" y="86" font-size="17" font-weight="600" fill="#111827">Average QP (lower is better)</text>
-  <line x1="${startX + panelWidth + panelGap}" y1="${baselineY}" x2="${startX + panelWidth * 2 + panelGap}" y2="${baselineY}" stroke="#111827"/>
-  ${bars("impairedAverageQP", 51, panelWidth + panelGap, "#7c3aed")}
-  <text x="${startX + (panelWidth + panelGap) * 2}" y="86" font-size="17" font-weight="600" fill="#111827">Frozen time (lower is better)</text>
-  <line x1="${startX + (panelWidth + panelGap) * 2}" y1="${baselineY}" x2="${startX + panelWidth * 3 + panelGap * 2}" y2="${baselineY}" stroke="#111827"/>
-  ${bars("impairedFreezeRatio", 0.35, (panelWidth + panelGap) * 2, "#d97706")}
+  <text x="${startX}" y="34" font-size="22" font-weight="700" fill="#0f172a">Adaptive video through direct and rstream relay paths</text>
+  <text x="${startX}" y="61" font-size="14" fill="#475569">${escapeXML(formatCapacity(result.impairment?.capacityKbps))} · ${escapeXML(result.impairment?.delay || "unknown delay")} one-way delay · ${escapeXML(result.impairment?.jitter || "unknown jitter")} jitter · ${escapeXML(result.impairment?.loss || "unknown loss")} loss · medians and min–max across three runs</text>
+  <text x="${width - 45}" y="34" text-anchor="end" font-size="17" font-weight="700" fill="${passColor}">${result.passed ? "PASS" : "FAIL"}</text>
+  ${panels.map(panel).join("\n  ")}
+  <text x="${startX}" y="566" font-size="13" fill="#475569">Base: NACK + RTX</text>
+  <text x="${startX + 155}" y="566" font-size="13" fill="#475569">Full: NACK + RTX + one FlexFEC repair packet per five media packets</text>
+  <text x="${startX}" y="594" font-size="12" fill="#64748b">Bars show the median. Whiskers show the minimum and maximum selected result; red lines are release gates.</text>
 </svg>
 `;
 }
