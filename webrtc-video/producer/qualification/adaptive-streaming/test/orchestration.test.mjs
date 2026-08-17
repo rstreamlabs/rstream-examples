@@ -189,6 +189,18 @@ test("runs impairment timing inside the producer namespace", async () => {
   );
   assert.doesNotMatch(runScript, /capture_qdisc\(\)/);
   assert.doesNotMatch(runScript, /apply_shaping\(\)/);
+  for (const [event, capture] of [
+    ["conditioning-started", "conditioning-start"],
+    ["constrained-started", "constrained-step-1-start"],
+    ["impaired-started", "impaired-start"],
+    ["recovery-capacity-started", "recovery-capacity-start"],
+  ]) {
+    assert.ok(
+      trafficControlScript.indexOf(`emit ${event}`) <
+        trafficControlScript.indexOf(`capture ${capture}`),
+      `${event} must be emitted before its diagnostic capture`,
+    );
+  }
 });
 
 test("passes and records the configured FlexFEC protection ratio", async () => {

@@ -9,6 +9,8 @@ import {
 
 const maximumQualificationSampleGapMilliseconds = 2500;
 const minimumSustainedRecoveryMilliseconds = 10_000;
+const networkTransitionGuardMilliseconds = 2000;
+const stableConditioningWindowMilliseconds = 10_000;
 
 export function enrichSamples(samples) {
   let previous = null;
@@ -78,6 +80,26 @@ export function analyze(
     networkConditionTimeline,
     enriched,
     manifest,
+  );
+  const stableConditioningSamples = samplesBeforeNetworkTransition(
+    enriched,
+    networkConditions,
+    "conditioning",
+    "constrained-started",
+    stableConditioningWindowMilliseconds,
+    networkTransitionGuardMilliseconds,
+  );
+  const stableConditioningTargetRatio =
+    baseline?.medianEncoderTargetKbps && stableConditioningSamples.length > 0
+      ? stableConditioningSamples.filter(
+          (sample) =>
+            sample.encoderTargetKbps >= baseline.medianEncoderTargetKbps * 0.8,
+        ).length / stableConditioningSamples.length
+      : 0;
+  const stableConditioningMedianEncoderTargetKbps = median(
+    stableConditioningSamples
+      .map((sample) => sample.encoderTargetKbps)
+      .filter(positive),
   );
   const candidatePairSwitches = countCandidatePairSwitches(enriched);
   const networkMobility = summarizeNetworkMobility(enriched);
@@ -223,10 +245,10 @@ export function analyze(
   if (conditioning) {
     assert(
       assertions,
-      conditioning.endingEncoderTargetKbps >=
-        (baseline?.medianEncoderTargetKbps || Infinity) * 0.8,
+      stableConditioningSamples.length >= 5 &&
+        stableConditioningTargetRatio >= 0.8,
       "capacity-experiment-settled",
-      "the encoder returns to at least 80% of its baseline target after traffic-control activation and before the first capacity step",
+      "at least 80% of samples in the stable pre-transition window sustain 80% of the baseline encoder target",
     );
   }
   if (
@@ -756,8 +778,45 @@ export function analyze(
     hostCPU,
     networkMobility,
     networkConditions,
+    stableConditioningMedianEncoderTargetKbps,
+    stableConditioningSamples: stableConditioningSamples.length,
+    stableConditioningTargetRatio,
     trafficControl: trafficControlSummary,
   };
+}
+
+export function samplesBeforeNetworkTransition(
+  samples,
+  networkConditions,
+  phase,
+  transition,
+  windowMilliseconds = stableConditioningWindowMilliseconds,
+  guardMilliseconds = networkTransitionGuardMilliseconds,
+) {
+  const transitionEvent = networkConditions?.changes?.find(
+    (change) => change.name === transition,
+  );
+  if (
+    !transitionEvent ||
+    !Number.isFinite(transitionEvent.elapsedMilliseconds) ||
+    !Number.isFinite(windowMilliseconds) ||
+    windowMilliseconds <= 0 ||
+    !Number.isFinite(guardMilliseconds) ||
+    guardMilliseconds < 0
+  ) {
+    return [];
+  }
+  const end = transitionEvent.elapsedMilliseconds - guardMilliseconds;
+  const start = end - windowMilliseconds;
+  return samples.filter(
+    (sample) =>
+      sample.phase === phase &&
+      Number.isFinite(sample.elapsedMilliseconds) &&
+      sample.elapsedMilliseconds >= start &&
+      sample.elapsedMilliseconds <= end &&
+      Number.isFinite(sample.encoderTargetKbps) &&
+      sample.encoderTargetKbps > 0,
+  );
 }
 
 export function alignNetworkConditions(events, samples, manifest) {

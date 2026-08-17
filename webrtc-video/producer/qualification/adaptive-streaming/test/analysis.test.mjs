@@ -6,6 +6,7 @@ import {
   parseEncoderQuality,
   renderMarkdown,
   renderSVG,
+  samplesBeforeNetworkTransition,
   summarizeHostCPU,
   summarizeNetworkMobility,
   summarizeSetup,
@@ -109,6 +110,39 @@ test("aligns link changes to observed collector timestamps", () => {
   assert.equal(
     alignNetworkConditions(events.slice(0, -1), samples, manifest).available,
     false,
+  );
+});
+
+test("separates a stable conditioning window from the next link transition", () => {
+  const samples = Array.from({ length: 16 }, (_, index) => ({
+    elapsedMilliseconds: index * 1000,
+    encoderTargetKbps: index === 14 ? 4000 : 8000,
+    phase: "conditioning",
+  }));
+  const networkConditions = {
+    changes: [{ elapsedMilliseconds: 15_000, name: "constrained-started" }],
+  };
+  const stable = samplesBeforeNetworkTransition(
+    samples,
+    networkConditions,
+    "conditioning",
+    "constrained-started",
+    10_000,
+    2000,
+  );
+  assert.deepEqual(
+    stable.map((sample) => sample.elapsedMilliseconds),
+    [3000, 4000, 5000, 6000, 7000, 8000, 9000, 10_000, 11_000, 12_000, 13_000],
+  );
+  assert.ok(stable.every((sample) => sample.encoderTargetKbps === 8000));
+  assert.deepEqual(
+    samplesBeforeNetworkTransition(
+      samples,
+      { changes: [] },
+      "conditioning",
+      "constrained-started",
+    ),
+    [],
   );
 });
 
