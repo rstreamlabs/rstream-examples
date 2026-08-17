@@ -9,7 +9,20 @@ Media: `highway-traffic-pexels-2103099.mp4` · SHA-256 `9e18115c6dd7ec9fb41734d4
 
 Performance gates: model p95 <= 40.0 ms; model throughput >= 25.0 fps; live RTT p95 <= 750.0 ms; failover <= 2500.0 ms; transport overhead p95 <= 750.0 ms.
 
-## Automated gates
+## Method
+
+The local profile pins the YOLO model and reference media, exercises framing and malformed results, runs cancellation and lifecycle stress, then benchmarks the exact model input. The live profile starts two managed workers, fills and releases their bounded session capacity, kills the worker that owns an open stream, waits for the transport failure signal, reconnects to the surviving worker, and requires an identical inference signature. Regional and payload-size probes run as separate gates so routing decisions and transport scaling cannot be hidden inside an aggregate latency.
+
+## Acceptance gates
+
+- The complete code, protocol, cancellation, and lifecycle suite must pass.
+- Capacity exhaustion must reject the excess session explicitly and accept a new session after release.
+- Worker loss must be observed on the existing stream, and failover must return an identical inference signature from the surviving worker.
+- Framed transport must preserve every byte at every tested payload size.
+- Equal-capacity regional selection must choose the lower measured session-establishment latency.
+- Every configured model, live-path, failover, and transport performance budget must pass.
+
+## Code and lifecycle gates
 
 | Phase | Result | Wall time | Raw log |
 | --- | --- | ---: | --- |
@@ -21,8 +34,6 @@ Performance gates: model p95 <= 40.0 ms; model throughput >= 25.0 fps; live RTT 
 | live-mesh | PASS | 13.483 s | [live-mesh.log](live-mesh.log) |
 | transport-profile | PASS | 38.826 s | [transport-profile.log](transport-profile.log) |
 | regional-routing | PASS | 25.377 s | [regional-routing.log](regional-routing.log) |
-
-![Command duration](commands.svg)
 
 ## Model and media baseline
 
@@ -53,7 +64,9 @@ Workers registered in: `eu-west-3`. Reference payload: 36083 bytes.
 | Abrupt failure detection | 110.64 ms |
 | End-to-end failover | 694.13 ms |
 
-![Live latency](live-latency.svg)
+![Inference failover timeline](failover-timeline.svg)
+
+The failover clock starts immediately before the harness kills worker A. The first marker is the EOF observed on its existing stream; the final marker is a byte-valid inference response from worker B. Inventory removal is measured separately and is not on the request recovery critical path.
 
 ## Transport scaling
 
@@ -80,6 +93,6 @@ Both candidates reported equal capacity. The legacy order would have selected `v
 
 ## Integrity and interpretation
 
-Cancellation stress verifies that a cancelled executor call cannot release the model mutex while YOLO still owns the model. Admission, protocol framing, malformed results, capture teardown, routing, and registry recovery have independent regression tests.
+Cancellation stress verifies that a cancelled executor call cannot release the model mutex while YOLO still owns the model. The manifest fixes the model and media hashes, source revision, runtime, parameters, and thresholds; raw logs and JSON remain beside this report.
 The configured performance budgets are enforced in this verdict.
 A dirty run is diagnostic and must not be presented as qualification of a released revision.

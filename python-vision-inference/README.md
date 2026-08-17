@@ -141,20 +141,23 @@ Stop the worker currently serving the device and watch the session move to
 another worker within seconds, with the video playing through the switch. Add
 a worker back and the pool regrows, with no restart anywhere.
 
-## Qualification and measured evidence
+## Measured selection and failover
 
-The commands above are deliberately the complete quickstart. For repeatable
-real-model latency, concurrency, cancellation, malformed-message, registry,
-selection, saturation, and failover qualification, see
-[`qualification/README.md`](qualification/README.md). The qualification runner
-hashes the exact model and media, retains raw logs and JSON measurements, and
-generates compact Markdown/SVG evidence tied to the tested repository commit.
-The latest committed reference run is
-[`qualification/evidence/34aa947/report.md`](qualification/evidence/34aa947/report.md):
-it was produced from a clean worktree against staging and includes the raw
-logs, machine-readable measurements, integrity manifest, and SVG charts. Its
-budgets are regression gates for that recorded environment, not universal
-product SLOs.
+The [`qualification/`](qualification) pack pins the YOLO model and source media,
+then exercises frame correlation, bounded admission, cancellation races,
+selection under load, rstream transit, worker loss, and recovery. A live
+failover passes only after the stream from worker A reports its failure and the
+same reference frame returns from worker B with identical labels, confidence
+scores, and bounding boxes.
+
+The latest [reference record](qualification/evidence/34aa947/report.md) measured
+failure detection at 110.64 ms and a complete result from the surviving worker
+at 694.13 ms. It also forced two equal-capacity workers into different regions
+and verified that the selector chose the lower measured session-establishment
+latency, saving 136.81 ms of median round-trip time in that run. The configured
+latency and throughput budgets qualify that recorded hardware and network path;
+deployments should set their own gates for the chosen model, accelerator, and
+regions.
 
 ## Web UI
 

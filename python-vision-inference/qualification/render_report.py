@@ -19,33 +19,66 @@ def svg_bars(
     width = 900
     left = 260
     right = 170
-    row_height = 38
-    height = 100 + row_height * max(1, len(rows))
+    row_height = 46
+    height = 112 + row_height * max(1, len(rows))
     maximum = max((value for _, value, _ in rows), default=1) or 1
     scale = (width - left - right) / maximum
     lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" '
         f'height="{height}" viewBox="0 0 {width} {height}">',
         '<rect width="100%" height="100%" fill="#111827"/>',
-        f'<text x="24" y="38" fill="#f9fafb" font-family="sans-serif" '
-        f'font-size="22" font-weight="700">{html.escape(title)}</text>',
+        f'<text x="24" y="42" fill="#f9fafb" font-family="sans-serif" '
+        f'font-size="26" font-weight="700">{html.escape(title)}</text>',
     ]
     for index, (label, value, color) in enumerate(rows):
-        y = 70 + index * row_height
+        y = 78 + index * row_height
         bar_width = max(1, value * scale)
         lines.extend(
             [
                 f'<text x="24" y="{y + 18}" fill="#d1d5db" '
-                f'font-family="sans-serif" font-size="14">'
+                f'font-family="sans-serif" font-size="17">'
                 f'{html.escape(label)}</text>',
                 f'<rect x="{left}" y="{y}" width="{bar_width:.1f}" '
-                f'height="22" rx="4" fill="{color}"/>',
-                f'<text x="{left + bar_width + 10:.1f}" y="{y + 17}" '
-                f'fill="#f9fafb" font-family="sans-serif" font-size="14">'
+                f'height="26" rx="4" fill="{color}"/>',
+                f'<text x="{left + bar_width + 10:.1f}" y="{y + 20}" '
+                f'fill="#f9fafb" font-family="sans-serif" font-size="17">'
                 f'{value:.2f} {html.escape(unit)}</text>',
             ]
         )
     lines.append("</svg>")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def svg_failover_timeline(path: Path, detection_ms: float, failover_ms: float) -> None:
+    width = 900
+    height = 300
+    left = 72
+    right = 48
+    line_y = 155
+    span = max(1.0, failover_ms)
+    scale = (width - left - right) / span
+    detection_x = left + detection_ms * scale
+    failover_x = left + failover_ms * scale
+    lines = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-labelledby="title description">',
+        '<title id="title">Inference failover timeline</title>',
+        '<desc id="description">Worker A is stopped, the open stream reports EOF, and a matching inference result returns through worker B.</desc>',
+        '<rect width="100%" height="100%" fill="#111827"/>',
+        '<text x="28" y="42" fill="#f9fafb" font-family="sans-serif" font-size="26" font-weight="700">Inference failover timeline</text>',
+        '<text x="28" y="72" fill="#9ca3af" font-family="sans-serif" font-size="17">Abrupt worker loss · same reference frame · surviving worker</text>',
+        f'<line x1="{left}" y1="{line_y}" x2="{failover_x:.1f}" y2="{line_y}" stroke="#4b5563" stroke-width="8" stroke-linecap="round"/>',
+        f'<line x1="{left}" y1="{line_y}" x2="{detection_x:.1f}" y2="{line_y}" stroke="#f59e0b" stroke-width="8" stroke-linecap="round"/>',
+        f'<line x1="{detection_x:.1f}" y1="{line_y}" x2="{failover_x:.1f}" y2="{line_y}" stroke="#22c55e" stroke-width="8" stroke-linecap="round"/>',
+        f'<circle cx="{left}" cy="{line_y}" r="8" fill="#ef4444"/>',
+        f'<circle cx="{detection_x:.1f}" cy="{line_y}" r="8" fill="#f59e0b"/>',
+        f'<circle cx="{failover_x:.1f}" cy="{line_y}" r="8" fill="#22c55e"/>',
+        f'<text x="{left}" y="{line_y - 32}" text-anchor="start" fill="#f9fafb" font-family="sans-serif" font-size="17" font-weight="600">worker A stopped</text>',
+        f'<text x="{detection_x:.1f}" y="{line_y + 44}" text-anchor="middle" fill="#f9fafb" font-family="sans-serif" font-size="17" font-weight="600">EOF {detection_ms:.1f} ms</text>',
+        f'<text x="{failover_x:.1f}" y="{line_y - 32}" text-anchor="end" fill="#f9fafb" font-family="sans-serif" font-size="17" font-weight="600">worker B result {failover_ms:.1f} ms</text>',
+        f'<text x="{(left + detection_x) / 2:.1f}" y="{line_y + 84}" text-anchor="middle" fill="#fbbf24" font-family="sans-serif" font-size="16">failure detection</text>',
+        f'<text x="{(detection_x + failover_x) / 2:.1f}" y="{line_y + 84}" text-anchor="middle" fill="#86efac" font-family="sans-serif" font-size="16">reconnect, inference, response</text>',
+        '</svg>',
+    ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -109,7 +142,20 @@ def render(session_path: Path) -> bool:
             "not an SLO pass."
         ),
         "",
-        "## Automated gates",
+        "## Method",
+        "",
+        "The local profile pins the YOLO model and reference media, exercises framing and malformed results, runs cancellation and lifecycle stress, then benchmarks the exact model input. The live profile starts two managed workers, fills and releases their bounded session capacity, kills the worker that owns an open stream, waits for the transport failure signal, reconnects to the surviving worker, and requires an identical canonical signature covering labels, confidence scores, and bounding boxes. Regional and payload-size probes run as separate gates so routing decisions and transport scaling cannot be hidden inside an aggregate latency.",
+        "",
+        "## Acceptance gates",
+        "",
+        "- The complete code, protocol, cancellation, and lifecycle suite must pass.",
+        "- Capacity exhaustion must reject the excess session explicitly and accept a new session after release.",
+        "- Worker loss must be observed on the existing stream, and failover must return identical detections from the surviving worker.",
+        "- Framed transport must preserve every byte at every tested payload size.",
+        "- Equal-capacity regional selection must choose the lower measured session-establishment latency.",
+        "- Every configured model, live-path, failover, and transport performance budget must pass.",
+        "",
+        "## Code and lifecycle gates",
         "",
         "| Phase | Result | Wall time | Raw log |",
         "| --- | --- | ---: | --- |",
@@ -121,21 +167,7 @@ def render(session_path: Path) -> bool:
             f"{command['wallSeconds']:.3f} s | "
             f"[{command['log']}]({command['log']}) |"
         )
-    command_rows = [
-        (
-            command["name"],
-            float(command["wallSeconds"]),
-            "#22c55e" if command["exitCode"] == 0 else "#ef4444",
-        )
-        for command in commands
-    ]
-    svg_bars(
-        output / "commands.svg",
-        "Qualification phase duration",
-        command_rows,
-        "s",
-    )
-    lines.extend(["", "![Command duration](commands.svg)", ""])
+    lines.append("")
     if benchmark:
         inference = benchmark["inferenceMS"]
         lines.extend(
@@ -195,19 +227,19 @@ def render(session_path: Path) -> bool:
                 "",
             ]
         )
-        svg_bars(
-            output / "live-latency.svg",
-            "Live Vision latency and failover",
-            [
-                ("loopback RTT p95", float(loopback["roundTripP95MS"]), "#38bdf8"),
-                ("rstream RTT p50", float(round_trip["p50"]), "#22c55e"),
-                ("rstream RTT p95", float(round_trip["p95"]), "#a78bfa"),
-                ("failure detection", float(live["failureDetectionMS"]), "#f59e0b"),
-                ("failover", float(live["failoverMS"]), "#ef4444"),
-            ],
-            "ms",
+        svg_failover_timeline(
+            output / "failover-timeline.svg",
+            float(live["failureDetectionMS"]),
+            float(live["failoverMS"]),
         )
-        lines.extend(["![Live latency](live-latency.svg)", ""])
+        lines.extend(
+            [
+                "![Inference failover timeline](failover-timeline.svg)",
+                "",
+                "The failover clock starts immediately before the harness kills worker A. The first marker is the EOF observed on its existing stream; the final marker is a byte-valid inference response from worker B. Inventory removal is measured separately and is not on the request recovery critical path.",
+                "",
+            ]
+        )
     if transport:
         lines.extend(
             [
@@ -272,9 +304,9 @@ def render(session_path: Path) -> bool:
             "## Integrity and interpretation",
             "",
             "Cancellation stress verifies that a cancelled executor call cannot "
-            "release the model mutex while YOLO still owns the model. Admission, "
-            "protocol framing, malformed results, capture teardown, routing, and "
-            "registry recovery have independent regression tests.",
+            "release the model mutex while YOLO still owns the model. The manifest "
+            "fixes the model and media hashes, source revision, runtime, parameters, "
+            "and thresholds; raw logs and JSON remain beside this report.",
             (
                 "The configured performance budgets are enforced in this verdict."
                 if performance_gates
