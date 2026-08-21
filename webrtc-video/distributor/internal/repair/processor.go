@@ -125,7 +125,7 @@ func DefaultConfig() Config {
 		NACKRetry:        50 * time.Millisecond,
 		PacketExpiry:     time.Second,
 		ReorderWait:      300 * time.Millisecond,
-		KeyFrameInterval: time.Second,
+		KeyFrameInterval: 500 * time.Millisecond,
 		MaxMissing:       4096,
 		MaxPending:       8192,
 		MaxNACKs:         10,

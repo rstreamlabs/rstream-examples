@@ -7,6 +7,7 @@ test("producer OpenMetrics map bounded transport signals", () => {
   const sample = producerSample(
     parseOpenMetrics(`# HELP ignored help
 rstream_video_producer_encoder_target_bytes_per_second 1000000
+rstream_video_producer_encoded_frames_total{frame_type="key"} 9
 rstream_video_producer_twcc_estimated_available_bytes_per_second 750000
 rstream_video_producer_twcc_controller_target_bytes_per_second{controller="loss"} 700000
 rstream_video_producer_twcc_controller_target_bytes_per_second{controller="delay"} 650000
@@ -29,10 +30,15 @@ rstream_video_producer_pacer_sent_packets_total{kind="primary"} 100
 rstream_video_producer_pacer_sent_packets_total{kind="rtx"} 7
 rstream_video_producer_adaptive_bitrate_updates_total{outcome="applied"} 4
 rstream_video_producer_adaptive_bitrate_updates_total{outcome="failed"} 1
+rstream_video_producer_key_frame_requests_total{source="recovery"} 5
+rstream_video_producer_key_frame_requests_total{source="rtcp"} 6
+rstream_video_producer_key_frame_requests_coalesced_total 7
+rstream_video_producer_key_frame_request_failures_total 0
 rstream_video_producer_malformed_feedback_total{protocol="twcc"} 2
 `),
   );
   assert.equal(sample.encoderTargetKbps, 8000);
+  assert.equal(sample.encodedKeyFrames, 9);
   assert.equal(sample.twccTargetKbps, 6000);
   assert.equal(sample.lossTargetKbps, 5600);
   assert.equal(sample.delayTargetKbps, 5200);
@@ -51,6 +57,10 @@ rstream_video_producer_malformed_feedback_total{protocol="twcc"} 2
   assert.equal(sample.pacerSentRTX, 7);
   assert.equal(sample.adaptiveBitrateUpdates, 4);
   assert.equal(sample.adaptiveBitrateFailures, 1);
+  assert.equal(sample.recoveryKeyFrameRequests, 5);
+  assert.equal(sample.rtcpKeyFrameRequests, 6);
+  assert.equal(sample.recoveryKeyFrameCoalesced, 7);
+  assert.equal(sample.recoveryKeyFrameFailures, 0);
   assert.equal(sample.twccMalformedFeedback, 2);
 });
 

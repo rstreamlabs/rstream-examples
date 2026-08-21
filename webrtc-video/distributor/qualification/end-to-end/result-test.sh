@@ -36,6 +36,7 @@ jq -nc '
     bytesReceived: bytes,
     framesPerSecond: 30,
     encoderTargetKbps: target,
+    encodedKeyFrames: 1,
     twccTargetKbps: target,
     jitterSeconds: 0.01,
     currentRoundTripTimeSeconds: 0.02,
@@ -62,6 +63,10 @@ jq -nc '
     pacerPacingBitrateKbps: target,
     pacerSentRTX: 0,
     pacerTargetBitrateKbps: target,
+    recoveryKeyFrameCoalesced: 0,
+    recoveryKeyFrameFailures: 0,
+    recoveryKeyFrameRequests: 1,
+    rtcpKeyFrameRequests: 1,
     twccFeedbackPackets: 1,
     pacerSentFEC: 1,
     producerMetricsSource: "openmetrics"

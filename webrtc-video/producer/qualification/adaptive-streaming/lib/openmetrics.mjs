@@ -106,6 +106,11 @@ export function producerSample(samples) {
       value("rstream_video_producer_encoder_target_bytes_per_second"),
       8 / 1_000,
     ),
+    encodedKeyFrames: labeled(
+      "rstream_video_producer_encoded_frames_total",
+      "frame_type",
+      "key",
+    ),
     lossAverage: value("rstream_video_producer_twcc_maximum_packet_loss_ratio"),
     lossGuardActive: lossGuardSessions === null ? null : lossGuardSessions > 0,
     lossGuardRecoveries: labeled(
@@ -190,6 +195,22 @@ export function producerSample(samples) {
       8 / 1_000,
     ),
     producerMetricsSource: "openmetrics",
+    recoveryKeyFrameCoalesced: value(
+      "rstream_video_producer_key_frame_requests_coalesced_total",
+    ),
+    recoveryKeyFrameFailures: value(
+      "rstream_video_producer_key_frame_request_failures_total",
+    ),
+    recoveryKeyFrameRequests: labeled(
+      "rstream_video_producer_key_frame_requests_total",
+      "source",
+      "recovery",
+    ),
+    rtcpKeyFrameRequests: labeled(
+      "rstream_video_producer_key_frame_requests_total",
+      "source",
+      "rtcp",
+    ),
     staleBitrateCallbacks: value(
       "rstream_video_producer_stale_bitrate_callbacks_total",
     ),

@@ -47,6 +47,7 @@ def producer_metrics_complete:
     .delayControllerUnderuseSessions,
     .delayTargetKbps,
     .encoderTargetKbps,
+    .encodedKeyFrames,
     .lossAverage,
     .lossGuardRecoveries,
     .lossGuardReductions,
@@ -54,6 +55,10 @@ def producer_metrics_complete:
     .lossTargetKbps,
     .pacerPacingBitrateKbps,
     .pacerTargetBitrateKbps,
+    .recoveryKeyFrameCoalesced,
+    .recoveryKeyFrameFailures,
+    .recoveryKeyFrameRequests,
+    .rtcpKeyFrameRequests,
     .twccTargetKbps
   ] | all(type == "number")) and
   (.lossGuardActive | type == "boolean");

@@ -11,6 +11,12 @@ import (
 	"github.com/pion/rtp"
 )
 
+func TestDefaultConfigBoundsKeyFrameRecoveryRetries(t *testing.T) {
+	if got := DefaultConfig().KeyFrameInterval; got != 500*time.Millisecond {
+		t.Fatalf("key-frame retry interval = %s, want 500ms", got)
+	}
+}
+
 func TestTrackerHandlesSequenceWrapAndReorderingWithoutNACK(t *testing.T) {
 	config := DefaultConfig()
 	tracker := tracker{config: config, missing: make(map[uint64]missingPacket)}
