@@ -1,14 +1,14 @@
-.PHONY: build run test verify clean build-producer run-producer test-producer verify-producer clean-producer
+.PHONY: build run test verify clean build-producer run-producer test-producer verify-producer clean-producer build-distributor test-distributor verify-distributor clean-distributor
 
-build: build-producer
+build: build-producer build-distributor
 
 run: run-producer
 
-test: test-producer
+test: test-producer test-distributor
 
-verify: verify-producer
+verify: verify-producer verify-distributor
 
-clean: clean-producer
+clean: clean-producer clean-distributor
 
 build-producer:
 	$(MAKE) -C producer build
@@ -24,3 +24,15 @@ verify-producer:
 
 clean-producer:
 	$(MAKE) -C producer clean
+
+build-distributor:
+	$(MAKE) -C distributor build
+
+test-distributor:
+	$(MAKE) -C distributor test
+
+verify-distributor:
+	$(MAKE) -C distributor verify
+
+clean-distributor:
+	$(MAKE) -C distributor clean
