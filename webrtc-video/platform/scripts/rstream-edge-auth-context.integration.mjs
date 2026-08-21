@@ -46,23 +46,26 @@ await validateTarget()
 let forward = null
 try {
   const address = await listen(upstream)
-  const createToken = await delegatedToken({
-    tunnels: {
-      projects: [projectID],
-      scopes: {
-        tunnels: {
-          create: {
-            filters: {
-              name: { exact: tunnelName },
-              protocol: "http",
-              publish: true,
-              token_auth: true,
+  const createToken = await delegatedToken(
+    {
+      tunnels: {
+        projects: [projectID],
+        scopes: {
+          tunnels: {
+            create: {
+              filters: {
+                name: { exact: tunnelName },
+                protocol: "http",
+                publish: true,
+                token_auth: true,
+              },
             },
           },
         },
       },
     },
-  })
+    "tunnels.tunnels.create-delete",
+  )
   forward = spawn(
     process.env.RSTREAM_BIN ?? "rstream",
     [
@@ -86,7 +89,10 @@ try {
   )
   const failure = captureChildFailure(forward)
   const tunnel = await waitForTunnel(failure)
-  const connectToken = await delegatedToken(connectResources(tunnel.id))
+  const connectToken = await delegatedToken(
+    connectResources(tunnel.id),
+    "tunnels.streams.create-delete",
+  )
   const host = tunnel.host ?? tunnel.hostname
   assert.equal(typeof host, "string", "published tunnel has no host")
   const base = new URL(`https://${host}`)
@@ -190,6 +196,7 @@ try {
   )
   const shortConnectToken = await delegatedToken(
     connectResources(tunnel.id),
+    "tunnels.streams.create-delete",
     shortTokenTTLSeconds,
   )
   const shortEndpoint = edgeURL(new URL("/whep", base), shortConnectToken)
@@ -236,6 +243,7 @@ try {
   assert.equal(upstreamRequests.length, requestsBeforeExpiryChecks)
   const refreshedConnectToken = await delegatedToken(
     connectResources(tunnel.id),
+    "tunnels.streams.create-delete",
     refreshedTokenTTLSeconds,
   )
   const refreshedSession = edgeURL(
@@ -356,12 +364,14 @@ async function validateTarget() {
   )
 }
 
-async function delegatedToken(resources, expiresInSeconds) {
+async function delegatedToken(resources, permission, expiresInSeconds) {
   const arguments_ = [
     "--context",
     context,
     "token",
     "create",
+    "--permission",
+    permission,
     "--resources-json",
     JSON.stringify(resources),
     "--output",
