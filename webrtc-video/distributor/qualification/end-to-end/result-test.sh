@@ -161,4 +161,22 @@ render_result "${fixture_directory}/incomplete-samples.jsonl" | jq -e '
   .passed == false
 ' >/dev/null
 
+jq -c '
+  if .phase == "viewer-network" and .elapsedMilliseconds == 3000 then
+    .framesDecoded = 83 |
+    .freezeCount = 1 |
+    .totalFreezesDurationSeconds = 0.03
+  elif .phase == "recovery" then
+    .freezeCount = 1 |
+    .totalFreezesDurationSeconds = 0.03
+  else . end
+' "${fixture_directory}/samples.jsonl" >"${fixture_directory}/degraded-samples.jsonl"
+render_result "${fixture_directory}/degraded-samples.jsonl" | jq -e '
+  .phases.viewerNetwork.decodedFramesPerSecond == 23 and
+  .viewerNetwork.freezeRatio == 0.03 and
+  .gates.playback == false and
+  .gates.viewerNetworkRecovery == false and
+  .passed == false
+' >/dev/null
+
 printf 'End-to-end result tests passed\n'

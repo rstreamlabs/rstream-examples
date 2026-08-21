@@ -1,4 +1,6 @@
 def maximum(name): [.[] | .[name]] | max;
+def maximum_freeze_ratio: 0.02;
+def minimum_frame_rate_ratio: 0.8;
 def phase_delta(phase; name):
   [.[] | select(.phase == phase) | .[name]] |
   if length < 2 then null else last - first end;
@@ -190,8 +192,8 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     if .viewerNetwork.enabled then
       .viewerNetwork.baselineFreezeCountDelta == 0 and
       .viewerNetwork.baselineFreezeDurationDeltaSeconds == 0 and
-      .viewerNetwork.freezeRatio <= 0.1 and
-      .viewerNetwork.recoveryFreezeRatio <= 0.02
+      .viewerNetwork.freezeRatio <= maximum_freeze_ratio and
+      .viewerNetwork.recoveryFreezeRatio <= maximum_freeze_ratio
     else
       .phases.baseline.freezes == 0 and
       .phases.baseline.freezeDurationSeconds == 0
@@ -202,11 +204,13 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
       .viewerNetwork.qdisc.packets > 0 and
       (if .viewerNetwork.qdisc.drops > 0 then .viewerNetwork.nackCountDelta > 0 else true end) and
       (if .viewerNetwork.lossPercent > 0 then .viewerNetwork.qdisc.drops > 0 else true end) and
-      .viewerNetwork.framesDecodedDelta >= ($phase_seconds * 15) and
+      .phases.viewerNetwork.decodedFramesPerSecond >=
+        (.phases.baseline.decodedFramesPerSecond * minimum_frame_rate_ratio) and
       .viewerNetwork.framesDroppedDelta == 0 and
-      .viewerNetwork.freezeRatio <= 0.1 and
-      .viewerNetwork.recoveryFramesDecodedDelta >= ($recovery_seconds * 15) and
-      .viewerNetwork.recoveryFreezeRatio <= 0.02
+      .viewerNetwork.freezeRatio <= maximum_freeze_ratio and
+      .phases.recovery.decodedFramesPerSecond >=
+        (.phases.baseline.decodedFramesPerSecond * minimum_frame_rate_ratio) and
+      .viewerNetwork.recoveryFreezeRatio <= maximum_freeze_ratio
     else true end
   )
 | .gates.sourceTargetRecovery = (
