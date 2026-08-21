@@ -1,114 +1,124 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title description">
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1280" viewBox="0 0 720 1280" role="img" aria-labelledby="title description" style="font-family:system-ui,sans-serif">
   <title id="title">Adaptive streaming direct and rstream comparison</title>
   <desc id="description">Median decoded frames per second, H.264 quantization, and frozen-time percentage with minimum and maximum whiskers across three direct and three rstream relay runs per protection profile.</desc>
   <rect width="100%" height="100%" fill="#ffffff"/>
-  <text x="45" y="34" font-size="22" font-weight="700" fill="#0f172a">Adaptive video through direct and rstream relay paths</text>
-  <text x="45" y="61" font-size="14" fill="#475569">4 Mbit/s · 120ms one-way delay · 30ms jitter · 2% loss · medians and min–max across three runs</text>
-  <text x="1155" y="34" text-anchor="end" font-size="17" font-weight="700" fill="#047857">PASS</text>
-  <text x="45" y="104" font-size="18" font-weight="700" fill="#0f172a">Decoded output</text>
-  <text x="45" y="127" font-size="13" fill="#475569">fps · higher is better</text>
-  <line x1="45" y1="475" x2="375" y2="475" stroke="#94a3b8"/>
-  <line x1="45" y1="255" x2="375" y2="255" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="6 5"/>
-  <rect x="285" y="237" width="90" height="18" fill="#ffffff"/>
-  <text x="371" y="250" text-anchor="end" font-size="12" font-weight="600" fill="#b91c1c">20 fps gate</text>
-  <rect x="55" y="154.3" width="56" height="320.7" rx="5" fill="#475569" fill-opacity="0.88"/>
-    <line x1="83" y1="150.9" x2="83" y2="156.6" stroke="#0f172a" stroke-width="2"/>
-    <line x1="75" y1="150.9" x2="91" y2="150.9" stroke="#0f172a" stroke-width="2"/>
-    <line x1="75" y1="156.6" x2="91" y2="156.6" stroke="#0f172a" stroke-width="2"/>
-    <text x="83" y="140.9" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">29.2</text>
-    <text x="83" y="502" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">Direct</text>
-    <text x="83" y="519" text-anchor="middle" font-size="12" fill="#475569">base</text>
-    <rect x="132" y="165.2" width="56" height="309.8" rx="5" fill="#d97706" fill-opacity="0.88"/>
-    <line x1="160" y1="160.1" x2="160" y2="167" stroke="#0f172a" stroke-width="2"/>
-    <line x1="152" y1="160.1" x2="168" y2="160.1" stroke="#0f172a" stroke-width="2"/>
-    <line x1="152" y1="167" x2="168" y2="167" stroke="#0f172a" stroke-width="2"/>
-    <text x="160" y="150.1" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">28.2</text>
-    <text x="160" y="502" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">Relay</text>
-    <text x="160" y="519" text-anchor="middle" font-size="12" fill="#475569">base</text>
-    <rect x="209" y="146.4" width="56" height="328.6" rx="5" fill="#2563eb" fill-opacity="0.88"/>
-    <line x1="237" y1="145.9" x2="237" y2="148.1" stroke="#0f172a" stroke-width="2"/>
-    <line x1="229" y1="145.9" x2="245" y2="145.9" stroke="#0f172a" stroke-width="2"/>
-    <line x1="229" y1="148.1" x2="245" y2="148.1" stroke="#0f172a" stroke-width="2"/>
-    <text x="237" y="135.9" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">29.9</text>
-    <text x="237" y="502" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">Direct</text>
-    <text x="237" y="519" text-anchor="middle" font-size="12" fill="#475569">full</text>
-    <rect x="286" y="149.3" width="56" height="325.7" rx="5" fill="#059669" fill-opacity="0.88"/>
-    <line x1="314" y1="149" x2="314" y2="150" stroke="#0f172a" stroke-width="2"/>
-    <line x1="306" y1="149" x2="322" y2="149" stroke="#0f172a" stroke-width="2"/>
-    <line x1="306" y1="150" x2="322" y2="150" stroke="#0f172a" stroke-width="2"/>
-    <text x="314" y="139" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">29.6</text>
-    <text x="314" y="502" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">Relay</text>
-    <text x="314" y="519" text-anchor="middle" font-size="12" fill="#475569">full</text>
-  <text x="430" y="104" font-size="18" font-weight="700" fill="#0f172a">H.264 quantization</text>
-  <text x="430" y="127" font-size="13" fill="#475569">average QP · lower is better</text>
-  <line x1="430" y1="475" x2="760" y2="475" stroke="#94a3b8"/>
-  <line x1="430" y1="203.2" x2="760" y2="203.2" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="6 5"/>
-  <rect x="670" y="185.2" width="90" height="18" fill="#ffffff"/>
-  <text x="756" y="198.2" text-anchor="end" font-size="12" font-weight="600" fill="#b91c1c">QP 42 gate</text>
-  <rect x="440" y="270.6" width="56" height="204.4" rx="5" fill="#475569" fill-opacity="0.88"/>
-    <line x1="468" y1="270.2" x2="468" y2="272.4" stroke="#0f172a" stroke-width="2"/>
-    <line x1="460" y1="270.2" x2="476" y2="270.2" stroke="#0f172a" stroke-width="2"/>
-    <line x1="460" y1="272.4" x2="476" y2="272.4" stroke="#0f172a" stroke-width="2"/>
-    <text x="468" y="260.2" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">31.6</text>
-    <text x="468" y="502" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">Direct</text>
-    <text x="468" y="519" text-anchor="middle" font-size="12" fill="#475569">base</text>
-    <rect x="517" y="272.3" width="56" height="202.7" rx="5" fill="#d97706" fill-opacity="0.88"/>
-    <line x1="545" y1="271.7" x2="545" y2="272.3" stroke="#0f172a" stroke-width="2"/>
-    <line x1="537" y1="271.7" x2="553" y2="271.7" stroke="#0f172a" stroke-width="2"/>
-    <line x1="537" y1="272.3" x2="553" y2="272.3" stroke="#0f172a" stroke-width="2"/>
-    <text x="545" y="261.7" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">31.3</text>
-    <text x="545" y="502" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">Relay</text>
-    <text x="545" y="519" text-anchor="middle" font-size="12" fill="#475569">base</text>
-    <rect x="594" y="271" width="56" height="204" rx="5" fill="#2563eb" fill-opacity="0.88"/>
-    <line x1="622" y1="270.9" x2="622" y2="273.2" stroke="#0f172a" stroke-width="2"/>
-    <line x1="614" y1="270.9" x2="630" y2="270.9" stroke="#0f172a" stroke-width="2"/>
-    <line x1="614" y1="273.2" x2="630" y2="273.2" stroke="#0f172a" stroke-width="2"/>
-    <text x="622" y="260.9" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">31.5</text>
-    <text x="622" y="502" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">Direct</text>
-    <text x="622" y="519" text-anchor="middle" font-size="12" fill="#475569">full</text>
-    <rect x="671" y="271.6" width="56" height="203.4" rx="5" fill="#059669" fill-opacity="0.88"/>
-    <line x1="699" y1="271.6" x2="699" y2="272.3" stroke="#0f172a" stroke-width="2"/>
-    <line x1="691" y1="271.6" x2="707" y2="271.6" stroke="#0f172a" stroke-width="2"/>
-    <line x1="691" y1="272.3" x2="707" y2="272.3" stroke="#0f172a" stroke-width="2"/>
-    <text x="699" y="261.6" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">31.4</text>
-    <text x="699" y="502" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">Relay</text>
-    <text x="699" y="519" text-anchor="middle" font-size="12" fill="#475569">full</text>
-  <text x="815" y="104" font-size="18" font-weight="700" fill="#0f172a">Frozen time</text>
-  <text x="815" y="127" font-size="13" fill="#475569">share of phase · lower is better</text>
-  <line x1="815" y1="475" x2="1145" y2="475" stroke="#94a3b8"/>
-  <line x1="815" y1="380.7" x2="1145" y2="380.7" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="6 5"/>
-  <rect x="1055" y="362.7" width="90" height="18" fill="#ffffff"/>
-  <text x="1141" y="375.7" text-anchor="end" font-size="12" font-weight="600" fill="#b91c1c">10% gate</text>
-  <rect x="825" y="436.7" width="56" height="38.3" rx="5" fill="#475569" fill-opacity="0.88"/>
-    <line x1="853" y1="420.3" x2="853" y2="451.3" stroke="#0f172a" stroke-width="2"/>
-    <line x1="845" y1="420.3" x2="861" y2="420.3" stroke="#0f172a" stroke-width="2"/>
-    <line x1="845" y1="451.3" x2="861" y2="451.3" stroke="#0f172a" stroke-width="2"/>
-    <text x="853" y="410.3" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">4.1%</text>
-    <text x="853" y="502" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">Direct</text>
-    <text x="853" y="519" text-anchor="middle" font-size="12" fill="#475569">base</text>
-    <rect x="902" y="322.5" width="56" height="152.5" rx="5" fill="#d97706" fill-opacity="0.88"/>
-    <line x1="930" y1="314.4" x2="930" y2="354.4" stroke="#0f172a" stroke-width="2"/>
-    <line x1="922" y1="314.4" x2="938" y2="314.4" stroke="#0f172a" stroke-width="2"/>
-    <line x1="922" y1="354.4" x2="938" y2="354.4" stroke="#0f172a" stroke-width="2"/>
-    <text x="930" y="304.4" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">16.2%</text>
-    <text x="930" y="502" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">Relay</text>
-    <text x="930" y="519" text-anchor="middle" font-size="12" fill="#475569">base</text>
-    <rect x="979" y="469.3" width="56" height="5.7" rx="5" fill="#2563eb" fill-opacity="0.88"/>
-    <line x1="1007" y1="452.2" x2="1007" y2="469.4" stroke="#0f172a" stroke-width="2"/>
-    <line x1="999" y1="452.2" x2="1015" y2="452.2" stroke="#0f172a" stroke-width="2"/>
-    <line x1="999" y1="469.4" x2="1015" y2="469.4" stroke="#0f172a" stroke-width="2"/>
-    <text x="1007" y="442.2" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">0.6%</text>
-    <text x="1007" y="502" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">Direct</text>
-    <text x="1007" y="519" text-anchor="middle" font-size="12" fill="#475569">full</text>
-    <rect x="1056" y="441.3" width="56" height="33.7" rx="5" fill="#059669" fill-opacity="0.88"/>
-    <line x1="1084" y1="434.1" x2="1084" y2="455.1" stroke="#0f172a" stroke-width="2"/>
-    <line x1="1076" y1="434.1" x2="1092" y2="434.1" stroke="#0f172a" stroke-width="2"/>
-    <line x1="1076" y1="455.1" x2="1092" y2="455.1" stroke="#0f172a" stroke-width="2"/>
-    <text x="1084" y="424.1" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">3.6%</text>
-    <text x="1084" y="502" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">Relay</text>
-    <text x="1084" y="519" text-anchor="middle" font-size="12" fill="#475569">full</text>
-  <text x="45" y="566" font-size="13" fill="#475569">Base: NACK + RTX</text>
-  <text x="200" y="566" font-size="13" fill="#475569">Full: NACK + RTX + one FlexFEC repair packet per five media packets</text>
-  <text x="45" y="594" font-size="12" fill="#64748b">Bars show the median. Whiskers show the minimum and maximum selected result; red lines are release gates.</text>
+  <text x="28" y="38" font-size="28" font-weight="750" fill="#0f172a">Direct and relay media quality</text>
+  <text x="28" y="76" font-size="19" fill="#475569">4 Mbit/s · 120ms one-way delay · 30ms jitter · 2% loss</text>
+  <text x="28" y="106" font-size="18" fill="#64748b">Medians and min–max across three independent runs</text>
+  <text x="692" y="38" text-anchor="end" font-size="22" font-weight="750" fill="#047857">PASS</text>
+  <rect x="28" y="142" width="664" height="312" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="46" y="176" font-size="26" font-weight="750" fill="#0f172a">Decoded output</text>
+  <text x="46" y="203" font-size="18" fill="#475569">fps · higher is better</text>
+  <line x1="190" y1="216" x2="190" y2="424" stroke="#cbd5e1"/>
+  <line x1="688" y1="216" x2="688" y2="424" stroke="#cbd5e1"/>
+  <line x1="522" y1="216" x2="522" y2="424" stroke="#dc2626" stroke-width="2" stroke-dasharray="7 6"/>
+  <text x="516" y="214" text-anchor="end" font-size="17" font-weight="650" fill="#b91c1c">20 fps gate</text>
+  <text x="190" y="446" font-size="16" fill="#64748b">0</text>
+  <text x="688" y="446" text-anchor="end" font-size="16" fill="#64748b">30.0</text>
+  <text x="28" y="249" font-size="19" font-weight="650" fill="#0f172a">Direct</text>
+    <text x="100" y="249" font-size="18" fill="#475569">base</text>
+    <rect x="190" y="228" width="484" height="30" rx="5" fill="#475569" fill-opacity="0.9"/>
+    <line x1="670.4" y1="243" x2="679.1" y2="243" stroke="#0f172a" stroke-width="3"/>
+    <line x1="670.4" y1="236" x2="670.4" y2="250" stroke="#0f172a" stroke-width="3"/>
+    <line x1="679.1" y1="236" x2="679.1" y2="250" stroke="#0f172a" stroke-width="3"/>
+    <text x="664" y="250" text-anchor="end" font-size="18" font-weight="750" fill="#ffffff">29.2</text>
+    <text x="28" y="298" font-size="19" font-weight="650" fill="#0f172a">Relay</text>
+    <text x="100" y="298" font-size="18" fill="#475569">base</text>
+    <rect x="190" y="277" width="467.5" height="30" rx="5" fill="#d97706" fill-opacity="0.9"/>
+    <line x1="654.8" y1="292" x2="665.3" y2="292" stroke="#0f172a" stroke-width="3"/>
+    <line x1="654.8" y1="285" x2="654.8" y2="299" stroke="#0f172a" stroke-width="3"/>
+    <line x1="665.3" y1="285" x2="665.3" y2="299" stroke="#0f172a" stroke-width="3"/>
+    <text x="647.5" y="299" text-anchor="end" font-size="18" font-weight="750" fill="#ffffff">28.2</text>
+    <text x="28" y="347" font-size="19" font-weight="650" fill="#0f172a">Direct</text>
+    <text x="100" y="347" font-size="18" fill="#475569">full</text>
+    <rect x="190" y="326" width="495.9" height="30" rx="5" fill="#2563eb" fill-opacity="0.9"/>
+    <line x1="683.3" y1="341" x2="686.6" y2="341" stroke="#0f172a" stroke-width="3"/>
+    <line x1="683.3" y1="334" x2="683.3" y2="348" stroke="#0f172a" stroke-width="3"/>
+    <line x1="686.6" y1="334" x2="686.6" y2="348" stroke="#0f172a" stroke-width="3"/>
+    <text x="675.9" y="348" text-anchor="end" font-size="18" font-weight="750" fill="#ffffff">29.9</text>
+    <text x="28" y="396" font-size="19" font-weight="650" fill="#0f172a">Relay</text>
+    <text x="100" y="396" font-size="18" fill="#475569">full</text>
+    <rect x="190" y="375" width="491.5" height="30" rx="5" fill="#059669" fill-opacity="0.9"/>
+    <line x1="680.4" y1="390" x2="682" y2="390" stroke="#0f172a" stroke-width="3"/>
+    <line x1="680.4" y1="383" x2="680.4" y2="397" stroke="#0f172a" stroke-width="3"/>
+    <line x1="682" y1="383" x2="682" y2="397" stroke="#0f172a" stroke-width="3"/>
+    <text x="671.5" y="397" text-anchor="end" font-size="18" font-weight="750" fill="#ffffff">29.6</text>
+  <rect x="28" y="472" width="664" height="312" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="46" y="506" font-size="26" font-weight="750" fill="#0f172a">H.264 quantization</text>
+  <text x="46" y="533" font-size="18" fill="#475569">average QP · lower is better</text>
+  <line x1="190" y1="546" x2="190" y2="754" stroke="#cbd5e1"/>
+  <line x1="688" y1="546" x2="688" y2="754" stroke="#cbd5e1"/>
+  <line x1="600.1" y1="546" x2="600.1" y2="754" stroke="#dc2626" stroke-width="2" stroke-dasharray="7 6"/>
+  <text x="594.1" y="544" text-anchor="end" font-size="17" font-weight="650" fill="#b91c1c">QP 42 gate</text>
+  <text x="190" y="776" font-size="16" fill="#64748b">0</text>
+  <text x="688" y="776" text-anchor="end" font-size="16" fill="#64748b">51.0</text>
+  <text x="28" y="579" font-size="19" font-weight="650" fill="#0f172a">Direct</text>
+    <text x="100" y="579" font-size="18" fill="#475569">base</text>
+    <rect x="190" y="558" width="308.4" height="30" rx="5" fill="#475569" fill-opacity="0.9"/>
+    <line x1="495.7" y1="573" x2="499" y2="573" stroke="#0f172a" stroke-width="3"/>
+    <line x1="495.7" y1="566" x2="495.7" y2="580" stroke="#0f172a" stroke-width="3"/>
+    <line x1="499" y1="566" x2="499" y2="580" stroke="#0f172a" stroke-width="3"/>
+    <text x="509" y="580" text-anchor="start" font-size="18" font-weight="750" fill="#0f172a">31.6</text>
+    <text x="28" y="628" font-size="19" font-weight="650" fill="#0f172a">Relay</text>
+    <text x="100" y="628" font-size="18" fill="#475569">base</text>
+    <rect x="190" y="607" width="305.9" height="30" rx="5" fill="#d97706" fill-opacity="0.9"/>
+    <line x1="495.9" y1="622" x2="496.8" y2="622" stroke="#0f172a" stroke-width="3"/>
+    <line x1="495.9" y1="615" x2="495.9" y2="629" stroke="#0f172a" stroke-width="3"/>
+    <line x1="496.8" y1="615" x2="496.8" y2="629" stroke="#0f172a" stroke-width="3"/>
+    <text x="506.8" y="629" text-anchor="start" font-size="18" font-weight="750" fill="#0f172a">31.3</text>
+    <text x="28" y="677" font-size="19" font-weight="650" fill="#0f172a">Direct</text>
+    <text x="100" y="677" font-size="18" fill="#475569">full</text>
+    <rect x="190" y="656" width="307.9" height="30" rx="5" fill="#2563eb" fill-opacity="0.9"/>
+    <line x1="494.6" y1="671" x2="498.1" y2="671" stroke="#0f172a" stroke-width="3"/>
+    <line x1="494.6" y1="664" x2="494.6" y2="678" stroke="#0f172a" stroke-width="3"/>
+    <line x1="498.1" y1="664" x2="498.1" y2="678" stroke="#0f172a" stroke-width="3"/>
+    <text x="508.1" y="678" text-anchor="start" font-size="18" font-weight="750" fill="#0f172a">31.5</text>
+    <text x="28" y="726" font-size="19" font-weight="650" fill="#0f172a">Relay</text>
+    <text x="100" y="726" font-size="18" fill="#475569">full</text>
+    <rect x="190" y="705" width="307" height="30" rx="5" fill="#059669" fill-opacity="0.9"/>
+    <line x1="495.9" y1="720" x2="497" y2="720" stroke="#0f172a" stroke-width="3"/>
+    <line x1="495.9" y1="713" x2="495.9" y2="727" stroke="#0f172a" stroke-width="3"/>
+    <line x1="497" y1="713" x2="497" y2="727" stroke="#0f172a" stroke-width="3"/>
+    <text x="507" y="727" text-anchor="start" font-size="18" font-weight="750" fill="#0f172a">31.4</text>
+  <rect x="28" y="802" width="664" height="312" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="46" y="836" font-size="26" font-weight="750" fill="#0f172a">Frozen time</text>
+  <text x="46" y="863" font-size="18" fill="#475569">share of phase · lower is better</text>
+  <line x1="190" y1="876" x2="190" y2="1084" stroke="#cbd5e1"/>
+  <line x1="688" y1="876" x2="688" y2="1084" stroke="#cbd5e1"/>
+  <line x1="332.3" y1="876" x2="332.3" y2="1084" stroke="#dc2626" stroke-width="2" stroke-dasharray="7 6"/>
+  <text x="326.3" y="874" text-anchor="end" font-size="17" font-weight="650" fill="#b91c1c">10% gate</text>
+  <text x="190" y="1106" font-size="16" fill="#64748b">0</text>
+  <text x="688" y="1106" text-anchor="end" font-size="16" fill="#64748b">35.0%</text>
+  <text x="28" y="909" font-size="19" font-weight="650" fill="#0f172a">Direct</text>
+    <text x="100" y="909" font-size="18" fill="#475569">base</text>
+    <rect x="190" y="888" width="57.8" height="30" rx="5" fill="#475569" fill-opacity="0.9"/>
+    <line x1="225.7" y1="903" x2="272.6" y2="903" stroke="#0f172a" stroke-width="3"/>
+    <line x1="225.7" y1="896" x2="225.7" y2="910" stroke="#0f172a" stroke-width="3"/>
+    <line x1="272.6" y1="896" x2="272.6" y2="910" stroke="#0f172a" stroke-width="3"/>
+    <text x="282.6" y="910" text-anchor="start" font-size="18" font-weight="750" fill="#0f172a">4.1%</text>
+    <text x="28" y="958" font-size="19" font-weight="650" fill="#0f172a">Relay</text>
+    <text x="100" y="958" font-size="18" fill="#475569">base</text>
+    <rect x="190" y="937" width="230.2" height="30" rx="5" fill="#d97706" fill-opacity="0.9"/>
+    <line x1="372.1" y1="952" x2="432.3" y2="952" stroke="#0f172a" stroke-width="3"/>
+    <line x1="372.1" y1="945" x2="372.1" y2="959" stroke="#0f172a" stroke-width="3"/>
+    <line x1="432.3" y1="945" x2="432.3" y2="959" stroke="#0f172a" stroke-width="3"/>
+    <text x="442.3" y="959" text-anchor="start" font-size="18" font-weight="750" fill="#0f172a">16.2%</text>
+    <text x="28" y="1007" font-size="19" font-weight="650" fill="#0f172a">Direct</text>
+    <text x="100" y="1007" font-size="18" fill="#475569">full</text>
+    <rect x="190" y="986" width="8.5" height="30" rx="5" fill="#2563eb" fill-opacity="0.9"/>
+    <line x1="198.5" y1="1001" x2="224.4" y2="1001" stroke="#0f172a" stroke-width="3"/>
+    <line x1="198.5" y1="994" x2="198.5" y2="1008" stroke="#0f172a" stroke-width="3"/>
+    <line x1="224.4" y1="994" x2="224.4" y2="1008" stroke="#0f172a" stroke-width="3"/>
+    <text x="234.4" y="1008" text-anchor="start" font-size="18" font-weight="750" fill="#0f172a">0.6%</text>
+    <text x="28" y="1056" font-size="19" font-weight="650" fill="#0f172a">Relay</text>
+    <text x="100" y="1056" font-size="18" fill="#475569">full</text>
+    <rect x="190" y="1035" width="50.8" height="30" rx="5" fill="#059669" fill-opacity="0.9"/>
+    <line x1="220" y1="1050" x2="251.8" y2="1050" stroke="#0f172a" stroke-width="3"/>
+    <line x1="220" y1="1043" x2="220" y2="1057" stroke="#0f172a" stroke-width="3"/>
+    <line x1="251.8" y1="1043" x2="251.8" y2="1057" stroke="#0f172a" stroke-width="3"/>
+    <text x="261.8" y="1057" text-anchor="start" font-size="18" font-weight="750" fill="#0f172a">3.6%</text>
+  <text x="28" y="1167" font-size="18" fill="#475569">Base · NACK + RTX</text>
+  <text x="28" y="1197" font-size="18" fill="#475569">Full · NACK + RTX + one FlexFEC packet per five media packets</text>
+  <text x="28" y="1237" font-size="17" fill="#64748b">Bars show medians; whiskers show min–max; dashed red lines are release gates.</text>
 </svg>

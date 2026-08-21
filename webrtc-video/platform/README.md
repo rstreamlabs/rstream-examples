@@ -10,7 +10,9 @@ adaptation, repair, recovery, and metrics remain in that producer; this
 application supplies short-lived rstream material and owns the viewer
 entrypoint.
 
-If you want a guided walkthrough of the architecture and the JavaScript SDK integration, see the associated guide: [Build a Next.js WebRTC Video Platform with rstream](https://rstream.io/guides/integrate-webrtc-video-streaming-into-a-nextjs-platform-with-rstream).
+The [Next.js platform guide](https://rstream.io/guides/integrate-webrtc-video-streaming-into-a-nextjs-platform-with-rstream)
+walks through this control plane. It follows the [adaptive producer](https://rstream.io/guides/build-device-to-browser-webrtc-streaming-with-rstream)
+and precedes the optional [MediaMTX distribution backend](https://rstream.io/guides/distribute-webrtc-video-with-mediamtx-and-rstream).
 
 ## One media core across the video series
 
@@ -26,6 +28,10 @@ The series keeps those responsibilities stable across three delivery paths:
 3. a MediaMTX distribution adapter that sends one device upstream to several
    viewers while preserving direct WebRTC as an option.
 
+The browser consumes one WHEP contract in both modes. `VIDEO_DISTRIBUTOR`
+selects `direct` or `mediamtx`; the viewer component, producer binary, device
+identity, and product authorization flow stay shared.
+
 The producer receives only two product-level values:
 
 ```bash
@@ -37,7 +43,14 @@ It calls `POST /api/devices/tunnel` with that secret. The Next.js API validates 
 
 Whenever the producer needs TURN credentials, it calls `POST /api/devices/turn` with the same device secret. TURN issuance is intentionally separate from tunnel provisioning so the producer can refresh credentials on demand.
 
-Browser viewers never receive the producer secret. When a signed viewer URL is needed, the frontend calls `POST /api/devices/:id/viewer`. The API creates TURN credentials itself, then creates a short-lived token that can only connect to the selected tunnel on `/ws`.
+Browser viewers never receive the producer secret. When a viewer session is needed, the frontend calls `POST /api/devices/:id/viewer`. The API creates TURN credentials and a short-lived token that can only reach the selected producer's WHEP resource. The same response shape selects either the direct producer or MediaMTX backend.
+
+The WHEP URL carries the short-lived rstream edge token as its single
+`rstream.token` query value. `Authorization` remains available to the service
+behind the tunnel: it is empty for the producer and contains the path-scoped
+MediaMTX JWT for distributed viewers. The player uses the same response shape
+for both paths and keeps the two trust boundaries separate during credential
+refresh.
 
 The dashboard uses `@rstreamlabs/react` to watch tunnel state in real time. The device list is still stored in PostgreSQL, but online/offline state is read from rstream tunnel state.
 
@@ -51,9 +64,9 @@ queries.
 
 The MediaMTX distribution path introduces a second congestion domain. The
 producer controls and reports the shared device upstream; MediaMTX and browser
-telemetry describe viewer delivery. The third guide will qualify feedback,
-repair, latency, and recovery on both legs so each metric retains a precise
-operational meaning.
+telemetry describe viewer delivery. The adapter repairs the source leg before
+republishing it, so feedback from one viewer never controls the uplink shared
+by every viewer.
 
 ## Stack
 
@@ -102,6 +115,85 @@ WATCH_TOKEN_TTL_SECONDS="120"
 
 The sample resolves the engine from `RSTREAM_PROJECT_ENDPOINT`. `RSTREAM_PROJECT_ID` is optional when an endpoint is configured; when present, it is used by the SDK as the default project scope for short-lived tunnel tokens. Application TURN credentials are derived locally from the public key published for the selected TURN realm. Leave `RSTREAM_TURN_KEYRING_BASE_URL` empty when that key is served by `RSTREAM_API_URL`; set it to a separate public HTTPS origin when an interactive access gateway protects the control-plane origin. The keyring request refuses redirects and validates the bounded DER key before using it.
 
+### Select the distribution backend
+
+Direct playback is the default and needs no MediaMTX configuration.
+
+```bash
+VIDEO_DISTRIBUTOR="direct"
+```
+
+Select MediaMTX when several viewers should share one device uplink.
+
+```bash
+VIDEO_DISTRIBUTOR="mediamtx"
+MEDIAMTX_TUNNEL_NAME="webrtc-video-mediamtx"
+MEDIAMTX_SOURCE_RESOLVER_JWKS='{"keys":[...]}'
+MEDIAMTX_SOURCE_RESOLVER_ISSUER="rstream-video-distributor"
+MEDIAMTX_SOURCE_RESOLVER_AUDIENCE="rstream-video-source-resolver"
+MEDIAMTX_JWT_PRIVATE_KEY_BASE64="..."
+MEDIAMTX_JWT_ADDITIONAL_JWKS='{"keys":[]}'
+MEDIAMTX_JWT_ISSUER="rstream-webrtc-video-platform"
+MEDIAMTX_JWT_AUDIENCE="rstream-mediamtx"
+MEDIAMTX_TOKEN_TTL_SECONDS="300"
+```
+
+Run `npm run mediamtx:key -- mediamtx-one` once to generate the asymmetric
+signing material for MediaMTX access and the named distributor identity.
+The platform publishes the public key at `/api/video/distributor/jwks` and
+keeps the private key server-side. The source resolver at
+`/api/video/distributor/source` verifies a separate, short-lived Ed25519 request
+signed by the named distributor instance. It returns producer WHEP,
+distributor WHIP, and TURN material only for a known device with an online
+tunnel.
+
+MediaMTX 1.20 [refreshes a remote JWKS at most once per hour](https://github.com/bluenviron/mediamtx/blob/v1.20.0/internal/auth/manager.go).
+Rotate the access
+key in two phases so that every instance learns the next key before it signs a
+token. Keep the current private key active, add the next public JWK to
+`MEDIAMTX_JWT_ADDITIONAL_JWKS`, deploy, then wait at least one hour or refresh
+each instance through a controlled restart. Switch to the next private key and
+replace the additional set with the old public JWK. Remove the old public key
+only after the longest token lifetime and another complete JWKS refresh window.
+Private keys are never placed in the additional set.
+
+The [distributor README](../distributor/) documents the combined image,
+MediaMTX environment, ICE reachability, profile differences, and qualification
+gates. Native MediaMTX WHEP pull is retained for sources whose WHEP contract it
+can satisfy, but it is not compatible with the strict rstream producer in
+MediaMTX 1.20 and does not provide the adapter's source-side RTX/FlexFEC
+repair.
+
+### Qualify the edge authentication contract
+
+Set `RSTREAM_EDGE_AUTH_EXPECTED_ENGINE` to the exact engine selected by the
+sample credentials, then run:
+
+```bash
+npm run test:rstream-edge-auth
+```
+
+The live check creates a temporary token-protected tunnel and exercises a
+complete POST, PATCH, expiry, credential-renewal, and DELETE lifecycle. It
+verifies that rstream authenticates every edge request while the producer
+continues to receive its own application Bearer token. The expected-engine
+guard is evaluated before the check creates any remote resource.
+
+An operator can qualify a deployed context directly:
+
+```bash
+RSTREAM_EDGE_AUTH_CONTEXT="<context>" \
+RSTREAM_EDGE_AUTH_PROJECT_ID="<project-id>" \
+RSTREAM_EDGE_AUTH_EXPECTED_ENGINE="<engine-host:port>" \
+npm run test:rstream-edge-auth:context
+```
+
+This canary verifies complete WHEP-like lifecycles both with and without an
+application bearer, plus path scope, reserved-query sanitization, and
+malformed-token rejection. It validates the context, project, and exact engine
+before creating its temporary tunnel. The check above additionally qualifies
+real expiry and renewal.
+
 ### rstream Project Setup
 
 Use a dedicated rstream project for this sample. Create an application token scoped to that project and store its client id and secret in the Next.js environment.
@@ -138,7 +230,7 @@ not create delivery history or retry after the CLI exits.
 
 ### rstream Resource Requirements
 
-The sample always mints short-lived tokens with tunnel resources. Producer tokens can only create the expected tunnel for one device, viewer tokens can only connect to the selected online tunnel on `/ws`, and dashboard watch tokens can only list the sample tunnels for the signed-in user.
+The sample always mints short-lived tokens with tunnel resources. Producer tokens can only create the expected tunnel for one device, direct viewer tokens can only connect to that device's `/whep` resource, distributor tokens are bound to one MediaMTX device path, and dashboard watch tokens can only list the sample tunnels for the signed-in user.
 
 Install dependencies, create the database, and start the app:
 
@@ -170,6 +262,11 @@ DEVICE_SECRET=dev_... \
 ```
 
 The producer asks this application for provisioning, creates its rstream tunnel with the returned short-lived token, and serves only the API surface required by the product viewer when `web.viewer.enabled` is `false`. `make build-provisioning` builds that no-viewer binary without requiring Node.js or npm on the producer machine.
+
+The provisioning profile uses the same adaptive 2–8 Mbit/s H.264 sender,
+bounded pacer, NACK/RTX, and one-per-five FlexFEC protection qualified by the
+standalone producer. It admits one source session: the selected direct browser
+or the MediaMTX adapter owns that feedback loop, never both at once.
 
 ## Demo Deployment
 
@@ -209,7 +306,7 @@ Set `CRON_SECRET` and `DEMO_CLEANUP_ENABLED="true"` only for disposable demo dep
 - rstream application credentials stay on the Next.js server.
 - Producer tokens are short-lived and allow only tunnel creation for one device tunnel.
 - Producer TURN credentials are fetched from the product API when needed.
-- Viewer tokens are short-lived and allow only tunnel connection to `/ws`.
+- Viewer tokens are short-lived and allow only the WHEP resource required by the selected backend.
 - Dashboard watch tokens are short-lived and only list tunnels labelled for the signed-in user.
 - The webhook endpoint accepts only signed rstream lifecycle events and only updates devices carrying this sample's `app` and `device` labels.
 - Device creation and TURN credential issuance are bounded to keep the public sample from being used as an unmetered relay minting endpoint.

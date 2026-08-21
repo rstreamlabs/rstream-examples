@@ -21,7 +21,10 @@ test("accepts a full profile that closes the direct/relay quality gap", () => {
   const svg = renderComparisonSVG(result);
   assert.match(svg, /Decoded output/);
   assert.match(svg, /20 fps gate/);
-  assert.match(svg, /Whiskers show the minimum and maximum/);
+  assert.match(svg, /whiskers show min–max/);
+  assert.match(svg, /width="720" height="1280"/);
+  assert.match(svg, /font-family:system-ui,sans-serif/);
+  assert.match(svg, /Direct and relay media quality/);
 });
 
 test("rejects an incomplete or degraded full relay profile", () => {

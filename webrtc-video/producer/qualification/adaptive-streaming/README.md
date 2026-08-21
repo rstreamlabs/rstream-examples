@@ -274,9 +274,9 @@ the topology and tool versions required to reproduce the result.
 The relay harness can move the producer to a second isolated interface while
 the session is playing. This scenario forces the rstream upstream to QUIC, so a
 successful publication proves the signaling transport in use. The producer
-keeps that original QUIC client and signaling WebSocket, gathers a fresh ICE
-candidate, trickles it to the browser, and lets WebRTC select the replacement
-TURN path.
+keeps that original QUIC client while the browser preserves its WHEP resource,
+performs an in-place ICE restart, and lets WebRTC select the replacement TURN
+path.
 
 ```bash
 RSTREAM_CONTEXT=your-context \
@@ -289,10 +289,10 @@ RSTREAM_QUALIFICATION_MOBILITY=producer \
 
 The mobility verdict requires one producer address change, a newly trickled
 candidate, a selected candidate-pair switch, one WebRTC peer connection, one
-signaling WebSocket with no close event, and playback recovery within 15
-seconds. The manifest records both interfaces and the switch point. Mobility
-is explicit and relay-only, so the normal release matrix keeps one stable path
-per run.
+WHEP resource with no intervening DELETE or failed request, one successful
+restart PATCH, and playback recovery within 15 seconds. The manifest records
+both interfaces and the switch point. Mobility is explicit and relay-only, so
+the normal release matrix keeps one stable path per run.
 
 ## Run the release matrix
 
