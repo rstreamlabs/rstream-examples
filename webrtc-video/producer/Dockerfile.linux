@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1.7
 
-ARG GO_VERSION=1.26.5
+ARG GO_VERSION=1.26.6
 
 ARG GST_VERSION=1.28.1
 
-FROM --platform=$TARGETPLATFORM golang:${GO_VERSION}-alpine AS base
+FROM --platform=$TARGETPLATFORM golang:${GO_VERSION}-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83 AS base
 
 ARG GST_VERSION
 
@@ -35,15 +35,17 @@ RUN apk add --no-cache \
 
 FROM base AS gstreamer
 
-COPY build-gstreamer-static-linux.sh ./
+COPY producer/build-gstreamer-static-linux.sh ./
 
 RUN ./build-gstreamer-static-linux.sh
 
 FROM base AS web
 
-COPY package.json package-lock.json tsconfig.json tailwind.config.js ./
+COPY producer/package.json producer/package-lock.json producer/tsconfig.json producer/tailwind.config.js ./
 
-COPY internal/web/embed ./internal/web/embed
+COPY producer/internal/web/embed ./internal/web/embed
+
+COPY shared ../shared
 
 RUN --mount=type=cache,target=/root/.npm \
 	npm ci && \
@@ -55,18 +57,18 @@ ENV GOMODCACHE=/go/pkg/mod-linux
 
 COPY --from=gstreamer /opt/gstreamer /opt/gstreamer
 
-COPY go.mod go.sum ./
+COPY producer/go.mod producer/go.sum ./
 
 RUN --mount=type=cache,target=/go/pkg/mod-linux \
 	go mod download
 
-COPY cmd ./cmd
+COPY producer/cmd ./cmd
 
-COPY internal ./internal
+COPY producer/internal ./internal
 
-COPY config.h264.yaml ./
+COPY producer/config.h264.yaml ./
 
-COPY build-static-linux.sh ./
+COPY producer/build-static-linux.sh ./
 
 COPY --from=web /src/internal/web/generated/app.js ./internal/web/generated/app.js
 

@@ -7,11 +7,14 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /qualification
-COPY package.json package-lock.json ./
+COPY producer/qualification/adaptive-streaming/package.json producer/qualification/adaptive-streaming/package-lock.json ./
 RUN npm ci --omit=optional
-COPY collect.mjs ./collect.mjs
-COPY sample-receiver-udp.mjs ./sample-receiver-udp.mjs
-COPY sample-host-cpu.sh /usr/local/bin/rstream-sample-host-cpu
-COPY lib ./lib
+COPY producer/qualification/adaptive-streaming/collect.mjs ./collect.mjs
+COPY producer/qualification/adaptive-streaming/viewer.ts ./viewer.ts
+COPY producer/qualification/adaptive-streaming/sample-receiver-udp.mjs ./sample-receiver-udp.mjs
+COPY producer/qualification/adaptive-streaming/sample-host-cpu.sh /usr/local/bin/rstream-sample-host-cpu
+COPY producer/qualification/adaptive-streaming/lib ./lib
+COPY shared /shared
+RUN ./node_modules/.bin/esbuild viewer.ts --bundle --format=esm --outfile=viewer.js
 
 ENTRYPOINT ["node", "/qualification/collect.mjs"]

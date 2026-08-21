@@ -30,7 +30,7 @@ func TestRunBuildsPrivateQualificationContextFromEnvironment(t *testing.T) {
 		t.Fatalf("write producer config: %v", err)
 	}
 	outputDirectory := filepath.Join(directory, "runtime")
-	if err := run("source", outputDirectory, sourcePath, "relay", "udp", flexFECConfig{enabled: true, mediaPackets: 5, repairPackets: 1}); err != nil {
+	if err := run("source", outputDirectory, sourcePath, "relay", "1m", "udp", true, true, false, flexFECConfig{enabled: true, mediaPackets: 5, repairPackets: 1}); err != nil {
 		t.Fatalf("run() error = %v", err)
 	}
 	runtimeEnvironment, err := os.ReadFile(filepath.Join(outputDirectory, "runtime.env"))
@@ -69,7 +69,7 @@ func TestRunRejectsMissingRequiredInputs(t *testing.T) {
 		{name: "output", context: "source", want: "output directory is required"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			err := run(test.context, test.output, "unused", "disabled", "", flexFECConfig{})
+			err := run(test.context, test.output, "unused", "disabled", "", "", true, false, false, flexFECConfig{})
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("run() error = %v, want %q", err, test.want)
 			}
@@ -91,6 +91,10 @@ func TestRunDoesNotExposeSelectedContextNameInErrors(t *testing.T) {
 		"unused",
 		"disabled",
 		"",
+		"",
+		true,
+		false,
+		false,
 		flexFECConfig{},
 	)
 	if err == nil {
@@ -172,15 +176,18 @@ func TestWriteProducerConfigsPreservesMediaAndBuildsIsolatedReference(t *testing
 		t.Fatalf("write source config: %v", err)
 	}
 	protection := flexFECConfig{enabled: true, mediaPackets: 5, repairPackets: 2}
-	if err := writeProducerConfigs(source, directory, "relay", "tls", protection); err != nil {
+	if err := writeProducerConfigs(source, directory, "relay", "1m", "tls", true, true, true, protection); err != nil {
 		t.Fatalf("write producer configs: %v", err)
 	}
 	relay, err := producerconfig.Load(filepath.Join(directory, "relay-config.yaml"))
 	if err != nil {
 		t.Fatalf("load relay config: %v", err)
 	}
-	if !relay.Tunnel.Enabled || !relay.WebRTC.UseTURN || !relay.WebRTC.Interceptors.FlexFEC {
+	if !relay.Tunnel.Enabled || !relay.Tunnel.Auth.Token || !relay.WebRTC.UseTURN || !relay.WebRTC.Interceptors.FlexFEC {
 		t.Fatal("relay profile did not retain rstream transport or enable requested FlexFEC")
+	}
+	if !relay.Web.WHEP.AllowMediaMTXNativeOffer {
+		t.Fatal("relay profile did not enable the requested native MediaMTX offer profile")
 	}
 	if relay.FlexFECMediaPackets() != 5 || relay.FlexFECRepairPackets() != 2 {
 		t.Fatalf("relay FlexFEC protection = %d/%d, want 2 repairs per 5 media packets", relay.FlexFECRepairPackets(), relay.FlexFECMediaPackets())
@@ -191,6 +198,12 @@ func TestWriteProducerConfigsPreservesMediaAndBuildsIsolatedReference(t *testing
 	if len(relay.TURN.Transports) != 1 || relay.TURN.Transports[0] != "tls" {
 		t.Fatalf("relay TURN transports = %v, want [tls]", relay.TURN.Transports)
 	}
+	if relay.TURN.TTL != "1m" {
+		t.Fatalf("relay TURN TTL = %q, want 1m", relay.TURN.TTL)
+	}
+	if !relay.Metrics.Enabled || relay.Metrics.Listen != "0.0.0.0:9090" {
+		t.Fatalf("relay qualification metrics = %#v", relay.Metrics)
+	}
 	direct, err := producerconfig.Load(filepath.Join(directory, "direct-config.yaml"))
 	if err != nil {
 		t.Fatalf("load direct config: %v", err)
@@ -198,8 +211,11 @@ func TestWriteProducerConfigsPreservesMediaAndBuildsIsolatedReference(t *testing
 	if direct.Server.Listen != "0.0.0.0:8080" {
 		t.Fatalf("direct listen = %q", direct.Server.Listen)
 	}
-	if direct.Tunnel.Enabled || direct.Tunnel.Reconnect.Enabled || direct.WebRTC.UseTURN {
+	if direct.Tunnel.Enabled || direct.Tunnel.Auth.Token || direct.Tunnel.Reconnect.Enabled || direct.WebRTC.UseTURN {
 		t.Fatal("direct reference retained an external tunnel or TURN dependency")
+	}
+	if !direct.Metrics.Enabled || direct.Metrics.Listen != "0.0.0.0:9090" {
+		t.Fatalf("direct qualification metrics = %#v", direct.Metrics)
 	}
 	if !direct.WebRTC.Interceptors.FlexFEC {
 		t.Fatal("direct reference changed the requested protection profile")
@@ -225,8 +241,23 @@ func TestWriteProducerConfigsRejectsInvalidTURNTransport(t *testing.T) {
 	if err := os.WriteFile(source, data, 0o600); err != nil {
 		t.Fatalf("write source config: %v", err)
 	}
-	if err := writeProducerConfigs(source, directory, "auto", "quic", flexFECConfig{}); err == nil {
+	if err := writeProducerConfigs(source, directory, "auto", "", "quic", true, false, false, flexFECConfig{}); err == nil {
 		t.Fatal("expected unsupported TURN transport to fail")
+	}
+}
+
+func TestWriteProducerConfigsRejectsInvalidTURNTTL(t *testing.T) {
+	directory := t.TempDir()
+	source := filepath.Join(directory, "source.yaml")
+	data, err := yaml.Marshal(producerconfig.Default())
+	if err != nil {
+		t.Fatalf("marshal source config: %v", err)
+	}
+	if err := os.WriteFile(source, data, 0o600); err != nil {
+		t.Fatalf("write source config: %v", err)
+	}
+	if err := writeProducerConfigs(source, directory, "relay", "25h", "udp", true, false, false, flexFECConfig{}); err == nil {
+		t.Fatal("expected oversized TURN TTL to fail")
 	}
 }
 
@@ -240,7 +271,7 @@ func TestWriteProducerConfigsCanDisableProducerTURN(t *testing.T) {
 	if err := os.WriteFile(source, data, 0o600); err != nil {
 		t.Fatalf("write source config: %v", err)
 	}
-	if err := writeProducerConfigs(source, directory, "disabled", "", flexFECConfig{}); err != nil {
+	if err := writeProducerConfigs(source, directory, "disabled", "", "", true, false, false, flexFECConfig{}); err != nil {
 		t.Fatalf("write producer configs: %v", err)
 	}
 	relay, err := producerconfig.Load(filepath.Join(directory, "relay-config.yaml"))
@@ -265,7 +296,31 @@ func TestWriteProducerConfigsRejectsInvalidProducerTURNPolicy(t *testing.T) {
 	if err := os.WriteFile(source, data, 0o600); err != nil {
 		t.Fatalf("write source config: %v", err)
 	}
-	if err := writeProducerConfigs(source, directory, "sometimes", "", flexFECConfig{}); err == nil {
+	if err := writeProducerConfigs(source, directory, "sometimes", "", "", true, false, false, flexFECConfig{}); err == nil {
 		t.Fatal("expected unsupported producer TURN policy to fail")
+	}
+}
+
+func TestWriteProducerConfigsCanUseASeparateProductViewer(t *testing.T) {
+	directory := t.TempDir()
+	source := filepath.Join(directory, "source.yaml")
+	data, err := yaml.Marshal(producerconfig.Default())
+	if err != nil {
+		t.Fatalf("marshal source config: %v", err)
+	}
+	if err := os.WriteFile(source, data, 0o600); err != nil {
+		t.Fatalf("write source config: %v", err)
+	}
+	if err := writeProducerConfigs(source, directory, "disabled", "", "", false, false, false, flexFECConfig{}); err != nil {
+		t.Fatalf("write producer configs: %v", err)
+	}
+	for _, name := range []string{"relay-config.yaml", "direct-config.yaml"} {
+		cfg, err := producerconfig.Load(filepath.Join(directory, name))
+		if err != nil {
+			t.Fatalf("load %s: %v", name, err)
+		}
+		if cfg.Web.Viewer.Enabled {
+			t.Fatalf("%s retained the embedded viewer", name)
+		}
 	}
 }

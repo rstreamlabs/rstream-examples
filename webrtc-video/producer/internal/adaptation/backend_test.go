@@ -244,3 +244,49 @@ func TestControllerBlocksPeriodicIncreaseUntilMeasuredLossRecovers(t *testing.T)
 	case <-time.After(25 * time.Millisecond):
 	}
 }
+
+func TestControllerReportsOnlyItsRunningLifecycleAsActive(t *testing.T) {
+	encoder := &recordingEncoder{target: 5000, updates: make(chan int, 1)}
+	cfg := config.Default()
+	controller := NewController(logs.NewLogger(logs.NewHub(16), false), encoder, newTestTWCCGCCBackend(t, cfg), time.Hour, nil, nil, nil)
+	if snapshot := controller.Snapshot(); snapshot.Active {
+		t.Fatalf("controller reported active before Start: %+v", snapshot)
+	}
+	controller.Start()
+	if snapshot := controller.Snapshot(); !snapshot.Active {
+		t.Fatalf("controller reported inactive after Start: %+v", snapshot)
+	}
+	controller.Close()
+	if snapshot := controller.Snapshot(); snapshot.Active {
+		t.Fatalf("controller reported active after Close: %+v", snapshot)
+	}
+	controller.Close()
+}
+
+func TestControllerConcurrentStartAndCloseAlwaysTerminatesInactive(t *testing.T) {
+	const iterations = 100
+	for iteration := 0; iteration < iterations; iteration++ {
+		encoder := &recordingEncoder{target: 5000, updates: make(chan int, 1)}
+		cfg := config.Default()
+		controller := NewController(logs.NewLogger(logs.NewHub(16), false), encoder, newTestTWCCGCCBackend(t, cfg), time.Hour, nil, nil, nil)
+		start := make(chan struct{})
+		var workers sync.WaitGroup
+		workers.Add(2)
+		go func() {
+			defer workers.Done()
+			<-start
+			controller.Start()
+		}()
+		go func() {
+			defer workers.Done()
+			<-start
+			controller.Close()
+		}()
+		close(start)
+		workers.Wait()
+		controller.Close()
+		if snapshot := controller.Snapshot(); snapshot.Active {
+			t.Fatalf("iteration %d left controller active: %+v", iteration, snapshot)
+		}
+	}
+}

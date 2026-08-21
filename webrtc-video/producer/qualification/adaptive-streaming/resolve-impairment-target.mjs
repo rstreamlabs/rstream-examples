@@ -11,9 +11,12 @@ const ready = JSON.parse(await readFile(readyPath, "utf8"));
 const target = selectImpairmentTarget(ready, pathKind);
 if (target.family === 0) {
   const addresses = await lookup(target.address, { all: true, verbatim: true });
-  const selected = addresses.find((entry) => entry.family === 4) || addresses[0];
+  const selected =
+    addresses.find((entry) => entry.family === 4) || addresses[0];
   if (!selected) {
-    throw new Error(`TURN target ${target.address} did not resolve to an address`);
+    throw new Error(
+      `TURN target ${target.address} did not resolve to an address`,
+    );
   }
   target.resolvedFrom = target.address;
   target.address = selected.address;

@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/config"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/logs"
 	rtc "github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/webrtc"
@@ -30,26 +29,39 @@ type Info struct {
 	AdaptiveBackend config.AdaptiveBackend  `json:"adaptiveBackend"`
 }
 
+type Session interface {
+	ID() string
+	Done() <-chan struct{}
+	HandleWHEPOffer(context.Context, string) (string, error)
+	RefreshWHEPICE(context.Context) error
+	HandleWHEPICE(context.Context, string, bool) (string, error)
+	StatsSnapshot() rtc.SessionStats
+	Close(string)
+}
+
 type Server struct {
 	logger      *logs.Logger
-	logHub      *logs.Hub
 	createTURN  func(context.Context) (*rstream.TURNCredentials, error)
-	openSession func(context.Context, func(rtc.SignalMessage) error) (*rtc.Session, error)
+	openSession func(context.Context) (Session, error)
+	whep        *whepServer
 	viewer      bool
 	mu          sync.RWMutex
 	info        Info
-	upgrader    websocket.Upgrader
 }
 
 type ServerOptions struct {
 	Viewer bool
 }
 
+type turnCredentialsResponse struct {
+	*rstream.TURNCredentials
+	ExpiresAt time.Time `json:"expiresAt"`
+}
+
 func NewServer(
 	logger *logs.Logger,
-	logHub *logs.Hub,
 	createTURN func(context.Context) (*rstream.TURNCredentials, error),
-	openSession func(context.Context, func(rtc.SignalMessage) error) (*rtc.Session, error),
+	openSession func(context.Context) (Session, error),
 	options ...ServerOptions,
 ) *Server {
 	viewer := true
@@ -60,22 +72,24 @@ func NewServer(
 	if !viewer {
 		checkOrigin = browserOrigin
 	}
-	return &Server{
+	server := &Server{
 		logger:      logger,
-		logHub:      logHub,
 		createTURN:  createTURN,
 		openSession: openSession,
 		viewer:      viewer,
-		upgrader: websocket.Upgrader{
-			CheckOrigin: checkOrigin,
-		},
 	}
+	server.whep = newWHEPServer(logger, openSession, checkOrigin)
+	return server
 }
 
 func (s *Server) SetInfo(info Info) {
 	s.mu.Lock()
 	s.info = info
 	s.mu.Unlock()
+}
+
+func (s *Server) WHEPInitialRequests() map[string]uint64 {
+	return s.whep.initialRequestSnapshot()
 }
 
 func (s *Server) Handler() http.Handler {
@@ -99,10 +113,18 @@ func (s *Server) mountViewerRoutes(mux *http.ServeMux) {
 func (s *Server) mountAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/status", s.handleAPIStatus)
 	mux.HandleFunc("GET /api/turn", s.handleAPITURN)
+	mux.HandleFunc("GET /api/diagnostics/sessions/{session}", s.handleAPISessionDiagnostics)
 }
 
 func (s *Server) mountRealtimeRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /ws", s.handleWS)
+	mux.Handle("HEAD /whep", s.whep)
+	mux.Handle("GET /whep", s.whep)
+	mux.Handle("OPTIONS /whep", s.whep)
+	mux.Handle("POST /whep", s.whep)
+	mux.Handle("GET /whep/{session}", s.whep)
+	mux.Handle("OPTIONS /whep/{session}", s.whep)
+	mux.Handle("PATCH /whep/{session}", s.whep)
+	mux.Handle("DELETE /whep/{session}", s.whep)
 }
 
 func (s *Server) mountHealthRoutes(mux *http.ServeMux) {
@@ -137,151 +159,31 @@ func (s *Server) handleAPIStatus(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleAPITURN(w http.ResponseWriter, r *http.Request) {
+	issuedAt := time.Now()
 	credentials, err := s.createTURN(r.Context())
 	if err != nil {
 		s.logger.Error("TURN credential request failed: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": err.Error(),
+			"error": "failed to issue TURN credentials",
 		})
 		return
 	}
-	writeJSON(w, http.StatusOK, credentials)
+	writeJSON(w, http.StatusOK, turnCredentialsResponse{TURNCredentials: credentials, ExpiresAt: issuedAt.Add(time.Duration(credentials.TTL) * time.Second)})
+}
+
+func (s *Server) handleAPISessionDiagnostics(w http.ResponseWriter, r *http.Request) {
+	stats, status := s.whep.diagnostics(strings.TrimSpace(r.PathValue("session")), bearerToken(r.Header.Get("Authorization")))
+	if status != http.StatusOK {
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, stats)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok"))
-}
-
-func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
-	conn, err := s.upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		return
-	}
-	writer := &wsWriter{conn: conn}
-	send := func(message rtc.SignalMessage) error {
-		return writer.WriteJSON(message)
-	}
-	session, err := s.openSession(r.Context(), send)
-	if err != nil {
-		s.logger.Warn("WebRTC session creation failed: %v", err)
-		_ = writer.WriteJSON(rtc.SignalMessage{
-			Type:    "error",
-			Message: err.Error(),
-		})
-		_ = conn.Close()
-		return
-	}
-	if err := writer.WriteJSON(rtc.SignalMessage{
-		Type:     "session.ready",
-		ViewerID: session.ID(),
-	}); err != nil {
-		session.Close("failed to write the session bootstrap message")
-		_ = conn.Close()
-		return
-	}
-	recent := s.logHub.Recent()
-	for _, entry := range recent {
-		if err := writer.WriteJSON(rtc.SignalMessage{
-			Type:    "log",
-			Message: entry.Message,
-		}); err != nil {
-			session.Close("websocket write failed")
-			_ = conn.Close()
-			return
-		}
-	}
-	logEvents, unsubscribe := s.logHub.Subscribe()
-	defer unsubscribe()
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case entry, ok := <-logEvents:
-				if !ok {
-					return
-				}
-				if err := writer.WriteJSON(rtc.SignalMessage{
-					Type:    "log",
-					Message: entry.Message,
-				}); err != nil {
-					session.Close("websocket write failed")
-					_ = conn.Close()
-					return
-				}
-			case <-ticker.C:
-				if err := writer.WriteControl(websocket.PingMessage, nil); err != nil {
-					session.Close("websocket write failed")
-					_ = conn.Close()
-					return
-				}
-			case <-session.Done():
-				return
-			}
-		}
-	}()
-	go func() {
-		<-session.Done()
-		_ = conn.Close()
-	}()
-	conn.SetReadLimit(1 << 20)
-	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-	conn.SetPongHandler(func(string) error {
-		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-		return nil
-	})
-	for {
-		var message rtc.SignalMessage
-		if err := conn.ReadJSON(&message); err != nil {
-			session.Close("websocket closed")
-			_ = conn.Close()
-			<-done
-			return
-		}
-		switch strings.TrimSpace(message.Type) {
-		case "offer", "webrtc.offer":
-			if err := session.HandleOffer(message.SDP); err != nil {
-				s.logger.Warn("Viewer %s offer handling failed: %v", session.ID(), err)
-				if writeErr := writer.WriteJSON(rtc.SignalMessage{
-					Type:    "error",
-					Message: err.Error(),
-				}); writeErr != nil {
-					session.Close("websocket write failed")
-					_ = conn.Close()
-					<-done
-					return
-				}
-			}
-		case "candidate", "webrtc.candidate":
-			if err := session.AddICECandidate(
-				message.Candidate,
-				message.SDPMid,
-				message.SDPMLineIndex,
-				message.UsernameFragment,
-			); err != nil {
-				s.logger.Warn("Viewer %s ICE candidate handling failed: %v", session.ID(), err)
-				if writeErr := writer.WriteJSON(rtc.SignalMessage{
-					Type:    "error",
-					Message: err.Error(),
-				}); writeErr != nil {
-					session.Close("websocket write failed")
-					_ = conn.Close()
-					<-done
-					return
-				}
-			}
-		case "ping":
-			if err := writer.WriteJSON(rtc.SignalMessage{Type: "pong"}); err != nil {
-				session.Close("websocket write failed")
-				_ = conn.Close()
-				<-done
-				return
-			}
-		}
-	}
 }
 
 func (s *Server) serveAsset(w http.ResponseWriter, name, contentType string) {
@@ -382,19 +284,10 @@ func defaultPortForScheme(scheme string) string {
 	}
 }
 
-type wsWriter struct {
-	mu   sync.Mutex
-	conn *websocket.Conn
-}
-
-func (w *wsWriter) WriteJSON(value any) error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return w.conn.WriteJSON(value)
-}
-
-func (w *wsWriter) WriteControl(messageType int, data []byte) error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return w.conn.WriteControl(messageType, data, time.Now().Add(5*time.Second))
+func bearerToken(value string) string {
+	fields := strings.Fields(value)
+	if len(fields) != 2 || !strings.EqualFold(fields[0], "Bearer") {
+		return ""
+	}
+	return fields[1]
 }

@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -16,7 +18,11 @@ import (
 	"github.com/rstreamlabs/rstream-go"
 )
 
-const userAgent = "rstream-webrtc-video-producer/guide-2"
+const (
+	userAgent                   = "rstream-webrtc-video-producer/guide-2"
+	maxProvisioningResponseSize = 64 * 1024
+	maxProvisioningDialTimeout  = 3 * time.Second
+)
 
 type Client struct {
 	endpoint *url.URL
@@ -42,18 +48,37 @@ func NewClient(cfg config.Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	rawEndpoint := strings.TrimSpace(cfg.Tunnel.Provisioning.Endpoint)
-	parsed, err := url.Parse(rawEndpoint)
+	parsed, err := cfg.TunnelProvisioningEndpoint()
 	if err != nil {
-		return nil, fmt.Errorf("invalid provisioning endpoint: %w", err)
+		return nil, err
 	}
+	secret, err := cfg.TunnelProvisioningSecret()
+	if err != nil {
+		return nil, err
+	}
+	dialTimeout := min(timeout, maxProvisioningDialTimeout)
+	dialer := &net.Dialer{Timeout: dialTimeout, KeepAlive: 30 * time.Second}
+	baseTransport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return nil, errors.New("default HTTP transport is unavailable")
+	}
+	transport := baseTransport.Clone()
+	transport.DialContext = dialer.DialContext
+	transport.DisableKeepAlives = true
+	transport.ForceAttemptHTTP2 = false
 	return &Client{
 		endpoint: parsed,
-		secret:   strings.TrimSpace(cfg.Tunnel.Provisioning.Secret),
+		secret:   secret,
 		http: &http.Client{
-			Timeout: timeout,
+			Timeout:       timeout,
+			CheckRedirect: rejectRedirect,
+			Transport:     transport,
 		},
 	}, nil
+}
+
+func rejectRedirect(*http.Request, []*http.Request) error {
+	return http.ErrUseLastResponse
 }
 
 func (c *Client) Tunnel(ctx context.Context) (Tunnel, error) {
@@ -93,7 +118,7 @@ func (c *Client) TURN(ctx context.Context) (*rstream.TURNCredentials, error) {
 	return &out, nil
 }
 
-func (c *Client) do(ctx context.Context, method, pathname string, input any, output any) error {
+func (c *Client) do(ctx context.Context, method, pathname string, input any, output any) (err error) {
 	var body bytes.Buffer
 	if input != nil {
 		if err := json.NewEncoder(&body).Encode(input); err != nil {
@@ -112,14 +137,22 @@ func (c *Client) do(ctx context.Context, method, pathname string, input any, out
 	req.Header.Set("User-Agent", userAgent)
 	res, err := c.http.Do(req)
 	if err != nil {
-		return err
+		c.http.CloseIdleConnections()
+		return fmt.Errorf("perform provisioning request: %w", err)
 	}
-	defer res.Body.Close()
+	defer func() { err = errors.Join(err, res.Body.Close()) }()
+	responseBody, err := io.ReadAll(io.LimitReader(res.Body, maxProvisioningResponseSize+1))
+	if err != nil {
+		return fmt.Errorf("read provisioning response: %w", err)
+	}
+	if len(responseBody) > maxProvisioningResponseSize {
+		return fmt.Errorf("provisioning response exceeds %d bytes", maxProvisioningResponseSize)
+	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		var problem struct {
 			Error string `json:"error"`
 		}
-		_ = json.NewDecoder(res.Body).Decode(&problem)
+		_ = json.Unmarshal(responseBody, &problem)
 		message := strings.TrimSpace(problem.Error)
 		if message == "" {
 			message = res.Status
@@ -129,7 +162,10 @@ func (c *Client) do(ctx context.Context, method, pathname string, input any, out
 	if output == nil {
 		return nil
 	}
-	return json.NewDecoder(res.Body).Decode(output)
+	if err := json.Unmarshal(responseBody, output); err != nil {
+		return fmt.Errorf("decode provisioning response: %w", err)
+	}
+	return nil
 }
 
 func join(basePath, subPath string) string {
@@ -138,15 +174,4 @@ func join(basePath, subPath string) string {
 		joined += "/"
 	}
 	return joined
-}
-
-func TURNExpires(credentials *rstream.TURNCredentials, now time.Time) time.Time {
-	if credentials == nil || credentials.TTL <= 0 {
-		return now
-	}
-	expires := now.Add(time.Duration(credentials.TTL)*time.Second - 5*time.Minute)
-	if expires.Before(now) {
-		return now
-	}
-	return expires
 }

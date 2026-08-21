@@ -1,7 +1,16 @@
 import { turnCredentialsSchema } from "@rstreamlabs/rstream/turn";
 import { z } from "zod";
 
+import { WHEPClient } from "../../../../shared/whep-client";
+import { ICERestartTimers, iceRestartDisposition } from "./ice-recovery";
+
 type TURNPolicy = "auto" | "direct" | "relay";
+
+const diagnosticsPollIntervalMs = 1_000;
+const diagnosticsRequestTimeoutMs = 3_000;
+const iceRestartDelayMs = 750;
+const iceRestartOutcomeTimeoutMs = 15_000;
+const maxICERestarts = 2;
 
 const sampleInfoSchema = z.object({
   adaptiveBackend: z.enum(["off", "twcc-gcc"]),
@@ -19,98 +28,57 @@ const sampleInfoSchema = z.object({
 });
 
 const sessionStatsSchema = z.object({
-  codec: z.string(),
-  twccEnabled: z.boolean(),
-  nackEnabled: z.boolean(),
-  rtxEnabled: z.boolean(),
-  flexFECEnabled: z.boolean(),
-  adaptiveBackend: z.enum(["off", "twcc-gcc"]),
   adaptiveActive: z.boolean(),
-  estimatedBitrateBps: z.number().int(),
+  adaptiveBackend: z.enum(["off", "twcc-gcc"]),
+  codec: z.string(),
   encoderTargetBitrateKbps: z.number().int(),
+  estimatedBitrateBps: z.number().int(),
+  flexFECEnabled: z.boolean(),
+  flexFECNegotiated: z.boolean(),
   lastAppliedBitrateKbps: z.number().int(),
-  adaptiveBitrateUpdates: z.number().int().nonnegative().optional(),
-  adaptiveBitrateFailures: z.number().int().nonnegative().optional(),
-  recoveryKeyFrameRequests: z.number().int().nonnegative().optional(),
-  recoveryKeyFrameCoalesced: z.number().int().nonnegative().optional(),
-  recoveryKeyFrameFailures: z.number().int().nonnegative().optional(),
-  rtcpKeyFrameRequests: z.number().int().nonnegative().optional(),
-  rtcpMalformedFeedback: z.number().int().nonnegative().optional(),
-  bandwidth: z
-    .object({
-      lossTargetBitrateBps: z.number().int(),
-      delayTargetBitrateBps: z.number().int(),
-      averageLoss: z.number(),
-      delayMeasurementMs: z.number(),
-      delayEstimateMs: z.number(),
-      delayThresholdMs: z.number(),
-      usage: z.string(),
-      state: z.string(),
-    })
-    .optional(),
+  nackEnabled: z.boolean(),
+  nackNegotiated: z.boolean(),
+  rtxEnabled: z.boolean(),
+  rtxNegotiated: z.boolean(),
+  twccEnabled: z.boolean(),
+  twccNegotiated: z.boolean(),
 });
-
-const signalMessageSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("session.ready"),
-    viewerId: z.string().optional(),
-  }),
-  z.object({
-    type: z.literal("webrtc.answer"),
-    sdp: z.string(),
-  }),
-  z.object({
-    type: z.literal("webrtc.candidate"),
-    candidate: z.string().optional(),
-    sdpMid: z.string().nullable().optional(),
-    sdpMLineIndex: z.number().int().optional(),
-    usernameFragment: z.string().nullable().optional(),
-  }),
-  z.object({
-    type: z.literal("log"),
-    message: z.string().optional(),
-  }),
-  z.object({
-    type: z.literal("error"),
-    message: z.string().optional(),
-  }),
-  z.object({
-    type: z.literal("session.stats"),
-    stats: sessionStatsSchema.optional(),
-  }),
-]);
 
 const errorResponseSchema = z.object({
   error: z.string().optional(),
 });
 
+const expiringTurnCredentialsSchema = turnCredentialsSchema.extend({
+  expiresAt: z.string().datetime(),
+});
+
 type SampleInfo = z.infer<typeof sampleInfoSchema>;
+type TURNConfiguration = {
+  configuration: RTCConfiguration;
+  expiresAt: string | null;
+};
 type State = {
-  info: SampleInfo | null;
-  peerConnection: RTCPeerConnection | null;
-  webSocket: WebSocket | null;
-  viewerId: string | null;
+  client: WHEPClient | null;
+  diagnosticsAbort: AbortController | null;
+  diagnosticsTimer: number | null;
   edgeToken: string | null;
-  offerPending: boolean;
-  iceRestartTimer: number | null;
-  pendingLocalCandidates: RTCIceCandidateInit[];
-  pendingRemoteCandidates: RTCIceCandidateInit[];
-  // Guards against stale WebSocket and WebRTC callbacks after stop/restart.
+  iceRestartAttempts: number;
+  iceRestartInFlight: boolean;
+  info: SampleInfo | null;
   sessionID: number;
 };
 
-const EMPTY_LOG_MESSAGE = "No events yet.";
+const emptyLogMessage = "No events yet.";
+const diagnosticsHeader = "X-Rstream-Diagnostics-Token";
 
 const state: State = {
-  info: null,
-  peerConnection: null,
-  webSocket: null,
-  viewerId: null,
+  client: null,
+  diagnosticsAbort: null,
+  diagnosticsTimer: null,
   edgeToken: new URL(window.location.href).searchParams.get("rstream.token"),
-  offerPending: false,
-  iceRestartTimer: null,
-  pendingLocalCandidates: [],
-  pendingRemoteCandidates: [],
+  iceRestartAttempts: 0,
+  iceRestartInFlight: false,
+  info: null,
   sessionID: 0,
 };
 
@@ -150,7 +118,7 @@ const publicURL = requiredHTMLElement("public-url");
 const tunnelAuth = requiredHTMLElement("tunnel-auth");
 const peerStatus = requiredHTMLElement("peer-status");
 const iceStatus = requiredHTMLElement("ice-status");
-const wsStatus = requiredHTMLElement("ws-status");
+const signalingStatus = requiredHTMLElement("signaling-status");
 const playbackStatus = requiredHTMLElement("playback-status");
 const codecStatus = requiredHTMLElement("codec-status");
 const recoveryStatus = requiredHTMLElement("recovery-status");
@@ -165,13 +133,14 @@ const connectButton = requiredButtonElement("connect");
 const disconnectButton = requiredButtonElement("disconnect");
 const clearLogButton = requiredButtonElement("clear-log");
 const turnPolicy = requiredSelectElement("turn-policy");
+const iceRestartTimers = new ICERestartTimers();
 
 function resetLog() {
-  logOutput.textContent = EMPTY_LOG_MESSAGE;
+  logOutput.textContent = emptyLogMessage;
 }
 
 function log(message: string) {
-  if (logOutput.textContent === EMPTY_LOG_MESSAGE) {
+  if (logOutput.textContent === emptyLogMessage) {
     logOutput.textContent = "";
   }
   const timestamp = new Date().toLocaleTimeString();
@@ -191,27 +160,27 @@ function currentTURNPolicy(): TURNPolicy {
 
 function browserSupportsVideoMimeType(mimeType: string): boolean {
   const capabilities = RTCRtpReceiver.getCapabilities("video");
-  if (!capabilities) {
-    return false;
-  }
-  return capabilities.codecs.some(
-    (codec) => codec.mimeType.toLowerCase() === mimeType.toLowerCase(),
+  return (
+    capabilities?.codecs.some(
+      (codec) => codec.mimeType.toLowerCase() === mimeType.toLowerCase(),
+    ) ?? false
   );
 }
 
-function endpoint(pathname: string, options?: { protocol?: "ws:" | "wss:" }) {
+function endpoint(pathname: string) {
   const url = new URL(pathname, window.location.origin);
   if (state.edgeToken) {
     url.searchParams.set("rstream.token", state.edgeToken);
-  }
-  if (options?.protocol) {
-    url.protocol = options.protocol;
   }
   return url.toString();
 }
 
 function setField(node: HTMLElement, value: string) {
   node.textContent = value;
+}
+
+function setBadge(node: HTMLElement, label: string, value: string) {
+  node.textContent = `${label}: ${value}`;
 }
 
 function formatBitrateBps(value: number): string {
@@ -225,17 +194,7 @@ function formatBitrateBps(value: number): string {
 }
 
 function formatBitrateKbps(value: number): string {
-  if (value <= 0) {
-    return "-";
-  }
-  if (value >= 1000) {
-    return `${(value / 1000).toFixed(1)} Mbps`;
-  }
-  return `${value} kbps`;
-}
-
-function setBadge(node: HTMLElement, label: string, value: string) {
-  node.textContent = `${label}: ${value}`;
+  return formatBitrateBps(value * 1_000);
 }
 
 function formatTunnelAuth(auth: SampleInfo["tunnelAuth"]): string {
@@ -264,13 +223,16 @@ function isCurrentSession(sessionID: number) {
 }
 
 async function loadInfo() {
-  const response = await fetch(endpoint("/api/status"));
+  const response = await fetch(endpoint("/api/status"), {
+    cache: "no-store",
+    credentials: "omit",
+  });
   if (!response.ok) {
     throw new Error("Failed to load the sample status");
   }
   state.info = sampleInfoSchema.parse(await response.json());
   const publicURLText = state.info.publicURL ?? "Unavailable";
-  publicURL.textContent = publicURLText;
+  setField(publicURL, publicURLText);
   setBadge(tunnelAuth, "Auth", formatTunnelAuth(state.info.tunnelAuth));
   setField(codecStatus, state.info.videoMimeType.replace("video/", ""));
   setField(
@@ -293,26 +255,30 @@ async function loadInfo() {
 
 async function loadTURNConfiguration(
   policy: TURNPolicy,
-): Promise<RTCConfiguration> {
+  signal?: AbortSignal,
+): Promise<TURNConfiguration> {
   if (policy === "direct") {
     log("TURN disabled for this viewer session");
-    return {};
+    return { configuration: {}, expiresAt: null };
   }
-  const response = await fetch(endpoint("/api/turn"));
+  const response = await fetch(endpoint("/api/turn"), {
+    cache: "no-store",
+    credentials: "omit",
+    signal,
+  });
   if (!response.ok) {
     const body = errorResponseSchema.parse(
       await response.json().catch(() => ({})),
     );
     throw new Error(body.error || "Failed to load TURN credentials");
   }
-  // Parse the TURN payload with the shared SDK schema before handing it to WebRTC.
-  const turn = turnCredentialsSchema.parse(await response.json());
+  const turn = expiringTurnCredentialsSchema.parse(await response.json());
   const configuration: RTCConfiguration = {
     iceServers: [
       {
+        credential: turn.credential,
         urls: turn.urls,
         username: turn.username,
-        credential: turn.credential,
       },
     ],
   };
@@ -322,414 +288,365 @@ async function loadTURNConfiguration(
   } else {
     log("TURN credentials loaded");
   }
-  return configuration;
+  return { configuration, expiresAt: turn.expiresAt };
 }
 
-async function createPeerConnection(policy: TURNPolicy, sessionID: number) {
-  const configuration = await loadTURNConfiguration(policy);
-  const peerConnection = new RTCPeerConnection(configuration);
-  peerConnection.addTransceiver("video", { direction: "recvonly" });
-  peerConnection.ontrack = (event) => {
-    if (!isCurrentSession(sessionID)) {
-      return;
-    }
-    const [stream] = event.streams;
-    if (!stream) {
-      return;
-    }
-    video.srcObject = stream;
-    overlay.classList.add("hidden");
-    log("Remote video track attached");
-    const play = video.play();
-    if (play && typeof play.then === "function") {
-      play
-        .then(() => {
-          setField(playbackStatus, "Playing");
-          log("Video playback started");
-        })
-        .catch((error: unknown) => {
-          setField(playbackStatus, "Paused");
-          if (error instanceof Error) {
-            log(error.message);
-            return;
-          }
-          log("Video playback could not start automatically");
-        });
-      return;
-    }
-    setField(playbackStatus, "Playing");
-  };
-  peerConnection.onconnectionstatechange = () => {
-    if (!isCurrentSession(sessionID)) {
-      return;
-    }
-    setBadge(peerStatus, "Peer", peerConnection.connectionState);
-    log(`Peer connection state: ${peerConnection.connectionState}`);
-    if (peerConnection.connectionState === "connected") {
-      setConnectedState();
-      return;
-    }
-    if (peerConnection.connectionState === "closed") {
-      setDisconnectedState();
-      return;
-    }
-    if (
-      peerConnection.connectionState === "disconnected" ||
-      peerConnection.connectionState === "failed"
-    ) {
-      scheduleICERestart(sessionID, `peer ${peerConnection.connectionState}`);
-    }
-  };
-  peerConnection.oniceconnectionstatechange = () => {
-    if (!isCurrentSession(sessionID)) {
-      return;
-    }
-    setBadge(iceStatus, "ICE", peerConnection.iceConnectionState);
-    log(`ICE connection state: ${peerConnection.iceConnectionState}`);
-    if (
-      peerConnection.iceConnectionState === "connected" ||
-      peerConnection.iceConnectionState === "completed"
-    ) {
-      setConnectedState();
-      return;
-    }
-    if (
-      peerConnection.iceConnectionState === "disconnected" ||
-      peerConnection.iceConnectionState === "failed"
-    ) {
-      scheduleICERestart(sessionID, `ICE ${peerConnection.iceConnectionState}`);
-    }
-  };
-  peerConnection.onicecandidate = (event) => {
-    if (
-      !isCurrentSession(sessionID) ||
-      !event.candidate ||
-      !state.webSocket ||
-      state.webSocket.readyState !== WebSocket.OPEN
-    ) {
-      return;
-    }
-    const candidate = event.candidate.toJSON();
-    if (state.offerPending) {
-      state.pendingLocalCandidates.push(candidate);
-      return;
-    }
-    sendLocalCandidate(candidate);
-  };
-  return peerConnection;
-}
-
-function createSignalSocket(policy: TURNPolicy, sessionID: number) {
-  return new Promise<WebSocket>((resolve, reject) => {
-    const socketURL = endpoint("/ws", {
-      protocol: window.location.protocol === "https:" ? "wss:" : "ws:",
-    });
-    const socket = new WebSocket(socketURL);
-    socket.onopen = () => {
-      if (!isCurrentSession(sessionID)) {
-        socket.close();
-        reject(new Error("The signaling session was stopped"));
-        return;
-      }
-      setField(wsStatus, "Open");
-      log("WebSocket signaling channel opened");
-      if (policy === "direct") {
-        log("Browser TURN usage is disabled");
-      }
-      resolve(socket);
-    };
-    socket.onerror = () => {
-      if (!isCurrentSession(sessionID)) {
-        reject(new Error("The signaling session was stopped"));
-        return;
-      }
-      reject(new Error("The signaling socket could not be opened"));
-    };
-  });
-}
-
-async function sendOffer(
-  sessionID: number,
-  options: { iceRestart?: boolean } = {},
-) {
+function handleTrack(event: RTCTrackEvent, sessionID: number) {
   if (!isCurrentSession(sessionID)) {
     return;
   }
-  if (!state.peerConnection || !state.webSocket) {
-    throw new Error("The viewer session is not ready");
-  }
-  if (state.offerPending) {
-    return;
-  }
-  if (state.webSocket.readyState !== WebSocket.OPEN) {
-    throw new Error("The signaling socket is not open");
-  }
-  state.offerPending = true;
-  try {
-    // An ICE restart keeps the same WebRTC session and gathers fresh
-    // candidates after an IP address or network interface change.
-    const offer = await state.peerConnection.createOffer(
-      options.iceRestart ? { iceRestart: true } : undefined,
-    );
-    await state.peerConnection.setLocalDescription(offer);
-    state.webSocket.send(
-      JSON.stringify({ type: "webrtc.offer", sdp: offer.sdp }),
-    );
-    flushLocalCandidates();
-    log(options.iceRestart ? "ICE restart offer sent" : "Offer sent");
-  } finally {
-    state.offerPending = false;
-  }
+  video.srcObject = event.streams[0] ?? new MediaStream([event.track]);
+  overlay.classList.add("hidden");
+  log("Remote video track attached");
+  void video
+    .play()
+    .then(() => {
+      if (isCurrentSession(sessionID)) {
+        setField(playbackStatus, "Playing");
+        log("Video playback started");
+      }
+    })
+    .catch((error: unknown) => {
+      if (!isCurrentSession(sessionID)) {
+        return;
+      }
+      setField(playbackStatus, "Paused");
+      log(error instanceof Error ? error.message : "Playback did not start");
+    });
 }
 
-function sendLocalCandidate(candidate: RTCIceCandidateInit) {
-  if (!state.webSocket || state.webSocket.readyState !== WebSocket.OPEN) {
-    return;
-  }
-  state.webSocket.send(
-    JSON.stringify({
-      type: "webrtc.candidate",
-      ...candidate,
-    }),
-  );
-}
-
-function flushLocalCandidates() {
-  while (state.pendingLocalCandidates.length > 0) {
-    const candidate = state.pendingLocalCandidates.shift();
-    if (candidate) {
-      sendLocalCandidate(candidate);
+function configurePeer(client: WHEPClient, sessionID: number) {
+  client.peer.onconnectionstatechange = () => {
+    if (!isCurrentSession(sessionID)) {
+      return;
     }
-  }
+    const connectionState = client.peer.connectionState;
+    setBadge(peerStatus, "Peer", connectionState);
+    log(`Peer connection state: ${connectionState}`);
+    if (connectionState === "connected") {
+      iceRestartTimers.clear();
+      state.iceRestartAttempts = 0;
+      setConnectedState();
+    } else if (connectionState === "failed") {
+      if (!state.iceRestartInFlight) {
+        iceRestartTimers.clearOutcome();
+      }
+      scheduleICERestart(sessionID, "peer connection failed");
+    }
+  };
+  client.peer.oniceconnectionstatechange = () => {
+    if (!isCurrentSession(sessionID)) {
+      return;
+    }
+    const iceState = client.peer.iceConnectionState;
+    setBadge(iceStatus, "ICE", iceState);
+    log(`ICE connection state: ${iceState}`);
+    if (iceState === "connected" || iceState === "completed") {
+      iceRestartTimers.clear();
+      state.iceRestartAttempts = 0;
+      setConnectedState();
+    } else if (iceState === "disconnected" || iceState === "failed") {
+      if (!state.iceRestartInFlight) {
+        iceRestartTimers.clearOutcome();
+      }
+      scheduleICERestart(sessionID, `ICE ${iceState}`);
+    }
+  };
 }
 
 function scheduleICERestart(sessionID: number, reason: string) {
   if (
     !isCurrentSession(sessionID) ||
-    !state.peerConnection ||
-    !state.webSocket ||
-    state.iceRestartTimer !== null ||
-    state.offerPending ||
-    state.peerConnection.signalingState !== "stable" ||
-    state.webSocket.readyState !== WebSocket.OPEN
+    !state.client ||
+    state.iceRestartInFlight ||
+    iceRestartTimers.retryScheduled
   ) {
     return;
   }
-  log(`Scheduling ICE restart after ${reason}`);
-  state.iceRestartTimer = window.setTimeout(() => {
-    state.iceRestartTimer = null;
-    sendOffer(sessionID, { iceRestart: true }).catch((error: unknown) => {
-      if (error instanceof Error) {
-        log(error.message);
-      } else {
-        log("ICE restart failed");
+  if (state.iceRestartAttempts >= maxICERestarts) {
+    log(`WHEP recovery stopped after ${maxICERestarts} ICE restarts`);
+    stop(sessionID);
+    return;
+  }
+  log(`Scheduling an ICE restart after ${reason}`);
+  iceRestartTimers.scheduleRetry(() => {
+    const client = state.client;
+    if (!client || !isCurrentSession(sessionID)) {
+      return;
+    }
+    state.iceRestartAttempts += 1;
+    state.iceRestartInFlight = true;
+    iceRestartTimers.scheduleOutcome(() => {
+      if (!isCurrentSession(sessionID) || state.client !== client) {
+        return;
       }
-      stop(sessionID);
-    });
-  }, 500);
+      state.iceRestartInFlight = false;
+      scheduleICERestart(sessionID, "restart did not restore connectivity");
+    }, iceRestartOutcomeTimeoutMs);
+    let retry = false;
+    void client
+      .restart()
+      .then(() => {
+        if (isCurrentSession(sessionID)) {
+          log(`ICE restart ${state.iceRestartAttempts} completed`);
+          const connectionState = client.peer.connectionState;
+          const iceState = client.peer.iceConnectionState;
+          const disposition = iceRestartDisposition(connectionState, iceState);
+          if (disposition === "connected") {
+            iceRestartTimers.clearOutcome();
+          } else if (disposition === "retry") {
+            iceRestartTimers.clearOutcome();
+            retry = true;
+          }
+        }
+      })
+      .catch((error: unknown) => {
+        if (!isCurrentSession(sessionID)) {
+          return;
+        }
+        iceRestartTimers.clearOutcome();
+        log(error instanceof Error ? error.message : "ICE restart failed");
+        retry = true;
+      })
+      .finally(() => {
+        if (!isCurrentSession(sessionID)) {
+          return;
+        }
+        state.iceRestartInFlight = false;
+        if (retry) {
+          scheduleICERestart(sessionID, "restart failure");
+        }
+      });
+  }, iceRestartDelayMs);
+}
+
+function sessionIdentifier(client: WHEPClient) {
+  const resource = client.sessionResource();
+  if (!resource) {
+    throw new Error("WHEP endpoint did not return a session resource");
+  }
+  const identifier = new URL(resource).pathname
+    .split("/")
+    .filter(Boolean)
+    .at(-1);
+  if (!identifier) {
+    throw new Error("WHEP endpoint returned an invalid session resource");
+  }
+  return identifier;
+}
+
+function startDiagnostics(client: WHEPClient, sessionID: number) {
+  const token = client.sessionHeader(diagnosticsHeader);
+  if (!token) {
+    log("Session diagnostics are unavailable");
+    return;
+  }
+  const identifier = sessionIdentifier(client);
+  setField(viewerID, identifier);
+  const poll = async () => {
+    if (!isCurrentSession(sessionID)) {
+      return;
+    }
+    const abort = new AbortController();
+    state.diagnosticsAbort = abort;
+    const timeout = window.setTimeout(
+      () => abort.abort(),
+      diagnosticsRequestTimeoutMs,
+    );
+    try {
+      const response = await fetch(
+        endpoint(`/api/diagnostics/sessions/${encodeURIComponent(identifier)}`),
+        {
+          cache: "no-store",
+          credentials: "omit",
+          headers: { Authorization: `Bearer ${token}` },
+          signal: abort.signal,
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`Session diagnostics failed (${response.status})`);
+      }
+      applySessionStats(sessionStatsSchema.parse(await response.json()));
+    } catch (error: unknown) {
+      if (!abort.signal.aborted && isCurrentSession(sessionID)) {
+        log(
+          error instanceof Error ? error.message : "Session diagnostics failed",
+        );
+      }
+    } finally {
+      window.clearTimeout(timeout);
+      if (state.diagnosticsAbort === abort) {
+        state.diagnosticsAbort = null;
+      }
+      if (isCurrentSession(sessionID)) {
+        state.diagnosticsTimer = window.setTimeout(
+          () => void poll(),
+          diagnosticsPollIntervalMs,
+        );
+      }
+    }
+  };
+  void poll();
+}
+
+function applySessionStats(stats: z.infer<typeof sessionStatsSchema>) {
+  setField(codecStatus, stats.codec.replace("video/", ""));
+  setField(recoveryStatus, formatNegotiatedTransport(stats));
+  setField(
+    adaptiveStatus,
+    stats.adaptiveActive
+      ? stats.adaptiveBackend
+      : stats.adaptiveBackend === "off"
+        ? "Off"
+        : `${stats.adaptiveBackend} standby`,
+  );
+  setField(twccTargetStatus, formatBitrateBps(stats.estimatedBitrateBps));
+  setField(
+    encoderTargetStatus,
+    formatBitrateKbps(stats.encoderTargetBitrateKbps),
+  );
+}
+
+function formatNegotiatedTransport(stats: z.infer<typeof sessionStatsSchema>) {
+  return (
+    [
+      formatTransportFeature("TWCC", stats.twccEnabled, stats.twccNegotiated),
+      formatTransportFeature("NACK", stats.nackEnabled, stats.nackNegotiated),
+      formatTransportFeature("RTX", stats.rtxEnabled, stats.rtxNegotiated),
+      formatTransportFeature(
+        "FlexFEC",
+        stats.flexFECEnabled,
+        stats.flexFECNegotiated,
+      ),
+    ]
+      .filter((value) => value !== null)
+      .join(", ") || "Off"
+  );
+}
+
+function formatTransportFeature(
+  name: string,
+  enabled: boolean,
+  negotiated: boolean,
+) {
+  if (!enabled) {
+    return null;
+  }
+  return negotiated ? name : `${name} unavailable`;
 }
 
 async function start() {
-  if (state.peerConnection || state.webSocket) {
-    return;
-  }
-  if (!state.info) {
-    log("The sample status is not ready");
+  if (state.client || !state.info) {
     return;
   }
   const sessionID = state.sessionID + 1;
   state.sessionID = sessionID;
   connectButton.disabled = true;
-  const policy = currentTURNPolicy();
+  state.iceRestartAttempts = 0;
+  state.iceRestartInFlight = false;
   try {
-    if (state.info && !browserSupportsVideoMimeType(state.info.videoMimeType)) {
+    if (!browserSupportsVideoMimeType(state.info.videoMimeType)) {
       throw new Error(
         `This browser does not advertise WebRTC support for ${state.info.videoMimeType}.`,
       );
     }
-    state.peerConnection = await createPeerConnection(policy, sessionID);
-    state.webSocket = await createSignalSocket(policy, sessionID);
+    const policy = currentTURNPolicy();
+    const turn = await loadTURNConfiguration(policy);
     if (!isCurrentSession(sessionID)) {
       return;
     }
-    setConnectedState();
-    state.webSocket.onmessage = async (event) => {
-      if (!isCurrentSession(sessionID)) {
-        return;
-      }
-      try {
-        const message = signalMessageSchema.parse(JSON.parse(event.data));
-        switch (message.type) {
-          case "session.ready":
-            state.viewerId = message.viewerId ?? null;
-            setField(viewerID, state.viewerId ?? "Pending");
-            log(`Viewer session created: ${state.viewerId ?? "pending"}`);
-            break;
-          case "webrtc.answer":
-            if (!message.sdp) {
-              throw new Error(
-                "The signaling server returned an invalid answer",
-              );
-            }
-            await state.peerConnection?.setRemoteDescription({
-              type: "answer",
-              sdp: message.sdp,
-            });
-            await flushRemoteCandidates(sessionID);
-            log("Remote answer applied");
-            break;
-          case "webrtc.candidate":
-            if (!message.candidate) {
-              return;
-            }
-            await addRemoteCandidate(sessionID, {
-              candidate: message.candidate,
-              sdpMid: message.sdpMid ?? null,
-              sdpMLineIndex: message.sdpMLineIndex,
-              usernameFragment: message.usernameFragment ?? null,
-            });
-            break;
-          case "log":
-            if (message.message) {
-              log(message.message);
-            }
-            break;
-          case "error":
-            throw new Error(message.message || "The server returned an error");
-          case "session.stats":
-            if (!message.stats) {
-              return;
-            }
-            setField(codecStatus, message.stats.codec.replace("video/", ""));
-            setField(
-              recoveryStatus,
-              [
-                message.stats.twccEnabled ? "TWCC" : null,
-                message.stats.nackEnabled ? "NACK" : null,
-                message.stats.rtxEnabled ? "RTX" : null,
-                message.stats.flexFECEnabled ? "FlexFEC" : null,
-              ]
-                .filter((value) => value !== null)
-                .join(", ") || "Off",
-            );
-            setField(
-              adaptiveStatus,
-              message.stats.adaptiveActive
-                ? message.stats.adaptiveBackend
-                : message.stats.adaptiveBackend === "off"
-                  ? "Off"
-                  : `${message.stats.adaptiveBackend} standby`,
-            );
-            setField(
-              twccTargetStatus,
-              formatBitrateBps(message.stats.estimatedBitrateBps),
-            );
-            setField(
-              encoderTargetStatus,
-              formatBitrateKbps(message.stats.encoderTargetBitrateKbps),
-            );
-            break;
-        }
-      } catch (error: unknown) {
-        if (error instanceof Error) {
+    const client = new WHEPClient({
+      allowInsecureHTTP:
+        state.info.publicURL == null && window.location.protocol === "http:",
+      authorization: "",
+      credentialExpiresAt: turn.expiresAt ?? undefined,
+      endpoint: endpoint("/whep"),
+      iceCredentialExpiresAt: turn.expiresAt ?? undefined,
+      iceServers: turn.configuration.iceServers ?? [],
+      onError: (error) => {
+        if (isCurrentSession(sessionID)) {
           log(error.message);
-        } else {
-          log("The signaling channel returned an invalid response");
+          log("The WHEP signaling session failed and must be reconnected");
+          stop(sessionID);
         }
-        stop(sessionID);
-      }
-    };
-    state.webSocket.onclose = () => {
-      if (!isCurrentSession(sessionID)) {
-        return;
-      }
-      setField(wsStatus, "Closed");
-      log("WebSocket signaling channel closed");
-      stop(sessionID);
-    };
-    await sendOffer(sessionID);
+      },
+      onTrack: (event) => handleTrack(event, sessionID),
+      peerFactory: (peerConfiguration) =>
+        new RTCPeerConnection({
+          ...peerConfiguration,
+          ...turn.configuration,
+        }),
+      refreshCredentials:
+        policy === "direct"
+          ? undefined
+          : async (signal) => {
+              const refreshed = await loadTURNConfiguration(policy, signal);
+              if (!refreshed.expiresAt) {
+                throw new Error("TURN credentials omitted their expiration");
+              }
+              return {
+                authorization: "",
+                endpoint: endpoint("/whep"),
+                expiresAt: refreshed.expiresAt,
+                iceExpiresAt: refreshed.expiresAt,
+                iceServers: refreshed.configuration.iceServers ?? [],
+              };
+            },
+    });
+    state.client = client;
+    configurePeer(client, sessionID);
+    setField(signalingStatus, "Negotiating");
+    setConnectedState();
+    await client.start();
+    if (!isCurrentSession(sessionID)) {
+      await client.close();
+      return;
+    }
+    setField(signalingStatus, "WHEP active");
+    log("WHEP session established");
+    startDiagnostics(client, sessionID);
   } catch (error: unknown) {
     if (!isCurrentSession(sessionID)) {
       return;
     }
-    if (error instanceof Error) {
-      log(error.message);
-    } else {
-      log("Failed to start the session");
-    }
+    log(error instanceof Error ? error.message : "Failed to start the session");
     stop(sessionID);
   }
 }
 
-function stop(sessionID?: number) {
-  if (sessionID !== undefined && !isCurrentSession(sessionID)) {
+function stop(expectedSessionID?: number) {
+  if (expectedSessionID !== undefined && !isCurrentSession(expectedSessionID)) {
     return;
   }
   state.sessionID += 1;
-  if (state.iceRestartTimer !== null) {
-    window.clearTimeout(state.iceRestartTimer);
-    state.iceRestartTimer = null;
+  state.iceRestartInFlight = false;
+  iceRestartTimers.clear();
+  if (state.diagnosticsTimer !== null) {
+    window.clearTimeout(state.diagnosticsTimer);
+    state.diagnosticsTimer = null;
   }
-  state.offerPending = false;
-  state.pendingLocalCandidates = [];
-  state.pendingRemoteCandidates = [];
-  if (state.webSocket) {
-    try {
-      state.webSocket.close();
-    } catch {}
-    state.webSocket = null;
+  state.diagnosticsAbort?.abort();
+  state.diagnosticsAbort = null;
+  const client = state.client;
+  state.client = null;
+  if (client) {
+    void client.close();
   }
-  if (state.peerConnection) {
-    try {
-      state.peerConnection.close();
-    } catch {}
-    state.peerConnection = null;
+  const stream = video.srcObject;
+  if (stream instanceof MediaStream) {
+    for (const track of stream.getTracks()) {
+      track.stop();
+    }
   }
-  state.viewerId = null;
+  video.srcObject = null;
   setBadge(peerStatus, "Peer", "idle");
   setBadge(iceStatus, "ICE", "idle");
-  setField(wsStatus, "Idle");
+  setField(signalingStatus, "Idle");
   setField(playbackStatus, "Idle");
-  setField(
-    adaptiveStatus,
-    state.info?.adaptiveBackend === "off"
-      ? "Off"
-      : state.info?.adaptiveBackend || "Off",
-  );
+  setField(viewerID, "Pending");
   setField(twccTargetStatus, "-");
   setField(encoderTargetStatus, "-");
-  setField(viewerID, "Pending");
-  video.srcObject = null;
   setDisconnectedState();
-}
-
-async function addRemoteCandidate(
-  sessionID: number,
-  candidate: RTCIceCandidateInit,
-) {
-  if (!isCurrentSession(sessionID)) {
-    return;
-  }
-  if (!state.peerConnection) {
-    return;
-  }
-  if (!state.peerConnection.remoteDescription) {
-    state.pendingRemoteCandidates.push(candidate);
-    return;
-  }
-  await state.peerConnection.addIceCandidate(candidate);
-}
-
-async function flushRemoteCandidates(sessionID: number) {
-  while (state.pendingRemoteCandidates.length > 0) {
-    const candidate = state.pendingRemoteCandidates.shift();
-    if (!isCurrentSession(sessionID)) {
-      return;
-    }
-    if (candidate && state.peerConnection) {
-      await state.peerConnection.addIceCandidate(candidate);
-    }
-  }
 }
 
 connectButton.addEventListener("click", () => {
@@ -741,9 +658,7 @@ disconnectButton.addEventListener("click", () => {
   stop();
 });
 
-clearLogButton.addEventListener("click", () => {
-  resetLog();
-});
+clearLogButton.addEventListener("click", resetLog);
 
 window.addEventListener("beforeunload", () => {
   stop();
@@ -751,14 +666,8 @@ window.addEventListener("beforeunload", () => {
 
 resetLog();
 
-loadInfo()
-  .then(() => {
-    setDisconnectedState();
-  })
+void loadInfo()
+  .then(setDisconnectedState)
   .catch((error: unknown) => {
-    if (error instanceof Error) {
-      log(error.message);
-      return;
-    }
-    log("Failed to load the sample");
+    log(error instanceof Error ? error.message : "Failed to load the sample");
   });

@@ -22,24 +22,16 @@ import (
 	"github.com/rstreamlabs/rstream-go"
 )
 
-type SignalMessage struct {
-	Type             string        `json:"type"`
-	ViewerID         string        `json:"viewerId,omitempty"`
-	SDP              string        `json:"sdp,omitempty"`
-	Candidate        string        `json:"candidate,omitempty"`
-	SDPMid           *string       `json:"sdpMid,omitempty"`
-	SDPMLineIndex    *uint16       `json:"sdpMLineIndex,omitempty"`
-	UsernameFragment *string       `json:"usernameFragment,omitempty"`
-	Message          string        `json:"message,omitempty"`
-	Stats            *SessionStats `json:"stats,omitempty"`
-}
-
 type SessionStats struct {
 	Codec                     string                 `json:"codec"`
 	TWCCEnabled               bool                   `json:"twccEnabled"`
+	TWCCNegotiated            bool                   `json:"twccNegotiated"`
 	NACKEnabled               bool                   `json:"nackEnabled"`
+	NACKNegotiated            bool                   `json:"nackNegotiated"`
 	RTXEnabled                bool                   `json:"rtxEnabled"`
+	RTXNegotiated             bool                   `json:"rtxNegotiated"`
 	FlexFECEnabled            bool                   `json:"flexFECEnabled"`
+	FlexFECNegotiated         bool                   `json:"flexFECNegotiated"`
 	AdaptiveBackend           config.AdaptiveBackend `json:"adaptiveBackend"`
 	AdaptiveActive            bool                   `json:"adaptiveActive"`
 	EstimatedBitrateBps       int                    `json:"estimatedBitrateBps"`
@@ -119,24 +111,25 @@ type BandwidthStats struct {
 }
 
 type Broadcaster struct {
-	cfg           config.Config
-	logger        *logs.Logger
-	sourceFactory media.Factory
-	sharedSource  media.Source
-	sharedUsers   int
-	turn          *turnprovider.Provider
-	peerFactory   *peerConnectionFactory
-	codec         webrtc.RTPCodecCapability
-	streamID      string
-	trackID       string
-	useTURN       bool
-	mediaMode     config.MediaMode
-	maxViewers    int
-	mu            sync.Mutex
-	sessions      map[string]*Session
-	retired       producerTotals
-	opening       int
-	closed        bool
+	cfg            config.Config
+	logger         *logs.Logger
+	sourceFactory  media.Factory
+	sharedSource   media.Source
+	sharedUsers    int
+	turn           *turnprovider.Provider
+	peerFactory    *peerConnectionFactory
+	codec          webrtc.RTPCodecCapability
+	streamID       string
+	trackID        string
+	useTURN        bool
+	mediaMode      config.MediaMode
+	maxViewers     int
+	sharedInitGate chan struct{}
+	mu             sync.Mutex
+	sessions       map[string]*Session
+	retired        producerTotals
+	opening        int
+	closed         bool
 }
 
 type Session struct {
@@ -150,15 +143,13 @@ type Session struct {
 	estimator                 bandwidthEstimator
 	encoder                   media.EncoderController
 	adaptive                  *adaptation.Controller
-	send                      func(SignalMessage) error
 	close                     sync.Once
 	closed                    chan struct{}
 	onClose                   func(string)
 	statsMu                   sync.RWMutex
 	stats                     SessionStats
 	signalingMu               sync.Mutex
-	pendingICE                []webrtc.ICECandidateInit
-	pendingBytes              int
+	whepRemoteCandidates      int
 	candidateMu               sync.Mutex
 	localICE                  candidateCounts
 	remoteICE                 candidateCounts
@@ -175,6 +166,13 @@ type Session struct {
 	keyFrameRequestGeneration uint64
 	recoveryMu                sync.Mutex
 	recovery                  *time.Timer
+	whep                      atomic.Bool
+	mediaMTXNative            atomic.Bool
+	nativeMediaBitrateBps     int
+	requiredTransport         *transportNegotiation
+	allowMediaMTXNativeOffer  bool
+	refreshICEServers         func(context.Context) ([]webrtc.ICEServer, map[string]string, error)
+	iceConfigMu               sync.RWMutex
 	turnURLs                  map[string]string
 }
 
@@ -187,11 +185,12 @@ type candidateCounts struct {
 }
 
 const (
-	networkRecoveryTimeout      = 30 * time.Second
-	keyFrameRequestInterval     = 250 * time.Millisecond
-	maxPendingICECandidates     = 64
-	maxPendingICECandidateBytes = 64 * 1024
+	networkRecoveryTimeout  = 30 * time.Second
+	keyFrameRequestInterval = 250 * time.Millisecond
 )
+
+// ErrSessionCapacity identifies a temporary viewer-admission refusal.
+var ErrSessionCapacity = errors.New("viewer session capacity exhausted")
 
 func NewBroadcaster(cfg config.Config, sourceFactory media.Factory, turn *turnprovider.Provider, logger *logs.Logger) (*Broadcaster, error) {
 	peerFactory, codec, err := newPeerConnectionFactory(cfg)
@@ -199,22 +198,23 @@ func NewBroadcaster(cfg config.Config, sourceFactory media.Factory, turn *turnpr
 		return nil, err
 	}
 	return &Broadcaster{
-		cfg:           cfg,
-		logger:        logger,
-		sourceFactory: sourceFactory,
-		turn:          turn,
-		peerFactory:   peerFactory,
-		codec:         codec,
-		streamID:      cfg.WebRTC.Video.StreamID,
-		trackID:       cfg.WebRTC.Video.TrackID,
-		useTURN:       cfg.WebRTC.UseTURN,
-		mediaMode:     cfg.MediaMode(),
-		maxViewers:    cfg.WebRTC.MaxViewers,
-		sessions:      make(map[string]*Session),
+		cfg:            cfg,
+		logger:         logger,
+		sourceFactory:  sourceFactory,
+		turn:           turn,
+		peerFactory:    peerFactory,
+		codec:          codec,
+		streamID:       cfg.WebRTC.Video.StreamID,
+		trackID:        cfg.WebRTC.Video.TrackID,
+		useTURN:        cfg.WebRTC.UseTURN,
+		mediaMode:      cfg.MediaMode(),
+		maxViewers:     cfg.WebRTC.MaxViewers,
+		sharedInitGate: make(chan struct{}, 1),
+		sessions:       make(map[string]*Session),
 	}, nil
 }
 
-func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) error) (*Session, error) {
+func (b *Broadcaster) OpenSession(ctx context.Context) (*Session, error) {
 	if err := b.reserveSession(); err != nil {
 		return nil, err
 	}
@@ -224,7 +224,7 @@ func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) 
 			b.releaseReservation()
 		}
 	}()
-	source, release, err := b.acquireSource()
+	source, release, err := b.acquireSource(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -259,6 +259,8 @@ func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) 
 		}
 	}
 	iceConfiguration := turnprovider.ICEConfig(credentials)
+	iceConfiguration.BundlePolicy = webrtc.BundlePolicyMaxBundle
+	iceConfiguration.SDPSemantics = webrtc.SDPSemanticsUnifiedPlan
 	if b.cfg.ICETransportPolicy() == config.ICETransportPolicyRelay {
 		iceConfiguration.ICETransportPolicy = webrtc.ICETransportPolicyRelay
 	}
@@ -283,18 +285,20 @@ func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) 
 	}
 	samples, unsubscribe := source.Subscribe()
 	session := &Session{
-		id:          sessionID,
-		logger:      b.logger,
-		pc:          peerConnection,
-		track:       track,
-		sender:      sender,
-		unsubscribe: unsubscribe,
-		release:     release,
-		estimator:   estimator,
-		encoder:     encoderController,
-		send:        send,
-		closed:      make(chan struct{}),
-		turnURLs:    turnURLs,
+		id:                       sessionID,
+		logger:                   b.logger,
+		pc:                       peerConnection,
+		track:                    track,
+		sender:                   sender,
+		unsubscribe:              unsubscribe,
+		release:                  release,
+		estimator:                estimator,
+		encoder:                  encoderController,
+		closed:                   make(chan struct{}),
+		requiredTransport:        requiredWHEPTransport(b.cfg),
+		allowMediaMTXNativeOffer: b.cfg.Web.WHEP.AllowMediaMTXNativeOffer,
+		nativeMediaBitrateBps:    initialBitrateBps,
+		turnURLs:                 turnURLs,
 		stats: SessionStats{
 			Codec:           b.codec.MimeType,
 			TWCCEnabled:     b.cfg.WebRTC.Interceptors.TWCC,
@@ -303,6 +307,19 @@ func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) 
 			FlexFECEnabled:  b.cfg.WebRTC.Interceptors.FlexFEC,
 			AdaptiveBackend: b.cfg.AdaptiveBackend(),
 		},
+	}
+	if b.useTURN {
+		session.refreshICEServers = func(ctx context.Context) ([]webrtc.ICEServer, map[string]string, error) {
+			credentials, err := b.turn.Credentials(ctx)
+			if err != nil {
+				return nil, nil, fmt.Errorf("refresh viewer TURN credentials: %w", err)
+			}
+			urls, err := turnprovider.URLsByTransport(credentials)
+			if err != nil {
+				return nil, nil, fmt.Errorf("classify refreshed TURN credentials: %w", err)
+			}
+			return turnprovider.ICEConfig(credentials).ICEServers, urls, nil
+		}
 	}
 	session.onClose = func(reason string) {
 		count := b.retireSession(session)
@@ -315,21 +332,12 @@ func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) 
 		}
 		init := candidate.ToJSON()
 		session.recordLocalICECandidate(init.Candidate)
-		if err := send(SignalMessage{
-			Type:          "webrtc.candidate",
-			Candidate:     init.Candidate,
-			SDPMid:        trimmedStringPtr(init.SDPMid),
-			SDPMLineIndex: init.SDPMLineIndex,
-		}); err != nil {
-			b.logger.Warn("Viewer %s signaling write failed: %v", session.id, err)
-			session.Close("signaling write failed")
-		}
 	})
 	peerConnection.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		b.logger.Info("Viewer %s peer connection state: %s", session.id, state.String())
 		switch state {
 		case webrtc.PeerConnectionStateConnected:
-			session.clearNetworkRecovery()
+			session.handleConnected()
 		case webrtc.PeerConnectionStateDisconnected, webrtc.PeerConnectionStateFailed:
 			session.scheduleNetworkRecovery(state.String())
 		case webrtc.PeerConnectionStateClosed:
@@ -353,11 +361,9 @@ func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) 
 		session.adaptive = adaptiveController
 		snapshot := adaptiveController.Snapshot()
 		session.updateStats(func(stats *SessionStats) {
-			stats.AdaptiveActive = snapshot.Active
 			stats.EncoderTargetBitrateKbps = snapshot.EncoderTargetBitrateKbps
 			stats.LastAppliedBitrateKbps = snapshot.LastAppliedBitrateKbps
 		})
-		adaptiveController.Start()
 	}
 	if estimator != nil {
 		initialEstimate := estimator.GetTargetBitrate()
@@ -406,9 +412,20 @@ func (b *Broadcaster) OpenSession(ctx context.Context, send func(SignalMessage) 
 	releaseSource = false
 	go session.drainRTCP()
 	go session.writeSamples(samples)
-	go session.pushStats()
 	b.logger.Info("Viewer %s connected (active viewers: %d)", session.id, count)
 	return session, nil
+}
+
+func requiredWHEPTransport(cfg config.Config) *transportNegotiation {
+	if !cfg.Web.WHEP.RequireConfiguredFeatures {
+		return nil
+	}
+	return &transportNegotiation{
+		twcc:    cfg.WebRTC.Interceptors.TWCC,
+		nack:    cfg.WebRTC.Interceptors.NACK,
+		rtx:     cfg.WebRTC.Interceptors.RTX,
+		flexFEC: cfg.WebRTC.Interceptors.FlexFEC,
+	}
 }
 
 func (b *Broadcaster) Close() error {
@@ -444,6 +461,9 @@ func (s *Session) Done() <-chan struct{} {
 }
 
 func (s *Session) TargetBitrate() (int, bool) {
+	if s.mediaMTXNative.Load() && s.nativeMediaBitrateBps > 0 {
+		return s.nativeMediaBitrateBps, true
+	}
 	if s.estimator == nil {
 		return 0, false
 	}
@@ -471,9 +491,77 @@ func (s *Session) SetEncoderTargetBitrateKbps(value int) error {
 	return s.encoder.SetTargetBitrateKbps(value)
 }
 
-func (s *Session) HandleOffer(offer string) error {
+func (s *Session) HandleWHEPOffer(ctx context.Context, offer string) (string, error) {
+	profile, err := inspectWHEPOfferProfile(offer, s.allowMediaMTXNativeOffer)
+	if err != nil {
+		return "", err
+	}
+	if profile.mediaMTXNative {
+		s.mediaMTXNative.Store(true)
+		if fixed, ok := s.estimator.(interface{ UseFixedMediaTargetBitrate(int) }); ok {
+			fixed.UseFixedMediaTargetBitrate(s.nativeMediaBitrateBps)
+		}
+	}
+	s.whep.Store(true)
+	answer, err := s.createAnswer(ctx, offer, true)
+	if err != nil {
+		return "", err
+	}
+	answer, err = prepareWHEPAnswer(answer)
+	if err != nil {
+		return "", err
+	}
+	if s.requiredTransport == nil {
+		return answer, nil
+	}
+	missing := s.missingConfiguredTransportFeatures()
+	if profile.mediaMTXNative {
+		missing = filterNativeMediaMTXOptionalFeatures(missing)
+	}
+	if len(missing) > 0 {
+		return "", fmt.Errorf("required WHEP transport features were not negotiated: %s", strings.Join(missing, ", "))
+	}
+	return answer, nil
+}
+
+func filterNativeMediaMTXOptionalFeatures(features []string) []string {
+	filtered := features[:0]
+	for _, feature := range features {
+		if feature != "rtx" && feature != "flexfec" {
+			filtered = append(filtered, feature)
+		}
+	}
+	return filtered
+}
+
+func (s *Session) missingConfiguredTransportFeatures() []string {
+	stats := s.StatsSnapshot()
+	missing := make([]string, 0, 4)
+	if s.requiredTransport.twcc && !stats.TWCCNegotiated {
+		missing = append(missing, "twcc")
+	}
+	if s.requiredTransport.nack && !stats.NACKNegotiated {
+		missing = append(missing, "nack")
+	}
+	if s.requiredTransport.rtx && !stats.RTXNegotiated {
+		missing = append(missing, "rtx")
+	}
+	if s.requiredTransport.flexFEC && !stats.FlexFECNegotiated {
+		missing = append(missing, "flexfec")
+	}
+	return missing
+}
+
+func (s *Session) handleConnected() {
+	s.clearNetworkRecovery()
+	if s.whep.Load() {
+		s.requestRecoveryKeyFrame(0)
+	}
+}
+
+func (s *Session) createAnswer(ctx context.Context, offer string, gatherComplete bool) (string, error) {
 	if strings.TrimSpace(offer) == "" {
-		return errors.New("offer SDP is required")
+		return "", errors.New("offer SDP is required")
 	}
 	s.signalingMu.Lock()
 	defer s.signalingMu.Unlock()
@@ -483,84 +571,94 @@ func (s *Session) HandleOffer(offer string) error {
 		Type: webrtc.SDPTypeOffer,
 		SDP:  offer,
 	}); err != nil {
-		return fmt.Errorf("failed to apply the remote offer: %w", err)
-	}
-	if err := s.flushPendingICECandidates(); err != nil {
-		return err
+		return "", fmt.Errorf("failed to apply the remote offer: %w", err)
 	}
 	answer, err := s.pc.CreateAnswer(nil)
 	if err != nil {
-		return fmt.Errorf("failed to create the answer: %w", err)
+		return "", fmt.Errorf("failed to create the answer: %w", err)
+	}
+	var complete <-chan struct{}
+	if gatherComplete {
+		complete = webrtc.GatheringCompletePromise(s.pc)
 	}
 	if err := s.pc.SetLocalDescription(answer); err != nil {
-		return fmt.Errorf("failed to set the local answer: %w", err)
+		return "", fmt.Errorf("failed to set the local answer: %w", err)
 	}
-	if err := s.send(SignalMessage{
-		Type: "webrtc.answer",
-		SDP:  answer.SDP,
-	}); err != nil {
-		return err
+	s.recordTransportNegotiation()
+	if !gatherComplete {
+		return answer.SDP, nil
 	}
-	return nil
+	select {
+	case <-complete:
+	case <-ctx.Done():
+		return "", fmt.Errorf("candidate gathering interrupted: %w", ctx.Err())
+	case <-s.closed:
+		return "", errors.New("the WebRTC session closed while gathering candidates")
+	}
+	local := s.pc.LocalDescription()
+	if local == nil || strings.TrimSpace(local.SDP) == "" {
+		return "", errors.New("the complete local answer is unavailable")
+	}
+	return local.SDP, nil
 }
 
-func (s *Session) AddICECandidate(
-	candidate string,
-	sdpMid *string,
-	sdpMLineIndex *uint16,
-	usernameFragment *string,
-) error {
-	if strings.TrimSpace(candidate) == "" {
-		return errors.New("candidate is required")
+func (s *Session) recordTransportNegotiation() {
+	negotiation := transportNegotiationFromParameters(s.sender.GetParameters())
+	adaptive := negotiation.twcc && s.adaptive != nil && !s.mediaMTXNative.Load()
+	if adaptive {
+		s.adaptive.Start()
 	}
-	s.recordRemoteICECandidate(candidate)
-	init := webrtc.ICECandidateInit{
-		Candidate:        candidate,
-		SDPMid:           trimmedStringPtr(sdpMid),
-		SDPMLineIndex:    sdpMLineIndex,
-		UsernameFragment: trimmedStringPtr(usernameFragment),
-	}
-	s.signalingMu.Lock()
-	defer s.signalingMu.Unlock()
-	if s.pc.RemoteDescription() == nil {
-		if len(s.pendingICE) >= maxPendingICECandidates {
-			return errors.New("too many pending ICE candidates")
-		}
-		if s.pendingBytes+len(candidate) > maxPendingICECandidateBytes {
-			return errors.New("too many pending ICE candidates")
-		}
-		s.pendingICE = append(s.pendingICE, init)
-		s.pendingBytes += len(candidate)
-		return nil
-	}
-	return s.pc.AddICECandidate(init)
+	s.updateStats(func(stats *SessionStats) {
+		stats.TWCCNegotiated = negotiation.twcc
+		stats.NACKNegotiated = negotiation.nack
+		stats.RTXNegotiated = negotiation.rtx
+		stats.FlexFECNegotiated = negotiation.flexFEC
+		stats.AdaptiveActive = adaptive
+	})
 }
 
-func (s *Session) flushPendingICECandidates() error {
-	for len(s.pendingICE) > 0 {
-		candidate := s.pendingICE[0]
-		s.pendingICE = s.pendingICE[1:]
-		candidateBytes := len(candidate.Candidate)
-		if s.pendingBytes >= candidateBytes {
-			s.pendingBytes -= candidateBytes
-		} else {
-			s.pendingBytes = 0
-		}
-		if err := s.pc.AddICECandidate(candidate); err != nil {
-			s.pendingICE = nil
-			s.pendingBytes = 0
-			return fmt.Errorf("failed to apply a buffered ICE candidate: %w", err)
+type transportNegotiation struct {
+	twcc    bool
+	nack    bool
+	rtx     bool
+	flexFEC bool
+}
+
+func transportNegotiationFromParameters(parameters webrtc.RTPSendParameters) transportNegotiation {
+	negotiation := transportNegotiation{}
+	twccExtension := false
+	twccFeedback := false
+	for _, extension := range parameters.HeaderExtensions {
+		if extension.URI == transportCCHeaderExtensionURI {
+			twccExtension = true
 		}
 	}
-	s.pendingBytes = 0
-	return nil
+	for _, codec := range parameters.Codecs {
+		switch {
+		case strings.EqualFold(codec.MimeType, webrtc.MimeTypeRTX):
+			negotiation.rtx = true
+		case strings.EqualFold(codec.MimeType, webrtc.MimeTypeFlexFEC), strings.EqualFold(codec.MimeType, webrtc.MimeTypeFlexFEC03):
+			negotiation.flexFEC = true
+		default:
+			for _, feedback := range codec.RTCPFeedback {
+				if strings.EqualFold(feedback.Type, "nack") {
+					negotiation.nack = true
+				}
+				if strings.EqualFold(feedback.Type, webrtc.TypeRTCPFBTransportCC) {
+					twccFeedback = true
+				}
+			}
+		}
+	}
+	negotiation.twcc = twccExtension && twccFeedback
+	return negotiation
 }
 
 func (s *Session) Close(reason string) {
 	s.close.Do(func() {
+		close(s.closed)
 		s.clearNetworkRecovery()
 		s.cancelScheduledKeyFrameRequest()
-		close(s.closed)
 		if s.unsubscribe != nil {
 			s.unsubscribe()
 		}
@@ -677,6 +775,7 @@ func candidateType(candidate string) string {
 }
 
 func (s *Session) StatsSnapshot() SessionStats {
+	s.ensureSelectedICEPath()
 	s.statsMu.RLock()
 	stats := s.stats
 	s.statsMu.RUnlock()
@@ -717,6 +816,9 @@ func (s *Session) ensureSelectedICEPath() {
 	if complete {
 		return
 	}
+	if s.sender == nil {
+		return
+	}
 	transport := s.sender.Transport()
 	if transport == nil || transport.ICETransport() == nil {
 		return
@@ -733,7 +835,9 @@ func (s *Session) updateSelectedICEPath(pair *webrtc.ICECandidatePair) {
 	if path == nil {
 		return
 	}
+	s.iceConfigMu.RLock()
 	completeICEPathURL(path, s.turnURLs)
+	s.iceConfigMu.RUnlock()
 	s.logger.Debug(
 		"Viewer %s selected ICE path: local=%s/%s relay-transport=%s remote=%s/%s",
 		s.id,
@@ -746,6 +850,16 @@ func (s *Session) updateSelectedICEPath(pair *webrtc.ICECandidatePair) {
 	s.updateStats(func(stats *SessionStats) {
 		stats.ICEPath = path
 	})
+}
+
+func (s *Session) replaceTURNURLs(urls map[string]string) {
+	replacement := make(map[string]string, len(urls))
+	for transport, endpoint := range urls {
+		replacement[transport] = endpoint
+	}
+	s.iceConfigMu.Lock()
+	s.turnURLs = replacement
+	s.iceConfigMu.Unlock()
 }
 
 func completeICEPathURL(path *ICEPathStats, urls map[string]string) {
@@ -849,27 +963,6 @@ func (s *Session) updateStats(update func(*SessionStats)) {
 	update(&s.stats)
 }
 
-func (s *Session) pushStats() {
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			s.ensureSelectedICEPath()
-			if err := s.send(SignalMessage{
-				Type:  "session.stats",
-				Stats: ptrSessionStats(s.StatsSnapshot()),
-			}); err != nil {
-				s.logger.Warn("Viewer %s stats write failed: %v", s.id, err)
-				s.Close("signaling write failed")
-				return
-			}
-		case <-s.closed:
-			return
-		}
-	}
-}
-
 func (s *Session) drainRTCP() {
 	buffer := make([]byte, 1500)
 	for {
@@ -922,7 +1015,7 @@ func (s *Session) writeSamples(samples <-chan media.AccessUnit) {
 			decision := mediaFrameAdmission{admitted: true}
 			if admission, ok := s.estimator.(interface {
 				AdmitMediaFrame(int, bool) mediaFrameAdmission
-			}); ok {
+			}); ok && !s.mediaMTXNative.Load() {
 				decision = admission.AdmitMediaFrame(
 					len(unit.Data),
 					unit.KeyFrame,
@@ -1043,22 +1136,11 @@ func (s *Session) issueKeyFrameRequest() {
 }
 
 func randomID() (string, error) {
-	var raw [12]byte
+	var raw [16]byte
 	if _, err := rand.Read(raw[:]); err != nil {
 		return "", fmt.Errorf("failed to create a random session ID: %w", err)
 	}
 	return hex.EncodeToString(raw[:]), nil
-}
-
-func trimmedStringPtr(value *string) *string {
-	if value == nil {
-		return nil
-	}
-	trimmed := strings.TrimSpace(*value)
-	if trimmed == "" {
-		return nil
-	}
-	return &trimmed
 }
 
 func sourceEncoderController(source media.Source) (media.EncoderController, bool) {
@@ -1099,18 +1181,14 @@ func (b *Broadcaster) newAdaptiveController(
 	), true
 }
 
-func ptrSessionStats(stats SessionStats) *SessionStats {
-	return &stats
-}
-
-func (b *Broadcaster) acquireSource() (media.Source, func(), error) {
+func (b *Broadcaster) acquireSource(ctx context.Context) (media.Source, func(), error) {
 	switch b.mediaMode {
 	case config.MediaModePerViewer:
 		source, err := b.sourceFactory.New()
 		if err != nil {
 			return nil, nil, err
 		}
-		if err := source.Start(); err != nil {
+		if err := source.Start(ctx); err != nil {
 			_ = source.Close()
 			return nil, nil, err
 		}
@@ -1120,40 +1198,49 @@ func (b *Broadcaster) acquireSource() (media.Source, func(), error) {
 			}
 		}, nil
 	default:
-		return b.acquireSharedSource()
+		return b.acquireSharedSource(ctx)
 	}
 }
 
-func (b *Broadcaster) acquireSharedSource() (media.Source, func(), error) {
+func (b *Broadcaster) acquireSharedSource(ctx context.Context) (media.Source, func(), error) {
+	select {
+	case b.sharedInitGate <- struct{}{}:
+		defer func() { <-b.sharedInitGate }()
+	case <-ctx.Done():
+		return nil, nil, fmt.Errorf("shared media source initialization interrupted: %w", ctx.Err())
+	}
 	b.mu.Lock()
 	if b.closed {
 		b.mu.Unlock()
 		return nil, nil, errors.New("the broadcaster is closed")
 	}
 	source := b.sharedSource
-	if source == nil {
-		var err error
-		source, err = b.sourceFactory.New()
-		if err != nil {
-			b.mu.Unlock()
-			return nil, nil, err
-		}
-		b.sharedSource = source
-	}
-	b.sharedUsers++
-	b.mu.Unlock()
-	if err := source.Start(); err != nil {
-		b.mu.Lock()
-		if b.sharedUsers > 0 {
-			b.sharedUsers--
-		}
-		if b.sharedSource == source {
-			b.sharedSource = nil
-		}
+	if source != nil {
+		b.sharedUsers++
 		b.mu.Unlock()
+		return source, func() {
+			b.releaseSharedSource(source)
+		}, nil
+	}
+	b.mu.Unlock()
+	var err error
+	source, err = b.sourceFactory.New()
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := source.Start(ctx); err != nil {
 		_ = source.Close()
 		return nil, nil, err
 	}
+	b.mu.Lock()
+	if b.closed {
+		b.mu.Unlock()
+		_ = source.Close()
+		return nil, nil, errors.New("the broadcaster is closed")
+	}
+	b.sharedSource = source
+	b.sharedUsers = 1
+	b.mu.Unlock()
 	return source, func() {
 		b.releaseSharedSource(source)
 	}, nil
@@ -1161,6 +1248,10 @@ func (b *Broadcaster) acquireSharedSource() (media.Source, func(), error) {
 
 func (b *Broadcaster) releaseSharedSource(source media.Source) {
 	b.mu.Lock()
+	if b.sharedSource != source {
+		b.mu.Unlock()
+		return
+	}
 	if b.sharedUsers > 0 {
 		b.sharedUsers--
 	}
@@ -1183,7 +1274,7 @@ func (b *Broadcaster) reserveSession() error {
 		return errors.New("the broadcaster is closed")
 	}
 	if b.maxViewers > 0 && len(b.sessions)+b.opening >= b.maxViewers {
-		return fmt.Errorf("the server is limited to %d concurrent viewer(s)", b.maxViewers)
+		return fmt.Errorf("%w: limit is %d concurrent viewer(s)", ErrSessionCapacity, b.maxViewers)
 	}
 	b.opening++
 	return nil

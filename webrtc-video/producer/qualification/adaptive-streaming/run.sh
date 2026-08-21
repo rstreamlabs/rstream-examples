@@ -4,6 +4,7 @@ set -Eeuo pipefail
 
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 producer_directory="$(cd "${script_directory}/../.." && pwd -P)"
+video_directory="$(cd "${producer_directory}/.." && pwd -P)"
 repository_directory="$(git -C "${producer_directory}" rev-parse --show-toplevel)"
 context_name="${RSTREAM_CONTEXT:-}"
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -71,6 +72,8 @@ encoder_debug="${RSTREAM_QUALIFICATION_ENCODER_DEBUG:-true}"
 playout_delay_hint_seconds="${RSTREAM_QUALIFICATION_PLAYOUT_DELAY_HINT_SECONDS:-0.2}"
 turn_transport="${RSTREAM_QUALIFICATION_TURN_TRANSPORT:-}"
 producer_turn_policy="${RSTREAM_QUALIFICATION_PRODUCER_TURN_POLICY:-}"
+producer_turn_ttl="${RSTREAM_QUALIFICATION_PRODUCER_TURN_TTL:-}"
+runtime_token_ttl_seconds=900
 if [[ -z "${producer_turn_policy}" ]]; then
   if [[ "${path_kind}" == "relay" ]]; then
     producer_turn_policy="relay"
@@ -109,6 +112,56 @@ producer_docker() {
 
 producer_is_remote() {
   [[ -n "${producer_docker_context}" || -n "${producer_docker_host}" ]]
+}
+
+install_qualification_runtime_token() {
+  local project_endpoint
+  local project_id
+  local resources
+  local token
+  local temporary
+  project_endpoint="$(
+    rstream context list --output json |
+      jq -er --arg selected "${context_name}" '
+        [.[] | select(.Name == $selected)] |
+        if length == 1 then .[0].ProjectEndpoint else error("qualification context is not unique") end
+      '
+  )"
+  project_id="$(
+    rstream --context "${context_name}" project list --output json |
+      jq -er --arg endpoint "${project_endpoint}" '
+        [.projects[] | select(.endpoint == $endpoint)] |
+        if length == 1 then .[0].id else error("qualification project is not unique") end
+      '
+  )"
+  resources="$(
+    jq -cn --arg project "${project_id}" '{
+      tunnels: {
+        projects: [$project],
+        scopes: {tunnels: {create: {filters: {AND: [
+          {name: {oneof: [
+            "webrtc-video-producer-adaptive",
+            "webrtc-video-producer-adaptive-qualification"
+          ]}},
+          {publish: true},
+          {protocol: "http"}
+        ]}}}}
+      }
+    }'
+  )"
+  token="$(
+    rstream --context "${context_name}" token create \
+      --expires-in "${runtime_token_ttl_seconds}" \
+      --permission tunnels.tunnels.create-delete \
+      --permission turn.credentials.create \
+      --resources-json "${resources}" \
+      --output json |
+      jq -er '.token | select(type == "string" and length > 0)'
+  )"
+  temporary="${runtime_directory}/runtime.env.tmp"
+  (umask 077 && printf 'RSTREAM_AUTHENTICATION_TOKEN=%s\n' "${token}" >"${temporary}")
+  mv "${temporary}" "${runtime_directory}/runtime.env"
+  unset token
 }
 
 capture_encoder_evidence() {
@@ -605,6 +658,11 @@ elif [[ ! -x "${prepare_context_binary}" ]]; then
 else
   require_command rstream
 fi
+if [[ "${path_kind}" == "relay" ]] && [[ -z "${prepared_runtime_directory}" ]] && \
+  ! rstream token create --help 2>&1 | grep -q -- '--expires-in'; then
+  printf 'the selected rstream CLI cannot create bounded-lifetime qualification tokens\n' >&2
+  exit 1
+fi
 if [[ -n "${producer_docker_context}" && -n "${producer_docker_host}" ]]; then
   printf 'producer Docker context and host are mutually exclusive\n' >&2
   exit 1
@@ -780,6 +838,7 @@ else
     "-flex-fec-repair-packets=${flexfec_repair_packets}"
     -producer-config "${producer_config_path}"
     -producer-turn-policy "${producer_turn_policy}"
+    -producer-turn-ttl "${producer_turn_ttl}"
     -turn-transport "${turn_transport}"
     -output-directory "${runtime_directory}"
   )
@@ -846,7 +905,7 @@ for attempt in 1 2 3; do
   if producer_docker build "${pull_arguments[@]}" \
     --file "${script_directory}/Dockerfile" \
     --tag "${image_tag}" \
-    "${producer_directory}"; then
+    "${video_directory}"; then
     build_status=0
     break
   fi
@@ -883,6 +942,7 @@ jq -n \
   --arg protection_profile "${protection_profile}" \
   --arg turn_transport "${turn_transport}" \
   --arg producer_turn_policy "${producer_turn_policy}" \
+  --arg producer_turn_ttl "${producer_turn_ttl}" \
   --argjson flexfec_enabled "${flexfec_enabled}" \
   --argjson flexfec_media_packets "${flexfec_media_packets}" \
   --argjson flexfec_repair_packets "${flexfec_repair_packets}" \
@@ -931,7 +991,8 @@ jq -n \
       icePolicy: $path_kind,
       description: (if $path_kind == "relay" then "rstream managed TURN over the published producer tunnel" else "direct WebRTC over an isolated Docker bridge" end),
       turnTransport: (if $turn_transport == "" then null else $turn_transport end),
-      producerTURNPolicy: $producer_turn_policy
+      producerTURNPolicy: $producer_turn_policy,
+      producerTURNCredentialTTL: (if $producer_turn_ttl == "" then null else $producer_turn_ttl end)
     },
     networkConditionTimeline: {
       required: true,
@@ -985,7 +1046,7 @@ record_setup_milestone browser-build-started
 docker build "${pull_arguments[@]}" \
   --file "${script_directory}/Browser.Dockerfile" \
   --tag "${browser_image_tag}" \
-  "${script_directory}"
+  "${video_directory}"
 browser_image_id="$(docker image inspect --format '{{.Id}}' "${browser_image_tag}")"
 browser_docker_info="$(docker info --format '{{json .}}')"
 manifest_temporary="${output_directory}/manifest.json.tmp"
@@ -1007,6 +1068,12 @@ jq --arg browser_image "${browser_image_id}" \
   "${output_directory}/manifest.json" >"${manifest_temporary}"
 mv "${manifest_temporary}" "${output_directory}/manifest.json"
 record_setup_milestone browser-build-completed
+
+if [[ "${path_kind}" == "relay" ]] && [[ -z "${prepared_runtime_directory}" ]]; then
+  printf 'Installing a bounded, project-scoped qualification token\n'
+  install_qualification_runtime_token
+  record_setup_milestone runtime-token-installed
+fi
 
 printf 'Starting isolated producer container %s\n' "${container_name}"
 record_setup_milestone connection-started

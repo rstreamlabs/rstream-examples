@@ -98,6 +98,21 @@ test("stops namespace samplers before completing the collector", async () => {
   );
 });
 
+test("keeps collector teardown reachable when final metadata collection fails", async () => {
+  const collector = await readFile(
+    fileURLToPath(new URL("../collect.mjs", import.meta.url)),
+    "utf8",
+  );
+  assert.match(
+    collector,
+    /collectSignalingMetadata\(page\)\s+\.then\(\(metadata\) => writeJSONAtomic\(signalingPath, metadata\)\)\s+\.catch\(\(\) => \{\}\);/,
+  );
+  assert.doesNotMatch(
+    collector,
+    /writeJSONAtomic\(\s*signalingPath,\s*await collectSignalingMetadata\(page\)/,
+  );
+});
+
 test("records and applies one configurable qdisc queue limit", async () => {
   const runScript = await readFile(
     fileURLToPath(new URL("../run.sh", import.meta.url)),
@@ -235,7 +250,10 @@ test("passes and records the configured FlexFEC protection ratio", async () => {
     /if \[\[ "\$\{flexfec_enabled\}" == "true" \]\]; then\n+    producer_config_path="\$\{producer_directory\}\/config\.test-pattern\.h264\.twcc-gcc-flexfec\.yaml"/,
   );
   assert.match(runScript, /-producer-config "\$\{producer_config_path\}"/);
-  assert.match(collector, /pacerSentFEC: bandwidth\?\.pacerSentFEC \|\| 0/);
+  assert.match(
+    collector,
+    /pacerSentFEC: bandwidthNumber\(bandwidth\?\.pacerSentFEC\)/,
+  );
   assert.doesNotMatch(
     runScript,
     /-producer-config "\$\{producer_directory\}\/config\.test-pattern\.h264\.twcc-gcc\.yaml"/,
@@ -358,11 +376,11 @@ test("captures scheduler evidence from both media hosts", async () => {
   );
   assert.match(
     dockerfile,
-    /COPY qualification\/adaptive-streaming\/sample-host-cpu\.sh \/usr\/local\/bin\/rstream-sample-host-cpu/,
+    /COPY producer\/qualification\/adaptive-streaming\/sample-host-cpu\.sh \/usr\/local\/bin\/rstream-sample-host-cpu/,
   );
   assert.match(
     browserDockerfile,
-    /COPY sample-host-cpu\.sh \/usr\/local\/bin\/rstream-sample-host-cpu/,
+    /COPY producer\/qualification\/adaptive-streaming\/sample-host-cpu\.sh \/usr\/local\/bin\/rstream-sample-host-cpu/,
   );
   assert.match(
     dockerignore,

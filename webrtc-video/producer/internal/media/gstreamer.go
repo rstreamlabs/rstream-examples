@@ -17,6 +17,8 @@ var gstInitOnce sync.Once
 // Fallback to 30 fps when GStreamer does not expose a buffer duration.
 const (
 	defaultAccessUnitDuration = time.Second / 30
+	pipelineStartPollInterval = 100 * time.Millisecond
+	pipelineStartTimeout      = 10 * time.Second
 	pipelineStopTimeout       = 2 * time.Second
 )
 
@@ -29,19 +31,21 @@ type GStreamerFactory struct {
 }
 
 type GStreamerSource struct {
-	logger   *logs.Logger
-	pipeline *gst.Pipeline
-	sink     *app.Sink
-	encoder  *gstreamerEncoderController
-	busDone  chan struct{}
-	stopBus  context.CancelFunc
-	failOnce sync.Once
-	stats    *sourceStats
-	mu       sync.RWMutex
-	subs     map[chan AccessUnit]struct{}
-	started  bool
-	closed   bool
-	failed   error
+	logger        *logs.Logger
+	pipeline      *gst.Pipeline
+	sink          *app.Sink
+	encoder       *gstreamerEncoderController
+	busDone       chan struct{}
+	stopBus       context.CancelFunc
+	failOnce      sync.Once
+	stats         *sourceStats
+	lifecycleMu   sync.Mutex
+	mu            sync.RWMutex
+	subs          map[chan AccessUnit]struct{}
+	started       bool
+	closed        bool
+	failed        error
+	startPipeline func(context.Context) error
 }
 
 type gstreamerEncoderController struct {
@@ -138,6 +142,7 @@ func newGStreamerSource(
 		subs:     make(map[chan AccessUnit]struct{}),
 		stats:    stats,
 	}
+	source.startPipeline = source.startPipelineTransition
 	stats.sources.Add(1)
 	busCtx, cancel := context.WithCancel(context.Background())
 	source.stopBus = cancel
@@ -178,7 +183,12 @@ func (s *GStreamerSource) EncoderController() (EncoderController, bool) {
 	return s.encoder, true
 }
 
-func (s *GStreamerSource) Start() error {
+func (s *GStreamerSource) Start(ctx context.Context) error {
+	if ctx == nil {
+		return errors.New("the GStreamer start context is required")
+	}
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
@@ -193,19 +203,34 @@ func (s *GStreamerSource) Start() error {
 		s.mu.Unlock()
 		return nil
 	}
-	s.started = true
 	s.mu.Unlock()
-	if err := s.pipeline.BlockSetState(gst.StatePlaying); err != nil {
-		s.mu.Lock()
-		s.started = false
+	startCtx, cancel := context.WithTimeout(ctx, pipelineStartTimeout)
+	defer cancel()
+	if err := s.start(startCtx); err != nil {
+		if s.pipeline != nil {
+			s.abortStartTransition()
+		}
+		return err
+	}
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return errors.New("the GStreamer pipeline is closed")
+	}
+	if s.failed != nil {
+		err := s.failed
 		s.mu.Unlock()
 		return err
 	}
+	s.started = true
+	s.mu.Unlock()
 	s.logger.Info("GStreamer pipeline started")
 	return nil
 }
 
 func (s *GStreamerSource) Stop() error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
@@ -245,6 +270,8 @@ func (s *GStreamerSource) Subscribe() (<-chan AccessUnit, func()) {
 }
 
 func (s *GStreamerSource) Close() error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
@@ -274,6 +301,47 @@ func (s *GStreamerSource) Close() error {
 	s.mu.Unlock()
 	s.stats.sources.Add(-1)
 	return closeErr
+}
+
+func (s *GStreamerSource) start(ctx context.Context) error {
+	if s.startPipeline != nil {
+		return s.startPipeline(ctx)
+	}
+	return s.startPipelineTransition(ctx)
+}
+
+func (s *GStreamerSource) startPipelineTransition(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("GStreamer pipeline start interrupted: %w", err)
+	}
+	if err := s.pipeline.SetState(gst.StatePlaying); err != nil {
+		return fmt.Errorf("failed to start the GStreamer pipeline: %w", err)
+	}
+	for {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("GStreamer pipeline start interrupted: %w", err)
+		}
+		status, state := s.pipeline.GetState(gst.StatePlaying, gst.ClockTime(pipelineStartPollInterval))
+		switch status {
+		case gst.StateChangeSuccess, gst.StateChangeNoPreroll:
+			if state != gst.StatePlaying {
+				return fmt.Errorf("GStreamer pipeline reached unexpected state %s", state)
+			}
+			return nil
+		case gst.StateChangeFailure:
+			return errors.New("GStreamer pipeline failed to enter playing state")
+		case gst.StateChangeAsync:
+		default:
+			return fmt.Errorf("GStreamer pipeline returned unknown state change result %d", status)
+		}
+	}
+}
+
+func (s *GStreamerSource) abortStartTransition() {
+	s.pipeline.AbortState()
+	if err := s.pipeline.SetState(gst.StateNull); err != nil {
+		s.logger.Warn("GStreamer pipeline reset failed after interrupted startup: %v", err)
+	}
 }
 
 func (s *GStreamerSource) publish(unit AccessUnit) {

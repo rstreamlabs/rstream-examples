@@ -64,6 +64,8 @@ const (
 	DefaultFlexFECRepairPackets  = 1
 	MaxFlexFECPackets            = 110
 	DefaultIncreaseHoldAfterLoss = "5s"
+	MaxProvisioningSecretBytes   = 8 * 1024
+	MaxTURNTTL                   = 24 * time.Hour
 )
 
 type Config struct {
@@ -88,10 +90,16 @@ type MetricsConfig struct {
 
 type WebConfig struct {
 	Viewer WebViewerConfig `yaml:"viewer"`
+	WHEP   WebWHEPConfig   `yaml:"whep"`
 }
 
 type WebViewerConfig struct {
 	Enabled bool `yaml:"enabled"`
+}
+
+type WebWHEPConfig struct {
+	AllowMediaMTXNativeOffer  bool `yaml:"allowMediaMTXNativeOffer"`
+	RequireConfiguredFeatures bool `yaml:"requireConfiguredFeatures"`
 }
 
 type TunnelConfig struct {
@@ -197,6 +205,9 @@ func Default() Config {
 		Web: WebConfig{
 			Viewer: WebViewerConfig{
 				Enabled: true,
+			},
+			WHEP: WebWHEPConfig{
+				RequireConfiguredFeatures: true,
 			},
 		},
 		Tunnel: TunnelConfig{
@@ -324,15 +335,11 @@ func (c Config) Validate() error {
 	switch provisioningMode {
 	case TunnelProvisioningModeLocal:
 	case TunnelProvisioningModeRemote:
-		if strings.TrimSpace(c.Tunnel.Provisioning.Endpoint) == "" {
-			return errors.New("tunnel provisioning endpoint is required when mode is remote")
+		if _, err := c.TunnelProvisioningEndpoint(); err != nil {
+			return err
 		}
-		parsed, err := url.Parse(strings.TrimSpace(c.Tunnel.Provisioning.Endpoint))
-		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-			return fmt.Errorf("invalid tunnel provisioning endpoint %q", c.Tunnel.Provisioning.Endpoint)
-		}
-		if strings.TrimSpace(c.Tunnel.Provisioning.Secret) == "" {
-			return errors.New("tunnel provisioning secret is required when mode is remote")
+		if _, err := c.TunnelProvisioningSecret(); err != nil {
+			return err
 		}
 	default:
 		return fmt.Errorf("invalid tunnel provisioning mode %q", c.Tunnel.Provisioning.Mode)
@@ -627,6 +634,9 @@ func (c Config) TURNTTL() (time.Duration, error) {
 	if err != nil {
 		return 0, fmt.Errorf("invalid TURN TTL %q", c.TURN.TTL)
 	}
+	if dur <= 0 || dur > MaxTURNTTL {
+		return 0, fmt.Errorf("TURN TTL must be greater than 0 and at most %s", MaxTURNTTL)
+	}
 	return dur, nil
 }
 
@@ -665,6 +675,49 @@ func (c Config) TunnelProvisioningTimeout() (time.Duration, error) {
 		return 0, errors.New("tunnel provisioning timeout must be greater than 0")
 	}
 	return dur, nil
+}
+
+func (c Config) TunnelProvisioningEndpoint() (*url.URL, error) {
+	raw := strings.TrimSpace(c.Tunnel.Provisioning.Endpoint)
+	if raw == "" {
+		return nil, errors.New("tunnel provisioning endpoint is required when mode is remote")
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" || parsed.Opaque != "" {
+		return nil, fmt.Errorf("invalid tunnel provisioning endpoint %q", c.Tunnel.Provisioning.Endpoint)
+	}
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return nil, errors.New("tunnel provisioning endpoint must not contain user information, a query, or a fragment")
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "https":
+	case "http":
+		if !isLoopbackHost(parsed.Hostname()) {
+			return nil, errors.New("remote tunnel provisioning endpoint must use HTTPS")
+		}
+	default:
+		return nil, errors.New("tunnel provisioning endpoint scheme must be HTTP or HTTPS")
+	}
+	return parsed, nil
+}
+
+func (c Config) TunnelProvisioningSecret() (string, error) {
+	secret := strings.TrimSpace(c.Tunnel.Provisioning.Secret)
+	if secret == "" {
+		return "", errors.New("tunnel provisioning secret is required when mode is remote")
+	}
+	if len(secret) > MaxProvisioningSecretBytes || strings.ContainsAny(secret, "\x00\r\n") {
+		return "", errors.New("tunnel provisioning secret is invalid")
+	}
+	return secret, nil
+}
+
+func isLoopbackHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func (c Config) TunnelReconnectInterval() (time.Duration, error) {

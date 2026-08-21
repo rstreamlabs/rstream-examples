@@ -1,0 +1,7 @@
+distributor
+platform
+producer/.tmp
+producer/dist
+producer/internal/web/generated
+producer/node_modules
+producer/webrtc-video-producer

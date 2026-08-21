@@ -16,13 +16,30 @@ import (
 	rsconfig "github.com/rstreamlabs/rstream-go/config"
 )
 
+const (
+	defaultRefreshTimeout = 10 * time.Second
+	maxCredentialBytes    = 8 * 1024
+	maxTURNURLBytes       = 4 * 1024
+	maxTURNURLs           = 16
+)
+
 type Provider struct {
-	provisioning *provisioning.Client
-	options      rsconfig.TURNCredentialsEnvOptions
-	mu           sync.Mutex
-	cached       *rstream.TURNCredentials
-	expires      time.Time
-	transports   map[string]struct{}
+	fetch          func(context.Context) (*rstream.TURNCredentials, error)
+	mu             sync.Mutex
+	cached         *rstream.TURNCredentials
+	refresh        *credentialRefresh
+	refreshAt      time.Time
+	validUntil     time.Time
+	now            func() time.Time
+	refreshTimeout time.Duration
+	transports     map[string]struct{}
+}
+
+type credentialRefresh struct {
+	done        chan struct{}
+	credentials *rstream.TURNCredentials
+	validUntil  time.Time
+	err         error
 }
 
 func NewProvider(cfg config.Config, provisioningClient *provisioning.Client) (*Provider, error) {
@@ -38,46 +55,76 @@ func NewProvider(cfg config.Config, provisioningClient *provisioning.Client) (*P
 	for _, transport := range transports {
 		allowed[transport] = struct{}{}
 	}
-	return &Provider{
-		provisioning: provisioningClient,
-		options: rsconfig.TURNCredentialsEnvOptions{
-			TTL: ttl,
-		},
-		transports: allowed,
-	}, nil
+	fetch := func(ctx context.Context) (*rstream.TURNCredentials, error) {
+		return rsconfig.CreateTURNCredentialsFromEnv(ctx, rsconfig.TURNCredentialsEnvOptions{TTL: ttl})
+	}
+	if provisioningClient != nil {
+		fetch = provisioningClient.TURN
+	}
+	refreshTimeout, err := cfg.TunnelProvisioningTimeout()
+	if err != nil {
+		return nil, err
+	}
+	return &Provider{fetch: fetch, transports: allowed, now: time.Now, refreshTimeout: refreshTimeout}, nil
 }
 
 func (p *Provider) Credentials(ctx context.Context) (*rstream.TURNCredentials, error) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-	now := time.Now()
-	if p.cached != nil && now.Before(p.expires) {
-		return cloneCredentials(p.cached), nil
+	now := p.now()
+	if p.cached != nil && now.Before(p.refreshAt) {
+		credentials := cloneCredentialsAt(p.cached, p.validUntil, now)
+		p.mu.Unlock()
+		return credentials, nil
 	}
-	if p.provisioning != nil {
-		// Provisioned devices ask the platform for TURN credentials over HTTP.
-		credentials, err := p.provisioning.TURN(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to provision TURN credentials: %w", err)
+	refresh := p.refresh
+	if refresh == nil {
+		refresh = &credentialRefresh{done: make(chan struct{})}
+		p.refresh = refresh
+		go p.refreshCredentials(refresh, context.WithoutCancel(ctx))
+	}
+	p.mu.Unlock()
+	select {
+	case <-ctx.Done():
+		return nil, fmt.Errorf("wait for TURN credential refresh: %w", ctx.Err())
+	case <-refresh.done:
+		if refresh.err != nil {
+			return nil, refresh.err
 		}
-		p.cached, err = filterCredentials(credentials, p.transports)
-		if err != nil {
-			return nil, err
-		}
-		p.expires = provisioning.TURNExpires(credentials, now)
-		return cloneCredentials(p.cached), nil
+		return cloneCredentialsAt(refresh.credentials, refresh.validUntil, p.now()), nil
 	}
-	// Local demos can mint rstream TURN credentials directly from SDK env config.
-	credentials, err := rsconfig.CreateTURNCredentialsFromEnv(ctx, p.options)
+}
+
+func (p *Provider) refreshCredentials(refresh *credentialRefresh, parent context.Context) {
+	now := p.now()
+	timeout := p.refreshTimeout
+	if timeout <= 0 {
+		timeout = defaultRefreshTimeout
+	}
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+	credentials, err := p.fetch(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create TURN credentials: %w", err)
+		err = fmt.Errorf("create TURN credentials: %w", err)
 	}
-	p.cached, err = filterCredentials(credentials, p.transports)
-	if err != nil {
-		return nil, err
+	if err == nil {
+		credentials, err = filterCredentials(credentials, p.transports)
 	}
-	p.expires = credentialsExpires(credentials, now)
-	return cloneCredentials(p.cached), nil
+	validUntil := turnValidUntil(credentials, now)
+	if err == nil && !validUntil.After(p.now()) {
+		err = errors.New("TURN credentials expired before the refresh completed")
+	}
+	p.mu.Lock()
+	if err == nil {
+		p.cached = credentials
+		p.refreshAt = credentialsRefreshAt(credentials, now)
+		p.validUntil = validUntil
+		refresh.credentials = credentials
+		refresh.validUntil = validUntil
+	}
+	refresh.err = err
+	p.refresh = nil
+	close(refresh.done)
+	p.mu.Unlock()
 }
 
 func filterCredentials(credentials *rstream.TURNCredentials, allowed map[string]struct{}) (*rstream.TURNCredentials, error) {
@@ -85,8 +132,17 @@ func filterCredentials(credentials *rstream.TURNCredentials, allowed map[string]
 	if filtered == nil {
 		return nil, errors.New("TURN credentials are missing")
 	}
+	if filtered.TTL <= 0 || strings.TrimSpace(filtered.Username) == "" || strings.TrimSpace(filtered.Credential) == "" || len(filtered.Username) > maxCredentialBytes || len(filtered.Credential) > maxCredentialBytes || strings.ContainsAny(filtered.Username, "\r\n\x00") || strings.ContainsAny(filtered.Credential, "\r\n\x00") {
+		return nil, errors.New("TURN credentials are invalid")
+	}
+	if len(credentials.URLs) == 0 || len(credentials.URLs) > maxTURNURLs {
+		return nil, errors.New("TURN credential URLs are missing or exceed the limit")
+	}
 	filtered.URLs = filtered.URLs[:0]
 	for _, rawURL := range credentials.URLs {
+		if len(rawURL) > maxTURNURLBytes || strings.ContainsAny(rawURL, "\r\n\x00") {
+			return nil, errors.New("TURN credential URL is invalid")
+		}
 		transport, err := classifyTURNTransport(rawURL)
 		if err != nil {
 			return nil, err
@@ -170,13 +226,35 @@ func cloneCredentials(credentials *rstream.TURNCredentials) *rstream.TURNCredent
 	return &out
 }
 
-func credentialsExpires(credentials *rstream.TURNCredentials, now time.Time) time.Time {
+func cloneCredentialsAt(credentials *rstream.TURNCredentials, validUntil time.Time, now time.Time) *rstream.TURNCredentials {
+	out := cloneCredentials(credentials)
+	if out == nil {
+		return nil
+	}
+	remaining := validUntil.Sub(now)
+	if remaining <= 0 {
+		out.TTL = 0
+		return out
+	}
+	out.TTL = int((remaining + time.Second - 1) / time.Second)
+	return out
+}
+
+func turnValidUntil(credentials *rstream.TURNCredentials, now time.Time) time.Time {
 	if credentials == nil || credentials.TTL <= 0 {
 		return now
 	}
-	expires := now.Add(time.Duration(credentials.TTL)*time.Second - 5*time.Minute)
-	if expires.Before(now) {
+	return now.Add(time.Duration(credentials.TTL) * time.Second)
+}
+
+func credentialsRefreshAt(credentials *rstream.TURNCredentials, now time.Time) time.Time {
+	if credentials == nil || credentials.TTL <= 0 {
 		return now
 	}
-	return expires
+	lifetime := time.Duration(credentials.TTL) * time.Second
+	lead := 5 * time.Minute
+	if half := lifetime / 2; half < lead {
+		lead = half
+	}
+	return now.Add(lifetime - lead)
 }

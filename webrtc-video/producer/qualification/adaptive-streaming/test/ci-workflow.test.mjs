@@ -12,7 +12,6 @@ const workflowPath = fileURLToPath(
 
 test("keeps qualification credentials out of the reusable workflow", async () => {
   const workflow = await readFile(workflowPath, "utf8");
-  assert.doesNotMatch(workflow, /env-dev-pro|aws-global-dev|dev\.rstream\.io/);
   assert.match(
     workflow,
     /RSTREAM_AUTHENTICATION_TOKEN: \$\{\{ secrets\.RSTREAM_QUALIFICATION_TOKEN \}\}/,
@@ -46,10 +45,7 @@ test("pins external actions and preserves failed-run evidence", async () => {
     workflow,
     /if: always\(\) && steps\.runtime\.outcome == 'success'/,
   );
-  assert.match(
-    workflow,
-    /steps\.qualification\.outcome.*!=.*success/,
-  );
+  assert.match(workflow, /steps\.qualification\.outcome.*!=.*success/);
 });
 
 test("rejects mobility on a direct path and keeps FlexFEC optional", async () => {

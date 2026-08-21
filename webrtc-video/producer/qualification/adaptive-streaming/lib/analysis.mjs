@@ -45,6 +45,7 @@ export function analyze(
   phaseTimeline = null,
   receiverHostCPUEvidence = null,
   networkConditionTimeline = null,
+  signalingEvidence = null,
 ) {
   const enriched = enrichSamples(samples);
   const phaseOrder = manifest.phases.map((phase) => phase.name);
@@ -123,6 +124,7 @@ export function analyze(
     0;
   const candidatePairSwitches = countCandidatePairSwitches(enriched);
   const networkMobility = summarizeNetworkMobility(enriched);
+  const signaling = summarizeSignaling(signalingEvidence);
   const icePolicy = manifest.networkPath?.icePolicy || "relay";
   let healthyLinkTargetKbps = null;
   let healthyLinkTargetRatio = null;
@@ -226,6 +228,26 @@ export function analyze(
     "session-continuity",
     "peer connection and playback remain healthy for at least 98% of samples",
   );
+  if (signaling.available) {
+    assert(
+      assertions,
+      signaling.sessionCreates > 0 &&
+        signaling.sessionDeletes === signaling.sessionCreates &&
+        signaling.failedRequests === 0 &&
+        signaling.unsuccessfulRequests === 0,
+      "whep-session-lifecycle",
+      "every created WHEP resource is updated without HTTP failure and deleted before the browser exits",
+    );
+    if (signaling.closeOutcome !== null) {
+      assert(
+        assertions,
+        ["already-absent", "deleted"].includes(signaling.closeOutcome) &&
+          !signaling.closeCredentialRefreshFailed,
+        "whep-close-observed",
+        "the WHEP client confirms bounded remote cleanup with usable credentials before local teardown",
+      );
+    }
+  }
   if (manifest.networkMobility) {
     assert(
       assertions,
@@ -244,10 +266,12 @@ export function analyze(
       assertions,
       manifest.networkMobility.signalingTransport === "quic" &&
         networkMobility.peerConnectionsCreated === 1 &&
-        networkMobility.webSocketsCreated === 1 &&
-        networkMobility.webSocketCloses === 0,
-      "quic-signaling-mobility",
-      "the original WebRTC peer and signaling WebSocket survive the producer network change over the rstream QUIC upstream",
+        networkMobility.whepSessionCreates === 1 &&
+        networkMobility.whepSessionDeletes === 0 &&
+        networkMobility.whepRestartPatches >= 1 &&
+        networkMobility.whepFailedRequests === 0,
+      "whep-resource-mobility",
+      "the original WebRTC peer and WHEP resource survive the producer network change, with one successful in-place ICE restart over the rstream QUIC upstream",
     );
     assert(
       assertions,
@@ -262,7 +286,7 @@ export function analyze(
     "baseline-throughput",
     "baseline median receive throughput is at least 1 Mbps",
   );
-  if (conditioning) {
+  if (conditioning && !manifest.networkMobility) {
     assert(
       assertions,
       stableConditioningSamples.length >= 5 &&
@@ -609,10 +633,7 @@ export function analyze(
     0,
     ...enriched.map((sample) => sample.rtcpMalformedFeedback || 0),
   );
-  const maximumBrowserPLIRequests = Math.max(
-    0,
-    ...enriched.map((sample) => sample.pliCount || 0),
-  );
+  const routableBrowserPLIRequests = countRoutableBrowserPLIRequests(enriched);
   const maximumPacerMediaFrameDrops = Math.max(
     0,
     ...enriched.map((sample) => sample.pacerMediaFramesDropped || 0),
@@ -629,7 +650,7 @@ export function analyze(
   assert(
     assertions,
     !recoveryTelemetryPresent ||
-      maximumBrowserPLIRequests === 0 ||
+      routableBrowserPLIRequests === 0 ||
       maximumRTCPKeyFrameRequests > 0,
     "rtcp-keyframe-feedback",
     "receiver PLI feedback reaches the producer's encoder instead of being discarded",
@@ -812,13 +833,79 @@ export function analyze(
     hostCPU,
     networkMobility,
     networkConditions,
+    signaling,
     preTransitionEncoderTargetKbps,
     preTransitionReceivedBitrateKbps,
+    routableBrowserPLIRequests,
     stableConditioningMedianEncoderTargetKbps,
     stableConditioningMedianReceivedBitrateKbps,
     stableConditioningSamples: stableConditioningSamples.length,
     stableConditioningTargetRatio,
     trafficControl: trafficControlSummary,
+  };
+}
+
+export function countRoutableBrowserPLIRequests(samples) {
+  let previous = null;
+  let requests = 0;
+  for (const sample of samples) {
+    const increment = Math.max(
+      0,
+      (sample.pliCount || 0) - (previous?.pliCount || 0),
+    );
+    if (
+      increment > 0 &&
+      sample.phase !== "mobility" &&
+      sample.peerConnectionState === "connected" &&
+      sample.iceConnectionState === "connected" &&
+      (sample.framesDecoded || 0) > (previous?.framesDecoded || 0)
+    ) {
+      requests += increment;
+    }
+    previous = sample;
+  }
+  return requests;
+}
+
+export function summarizeSignaling(evidence) {
+  if (!evidence || !Array.isArray(evidence.events)) {
+    return {
+      available: false,
+      candidatePatches: 0,
+      closeCredentialRefreshFailed: false,
+      closeOutcome: null,
+      failedRequests: 0,
+      restartPatches: 0,
+      sessionCreates: 0,
+      sessionDeletes: 0,
+      unsuccessfulRequests: 0,
+    };
+  }
+  const requests = evidence.events.filter(
+    (event) => event?.kind === "whep-request",
+  );
+  return {
+    available: true,
+    candidatePatches: evidence.whepCandidatePatches || 0,
+    closeCredentialRefreshFailed:
+      evidence.closeResult?.credentialRefreshFailed === true,
+    closeOutcome:
+      typeof evidence.closeResult?.outcome === "string"
+        ? evidence.closeResult.outcome
+        : null,
+    failedRequests: evidence.whepFailedRequests || 0,
+    restartPatches: evidence.whepRestartPatches || 0,
+    sessionCreates: evidence.whepSessionCreates || 0,
+    sessionDeletes: evidence.whepSessionDeletes || 0,
+    unsuccessfulRequests: requests.filter(
+      (request) =>
+        !Number.isInteger(request.status) ||
+        request.status < 200 ||
+        (request.status >= 400 &&
+          !(
+            request.method === "DELETE" && [404, 410].includes(request.status)
+          )),
+    ).length,
   };
 }
 
@@ -1422,13 +1509,24 @@ Measured service establishment: ${formatDuration(analysis.setup.connectionMillis
 
 The qualification moves the running producer between two isolated network
 interfaces with distinct source addresses. The same browser page, WebRTC peer,
-and signaling WebSocket must remain in place while Trickle ICE publishes the
-new path. This separates transport mobility from a hidden page reload or a new
-viewer session.
+and WHEP session resource must remain in place while an in-place ICE restart
+publishes the new path. This separates transport mobility from a hidden page
+reload or a new viewer session.
 
-Candidate-pair switches: ${analysis.networkMobility.candidatePairSwitches}. Fresh remote candidates: ${analysis.networkMobility.trickledRemoteCandidates}. ICE restart offers: ${analysis.networkMobility.iceRestartOffers}. Longest playback interruption: ${formatDuration(analysis.networkMobility.maximumUnavailableMilliseconds)}.
+Candidate-pair switches: ${analysis.networkMobility.candidatePairSwitches}. Fresh remote candidates: ${analysis.networkMobility.trickledRemoteCandidates}. WHEP restart PATCH requests: ${analysis.networkMobility.whepRestartPatches}. Longest playback interruption: ${formatDuration(analysis.networkMobility.maximumUnavailableMilliseconds)}.
 
 The event timeline is recorded in \`signaling-events.json\`.
+
+`
+    : "";
+  const signalingSection = analysis.signaling?.available
+    ? `## WHEP resource lifecycle
+
+The browser created ${analysis.signaling.sessionCreates} WHEP resource, sent ${analysis.signaling.candidatePatches} candidate PATCH request${analysis.signaling.candidatePatches === 1 ? "" : "s"}${analysis.signaling.restartPatches > 0 ? ` and ${analysis.signaling.restartPatches} ICE-restart PATCH request${analysis.signaling.restartPatches === 1 ? "" : "s"}` : ""}, then deleted ${analysis.signaling.sessionDeletes} resource before exit. Failed or unsuccessful WHEP requests: ${analysis.signaling.failedRequests + analysis.signaling.unsuccessfulRequests}.
+
+${analysis.signaling.closeOutcome ? `Client teardown outcome: ${analysis.signaling.closeOutcome}. Credential refresh failed before teardown: ${analysis.signaling.closeCredentialRefreshFailed ? "yes" : "no"}.` : "The captured client predates explicit teardown-result reporting."}
+
+The complete HTTP timeline is recorded in \`signaling-events.json\`.
 
 `
     : "";
@@ -1440,7 +1538,7 @@ Generated at ${manifest.generatedAt} from repository revision \`${manifest.git.r
 
 ${Number.isFinite(manifest.video?.adaptive?.maximumBitrateKbps) ? `The media controller starts at ${manifest.video.adaptive.initialBitrateKbps} kbps and operates from ${manifest.video.adaptive.minimumBitrateKbps} through ${manifest.video.adaptive.maximumBitrateKbps} kbps. Its ${manifest.video.adaptive.changeThresholdPct}% hysteresis keeps a healthy-link target stable once it is close to the configured ceiling.` : ""}
 
-${setupSection}${mobilitySection}## Phase summary
+${setupSection}${mobilitySection}${signalingSection}## Phase summary
 
 | Phase | Samples | Connected | Received kbps (median) | Link use | TWCC kbps (median) | Encoder kbps (median) | Decoded fps | Avg QP | Decode ms/frame | Frozen | NACK | RTX packets | FEC packets | Max RTT ms |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -1660,11 +1758,11 @@ export async function writeArtifacts(outputDirectory, analysis, manifest) {
     "offersSent",
     "localCandidatesSent",
     "remoteCandidatesReceived",
-    "webSocketID",
-    "webSocketOpenCount",
-    "webSocketCloseCount",
-    "webSocketsCreated",
-    "webSocketState",
+    "whepCandidatePatches",
+    "whepFailedRequests",
+    "whepRestartPatches",
+    "whepSessionCreates",
+    "whepSessionDeletes",
     "localCandidateType",
     "localCandidateAddress",
     "localCandidatePort",
@@ -1727,8 +1825,10 @@ export function summarizeNetworkMobility(samples) {
       maximumUnavailableMilliseconds: 0,
       peerConnectionsCreated: 0,
       trickledRemoteCandidates: 0,
-      webSocketCloses: 0,
-      webSocketsCreated: 0,
+      whepFailedRequests: 0,
+      whepRestartPatches: 0,
+      whepSessionCreates: 0,
+      whepSessionDeletes: 0,
     };
   }
   const previous = [...samples]
@@ -1780,13 +1880,21 @@ export function summarizeNetworkMobility(samples) {
       (last.remoteCandidatesReceived || 0) -
         (first.remoteCandidatesReceived || 0),
     ),
-    webSocketCloses: Math.max(
+    whepFailedRequests: Math.max(
       0,
-      (last.webSocketCloseCount || 0) - (first.webSocketCloseCount || 0),
+      (last.whepFailedRequests || 0) - (first.whepFailedRequests || 0),
     ),
-    webSocketsCreated: Math.max(
+    whepRestartPatches: Math.max(
       0,
-      ...mobility.map((sample) => sample.webSocketsCreated || 0),
+      (last.whepRestartPatches || 0) - (first.whepRestartPatches || 0),
+    ),
+    whepSessionCreates: Math.max(
+      0,
+      ...mobility.map((sample) => sample.whepSessionCreates || 0),
+    ),
+    whepSessionDeletes: Math.max(
+      0,
+      (last.whepSessionDeletes || 0) - (first.whepSessionDeletes || 0),
     ),
   };
 }
@@ -2977,6 +3085,7 @@ async function main() {
     rawHostCPU,
     rawReceiverHostCPU,
     rawNetworkConditionTimeline,
+    rawSignaling,
   ] = await Promise.all([
     readFile(`${outputDirectory}/samples.jsonl`, "utf8"),
     readFile(`${outputDirectory}/manifest.json`, "utf8"),
@@ -3001,6 +3110,7 @@ async function main() {
     readOptional(`${outputDirectory}/producer-host-cpu.jsonl`),
     readOptional(`${outputDirectory}/receiver-host-cpu.jsonl`),
     readOptional(`${outputDirectory}/network-condition-timeline.jsonl`),
+    readOptional(`${outputDirectory}/signaling-events.json`),
   ]);
   const samples = rawSamples
     .split("\n")
@@ -3093,6 +3203,7 @@ async function main() {
           .filter(Boolean)
           .map((line) => JSON.parse(line))
       : null,
+    rawSignaling ? JSON.parse(rawSignaling) : null,
   );
   await writeArtifacts(outputDirectory, analysis, manifest);
   process.stdout.write(

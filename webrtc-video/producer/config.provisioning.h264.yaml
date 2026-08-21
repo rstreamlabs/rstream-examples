@@ -3,6 +3,9 @@ server:
 web:
   viewer:
     enabled: false
+  whep:
+    allowMediaMTXNativeOffer: false
+    requireConfiguredFeatures: true
 tunnel:
   enabled: true
   name: webrtc-video-producer
@@ -23,22 +26,24 @@ turn:
   ttl: 10m
 webrtc:
   useTurn: true
-  maxViewers: 0
+  maxViewers: 1
   initialBitrateKbps: 5000
   interceptors:
     twcc: true
     nack: true
     rtx: true
-    flexFEC: false
+    flexFEC: true
+    flexFECMediaPackets: 5
+    flexFECRepairPackets: 1
   adaptive:
-    enabled: false
+    enabled: true
     backend: twcc-gcc
     twccGCC:
       minBitrateKbps: 2000
       maxBitrateKbps: 8000
-      updateInterval: 1s
+      updateInterval: 2s
       changeThresholdPct: 10
-      decreaseThresholdPct: 5
+      decreaseThresholdPct: 0
       maxIncreaseLossPct: 1
       increaseHoldAfterLoss: 5s
   video:
@@ -56,7 +61,7 @@ media:
     videotestsrc is-live=true pattern=smpte !
     videoconvert !
     video/x-raw,width=1920,height=1080,framerate=30/1 !
-    x264enc name=encoder tune=zerolatency speed-preset=veryfast bitrate=5000 key-int-max=60 bframes=0 byte-stream=true aud=true !
+    x264enc name=encoder tune=zerolatency speed-preset=veryfast bitrate=5000 vbv-buf-capacity=100 option-string=scenecut=0 key-int-max=60 bframes=0 byte-stream=true aud=true !
     h264parse config-interval=-1 !
     video/x-h264,stream-format=byte-stream,alignment=au,profile=constrained-baseline !
     appsink name=video emit-signals=true sync=false max-buffers=4 drop=true

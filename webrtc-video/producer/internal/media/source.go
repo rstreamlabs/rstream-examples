@@ -1,6 +1,9 @@
 package media
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type AccessUnit struct {
 	Data     []byte
@@ -24,7 +27,7 @@ type KeyFrameRequester interface {
 }
 
 type Source interface {
-	Start() error
+	Start(context.Context) error
 	Stop() error
 	Subscribe() (<-chan AccessUnit, func())
 	Close() error
