@@ -6,6 +6,7 @@ distributor_directory="$(cd "${script_directory}/../.." && pwd -P)"
 repository_directory="$(git -C "${distributor_directory}" rev-parse --show-toplevel)"
 output_directory="${1:-}"
 run_count="${RSTREAM_DISTRIBUTOR_FANOUT_RUNS:-3}"
+mediamtx_binary="${RSTREAM_MEDIAMTX_BINARY:-}"
 
 if [[ -z "${output_directory}" ]]; then
   printf 'usage: %s OUTPUT_DIRECTORY\n' "$0" >&2
@@ -21,6 +22,14 @@ for command in git go jq; do
     exit 1
   fi
 done
+if [[ -z "${mediamtx_binary}" ]]; then
+  mediamtx_binary="$(command -v mediamtx || true)"
+fi
+if [[ -z "${mediamtx_binary}" ]] || [[ ! -x "${mediamtx_binary}" ]]; then
+  printf 'MediaMTX executable not found; install mediamtx or set RSTREAM_MEDIAMTX_BINARY to an executable path\n' >&2
+  exit 1
+fi
+mediamtx_binary="$(cd "$(dirname "${mediamtx_binary}")" && pwd -P)/$(basename "${mediamtx_binary}")"
 if [[ -e "${output_directory}" ]] && [[ -n "$(find "${output_directory}" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
   printf 'output directory is not empty: %s\n' "${output_directory}" >&2
   exit 1
@@ -38,6 +47,7 @@ for run in $(seq 1 "${run_count}"); do
   printf 'Running fan-out qualification %d/%d\n' "${run}" "${run_count}"
   RSTREAM_DISTRIBUTOR_QUALIFICATION_OUTPUT="${output_directory}/runs/${run}.json" \
   RSTREAM_DISTRIBUTOR_QUALIFICATION_REVISION="${revision}" \
+  RSTREAM_MEDIAMTX_BINARY="${mediamtx_binary}" \
     go -C "${distributor_directory}" test \
       -count=1 \
       -timeout=3m \
