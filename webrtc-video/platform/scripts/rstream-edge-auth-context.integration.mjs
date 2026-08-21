@@ -321,7 +321,7 @@ try {
     },
   ])
   process.stdout.write(
-    "rstream staging enforced edge scope and renewed an expired lifecycle credential.\n",
+    `rstream context ${context} enforced edge scope and renewed an expired lifecycle credential.\n`,
   )
 } finally {
   await stopChild(forward)
