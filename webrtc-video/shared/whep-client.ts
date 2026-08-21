@@ -150,7 +150,7 @@ export class WHEPClient {
     this.iceCredentialExpiresAt = parseCredentialExpiration(
       options.iceCredentialExpiresAt,
     );
-    this.fetch = options.fetch ?? fetch;
+    this.fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.onClose = options.onClose;
     this.onError = options.onError;
     this.refreshCredentials = options.refreshCredentials;

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -119,11 +120,59 @@ func TestNewClientUsesFreshBoundedConnectionsAcrossNetworkChanges(t *testing.T) 
 	if !transport.DisableKeepAlives {
 		t.Fatal("provisioning transport can retain a connection bound to an obsolete interface")
 	}
-	if transport.ForceAttemptHTTP2 {
-		t.Fatal("provisioning transport can retain a multiplexed connection bound to an obsolete interface")
+	if !transport.ForceAttemptHTTP2 {
+		t.Fatal("provisioning transport cannot safely negotiate an advertised HTTP/2 protocol")
 	}
 	if transport.DialContext == nil {
 		t.Fatal("provisioning transport omitted its bounded network dialer")
+	}
+}
+
+func TestClientNegotiatesAnAdvertisedHTTP2Protocol(t *testing.T) {
+	var protocol atomic.Int32
+	var connections sync.Map
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		protocol.Store(int32(request.ProtoMajor))
+		connections.Store(request.RemoteAddr, struct{}{})
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"device":"device-1","engine":"https://engine.example","token":"token","name":"camera"}`))
+	}))
+	server.EnableHTTP2 = true
+	server.StartTLS()
+	defer server.Close()
+	cfg := config.Default()
+	cfg.Tunnel.Provisioning.Mode = config.TunnelProvisioningModeRemote
+	cfg.Tunnel.Provisioning.Endpoint = server.URL
+	cfg.Tunnel.Provisioning.Secret = "device-secret"
+	client, err := NewClient(cfg)
+	if err != nil {
+		t.Fatalf("create provisioning client: %v", err)
+	}
+	transport, ok := client.http.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("provisioning transport = %T, want *http.Transport", client.http.Transport)
+	}
+	serverTransport, ok := server.Client().Transport.(*http.Transport)
+	if !ok || serverTransport.TLSClientConfig == nil {
+		t.Fatal("HTTP/2 test server did not expose its client TLS configuration")
+	}
+	transport.TLSClientConfig = serverTransport.TLSClientConfig.Clone()
+	transport.TLSClientConfig.NextProtos = []string{"h2", "http/1.1"}
+	for range 2 {
+		if _, err := client.Tunnel(t.Context()); err != nil {
+			t.Fatalf("provision tunnel over HTTP/2: %v", err)
+		}
+	}
+	if got := protocol.Load(); got != 2 {
+		t.Fatalf("provisioning protocol = HTTP/%d, want HTTP/2", got)
+	}
+	connectionCount := 0
+	connections.Range(func(any, any) bool {
+		connectionCount++
+		return true
+	})
+	if connectionCount != 2 {
+		t.Fatalf("provisioning connections = %d, want one bounded connection per request", connectionCount)
 	}
 }
 

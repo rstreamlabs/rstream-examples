@@ -46,23 +46,26 @@ await validateTarget()
 let forward = null
 try {
   const address = await listen(upstream)
-  const createToken = await delegatedToken({
-    tunnels: {
-      projects: [projectID],
-      scopes: {
-        tunnels: {
-          create: {
-            filters: {
-              name: { exact: tunnelName },
-              protocol: "http",
-              publish: true,
-              token_auth: true,
+  const createToken = await delegatedToken(
+    {
+      tunnels: {
+        projects: [projectID],
+        scopes: {
+          tunnels: {
+            create: {
+              filters: {
+                name: { exact: tunnelName },
+                protocol: "http",
+                publish: true,
+                token_auth: true,
+              },
             },
           },
         },
       },
     },
-  })
+    "tunnels.tunnels.create-delete",
+  )
   forward = spawn(
     process.env.RSTREAM_BIN ?? "rstream",
     [
@@ -86,7 +89,10 @@ try {
   )
   const failure = captureChildFailure(forward)
   const tunnel = await waitForTunnel(failure)
-  const connectToken = await delegatedToken(connectResources(tunnel.id))
+  const connectToken = await delegatedToken(
+    connectResources(tunnel.id),
+    "tunnels.streams.create-delete",
+  )
   const host = tunnel.host ?? tunnel.hostname
   assert.equal(typeof host, "string", "published tunnel has no host")
   const base = new URL(`https://${host}`)
@@ -114,17 +120,20 @@ try {
   })
   assert.equal(patched.status, 204)
   const requestsBeforeRejection = upstreamRequests.length
-  const outsideScope = edgeURL(new URL("/admin", base), connectToken)
-  assert.equal(
-    (
-      await request(outsideScope, {
-        headers: { Authorization: "Bearer application-token" },
-        method: "GET",
-      })
-    ).status,
-    403,
-  )
-  assert.equal(upstreamRequests.length, requestsBeforeRejection)
+  for (const path of ["/ws", "/api/status", "/metrics", "/admin"]) {
+    const outsideScope = edgeURL(new URL(path, base), connectToken)
+    assert.equal(
+      (
+        await request(outsideScope, {
+          headers: { Authorization: "Bearer application-token" },
+          method: "GET",
+        })
+      ).status,
+      403,
+      `${path} escaped the WHEP-only credential scope`,
+    )
+    assert.equal(upstreamRequests.length, requestsBeforeRejection)
+  }
   assert.equal(
     (
       await request(new URL("/whep", base), {
@@ -187,6 +196,7 @@ try {
   )
   const shortConnectToken = await delegatedToken(
     connectResources(tunnel.id),
+    "tunnels.streams.create-delete",
     shortTokenTTLSeconds,
   )
   const shortEndpoint = edgeURL(new URL("/whep", base), shortConnectToken)
@@ -233,6 +243,7 @@ try {
   assert.equal(upstreamRequests.length, requestsBeforeExpiryChecks)
   const refreshedConnectToken = await delegatedToken(
     connectResources(tunnel.id),
+    "tunnels.streams.create-delete",
     refreshedTokenTTLSeconds,
   )
   const refreshedSession = edgeURL(
@@ -310,7 +321,7 @@ try {
     },
   ])
   process.stdout.write(
-    "rstream staging enforced edge scope and renewed an expired lifecycle credential.\n",
+    `rstream context ${context} enforced edge scope and renewed an expired lifecycle credential.\n`,
   )
 } finally {
   await stopChild(forward)
@@ -353,12 +364,14 @@ async function validateTarget() {
   )
 }
 
-async function delegatedToken(resources, expiresInSeconds) {
+async function delegatedToken(resources, permission, expiresInSeconds) {
   const arguments_ = [
     "--context",
     context,
     "token",
     "create",
+    "--permission",
+    permission,
     "--resources-json",
     JSON.stringify(resources),
     "--output",
