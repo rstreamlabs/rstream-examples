@@ -1,5 +1,7 @@
 def maximum(name): [.[] | .[name]] | max;
 def maximum_freeze_ratio: 0.02;
+def maximum_capacity_transition_freeze_seconds: 1;
+def capacity_transition_grace_milliseconds: 3000;
 def minimum_frame_rate_ratio: 0.8;
 def phase_delta(phase; name):
   [.[] | select(.phase == phase) | .[name]] |
@@ -7,6 +9,26 @@ def phase_delta(phase; name):
 def phase_nullable_delta(phase; name):
   [.[] | select(.phase == phase) | .[name] | select(type == "number")] |
   if length < 2 then null else last - first end;
+def phase_counter_delta(phase; name):
+  . as $samples |
+  [range(0; $samples | length) | select($samples[.].phase == phase)] as $indices |
+  if ($indices | length) == 0 then null else
+    ($indices[0] - (if $indices[0] > 0 then 1 else 0 end)) as $before |
+    $samples[$indices[-1]][name] - $samples[$before][name]
+  end;
+def phase_delta_after(phase; offset; name):
+  . as $samples |
+  [$samples[] | select(.phase == phase)] as $phase_samples |
+  if ($phase_samples | length) == 0 then 0 else
+    $phase_samples[0].elapsedMilliseconds as $started |
+    [range(0; $samples | length) |
+      select($samples[.].phase == phase and $samples[.].elapsedMilliseconds >= ($started + offset))
+    ] as $indices |
+    if ($indices | length) == 0 then 0 else
+      ($indices[0] - (if $indices[0] > 0 then 1 else 0 end)) as $before |
+      $samples[$indices[-1]][name] - $samples[$before][name]
+    end
+  end;
 def producer_metrics_complete:
   .producerMetricsSource == "openmetrics" and
   ([
@@ -88,6 +110,17 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     warmupSeconds: $warmup_seconds,
     phaseSeconds: $phase_seconds,
     recoverySeconds: $recovery_seconds,
+    flexFEC: {
+      mediaPackets: $flexfec_media_packets,
+      repairPackets: $flexfec_repair_packets
+    },
+    playoutDelayHintSeconds: $playout_delay_hint_seconds,
+    acceptance: {
+      capacityTransitionGraceMilliseconds: capacity_transition_grace_milliseconds,
+      maximumCapacityTransitionFreezeSeconds: maximum_capacity_transition_freeze_seconds,
+      maximumContinuousImpairmentFreezeRatio: maximum_freeze_ratio,
+      minimumFrameRateRatio: minimum_frame_rate_ratio
+    },
     viewerNetwork: {
       capacityKbps: $viewer_network[0].capacityKbps,
       delayMilliseconds: $viewer_network[0].delayMilliseconds,
@@ -133,17 +166,21 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     recovery: phase_summary("recovery")
   },
   viewerNetwork: ($viewer_network[0] + {
-    nackCountDelta: phase_delta("viewer-network"; "nackCount"),
-    packetsLostNetChange: phase_delta("viewer-network"; "packetsLost"),
+    nackCountDelta: phase_counter_delta("viewer-network"; "nackCount"),
+    packetsLostNetChange: phase_counter_delta("viewer-network"; "packetsLost"),
     framesDecodedDelta: phase_delta("viewer-network"; "framesDecoded"),
-    framesDroppedDelta: phase_delta("viewer-network"; "framesDropped"),
-    freezeCountDelta: phase_delta("viewer-network"; "freezeCount"),
-    freezeDurationDeltaSeconds: phase_delta("viewer-network"; "totalFreezesDurationSeconds"),
-    baselineFreezeCountDelta: phase_delta("baseline"; "freezeCount"),
-    baselineFreezeDurationDeltaSeconds: phase_delta("baseline"; "totalFreezesDurationSeconds"),
+    framesDroppedDelta: phase_counter_delta("viewer-network"; "framesDropped"),
+    freezeCountDelta: phase_counter_delta("viewer-network"; "freezeCount"),
+    freezeDurationDeltaSeconds: phase_counter_delta("viewer-network"; "totalFreezesDurationSeconds"),
+    baselineFreezeCountDelta: phase_counter_delta("baseline"; "freezeCount"),
+    baselineFreezeDurationDeltaSeconds: phase_counter_delta("baseline"; "totalFreezesDurationSeconds"),
     recoveryFramesDecodedDelta: phase_delta("recovery"; "framesDecoded"),
-    recoveryFreezeCountDelta: phase_delta("recovery"; "freezeCount"),
-    recoveryFreezeDurationDeltaSeconds: phase_delta("recovery"; "totalFreezesDurationSeconds")
+    recoveryFreezeCountDelta: phase_counter_delta("recovery"; "freezeCount"),
+    recoveryFreezeDurationDeltaSeconds: phase_counter_delta("recovery"; "totalFreezesDurationSeconds"),
+    steadyStateFreezeCountDelta: phase_delta_after("viewer-network"; capacity_transition_grace_milliseconds; "freezeCount"),
+    steadyStateFreezeDurationDeltaSeconds: phase_delta_after("viewer-network"; capacity_transition_grace_milliseconds; "totalFreezesDurationSeconds"),
+    steadyRecoveryFreezeCountDelta: phase_delta_after("recovery"; capacity_transition_grace_milliseconds; "freezeCount"),
+    steadyRecoveryFreezeDurationDeltaSeconds: phase_delta_after("recovery"; capacity_transition_grace_milliseconds; "totalFreezesDurationSeconds")
   }),
   gates: {
     media: (maximum("framesDecoded") >= 150 and maximum("bytesReceived") > 0),
@@ -192,8 +229,19 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     if .viewerNetwork.enabled then
       .viewerNetwork.baselineFreezeCountDelta == 0 and
       .viewerNetwork.baselineFreezeDurationDeltaSeconds == 0 and
-      .viewerNetwork.freezeRatio <= maximum_freeze_ratio and
-      .viewerNetwork.recoveryFreezeRatio <= maximum_freeze_ratio
+      .viewerNetwork.recoveryFreezeDurationDeltaSeconds <= maximum_capacity_transition_freeze_seconds and
+      .viewerNetwork.steadyRecoveryFreezeCountDelta == 0 and
+      .viewerNetwork.steadyRecoveryFreezeDurationDeltaSeconds == 0 and
+      (if .viewerNetwork.capacityKbps > 0 and
+          .viewerNetwork.delayMilliseconds == 0 and
+          .viewerNetwork.jitterMilliseconds == 0 and
+          .viewerNetwork.lossPercent == 0 then
+        .viewerNetwork.freezeDurationDeltaSeconds <= maximum_capacity_transition_freeze_seconds and
+        .viewerNetwork.steadyStateFreezeCountDelta == 0 and
+        .viewerNetwork.steadyStateFreezeDurationDeltaSeconds == 0
+      else
+        .viewerNetwork.freezeRatio <= maximum_freeze_ratio
+      end)
     else
       .phases.baseline.freezes == 0 and
       .phases.baseline.freezeDurationSeconds == 0
@@ -207,10 +255,21 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
       .phases.viewerNetwork.decodedFramesPerSecond >=
         (.phases.baseline.decodedFramesPerSecond * minimum_frame_rate_ratio) and
       .viewerNetwork.framesDroppedDelta == 0 and
-      .viewerNetwork.freezeRatio <= maximum_freeze_ratio and
+      (if .viewerNetwork.capacityKbps > 0 and
+          .viewerNetwork.delayMilliseconds == 0 and
+          .viewerNetwork.jitterMilliseconds == 0 and
+          .viewerNetwork.lossPercent == 0 then
+        .viewerNetwork.freezeDurationDeltaSeconds <= maximum_capacity_transition_freeze_seconds and
+        .viewerNetwork.steadyStateFreezeCountDelta == 0 and
+        .viewerNetwork.steadyStateFreezeDurationDeltaSeconds == 0
+      else
+        .viewerNetwork.freezeRatio <= maximum_freeze_ratio
+      end) and
       .phases.recovery.decodedFramesPerSecond >=
         (.phases.baseline.decodedFramesPerSecond * minimum_frame_rate_ratio) and
-      .viewerNetwork.recoveryFreezeRatio <= maximum_freeze_ratio
+      .viewerNetwork.recoveryFreezeDurationDeltaSeconds <= maximum_capacity_transition_freeze_seconds and
+      .viewerNetwork.steadyRecoveryFreezeCountDelta == 0 and
+      .viewerNetwork.steadyRecoveryFreezeDurationDeltaSeconds == 0
     else true end
   )
 | .gates.sourceTargetRecovery = (

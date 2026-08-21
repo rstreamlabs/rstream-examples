@@ -747,6 +747,15 @@ async function collectSample(activePage) {
       pacerRTXPacketsCoalesced: bandwidthNumber(
         bandwidth?.pacerRTXPacketsCoalesced,
       ),
+      pacerRTXPacketsSuppressed: bandwidthNumber(
+        bandwidth?.pacerRTXPacketsSuppressed,
+      ),
+      pacerRetransmissionRTTMilliseconds: bandwidthNumber(
+        bandwidth?.pacerRetransmissionRTTMs,
+      ),
+      pacerRetransmissionIntervalMilliseconds: bandwidthNumber(
+        bandwidth?.pacerRetransmissionIntervalMs,
+      ),
       pacerFECPacketsExpired: bandwidthNumber(
         bandwidth?.pacerFECPacketsExpired,
       ),

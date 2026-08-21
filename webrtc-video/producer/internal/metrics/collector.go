@@ -51,6 +51,8 @@ type Collector struct {
 	packetLossRatio               *prometheus.Desc
 	delayEstimateSeconds          *prometheus.Desc
 	pacerQueueDelaySeconds        *prometheus.Desc
+	retransmissionRTTSeconds      *prometheus.Desc
+	retransmissionIntervalSeconds *prometheus.Desc
 	lossGuardActiveSessions       *prometheus.Desc
 	lossGuardTargetBytesSecond    *prometheus.Desc
 	adaptiveUpdates               *prometheus.Desc
@@ -233,6 +235,20 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 			nil,
 			"seconds",
 		),
+		retransmissionRTTSeconds: newDesc(
+			namespace+"_pacer_maximum_retransmission_round_trip_time_seconds",
+			"Highest round-trip time used to pace retransmission retries among active sessions.",
+			nil,
+			nil,
+			"seconds",
+		),
+		retransmissionIntervalSeconds: newDesc(
+			namespace+"_pacer_maximum_retransmission_interval_seconds",
+			"Highest minimum interval between retries of the same RTP packet among active sessions.",
+			nil,
+			nil,
+			"seconds",
+		),
 		lossGuardActiveSessions: newDesc(
 			namespace+"_loss_guard_active_sessions",
 			"Current sessions whose loss guard is constraining bitrate recovery.",
@@ -376,6 +392,8 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 		c.packetLossRatio,
 		c.delayEstimateSeconds,
 		c.pacerQueueDelaySeconds,
+		c.retransmissionRTTSeconds,
+		c.retransmissionIntervalSeconds,
 		c.lossGuardActiveSessions,
 		c.lossGuardTargetBytesSecond,
 		c.adaptiveUpdates,
@@ -470,6 +488,8 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(c.packetLossRatio, prometheus.GaugeValue, producer.MaximumPacketLossRatio)
 	ch <- prometheus.MustNewConstMetric(c.delayEstimateSeconds, prometheus.GaugeValue, producer.MaximumDelayEstimateSeconds)
 	ch <- prometheus.MustNewConstMetric(c.pacerQueueDelaySeconds, prometheus.GaugeValue, producer.MaximumPacerQueueDelaySeconds)
+	ch <- prometheus.MustNewConstMetric(c.retransmissionRTTSeconds, prometheus.GaugeValue, producer.MaximumRTXRTTSeconds)
+	ch <- prometheus.MustNewConstMetric(c.retransmissionIntervalSeconds, prometheus.GaugeValue, producer.MaximumRTXRetryIntervalSeconds)
 	ch <- prometheus.MustNewConstMetric(c.lossGuardActiveSessions, prometheus.GaugeValue, float64(producer.LossGuardActiveSessions))
 	ch <- prometheus.MustNewConstMetric(c.lossGuardTargetBytesSecond, prometheus.GaugeValue, bitsToBytes(producer.LossGuardTargetBitrateBps))
 	ch <- prometheus.MustNewConstMetric(c.adaptiveUpdates, prometheus.CounterValue, float64(producer.AdaptiveBitrateUpdates), "applied")
@@ -490,6 +510,7 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(c.pacerRepairPacketsDiscarded, prometheus.CounterValue, float64(producer.PacerRTXPacketsTrimmed), "rtx", "trimmed")
 	ch <- prometheus.MustNewConstMetric(c.pacerRepairPacketsDiscarded, prometheus.CounterValue, float64(producer.PacerFECPacketsTrimmed), "fec", "trimmed")
 	ch <- prometheus.MustNewConstMetric(c.pacerRepairPacketsDiscarded, prometheus.CounterValue, float64(producer.PacerRTXPacketsCoalesced), "rtx", "coalesced")
+	ch <- prometheus.MustNewConstMetric(c.pacerRepairPacketsDiscarded, prometheus.CounterValue, float64(producer.PacerRTXPacketsSuppressed), "rtx", "suppressed")
 	ch <- prometheus.MustNewConstMetric(c.pacerSentPackets, prometheus.CounterValue, float64(producer.PacerSentPrimary), "primary")
 	ch <- prometheus.MustNewConstMetric(c.pacerSentPackets, prometheus.CounterValue, float64(producer.PacerSentRTX), "rtx")
 	ch <- prometheus.MustNewConstMetric(c.pacerSentPackets, prometheus.CounterValue, float64(producer.PacerSentFEC), "fec")

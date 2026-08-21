@@ -1351,7 +1351,7 @@ export function renderMarkdown(analysis, manifest) {
   const repairRows = Object.entries(analysis.phases)
     .map(
       ([name, phase]) =>
-        `| ${name} | ${formatNumber(phase.maximumPacerFECDelayMilliseconds, 1)} | ${phase.pacerSentFECIncrease} | ${phase.pacerFECPacketsExpiredIncrease} | ${phase.pacerFECPacketsTrimmedIncrease} | ${formatNumber(phase.maximumPacerRTXDelayMilliseconds, 1)} | ${phase.pacerSentRTXIncrease} | ${phase.pacerRTXPacketsExpiredIncrease} | ${phase.pacerRTXPacketsTrimmedIncrease} | ${phase.pacerRTXPacketsCoalescedIncrease} |`,
+        `| ${name} | ${formatNumber(phase.maximumPacerFECDelayMilliseconds, 1)} | ${phase.pacerSentFECIncrease} | ${phase.pacerFECPacketsExpiredIncrease} | ${phase.pacerFECPacketsTrimmedIncrease} | ${formatNumber(phase.maximumPacerRTXDelayMilliseconds, 1)} | ${formatNumber(phase.maximumPacerRetransmissionRTTMilliseconds, 1)} | ${formatNumber(phase.maximumPacerRetransmissionIntervalMilliseconds, 1)} | ${phase.pacerSentRTXIncrease} | ${phase.pacerRTXPacketsExpiredIncrease} | ${phase.pacerRTXPacketsTrimmedIncrease} | ${phase.pacerRTXPacketsCoalescedIncrease} | ${phase.pacerRTXPacketsSuppressedIncrease} |`,
     )
     .join("\n");
   const encoderCadenceRows = Object.entries(analysis.phases)
@@ -1600,8 +1600,8 @@ an already reported loss and must not delay completion of the current frame.
 The split counters below make a late proactive repair distinguishable from an
 expired retransmission.
 
-| Phase | Max FEC residence ms | FEC sent | FEC expired | FEC rate-trimmed | Max RTX residence ms | RTX sent | RTX expired | RTX rate-trimmed | RTX duplicates coalesced |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Phase | Max FEC residence ms | FEC sent | FEC expired | FEC rate-trimmed | Max RTX residence ms | RTT ms | Min retry ms | RTX sent | RTX expired | RTX rate-trimmed | RTX pending coalesced | RTX recent suppressed |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 ${repairRows}
 
 ${hostCPUSection}${receiverHostCPUSection}## Encoder cadence and observer effect
@@ -1724,6 +1724,9 @@ export async function writeArtifacts(outputDirectory, analysis, manifest) {
     "pacerRepairPacketsTrimmed",
     "pacerRTXPacketsExpired",
     "pacerRTXPacketsCoalesced",
+    "pacerRTXPacketsSuppressed",
+    "pacerRetransmissionRTTMilliseconds",
+    "pacerRetransmissionIntervalMilliseconds",
     "pacerFECPacketsExpired",
     "pacerRTXPacketsTrimmed",
     "pacerFECPacketsTrimmed",
@@ -2315,6 +2318,18 @@ function summarizePhase(samples, phase, encoderQuality) {
       0,
       ...samples.map((sample) => sample.pacerMaximumRTXDelayMilliseconds || 0),
     ),
+    maximumPacerRetransmissionRTTMilliseconds: Math.max(
+      0,
+      ...samples.map(
+        (sample) => sample.pacerRetransmissionRTTMilliseconds || 0,
+      ),
+    ),
+    maximumPacerRetransmissionIntervalMilliseconds: Math.max(
+      0,
+      ...samples.map(
+        (sample) => sample.pacerRetransmissionIntervalMilliseconds || 0,
+      ),
+    ),
     maximumPacerFECDelayMilliseconds: Math.max(
       0,
       ...samples.map((sample) => sample.pacerMaximumFECDelayMilliseconds || 0),
@@ -2366,6 +2381,11 @@ function summarizePhase(samples, phase, encoderQuality) {
     pacerRTXPacketsCoalescedIncrease: counterIncrease(
       samples,
       "pacerRTXPacketsCoalesced",
+      [phase.name],
+    ),
+    pacerRTXPacketsSuppressedIncrease: counterIncrease(
+      samples,
+      "pacerRTXPacketsSuppressed",
       [phase.name],
     ),
     pacerFECPacketsExpiredIncrease: counterIncrease(

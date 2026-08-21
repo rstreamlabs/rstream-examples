@@ -43,6 +43,14 @@ type retransmissionKey struct {
 	originalSequence uint16
 }
 
+type retransmissionReservation uint8
+
+const (
+	retransmissionReserved retransmissionReservation = iota
+	retransmissionAlreadyPending
+	retransmissionRecentlySent
+)
+
 type pacedStream struct {
 	writer    interceptor.RTPWriter
 	repair    repairKind
@@ -110,6 +118,7 @@ type tokenBucketPacer struct {
 	repairPacketsTrimmed                     atomic.Uint64
 	retransmissionPacketsExpired             atomic.Uint64
 	retransmissionPacketsCoalesced           atomic.Uint64
+	retransmissionPacketsSuppressed          atomic.Uint64
 	forwardErrorCorrectionPacketsExpired     atomic.Uint64
 	retransmissionPacketsTrimmed             atomic.Uint64
 	forwardErrorCorrectionPacketsTrimmed     atomic.Uint64
@@ -129,11 +138,19 @@ type tokenBucketPacer struct {
 	writers                                  map[uint32]pacedStream
 	retransmissionMu                         sync.Mutex
 	pendingRetransmissions                   map[retransmissionKey]struct{}
+	recentRetransmissions                    map[retransmissionKey]time.Time
+	retransmissionRoundTripTime              time.Duration
+	retransmissionRoundTripSamples           uint64
+	nextRetransmissionPrune                  time.Time
 }
 
 const (
 	maximumMediaAdmissionDelay = 225 * time.Millisecond
 	maximumRepairResidence     = maximumMediaAdmissionDelay
+	defaultRetransmissionRTT   = 100 * time.Millisecond
+	retransmissionSafetyMargin = 5 * time.Millisecond
+	retransmissionPrunePeriod  = time.Second
+	maximumObservedRTT         = 10 * time.Second
 	// Pion packetizes outbound media below its 1200-byte MTU. The additional
 	// headroom covers RTP extensions and repair encapsulation when bounding the
 	// single repair packet that the scheduler may place before each media frame.
@@ -166,6 +183,8 @@ func newTokenBucketPacer(
 		queueSlots:                  make(chan struct{}, queueSize),
 		writers:                     make(map[uint32]pacedStream),
 		pendingRetransmissions:      make(map[retransmissionKey]struct{}),
+		recentRetransmissions:       make(map[retransmissionKey]time.Time),
+		retransmissionRoundTripTime: defaultRetransmissionRTT,
 	}
 	pacer.targetBitrate.Store(int64(initialBitrate))
 	pacer.payloadPool.New = func() any {
@@ -270,10 +289,17 @@ func (p *tokenBucketPacer) Write(
 	}
 	packetSize := header.MarshalSize() + len(payload)
 	retransmission, tracksRTX := retransmissionIdentity(header, payload, stream.repair)
-	if tracksRTX && !p.reserveRetransmission(retransmission) {
-		<-p.queueSlots
-		p.retransmissionPacketsCoalesced.Add(1)
-		return packetSize, nil
+	if tracksRTX {
+		switch p.reserveRetransmission(retransmission) {
+		case retransmissionAlreadyPending:
+			<-p.queueSlots
+			p.retransmissionPacketsCoalesced.Add(1)
+			return packetSize, nil
+		case retransmissionRecentlySent:
+			<-p.queueSlots
+			p.retransmissionPacketsSuppressed.Add(1)
+			return packetSize, nil
+		}
 	}
 	buffer := p.payloadPool.Get().(*[]byte)
 	if cap(*buffer) < len(payload) {
@@ -512,6 +538,9 @@ func (p *tokenBucketPacer) run() {
 				p.discardQueuedPackets()
 			} else if pending.repair != repairKindNone {
 				p.recordRepairSent(pending.repair, written)
+				if pending.tracksRTX {
+					p.markRetransmissionSent(pending.retransmission, now)
+				}
 			} else {
 				p.sentPrimary.Add(1)
 				p.sentPrimaryBytes.Add(uint64(max(0, written)))
@@ -773,6 +802,9 @@ func (p *tokenBucketPacer) Stats() map[string]any {
 		"pacerRepairPacketsTrimmed":                               p.repairPacketsTrimmed.Load(),
 		"pacerRetransmissionPacketsExpired":                       p.retransmissionPacketsExpired.Load(),
 		"pacerRetransmissionPacketsCoalesced":                     p.retransmissionPacketsCoalesced.Load(),
+		"pacerRetransmissionPacketsSuppressed":                    p.retransmissionPacketsSuppressed.Load(),
+		"pacerRetransmissionRoundTripTimeMilliseconds":            float64(p.retransmissionRTT()) / float64(time.Millisecond),
+		"pacerRetransmissionMinimumIntervalMilliseconds":          float64(p.retransmissionMinimumInterval()) / float64(time.Millisecond),
 		"pacerForwardErrorCorrectionPacketsExpired":               p.forwardErrorCorrectionPacketsExpired.Load(),
 		"pacerRetransmissionPacketsTrimmed":                       p.retransmissionPacketsTrimmed.Load(),
 		"pacerForwardErrorCorrectionPacketsTrimmed":               p.forwardErrorCorrectionPacketsTrimmed.Load(),
@@ -800,20 +832,81 @@ func retransmissionIdentity(
 	}, true
 }
 
-func (p *tokenBucketPacer) reserveRetransmission(key retransmissionKey) bool {
+func (p *tokenBucketPacer) reserveRetransmission(key retransmissionKey) retransmissionReservation {
+	return p.reserveRetransmissionAt(key, time.Now())
+}
+
+func (p *tokenBucketPacer) reserveRetransmissionAt(
+	key retransmissionKey,
+	now time.Time,
+) retransmissionReservation {
 	p.retransmissionMu.Lock()
 	defer p.retransmissionMu.Unlock()
+	p.pruneRetransmissionsLocked(now)
 	if _, exists := p.pendingRetransmissions[key]; exists {
-		return false
+		return retransmissionAlreadyPending
 	}
+	if eligibleAt, exists := p.recentRetransmissions[key]; exists && now.Before(eligibleAt) {
+		return retransmissionRecentlySent
+	}
+	delete(p.recentRetransmissions, key)
 	p.pendingRetransmissions[key] = struct{}{}
-	return true
+	return retransmissionReserved
 }
 
 func (p *tokenBucketPacer) releaseRetransmission(key retransmissionKey) {
 	p.retransmissionMu.Lock()
 	delete(p.pendingRetransmissions, key)
 	p.retransmissionMu.Unlock()
+}
+
+func (p *tokenBucketPacer) markRetransmissionSent(key retransmissionKey, sentAt time.Time) {
+	p.retransmissionMu.Lock()
+	delete(p.pendingRetransmissions, key)
+	p.recentRetransmissions[key] = sentAt.Add(p.retransmissionMinimumIntervalLocked())
+	p.retransmissionMu.Unlock()
+}
+
+func (p *tokenBucketPacer) observeRoundTripTime(roundTripTime time.Duration) {
+	if roundTripTime < 0 || roundTripTime > maximumObservedRTT {
+		return
+	}
+	p.retransmissionMu.Lock()
+	if p.retransmissionRoundTripSamples == 0 {
+		p.retransmissionRoundTripTime = roundTripTime
+	} else {
+		p.retransmissionRoundTripTime = (7*p.retransmissionRoundTripTime + roundTripTime) / 8
+	}
+	p.retransmissionRoundTripSamples++
+	p.retransmissionMu.Unlock()
+}
+
+func (p *tokenBucketPacer) retransmissionRTT() time.Duration {
+	p.retransmissionMu.Lock()
+	defer p.retransmissionMu.Unlock()
+	return p.retransmissionRoundTripTime
+}
+
+func (p *tokenBucketPacer) retransmissionMinimumInterval() time.Duration {
+	p.retransmissionMu.Lock()
+	defer p.retransmissionMu.Unlock()
+	return p.retransmissionMinimumIntervalLocked()
+}
+
+func (p *tokenBucketPacer) retransmissionMinimumIntervalLocked() time.Duration {
+	return retransmissionSafetyMargin + p.retransmissionRoundTripTime
+}
+
+func (p *tokenBucketPacer) pruneRetransmissionsLocked(now time.Time) {
+	if now.Before(p.nextRetransmissionPrune) {
+		return
+	}
+	for key, eligibleAt := range p.recentRetransmissions {
+		if !now.Before(eligibleAt) {
+			delete(p.recentRetransmissions, key)
+		}
+	}
+	p.nextRetransmissionPrune = now.Add(retransmissionPrunePeriod)
 }
 
 func (p *tokenBucketPacer) scheduledQueueDelay() time.Duration {

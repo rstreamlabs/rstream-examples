@@ -3,6 +3,7 @@ package webrtc
 import (
 	"math"
 	"sync"
+	"time"
 
 	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/pkg/gcc"
@@ -141,6 +142,13 @@ func (p *minimumBitratePacer) setTransportCCExtension(
 	})
 	if ok {
 		setter.setTransportCCExtension(ssrc, extensionID, tracked)
+	}
+}
+
+func (p *minimumBitratePacer) observeRoundTripTime(roundTripTime time.Duration) {
+	observer, ok := p.delegate.(interface{ observeRoundTripTime(time.Duration) })
+	if ok {
+		observer.observeRoundTripTime(roundTripTime)
 	}
 }
 

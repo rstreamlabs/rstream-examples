@@ -63,6 +63,9 @@ func TestCollectorExportsStableUnitsAndBoundedDimensions(t *testing.T) {
 		MaximumDelayEstimateSeconds:     0.018,
 		PacerSentPrimaryBytes:           9000,
 		PacerRTXPacketsCoalesced:        7,
+		PacerRTXPacketsSuppressed:       8,
+		MaximumRTXRTTSeconds:            0.06,
+		MaximumRTXRetryIntervalSeconds:  0.065,
 		TWCCFeedbackPackets:             10,
 		TWCCReportedStatuses:            100,
 		TWCCReportedLost:                3,
@@ -118,6 +121,15 @@ func TestCollectorExportsStableUnitsAndBoundedDimensions(t *testing.T) {
 	}
 	if value := metricValue(t, families, namespace+"_pacer_repair_discarded_packets_total", map[string]string{"repair": "rtx", "reason": "coalesced"}); value != 7 {
 		t.Fatalf("coalesced RTX packets = %f, want 7", value)
+	}
+	if value := metricValue(t, families, namespace+"_pacer_repair_discarded_packets_total", map[string]string{"repair": "rtx", "reason": "suppressed"}); value != 8 {
+		t.Fatalf("suppressed RTX packets = %f, want 8", value)
+	}
+	if value := metricValue(t, families, namespace+"_pacer_maximum_retransmission_round_trip_time_seconds", nil); value != 0.06 {
+		t.Fatalf("retransmission RTT = %f, want 0.06", value)
+	}
+	if value := metricValue(t, families, namespace+"_pacer_maximum_retransmission_interval_seconds", nil); value != 0.065 {
+		t.Fatalf("retransmission interval = %f, want 0.065", value)
 	}
 	if value := metricValue(t, families, namespace+"_whep_initial_requests_total", map[string]string{"outcome": "created"}); value != 7 {
 		t.Fatalf("created WHEP requests = %f, want 7", value)

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -92,6 +93,9 @@ type BandwidthStats struct {
 	PacerRepairPacketsTrimmed    uint64  `json:"pacerRepairPacketsTrimmed"`
 	PacerRTXPacketsExpired       uint64  `json:"pacerRTXPacketsExpired"`
 	PacerRTXPacketsCoalesced     uint64  `json:"pacerRTXPacketsCoalesced"`
+	PacerRTXPacketsSuppressed    uint64  `json:"pacerRTXPacketsSuppressed"`
+	PacerRTXRoundTripTimeMs      float64 `json:"pacerRetransmissionRTTMs"`
+	PacerRTXRetryIntervalMs      float64 `json:"pacerRetransmissionIntervalMs"`
 	PacerFECPacketsExpired       uint64  `json:"pacerFECPacketsExpired"`
 	PacerRTXPacketsTrimmed       uint64  `json:"pacerRTXPacketsTrimmed"`
 	PacerFECPacketsTrimmed       uint64  `json:"pacerFECPacketsTrimmed"`
@@ -158,6 +162,7 @@ type Session struct {
 	recoveryKeyFrameFailures  atomic.Uint64
 	rtcpKeyFrameRequests      atomic.Uint64
 	rtcpMalformedFeedback     atomic.Uint64
+	mediaSSRC                 atomic.Uint32
 	malformedRTCPLog          sync.Once
 	keyFrameMu                sync.Mutex
 	lastKeyFrameRequest       time.Time
@@ -938,6 +943,9 @@ func snapshotBandwidthStats(estimator bandwidthEstimator) *BandwidthStats {
 	stats.PacerRepairPacketsTrimmed, _ = raw["pacerRepairPacketsTrimmed"].(uint64)
 	stats.PacerRTXPacketsExpired, _ = raw["pacerRetransmissionPacketsExpired"].(uint64)
 	stats.PacerRTXPacketsCoalesced, _ = raw["pacerRetransmissionPacketsCoalesced"].(uint64)
+	stats.PacerRTXPacketsSuppressed, _ = raw["pacerRetransmissionPacketsSuppressed"].(uint64)
+	stats.PacerRTXRoundTripTimeMs, _ = raw["pacerRetransmissionRoundTripTimeMilliseconds"].(float64)
+	stats.PacerRTXRetryIntervalMs, _ = raw["pacerRetransmissionMinimumIntervalMilliseconds"].(float64)
 	stats.PacerFECPacketsExpired, _ = raw["pacerForwardErrorCorrectionPacketsExpired"].(uint64)
 	stats.PacerRTXPacketsTrimmed, _ = raw["pacerRetransmissionPacketsTrimmed"].(uint64)
 	stats.PacerFECPacketsTrimmed, _ = raw["pacerForwardErrorCorrectionPacketsTrimmed"].(uint64)
@@ -992,13 +1000,89 @@ func (s *Session) recordMalformedRTCP(err error) {
 }
 
 func (s *Session) handleRTCPPackets(packets []rtcp.Packet) {
+	arrival := time.Now()
+	mediaSSRC := s.outboundMediaSSRC()
 	for _, packet := range packets {
-		switch packet.(type) {
+		switch value := packet.(type) {
 		case *rtcp.PictureLossIndication, *rtcp.FullIntraRequest:
 			s.rtcpKeyFrameRequests.Add(1)
 			s.requestKeyFrame()
+		case *rtcp.ReceiverReport:
+			s.observeRoundTripTime(value.Reports, mediaSSRC, arrival)
+		case *rtcp.SenderReport:
+			s.observeRoundTripTime(value.Reports, mediaSSRC, arrival)
 		}
 	}
+}
+
+func (s *Session) outboundMediaSSRC() uint32 {
+	if mediaSSRC := s.mediaSSRC.Load(); mediaSSRC != 0 {
+		return mediaSSRC
+	}
+	if s.sender == nil {
+		return 0
+	}
+	parameters := s.sender.GetParameters()
+	if len(parameters.Encodings) == 0 {
+		return 0
+	}
+	mediaSSRC := uint32(parameters.Encodings[0].SSRC)
+	if mediaSSRC != 0 {
+		s.mediaSSRC.CompareAndSwap(0, mediaSSRC)
+	}
+	return mediaSSRC
+}
+
+func (s *Session) observeRoundTripTime(
+	reports []rtcp.ReceptionReport,
+	mediaSSRC uint32,
+	arrival time.Time,
+) {
+	if mediaSSRC == 0 {
+		return
+	}
+	var observed time.Duration
+	found := false
+	for _, report := range reports {
+		if report.SSRC != mediaSSRC {
+			continue
+		}
+		roundTripTime, ok := receptionReportRoundTripTime(report, arrival)
+		if ok && (!found || roundTripTime < observed) {
+			observed = roundTripTime
+			found = true
+		}
+	}
+	if !found {
+		return
+	}
+	observer, ok := s.estimator.(interface{ observeRoundTripTime(time.Duration) })
+	if ok {
+		observer.observeRoundTripTime(observed)
+	}
+}
+
+func receptionReportRoundTripTime(
+	report rtcp.ReceptionReport,
+	arrival time.Time,
+) (time.Duration, bool) {
+	if report.LastSenderReport == 0 {
+		return 0, false
+	}
+	elapsed := compactNTPTime(arrival) - report.LastSenderReport - report.Delay
+	if elapsed > math.MaxInt32 {
+		return 0, false
+	}
+	seconds := time.Duration(elapsed >> 16)
+	fraction := time.Duration(elapsed & 0xffff)
+	return seconds*time.Second + fraction*time.Second/(1<<16), true
+}
+
+func compactNTPTime(value time.Time) uint32 {
+	const ntpEpochOffset = 2_208_988_800
+	seconds := uint64(value.Unix() + ntpEpochOffset)
+	fraction := uint64(value.Nanosecond()) * (1 << 32) / uint64(time.Second)
+	return uint32(((seconds << 32) | fraction) >> 16)
 }
 
 func (s *Session) writeSamples(samples <-chan media.AccessUnit) {

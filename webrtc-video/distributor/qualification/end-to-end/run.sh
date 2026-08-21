@@ -19,11 +19,14 @@ warmup_seconds="${RSTREAM_DISTRIBUTOR_WARMUP_SECONDS:-20}"
 duration_seconds="${RSTREAM_DISTRIBUTOR_QUALIFICATION_SECONDS:-15}"
 edge_auth="${RSTREAM_DISTRIBUTOR_EDGE_AUTH:-true}"
 recovery_seconds="${RSTREAM_DISTRIBUTOR_RECOVERY_SECONDS:-45}"
+flexfec_media_packets="${RSTREAM_DISTRIBUTOR_FLEXFEC_MEDIA_PACKETS:-5}"
+flexfec_repair_packets="${RSTREAM_DISTRIBUTOR_FLEXFEC_REPAIR_PACKETS:-1}"
 viewer_loss_percent="${RSTREAM_DISTRIBUTOR_VIEWER_LOSS_PERCENT:-0}"
 viewer_capacity_kbps="${RSTREAM_DISTRIBUTOR_VIEWER_CAPACITY_KBPS:-0}"
 viewer_delay_milliseconds="${RSTREAM_DISTRIBUTOR_VIEWER_DELAY_MILLISECONDS:-0}"
 viewer_jitter_milliseconds="${RSTREAM_DISTRIBUTOR_VIEWER_JITTER_MILLISECONDS:-0}"
 viewer_queue_packets="${RSTREAM_DISTRIBUTOR_VIEWER_QUEUE_PACKETS:-256}"
+playout_delay_hint_seconds="${RSTREAM_DISTRIBUTOR_PLAYOUT_DELAY_HINT_SECONDS:-0}"
 output_directory="${1:-}"
 
 if [[ -z "${context_name}" ]]; then
@@ -58,6 +61,21 @@ if ! [[ "${recovery_seconds}" =~ ^[0-9]+$ ]] || ((recovery_seconds < 15 || recov
   printf 'RSTREAM_DISTRIBUTOR_RECOVERY_SECONDS must be from 15 through 300\n' >&2
   exit 1
 fi
+if ! [[ "${flexfec_media_packets}" =~ ^[0-9]+$ ]] ||
+  ! [[ "${flexfec_repair_packets}" =~ ^[0-9]+$ ]]; then
+  printf 'RSTREAM_DISTRIBUTOR_FLEXFEC_MEDIA_PACKETS and RSTREAM_DISTRIBUTOR_FLEXFEC_REPAIR_PACKETS must be positive integers\n' >&2
+  exit 1
+fi
+flexfec_media_packets=$((10#${flexfec_media_packets}))
+flexfec_repair_packets=$((10#${flexfec_repair_packets}))
+if ((flexfec_media_packets < 1 || flexfec_media_packets > 110)); then
+  printf 'RSTREAM_DISTRIBUTOR_FLEXFEC_MEDIA_PACKETS must be from 1 through 110\n' >&2
+  exit 1
+fi
+if ((flexfec_repair_packets < 1 || flexfec_repair_packets > flexfec_media_packets)); then
+  printf 'RSTREAM_DISTRIBUTOR_FLEXFEC_REPAIR_PACKETS must be from 1 through the media-packet count\n' >&2
+  exit 1
+fi
 for command in docker git go jq node; do
   if ! command -v "${command}" >/dev/null; then
     printf 'required command not found: %s\n' "${command}" >&2
@@ -79,6 +97,13 @@ if ! jq -en --arg value "${viewer_loss_percent}" '
   exit 1
 fi
 viewer_loss_percent="$(jq -nr --arg value "${viewer_loss_percent}" '$value | tonumber')"
+if ! jq -en --arg value "${playout_delay_hint_seconds}" '
+  ($value | tonumber) as $seconds | $seconds >= 0 and $seconds <= 1
+' >/dev/null 2>&1; then
+  printf 'RSTREAM_DISTRIBUTOR_PLAYOUT_DELAY_HINT_SECONDS must be from 0 through 1\n' >&2
+  exit 1
+fi
+playout_delay_hint_seconds="$(jq -nr --arg value "${playout_delay_hint_seconds}" '$value | tonumber')"
 for value in "${viewer_capacity_kbps}" "${viewer_delay_milliseconds}" "${viewer_jitter_milliseconds}" "${viewer_queue_packets}"; do
   if ! [[ "${value}" =~ ^[0-9]+$ ]]; then
     printf 'viewer capacity, delay, jitter, and queue values must be non-negative integers\n' >&2
@@ -262,10 +287,14 @@ trap cleanup EXIT INT TERM
 
 write_phase() {
   local name=$1
-  local temporary="${control_directory}/phase.json.tmp"
-  jq -n --arg name "${name}" --arg started_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    '{name: $name, startedAt: $started_at}' >"${temporary}"
-  mv "${temporary}" "${control_directory}/phase.json"
+  local encoded
+  encoded="$(jq -cn --arg name "${name}" --arg started_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{name: $name, startedAt: $started_at}')"
+  # Docker Desktop bind mounts follow the original inode. Replacing it can
+  # leave a running container on a stale partial view; one compact in-place
+  # write keeps the mounted inode stable, while the reader retries the brief
+  # truncate/write boundary.
+  printf '%s\n' "${encoded}" >"${control_directory}/phase.json"
 }
 
 printf 'Preparing an isolated rstream runtime\n'
@@ -274,6 +303,8 @@ go -C "${producer_directory}" run ./qualification/adaptive-streaming/cmd/prepare
   -allow-mediamtx-native-offer="$([[ "${distribution_mode}" == mediamtx-native ]] && printf true || printf false)" \
   -embedded-viewer=false \
   -flex-fec=true \
+  -flex-fec-media-packets "${flexfec_media_packets}" \
+  -flex-fec-repair-packets "${flexfec_repair_packets}" \
   -producer-config "${producer_directory}/config.test-pattern.h264.twcc-gcc-flexfec.yaml" \
   -producer-turn-policy disabled \
   -tunnel-token-auth="${edge_auth}" \
@@ -482,6 +513,7 @@ docker run --detach \
   --ice-policy direct \
   --browser-executable /usr/bin/chromium \
   --browser-sandbox disabled \
+  --playout-delay-hint-seconds "${playout_delay_hint_seconds}" \
   --maximum-duration-seconds "${collector_maximum_duration_seconds}" >/dev/null
 browser_started=1
 
@@ -710,6 +742,9 @@ jq -s \
   --argjson warmup_seconds "${warmup_seconds}" \
   --argjson phase_seconds "${duration_seconds}" \
   --argjson recovery_seconds "${recovery_seconds}" \
+  --argjson flexfec_media_packets "${flexfec_media_packets}" \
+  --argjson flexfec_repair_packets "${flexfec_repair_packets}" \
+  --argjson playout_delay_hint_seconds "${playout_delay_hint_seconds}" \
   --slurpfile viewer_network "${output_directory}/viewer-network.json" \
   --slurpfile native_source_profile "${output_directory}/native-source-profile.json" \
   -f "${script_directory}/result.jq" \

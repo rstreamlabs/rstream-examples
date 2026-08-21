@@ -91,6 +91,9 @@ render_result() {
   --argjson warmup_seconds 20 \
   --argjson phase_seconds 1 \
   --argjson recovery_seconds 1 \
+  --argjson flexfec_media_packets 5 \
+  --argjson flexfec_repair_packets 1 \
+  --argjson playout_delay_hint_seconds 0.2 \
   --slurpfile viewer_network "${network}" \
   --slurpfile native_source_profile "${native_source_profile}" \
   -f "${script_directory}/result.jq" \
@@ -103,6 +106,12 @@ render_result "${fixture_directory}/samples.jsonl" | jq -e '
     .profile.edgeCredentialLifetimeSeconds == 300 and
     .profile.warmupSeconds == 20 and
     .profile.recoverySeconds == 1 and
+    .profile.flexFEC == {mediaPackets: 5, repairPackets: 1} and
+    .profile.playoutDelayHintSeconds == 0.2 and
+    .profile.acceptance.capacityTransitionGraceMilliseconds == 3000 and
+    .profile.acceptance.maximumCapacityTransitionFreezeSeconds == 1 and
+    .profile.acceptance.maximumContinuousImpairmentFreezeRatio == 0.02 and
+    .profile.acceptance.minimumFrameRateRatio == 0.8 and
     .setupMilliseconds == 750 and
     .setup.whepPostDurationMilliseconds == 200 and
     .setup.postToConnectedMilliseconds == 400 and
@@ -116,6 +125,78 @@ render_result "${fixture_directory}/samples.jsonl" | jq -e '
     .viewerNetwork.packetsLostNetChange == 0 and
     .viewerNetwork.recoveryFramesDecodedDelta == 330
   ' >/dev/null
+
+jq -c '
+  if .elapsedMilliseconds >= 3000 then
+    .freezeCount = 1 |
+    .totalFreezesDurationSeconds = 0.8
+  else . end
+' "${fixture_directory}/samples.jsonl" >"${fixture_directory}/bounded-transition-samples.jsonl"
+render_result "${fixture_directory}/bounded-transition-samples.jsonl" | jq -e '
+  .viewerNetwork.freezeDurationDeltaSeconds == 0.8 and
+  .viewerNetwork.steadyStateFreezeDurationDeltaSeconds == 0 and
+  .gates.playback == true and
+  .gates.viewerNetworkRecovery == true and
+  .passed == true
+' >/dev/null
+
+jq -c '
+  if .phase == "recovery" then
+    .freezeCount = 1 |
+    .totalFreezesDurationSeconds = 0.3
+  else . end
+' "${fixture_directory}/samples.jsonl" >"${fixture_directory}/bounded-recovery-transition-samples.jsonl"
+render_result "${fixture_directory}/bounded-recovery-transition-samples.jsonl" | jq -e '
+  .viewerNetwork.recoveryFreezeDurationDeltaSeconds == 0.3 and
+  .viewerNetwork.steadyRecoveryFreezeDurationDeltaSeconds == 0 and
+  .gates.playback == true and
+  .gates.viewerNetworkRecovery == true and
+  .passed == true
+' >/dev/null
+
+jq -c '
+  if .phase == "recovery" and .elapsedMilliseconds >= 15000 then
+    .freezeCount = 1 |
+    .totalFreezesDurationSeconds = 0.3
+  else . end
+' "${fixture_directory}/samples.jsonl" >"${fixture_directory}/late-recovery-samples.jsonl"
+render_result "${fixture_directory}/late-recovery-samples.jsonl" | jq -e '
+  .viewerNetwork.recoveryFreezeDurationDeltaSeconds == 0.3 and
+  .viewerNetwork.steadyRecoveryFreezeDurationDeltaSeconds == 0.3 and
+  .gates.playback == false and
+  .gates.viewerNetworkRecovery == false and
+  .passed == false
+' >/dev/null
+
+jq -c '
+  (if .phase == "recovery" then
+    .freezeCount = 1 |
+    .totalFreezesDurationSeconds = 0.2
+  else . end),
+  if .phase == "viewer-network" and .elapsedMilliseconds == 3000 then
+    (. + {
+      elapsedMilliseconds: 5000,
+      framesDecoded: 120,
+      qpSum: 3000,
+      bytesReceived: 4000000
+    }),
+    (. + {
+      elapsedMilliseconds: 6000,
+      framesDecoded: 150,
+      qpSum: 3750,
+      bytesReceived: 5000000,
+      freezeCount: 1,
+      totalFreezesDurationSeconds: 0.2
+    })
+  else empty end
+' "${fixture_directory}/samples.jsonl" >"${fixture_directory}/late-transition-samples.jsonl"
+render_result "${fixture_directory}/late-transition-samples.jsonl" | jq -e '
+  .viewerNetwork.freezeDurationDeltaSeconds == 0.2 and
+  .viewerNetwork.steadyStateFreezeDurationDeltaSeconds == 0.2 and
+  .gates.playback == false and
+  .gates.viewerNetworkRecovery == false and
+  .passed == false
+' >/dev/null
 
 jq -n '{peerConnection: {nackNegotiated: true, twccNegotiated: true, rtxNegotiated: false, flexFECNegotiated: false}}' \
   >"${fixture_directory}/native-browser.json"
@@ -165,15 +246,15 @@ jq -c '
   if .phase == "viewer-network" and .elapsedMilliseconds == 3000 then
     .framesDecoded = 83 |
     .freezeCount = 1 |
-    .totalFreezesDurationSeconds = 0.03
+    .totalFreezesDurationSeconds = 1.03
   elif .phase == "recovery" then
     .freezeCount = 1 |
-    .totalFreezesDurationSeconds = 0.03
+    .totalFreezesDurationSeconds = 1.03
   else . end
 ' "${fixture_directory}/samples.jsonl" >"${fixture_directory}/degraded-samples.jsonl"
 render_result "${fixture_directory}/degraded-samples.jsonl" | jq -e '
   .phases.viewerNetwork.decodedFramesPerSecond == 23 and
-  .viewerNetwork.freezeRatio == 0.03 and
+  .viewerNetwork.freezeRatio == 1.03 and
   .gates.playback == false and
   .gates.viewerNetworkRecovery == false and
   .passed == false

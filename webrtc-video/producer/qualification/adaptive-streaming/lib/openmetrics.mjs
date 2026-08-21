@@ -148,6 +148,28 @@ export function producerSample(samples) {
       "rstream_video_producer_pacer_queue_dropped_packets_total",
     ),
     pacerQueuePackets: value("rstream_video_producer_pacer_queue_packets"),
+    pacerRetransmissionRTTMilliseconds: scale(
+      value(
+        "rstream_video_producer_pacer_maximum_retransmission_round_trip_time_seconds",
+      ),
+      1_000,
+    ),
+    pacerRetransmissionIntervalMilliseconds: scale(
+      value(
+        "rstream_video_producer_pacer_maximum_retransmission_interval_seconds",
+      ),
+      1_000,
+    ),
+    pacerRTXPacketsCoalesced: labeled(
+      "rstream_video_producer_pacer_repair_discarded_packets_total",
+      "reason",
+      "coalesced",
+    ),
+    pacerRTXPacketsSuppressed: labeled(
+      "rstream_video_producer_pacer_repair_discarded_packets_total",
+      "reason",
+      "suppressed",
+    ),
     pacerSentFEC: labeled(
       "rstream_video_producer_pacer_sent_packets_total",
       "kind",

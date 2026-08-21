@@ -21,6 +21,10 @@ rstream_video_producer_loss_guard_target_bytes_per_second 500000
 rstream_video_producer_loss_guard_transitions_total{transition="reduce"} 3
 rstream_video_producer_loss_guard_transitions_total{transition="recover"} 2
 rstream_video_producer_pacer_target_bytes_per_second 1200000
+rstream_video_producer_pacer_maximum_retransmission_round_trip_time_seconds 0.06
+rstream_video_producer_pacer_maximum_retransmission_interval_seconds 0.065
+rstream_video_producer_pacer_repair_discarded_packets_total{reason="coalesced",repair="rtx"} 11
+rstream_video_producer_pacer_repair_discarded_packets_total{reason="suppressed",repair="rtx"} 13
 rstream_video_producer_pacer_sent_packets_total{kind="primary"} 100
 rstream_video_producer_pacer_sent_packets_total{kind="rtx"} 7
 rstream_video_producer_adaptive_bitrate_updates_total{outcome="applied"} 4
@@ -39,6 +43,10 @@ rstream_video_producer_malformed_feedback_total{protocol="twcc"} 2
   assert.equal(sample.lossGuardReductions, 3);
   assert.equal(sample.lossGuardRecoveries, 2);
   assert.equal(sample.pacerTargetBitrateKbps, 9600);
+  assert.equal(sample.pacerRetransmissionRTTMilliseconds, 60);
+  assert.equal(sample.pacerRetransmissionIntervalMilliseconds, 65);
+  assert.equal(sample.pacerRTXPacketsCoalesced, 11);
+  assert.equal(sample.pacerRTXPacketsSuppressed, 13);
   assert.equal(sample.pacerSentPrimary, 100);
   assert.equal(sample.pacerSentRTX, 7);
   assert.equal(sample.adaptiveBitrateUpdates, 4);

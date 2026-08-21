@@ -26,6 +26,10 @@ type rejectingBandwidthEstimator struct {
 	admitted chan media.AccessUnit
 }
 
+type roundTripObservingEstimator struct {
+	observed chan time.Duration
+}
+
 type recordingKeyFrameRequester struct {
 	requested chan struct{}
 	err       error
@@ -56,6 +60,89 @@ func (r *rejectingBandwidthEstimator) GetStats() map[string]any {
 func (r *rejectingBandwidthEstimator) AdmitMediaFrame(size int, keyFrame bool) mediaFrameAdmission {
 	r.admitted <- media.AccessUnit{Data: make([]byte, size), KeyFrame: keyFrame}
 	return mediaFrameAdmission{requestKeyFrame: true}
+}
+
+func (r *roundTripObservingEstimator) GetTargetBitrate() int {
+	return 0
+}
+
+func (r *roundTripObservingEstimator) OnTargetBitrateChange(func(int)) {}
+
+func (r *roundTripObservingEstimator) GetStats() map[string]any {
+	return nil
+}
+
+func (r *roundTripObservingEstimator) observeRoundTripTime(roundTripTime time.Duration) {
+	r.observed <- roundTripTime
+}
+
+func TestReceptionReportRoundTripTime(t *testing.T) {
+	arrival := time.Date(2026, time.August, 21, 12, 0, 0, 0, time.UTC)
+	report := rtcp.ReceptionReport{
+		LastSenderReport: compactNTPTime(arrival.Add(-175 * time.Millisecond)),
+		Delay:            compactNTPDuration(25 * time.Millisecond),
+	}
+	roundTripTime, ok := receptionReportRoundTripTime(report, arrival)
+	if !ok {
+		t.Fatal("valid reception report did not produce an RTT")
+	}
+	if delta := roundTripTime - 150*time.Millisecond; delta < -time.Millisecond || delta > time.Millisecond {
+		t.Fatalf("round-trip time = %v, want 150ms", roundTripTime)
+	}
+	if _, ok := receptionReportRoundTripTime(rtcp.ReceptionReport{}, arrival); ok {
+		t.Fatal("report without a last sender report produced an RTT")
+	}
+	invalid := rtcp.ReceptionReport{
+		LastSenderReport: compactNTPTime(arrival.Add(-10 * time.Millisecond)),
+		Delay:            compactNTPDuration(100 * time.Millisecond),
+	}
+	if _, ok := receptionReportRoundTripTime(invalid, arrival); ok {
+		t.Fatal("report with a delay beyond its arrival interval produced an RTT")
+	}
+}
+
+func TestSessionUsesShortestValidReceptionReportRTT(t *testing.T) {
+	const mediaSSRC = 42
+	arrival := time.Date(2026, time.August, 21, 12, 0, 0, 0, time.UTC)
+	estimator := &roundTripObservingEstimator{observed: make(chan time.Duration, 1)}
+	session := &Session{estimator: estimator}
+	session.observeRoundTripTime([]rtcp.ReceptionReport{
+		{
+			SSRC:             mediaSSRC,
+			LastSenderReport: compactNTPTime(arrival.Add(-250 * time.Millisecond)),
+			Delay:            compactNTPDuration(50 * time.Millisecond),
+		},
+		{
+			SSRC:             mediaSSRC + 1,
+			LastSenderReport: compactNTPTime(arrival.Add(-125 * time.Millisecond)),
+			Delay:            compactNTPDuration(25 * time.Millisecond),
+		},
+		{
+			SSRC:             mediaSSRC,
+			LastSenderReport: compactNTPTime(arrival.Add(-175 * time.Millisecond)),
+			Delay:            compactNTPDuration(25 * time.Millisecond),
+		},
+	}, mediaSSRC, arrival)
+	select {
+	case observed := <-estimator.observed:
+		if delta := observed - 150*time.Millisecond; delta < -time.Millisecond || delta > time.Millisecond {
+			t.Fatalf("observed RTT = %v, want 150ms", observed)
+		}
+	default:
+		t.Fatal("session did not forward the reception report RTT")
+	}
+}
+
+func TestSessionUsesCachedOutboundMediaSSRCWithoutSenderLookup(t *testing.T) {
+	session := &Session{}
+	session.mediaSSRC.Store(42)
+	if mediaSSRC := session.outboundMediaSSRC(); mediaSSRC != 42 {
+		t.Fatalf("outbound media SSRC = %d, want 42", mediaSSRC)
+	}
+}
+
+func compactNTPDuration(value time.Duration) uint32 {
+	return uint32(uint64(value) * (1 << 16) / uint64(time.Second))
 }
 
 func (r *recordingKeyFrameRequester) Info() media.EncoderInfo {

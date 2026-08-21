@@ -25,6 +25,8 @@ type ProducerStats struct {
 	MaximumPacketLossRatio          float64
 	MaximumDelayEstimateSeconds     float64
 	MaximumPacerQueueDelaySeconds   float64
+	MaximumRTXRTTSeconds            float64
+	MaximumRTXRetryIntervalSeconds  float64
 	LossGuardActiveSessions         int
 	LossGuardTargetBitrateBps       int64
 	AdaptiveBitrateUpdates          uint64
@@ -43,6 +45,7 @@ type ProducerStats struct {
 	PacerRepairPacketsTrimmed       uint64
 	PacerRTXPacketsExpired          uint64
 	PacerRTXPacketsCoalesced        uint64
+	PacerRTXPacketsSuppressed       uint64
 	PacerFECPacketsExpired          uint64
 	PacerRTXPacketsTrimmed          uint64
 	PacerFECPacketsTrimmed          uint64
@@ -161,6 +164,8 @@ func addActiveSessionStats(producer *ProducerStats, session SessionStats, shared
 	producer.MaximumPacketLossRatio = max(producer.MaximumPacketLossRatio, bandwidth.AverageLoss)
 	producer.MaximumDelayEstimateSeconds = max(producer.MaximumDelayEstimateSeconds, bandwidth.DelayEstimateMs/1000)
 	producer.MaximumPacerQueueDelaySeconds = max(producer.MaximumPacerQueueDelaySeconds, bandwidth.PacerQueueDelayMs/1000)
+	producer.MaximumRTXRTTSeconds = max(producer.MaximumRTXRTTSeconds, bandwidth.PacerRTXRoundTripTimeMs/1000)
+	producer.MaximumRTXRetryIntervalSeconds = max(producer.MaximumRTXRetryIntervalSeconds, bandwidth.PacerRTXRetryIntervalMs/1000)
 	producer.LossControllerTargetBitrateBps += int64(bandwidth.LossTargetBitrateBps)
 	producer.DelayControllerTargetBitrateBps += int64(bandwidth.DelayTargetBitrateBps)
 	switch bandwidth.State {
@@ -203,6 +208,7 @@ func addProducerTotals(producer *ProducerStats, totals producerTotals) {
 	producer.PacerRepairPacketsTrimmed += bandwidth.PacerRepairPacketsTrimmed
 	producer.PacerRTXPacketsExpired += bandwidth.PacerRTXPacketsExpired
 	producer.PacerRTXPacketsCoalesced += bandwidth.PacerRTXPacketsCoalesced
+	producer.PacerRTXPacketsSuppressed += bandwidth.PacerRTXPacketsSuppressed
 	producer.PacerFECPacketsExpired += bandwidth.PacerFECPacketsExpired
 	producer.PacerRTXPacketsTrimmed += bandwidth.PacerRTXPacketsTrimmed
 	producer.PacerFECPacketsTrimmed += bandwidth.PacerFECPacketsTrimmed
@@ -231,6 +237,7 @@ func addBandwidthCounters(target *BandwidthStats, source BandwidthStats) {
 	target.PacerRepairPacketsTrimmed += source.PacerRepairPacketsTrimmed
 	target.PacerRTXPacketsExpired += source.PacerRTXPacketsExpired
 	target.PacerRTXPacketsCoalesced += source.PacerRTXPacketsCoalesced
+	target.PacerRTXPacketsSuppressed += source.PacerRTXPacketsSuppressed
 	target.PacerFECPacketsExpired += source.PacerFECPacketsExpired
 	target.PacerRTXPacketsTrimmed += source.PacerRTXPacketsTrimmed
 	target.PacerFECPacketsTrimmed += source.PacerFECPacketsTrimmed
