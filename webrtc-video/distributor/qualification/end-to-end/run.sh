@@ -15,6 +15,7 @@ repository_directory="$(git -C "${video_directory}" rev-parse --show-toplevel)"
 context_name="${RSTREAM_CONTEXT:-}"
 rstream_cli="${RSTREAM_CLI:-rstream}"
 distribution_mode="${RSTREAM_DISTRIBUTOR_MODE:-mediamtx}"
+warmup_seconds="${RSTREAM_DISTRIBUTOR_WARMUP_SECONDS:-20}"
 duration_seconds="${RSTREAM_DISTRIBUTOR_QUALIFICATION_SECONDS:-15}"
 edge_auth="${RSTREAM_DISTRIBUTOR_EDGE_AUTH:-true}"
 recovery_seconds="${RSTREAM_DISTRIBUTOR_RECOVERY_SECONDS:-45}"
@@ -47,6 +48,10 @@ true | false)
 esac
 if ! [[ "${duration_seconds}" =~ ^[0-9]+$ ]] || ((duration_seconds < 10 || duration_seconds > 300)); then
   printf 'RSTREAM_DISTRIBUTOR_QUALIFICATION_SECONDS must be from 10 through 300\n' >&2
+  exit 1
+fi
+if ! [[ "${warmup_seconds}" =~ ^[0-9]+$ ]] || ((warmup_seconds < 10 || warmup_seconds > 300)); then
+  printf 'RSTREAM_DISTRIBUTOR_WARMUP_SECONDS must be from 10 through 300\n' >&2
   exit 1
 fi
 if ! [[ "${recovery_seconds}" =~ ^[0-9]+$ ]] || ((recovery_seconds < 15 || recovery_seconds > 300)); then
@@ -102,9 +107,9 @@ viewer_network_enabled="$(jq -nr \
   --argjson delay "${viewer_delay_milliseconds}" \
   --argjson jitter "${viewer_jitter_milliseconds}" \
   '$loss > 0 or $capacity > 0 or $delay > 0 or $jitter > 0')"
-collector_maximum_duration_seconds=$((duration_seconds + 60))
+collector_maximum_duration_seconds=$((warmup_seconds + duration_seconds + 60))
 if [[ "${viewer_network_enabled}" == true ]]; then
-  collector_maximum_duration_seconds=$((duration_seconds * 2 + recovery_seconds + 60))
+  collector_maximum_duration_seconds=$((warmup_seconds + duration_seconds * 2 + recovery_seconds + 60))
 fi
 connect_token_ttl_seconds=$((collector_maximum_duration_seconds + 180))
 if ((connect_token_ttl_seconds < 300)); then
@@ -274,7 +279,7 @@ go -C "${producer_directory}" run ./qualification/adaptive-streaming/cmd/prepare
   -tunnel-token-auth="${edge_auth}" \
   -output-directory "${runtime_directory}"
 mkdir -m 0700 "${control_directory}"
-write_phase baseline
+write_phase warmup
 jq -n '{enabled: false, capacityKbps: 0, delayMilliseconds: 0, jitterMilliseconds: 0, lossPercent: 0, queuePackets: 0, qdisc: null, filters: []}' \
   >"${output_directory}/viewer-network.json"
 jq -n '{}' >"${output_directory}/adapter-result.json"
@@ -553,6 +558,8 @@ fi
 ) >"${output_directory}/resource-samples.jsonl" &
 resource_sampler_pid=$!
 
+sleep "${warmup_seconds}"
+write_phase baseline
 if [[ "${viewer_network_enabled}" == true ]]; then
   sleep "${duration_seconds}"
   browser_ip="$(docker inspect --format "{{with index .NetworkSettings.Networks \"${network_name}\"}}{{.IPAddress}}{{end}}" "${browser_name}")"
@@ -700,6 +707,7 @@ jq -s \
   --slurpfile browser "${output_directory}/browser.json" \
   --slurpfile signaling "${output_directory}/signaling-events.json" \
   --slurpfile resources "${output_directory}/resources.json" \
+  --argjson warmup_seconds "${warmup_seconds}" \
   --argjson phase_seconds "${duration_seconds}" \
   --argjson recovery_seconds "${recovery_seconds}" \
   --slurpfile viewer_network "${output_directory}/viewer-network.json" \

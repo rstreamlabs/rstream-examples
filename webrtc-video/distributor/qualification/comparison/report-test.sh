@@ -28,9 +28,9 @@ jq -n '
       peerToFirstDecodedFrameMilliseconds: (if mode == "direct" then 500 else 750 end)
     },
     teardown: {whepDeleteDurationMilliseconds: 125},
-    profile: {phaseSeconds: 15, recoverySeconds: 45, viewerNetwork: {capacityKbps: 4000, delayMilliseconds: 0, jitterMilliseconds: 0, lossPercent: 0, queuePackets: 256}},
+    profile: {warmupSeconds: 20, phaseSeconds: 15, recoverySeconds: 45, viewerNetwork: {capacityKbps: 4000, delayMilliseconds: 0, jitterMilliseconds: 0, lossPercent: 0, queuePackets: 256}},
     phases: {
-      baseline: {averageDecodedQP: 24, encoderTargetKbps: {last: 8000}},
+      baseline: {averageDecodedQP: 24, encoderTargetKbps: {last: 1000, medianLast10Seconds: 8000}},
       viewerNetwork: {
         averageDecodedQP: (if mode == "direct" then 28 else 24 end),
         receivedBitrateKbps: (if mode == "direct" then 3000 else 2000 end),
@@ -38,9 +38,12 @@ jq -n '
         nacks: 10,
         packetsLostNetChange: (if mode == "direct" then 2 else 1000 end),
         freezeDurationSeconds: (if mode == "direct" then 0.1 else 10 end),
-        encoderTargetKbps: {last: (if mode == "direct" then 2000 else 8000 end)}
+        encoderTargetKbps: {
+          last: (if mode == "direct" then 8000 else 1000 end),
+          medianLast10Seconds: (if mode == "direct" then 2000 else 8000 end)
+        }
       },
-      recovery: {averageDecodedQP: 24, encoderTargetKbps: {last: 8000, medianLast10Seconds: 7000, sustainedMinimumLast10Seconds: 7000}}
+      recovery: {averageDecodedQP: 24, encoderTargetKbps: {last: 1000, medianLast10Seconds: 7000, sustainedMinimumLast10Seconds: 7000}}
     },
     resources: resources(mode)
   };

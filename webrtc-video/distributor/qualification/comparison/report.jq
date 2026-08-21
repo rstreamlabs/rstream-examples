@@ -25,13 +25,13 @@ def mode_summary(mode):
       freezeDurationSeconds: range([$selected[].phases.viewerNetwork.freezeDurationSeconds])
     },
     sourceAdaptation: {
-      baselineEncoderTargetKbps: range([$selected[].phases.baseline.encoderTargetKbps.last]),
-      impairedEncoderTargetKbps: range([$selected[].phases.viewerNetwork.encoderTargetKbps.last]),
-      recoveryEncoderTargetKbps: range([$selected[].phases.recovery.encoderTargetKbps.last]),
+      baselineEncoderTargetKbps: range([$selected[].phases.baseline.encoderTargetKbps.medianLast10Seconds]),
+      impairedEncoderTargetKbps: range([$selected[].phases.viewerNetwork.encoderTargetKbps.medianLast10Seconds]),
+      recoveryEncoderTargetKbps: range([$selected[].phases.recovery.encoderTargetKbps.medianLast10Seconds]),
       sustainedRecoveryEncoderTargetKbps: range([$selected[].phases.recovery.encoderTargetKbps.sustainedMinimumLast10Seconds]),
       medianRecoveryEncoderTargetKbps: range([$selected[].phases.recovery.encoderTargetKbps.medianLast10Seconds]),
-      adaptedRuns: ([$selected[] | select(.phases.viewerNetwork.encoderTargetKbps.last <= (.phases.baseline.encoderTargetKbps.last * 0.8))] | length),
-      recoveredRuns: ([$selected[] | select(.phases.recovery.encoderTargetKbps.medianLast10Seconds >= (.phases.baseline.encoderTargetKbps.last * 0.8))] | length)
+      adaptedRuns: ([$selected[] | select(.phases.viewerNetwork.encoderTargetKbps.medianLast10Seconds <= (.phases.baseline.encoderTargetKbps.medianLast10Seconds * 0.8))] | length),
+      recoveredRuns: ([$selected[] | select(.phases.recovery.encoderTargetKbps.medianLast10Seconds >= (.phases.baseline.encoderTargetKbps.medianLast10Seconds * 0.8))] | length)
     },
     visualQuality: {
       baselineAverageDecodedQP: range([$selected[].phases.baseline.averageDecodedQP]),
@@ -87,15 +87,15 @@ def mode_summary(mode):
     sameProfile: (([$runs[].profile] | unique | length) == 1),
     resourceReportsComplete: ([$runs[] | (.resources.components.producer.samples >= 2 and .resources.components.browser.samples >= 2 and (if .mode == "mediamtx" then .resources.components.distributor.samples >= 2 else true end))] | all),
     directReferenceQualified: ([$direct[].passed] | all),
-    directSourceAdapted: (if $adaptation_required then [$direct[] | .phases.viewerNetwork.encoderTargetKbps.last <= (.phases.baseline.encoderTargetKbps.last * 0.8)] | all else true end),
-    directSourceRecovered: (if $network_conditioned then [$direct[] | .phases.recovery.encoderTargetKbps.medianLast10Seconds >= (.phases.baseline.encoderTargetKbps.last * 0.8)] | all else true end)
+    directSourceAdapted: (if $adaptation_required then [$direct[] | .phases.viewerNetwork.encoderTargetKbps.medianLast10Seconds <= (.phases.baseline.encoderTargetKbps.medianLast10Seconds * 0.8)] | all else true end),
+    directSourceRecovered: (if $network_conditioned then [$direct[] | .phases.recovery.encoderTargetKbps.medianLast10Seconds >= (.phases.baseline.encoderTargetKbps.medianLast10Seconds * 0.8)] | all else true end)
   },
   verdict: {
     directProfileQualified: ([$direct[].passed] | all),
     directAdaptive: (if $adaptation_required then [$direct[].passed] | all else null end),
     mediaMTXProfileQualified: ([$distributed[].passed] | all),
     mediaMTXSingleRenditionAdaptive: (if $adaptation_required then [$distributed[].passed] | all else null end),
-    mediaMTXSourceRespondsToViewerTWCC: (if $adaptation_required then [$distributed[] | .phases.viewerNetwork.encoderTargetKbps.last <= (.phases.baseline.encoderTargetKbps.last * 0.8)] | all else null end),
+    mediaMTXSourceRespondsToViewerTWCC: (if $adaptation_required then [$distributed[] | .phases.viewerNetwork.encoderTargetKbps.medianLast10Seconds <= (.phases.baseline.encoderTargetKbps.medianLast10Seconds * 0.8)] | all else null end),
     mediaMTXRequiresRenditionStrategy: (if $adaptation_required then (([$distributed[].passed] | all) | not) else false end)
   }
 }

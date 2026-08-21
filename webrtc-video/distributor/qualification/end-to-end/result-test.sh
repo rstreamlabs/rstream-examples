@@ -88,6 +88,7 @@ render_result() {
   --slurpfile browser "${browser}" \
   --slurpfile signaling "${fixture_directory}/signaling.json" \
   --slurpfile resources "${fixture_directory}/resources.json" \
+  --argjson warmup_seconds 20 \
   --argjson phase_seconds 1 \
   --argjson recovery_seconds 1 \
   --slurpfile viewer_network "${network}" \
@@ -100,6 +101,7 @@ render_result "${fixture_directory}/samples.jsonl" | jq -e '
     .passed == true and
     .profile.edgeAuthentication == true and
     .profile.edgeCredentialLifetimeSeconds == 300 and
+    .profile.warmupSeconds == 20 and
     .profile.recoverySeconds == 1 and
     .setupMilliseconds == 750 and
     .setup.whepPostDurationMilliseconds == 200 and

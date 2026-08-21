@@ -6,6 +6,7 @@ end_to_end_runner="${script_directory}/../end-to-end/run.sh"
 context_name="${RSTREAM_CONTEXT:-}"
 output_directory="${1:-}"
 run_count="${RSTREAM_DISTRIBUTOR_COMPARISON_RUNS:-3}"
+warmup_seconds="${RSTREAM_DISTRIBUTOR_WARMUP_SECONDS:-20}"
 phase_seconds="${RSTREAM_DISTRIBUTOR_QUALIFICATION_SECONDS:-15}"
 recovery_seconds="${RSTREAM_DISTRIBUTOR_RECOVERY_SECONDS:-45}"
 capacity_kbps="${RSTREAM_DISTRIBUTOR_VIEWER_CAPACITY_KBPS:-4000}"
@@ -26,6 +27,10 @@ if ! [[ "${run_count}" =~ ^[0-9]+$ ]] || ((run_count < 3 || run_count > 10)); th
   printf 'RSTREAM_DISTRIBUTOR_COMPARISON_RUNS must be from 3 through 10\n' >&2
   exit 1
 fi
+if ! [[ "${warmup_seconds}" =~ ^[0-9]+$ ]] || ((warmup_seconds < 10 || warmup_seconds > 300)); then
+  printf 'RSTREAM_DISTRIBUTOR_WARMUP_SECONDS must be from 10 through 300\n' >&2
+  exit 1
+fi
 if [[ -e "${output_directory}" ]] && [[ -n "$(find "${output_directory}" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
   printf 'output directory is not empty: %s\n' "${output_directory}" >&2
   exit 1
@@ -39,6 +44,7 @@ for run in $(seq 1 "${run_count}"); do
     printf 'Running %s comparison %d/%d\n' "${mode}" "${run}" "${run_count}"
     status=0
     RSTREAM_DISTRIBUTOR_MODE="${mode}" \
+    RSTREAM_DISTRIBUTOR_WARMUP_SECONDS="${warmup_seconds}" \
     RSTREAM_DISTRIBUTOR_QUALIFICATION_SECONDS="${phase_seconds}" \
     RSTREAM_DISTRIBUTOR_RECOVERY_SECONDS="${recovery_seconds}" \
     RSTREAM_DISTRIBUTOR_VIEWER_CAPACITY_KBPS="${capacity_kbps}" \

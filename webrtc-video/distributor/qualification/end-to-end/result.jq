@@ -83,6 +83,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
   profile: {
     edgeAuthentication: $edge_auth,
     edgeCredentialLifetimeSeconds: (if $edge_auth then $connect_token_ttl_seconds else null end),
+    warmupSeconds: $warmup_seconds,
     phaseSeconds: $phase_seconds,
     recoverySeconds: $recovery_seconds,
     viewerNetwork: {
@@ -211,7 +212,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
 | .gates.sourceTargetRecovery = (
     if .viewerNetwork.enabled and $mode == "direct" then
       .phases.recovery.encoderTargetKbps.medianLast10Seconds >=
-        (.phases.baseline.encoderTargetKbps.last * 0.8)
+        (.phases.baseline.encoderTargetKbps.medianLast10Seconds * 0.8)
     else true end
   )
 | .passed = ([.gates[]] | all)
