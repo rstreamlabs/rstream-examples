@@ -225,6 +225,50 @@ func TestProcessEmitsOrderedPacketsAndSkipsUnrepairedGapAfterBound(t *testing.T)
 	}
 }
 
+func TestProcessDoesNotPostponeExpiredReorderDeadlineUnderSaturatedInput(t *testing.T) {
+	config := DefaultConfig()
+	config.MinNACKDelay = time.Nanosecond
+	config.MaxNACKDelay = time.Nanosecond
+	config.NACKRetry = time.Millisecond
+	config.PacketExpiry = time.Second
+	config.ReorderWait = time.Nanosecond
+	config.MaxPending = 32
+	input := make(chan Packet, 128)
+	started := time.Now().Add(-time.Second)
+	input <- packetAt(1, started)
+	for sequence := uint16(3); sequence <= 100; sequence++ {
+		input <- packetAt(sequence, started)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	emitted := make(chan uint16, 128)
+	done := make(chan error, 1)
+	go func() {
+		_, err := Process(ctx, config, input, func(packet *rtp.Packet) error {
+			emitted <- packet.SequenceNumber
+			return nil
+		}, func([]uint16) error { return nil })
+		done <- err
+	}()
+	for {
+		select {
+		case sequence := <-emitted:
+			if sequence == 100 {
+				cancel()
+				if err := <-done; !errors.Is(err, context.Canceled) {
+					t.Fatalf("process error = %v, want cancellation", err)
+				}
+				return
+			}
+		case err := <-done:
+			cancel()
+			t.Fatalf("process stopped before draining saturated input: %v", err)
+		case <-time.After(time.Second):
+			cancel()
+			t.Fatal("expired reorder deadline was postponed by saturated input")
+		}
+	}
+}
+
 func TestProcessCancellationAndFeedbackFailureTerminateOnce(t *testing.T) {
 	config := DefaultConfig()
 	config.MinNACKDelay = time.Millisecond

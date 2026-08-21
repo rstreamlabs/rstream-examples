@@ -38,6 +38,8 @@ const rstreamEnvSchema = z
     VIEWER_TOKEN_TTL_SECONDS: secondsSchema("120"),
     WATCH_TOKEN_TTL_SECONDS: secondsSchema("120"),
     VIDEO_DISTRIBUTOR: z.enum(["direct", "mediamtx"]).default("direct"),
+    MEDIAMTX_EXPOSURE: z.enum(["public", "rstream"]).default("rstream"),
+    MEDIAMTX_PUBLIC_URL: optionalUrlSchema,
     MEDIAMTX_TUNNEL_NAME: optionalStringSchema,
     MEDIAMTX_SOURCE_RESOLVER_JWKS: optionalStringSchema,
     MEDIAMTX_SOURCE_RESOLVER_ISSUER: z
@@ -91,7 +93,6 @@ const rstreamEnvSchema = z
       return
     }
     for (const [name, value] of [
-      ["MEDIAMTX_TUNNEL_NAME", env.MEDIAMTX_TUNNEL_NAME],
       ["MEDIAMTX_SOURCE_RESOLVER_JWKS", env.MEDIAMTX_SOURCE_RESOLVER_JWKS],
       ["MEDIAMTX_JWT_PRIVATE_KEY_BASE64", env.MEDIAMTX_JWT_PRIVATE_KEY_BASE64],
     ] as const) {
@@ -103,6 +104,43 @@ const rstreamEnvSchema = z
         })
       }
     }
+    if (env.MEDIAMTX_EXPOSURE === "public") {
+      if (!env.MEDIAMTX_PUBLIC_URL) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["MEDIAMTX_PUBLIC_URL"],
+          message:
+            "MEDIAMTX_PUBLIC_URL is required when MEDIAMTX_EXPOSURE=public.",
+        })
+      } else {
+        validateMediaMTXPublicURL(env.MEDIAMTX_PUBLIC_URL, ctx)
+      }
+      if (env.MEDIAMTX_TUNNEL_NAME) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["MEDIAMTX_TUNNEL_NAME"],
+          message:
+            "MEDIAMTX_TUNNEL_NAME must be empty when MEDIAMTX_EXPOSURE=public.",
+        })
+      }
+    } else {
+      if (!env.MEDIAMTX_TUNNEL_NAME) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["MEDIAMTX_TUNNEL_NAME"],
+          message:
+            "MEDIAMTX_TUNNEL_NAME is required when MEDIAMTX_EXPOSURE=rstream.",
+        })
+      }
+      if (env.MEDIAMTX_PUBLIC_URL) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["MEDIAMTX_PUBLIC_URL"],
+          message:
+            "MEDIAMTX_PUBLIC_URL must be empty when MEDIAMTX_EXPOSURE=rstream.",
+        })
+      }
+    }
     if (env.MEDIAMTX_TOKEN_TTL_SECONDS > 3600) {
       ctx.addIssue({
         code: "custom",
@@ -111,6 +149,27 @@ const rstreamEnvSchema = z
       })
     }
   })
+
+function validateMediaMTXPublicURL(rawURL: string, ctx: z.RefinementCtx) {
+  const url = new URL(rawURL)
+  const loopback = new Set(["127.0.0.1", "::1", "localhost"]).has(url.hostname)
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["MEDIAMTX_PUBLIC_URL"],
+      message:
+        "MEDIAMTX_PUBLIC_URL must use HTTPS, except for a loopback development URL.",
+    })
+  }
+  if (url.username || url.password || url.search || url.hash) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["MEDIAMTX_PUBLIC_URL"],
+      message:
+        "MEDIAMTX_PUBLIC_URL must not contain credentials, a query, or a fragment.",
+    })
+  }
+}
 
 export type RstreamEnv = z.infer<typeof rstreamEnvSchema>
 

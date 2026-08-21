@@ -26,6 +26,11 @@ viewer_capacity_kbps="${RSTREAM_DISTRIBUTOR_VIEWER_CAPACITY_KBPS:-0}"
 viewer_delay_milliseconds="${RSTREAM_DISTRIBUTOR_VIEWER_DELAY_MILLISECONDS:-0}"
 viewer_jitter_milliseconds="${RSTREAM_DISTRIBUTOR_VIEWER_JITTER_MILLISECONDS:-0}"
 viewer_queue_packets="${RSTREAM_DISTRIBUTOR_VIEWER_QUEUE_PACKETS:-256}"
+source_loss_percent="${RSTREAM_DISTRIBUTOR_SOURCE_LOSS_PERCENT:-0}"
+source_capacity_kbps="${RSTREAM_DISTRIBUTOR_SOURCE_CAPACITY_KBPS:-0}"
+source_delay_milliseconds="${RSTREAM_DISTRIBUTOR_SOURCE_DELAY_MILLISECONDS:-0}"
+source_jitter_milliseconds="${RSTREAM_DISTRIBUTOR_SOURCE_JITTER_MILLISECONDS:-0}"
+source_queue_packets="${RSTREAM_DISTRIBUTOR_SOURCE_QUEUE_PACKETS:-256}"
 playout_delay_hint_seconds="${RSTREAM_DISTRIBUTOR_PLAYOUT_DELAY_HINT_SECONDS:-0}"
 output_directory="${1:-}"
 
@@ -82,11 +87,11 @@ for command in docker git go jq node; do
     exit 1
   fi
 done
-if [[ "${edge_auth}" == true ]] && ! command -v "${rstream_cli}" >/dev/null; then
+if ! command -v "${rstream_cli}" >/dev/null; then
   printf 'required command not found: %s\n' "${rstream_cli}" >&2
   exit 1
 fi
-if [[ "${edge_auth}" == true ]] && ! "${rstream_cli}" token create --help 2>&1 | grep -q -- '--expires-in'; then
+if ! "${rstream_cli}" token create --help 2>&1 | grep -q -- '--expires-in'; then
   printf 'the selected rstream CLI cannot create bounded-lifetime tokens; install version 1.29.0 or newer, or set RSTREAM_CLI to a compatible binary\n' >&2
   exit 1
 fi
@@ -126,19 +131,66 @@ if ((viewer_queue_packets < 32 || viewer_queue_packets > 4096)); then
   printf 'RSTREAM_DISTRIBUTOR_VIEWER_QUEUE_PACKETS must be from 32 through 4096\n' >&2
   exit 1
 fi
+if ! jq -en --arg value "${source_loss_percent}" '
+  ($value | tonumber) as $loss | $loss >= 0 and $loss <= 20
+' >/dev/null 2>&1; then
+  printf 'RSTREAM_DISTRIBUTOR_SOURCE_LOSS_PERCENT must be from 0 through 20\n' >&2
+  exit 1
+fi
+source_loss_percent="$(jq -nr --arg value "${source_loss_percent}" '$value | tonumber')"
+for value in "${source_capacity_kbps}" "${source_delay_milliseconds}" "${source_jitter_milliseconds}" "${source_queue_packets}"; do
+  if ! [[ "${value}" =~ ^[0-9]+$ ]]; then
+    printf 'source capacity, delay, jitter, and queue values must be non-negative integers\n' >&2
+    exit 1
+  fi
+done
+source_capacity_kbps=$((10#${source_capacity_kbps}))
+source_delay_milliseconds=$((10#${source_delay_milliseconds}))
+source_jitter_milliseconds=$((10#${source_jitter_milliseconds}))
+source_queue_packets=$((10#${source_queue_packets}))
+if ((source_capacity_kbps != 0 && source_capacity_kbps < 100)); then
+  printf 'RSTREAM_DISTRIBUTOR_SOURCE_CAPACITY_KBPS must be zero or at least 100\n' >&2
+  exit 1
+fi
+if ((source_delay_milliseconds > 2000 || source_jitter_milliseconds > 1000 || source_jitter_milliseconds > source_delay_milliseconds)); then
+  printf 'source delay must be at most 2000 ms and jitter must not exceed the delay or 1000 ms\n' >&2
+  exit 1
+fi
+if ((source_queue_packets < 32 || source_queue_packets > 4096)); then
+  printf 'RSTREAM_DISTRIBUTOR_SOURCE_QUEUE_PACKETS must be from 32 through 4096\n' >&2
+  exit 1
+fi
 viewer_network_enabled="$(jq -nr \
   --argjson loss "${viewer_loss_percent}" \
   --argjson capacity "${viewer_capacity_kbps}" \
   --argjson delay "${viewer_delay_milliseconds}" \
   --argjson jitter "${viewer_jitter_milliseconds}" \
   '$loss > 0 or $capacity > 0 or $delay > 0 or $jitter > 0')"
+source_network_enabled="$(jq -nr \
+  --argjson loss "${source_loss_percent}" \
+  --argjson capacity "${source_capacity_kbps}" \
+  --argjson delay "${source_delay_milliseconds}" \
+  --argjson jitter "${source_jitter_milliseconds}" \
+  '$loss > 0 or $capacity > 0 or $delay > 0 or $jitter > 0')"
+if [[ "${viewer_network_enabled}" == true && "${source_network_enabled}" == true ]]; then
+  printf 'source and viewer network impairment cannot be enabled in the same causal qualification run\n' >&2
+  exit 1
+fi
+if [[ "${source_network_enabled}" == true && "${uses_adapter}" != true ]]; then
+  printf 'source network impairment requires RSTREAM_DISTRIBUTOR_MODE=mediamtx\n' >&2
+  exit 1
+fi
 collector_maximum_duration_seconds=$((warmup_seconds + duration_seconds + 60))
-if [[ "${viewer_network_enabled}" == true ]]; then
+if [[ "${viewer_network_enabled}" == true || "${source_network_enabled}" == true ]]; then
   collector_maximum_duration_seconds=$((warmup_seconds + duration_seconds * 2 + recovery_seconds + 60))
 fi
 connect_token_ttl_seconds=$((collector_maximum_duration_seconds + 180))
 if ((connect_token_ttl_seconds < 300)); then
   connect_token_ttl_seconds=300
+fi
+qualification_token_ttl_seconds=$((collector_maximum_duration_seconds + 600))
+if ((qualification_token_ttl_seconds < 900)); then
+  qualification_token_ttl_seconds=900
 fi
 if [[ -e "${output_directory}" ]] && [[ -n "$(find "${output_directory}" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
   printf 'output directory is not empty: %s\n' "${output_directory}" >&2
@@ -192,18 +244,18 @@ stop_resource_sampler() {
 
 network_helper() {
   docker run --rm \
-    --network "container:${network_target_name}" \
+    --network "container:${impairment_target_name}" \
     --user 0 \
     --read-only \
     --security-opt no-new-privileges \
     --cap-add NET_ADMIN \
-    --env "BROWSER_IP=${browser_ip:-}" \
-    --env "BROWSER_PORT=${browser_port:-}" \
-    --env "LOSS_PERCENT=${viewer_loss_percent}" \
-    --env "CAPACITY_KBPS=${viewer_capacity_kbps}" \
-    --env "DELAY_MILLISECONDS=${viewer_delay_milliseconds}" \
-    --env "JITTER_MILLISECONDS=${viewer_jitter_milliseconds}" \
-    --env "QUEUE_PACKETS=${viewer_queue_packets}" \
+    --env "DESTINATION_IP=${impairment_destination_ip}" \
+    --env "DESTINATION_PORT=${impairment_destination_port:-}" \
+    --env "LOSS_PERCENT=${impairment_loss_percent}" \
+    --env "CAPACITY_KBPS=${impairment_capacity_kbps}" \
+    --env "DELAY_MILLISECONDS=${impairment_delay_milliseconds}" \
+    --env "JITTER_MILLISECONDS=${impairment_jitter_milliseconds}" \
+    --env "QUEUE_PACKETS=${impairment_queue_packets}" \
     --entrypoint /bin/sh \
     "${producer_image}" -ceu "$1"
 }
@@ -298,7 +350,38 @@ write_phase() {
 }
 
 printf 'Preparing an isolated rstream runtime\n'
-go -C "${producer_directory}" run ./qualification/adaptive-streaming/cmd/prepare-context \
+project_endpoint="$(
+  "${rstream_cli}" context list --output json |
+    jq -er --arg context "${context_name}" '
+      [.[] | select(.Name == $context)] |
+      if length == 1 then .[0].ProjectEndpoint else error("qualification context is not unique") end
+    '
+)"
+project_id="$(
+  "${rstream_cli}" --context "${context_name}" project list --output json |
+    jq -er --arg endpoint "${project_endpoint}" '
+      [.projects[] | select(.endpoint == $endpoint)] |
+      if length == 1 then .[0].id else error("qualification project is not unique") end
+    '
+)"
+qualification_resources="$(
+  jq -cn --arg project "${project_id}" --argjson token_auth "${edge_auth}" '{
+    tunnels: {projects: [$project], scopes: {tunnels: {create: {filters: {
+      name: {exact: "webrtc-video-producer-adaptive"},
+      protocol: "http",
+      publish: true,
+      token_auth: $token_auth
+    }}}}}
+  }'
+)"
+qualification_token="$(
+  "${rstream_cli}" --context "${context_name}" token create \
+    --expires-in "${qualification_token_ttl_seconds}" \
+    --resources-json "${qualification_resources}" \
+    --output json |
+    jq -er '.token | select(type == "string" and length > 0)'
+)"
+RSTREAM_AUTHENTICATION_TOKEN="${qualification_token}" go -C "${producer_directory}" run ./qualification/adaptive-streaming/cmd/prepare-context \
   -context "${context_name}" \
   -allow-mediamtx-native-offer="$([[ "${distribution_mode}" == mediamtx-native ]] && printf true || printf false)" \
   -embedded-viewer=false \
@@ -309,10 +392,13 @@ go -C "${producer_directory}" run ./qualification/adaptive-streaming/cmd/prepare
   -producer-turn-policy disabled \
   -tunnel-token-auth="${edge_auth}" \
   -output-directory "${runtime_directory}"
+unset qualification_token
 mkdir -m 0700 "${control_directory}"
 write_phase warmup
 jq -n '{enabled: false, capacityKbps: 0, delayMilliseconds: 0, jitterMilliseconds: 0, lossPercent: 0, queuePackets: 0, qdisc: null, filters: []}' \
   >"${output_directory}/viewer-network.json"
+jq -n '{enabled: false, capacityKbps: 0, delayMilliseconds: 0, jitterMilliseconds: 0, lossPercent: 0, queuePackets: 0, qdisc: null, filters: []}' \
+  >"${output_directory}/source-network.json"
 jq -n '{}' >"${output_directory}/adapter-result.json"
 jq -n '{required: false}' >"${output_directory}/native-source-profile.json"
 
@@ -373,20 +459,6 @@ if [[ "${edge_auth}" == true ]]; then
         if length == 1 then .[0].id else error("temporary producer tunnel is not unique") end
       '
   )"
-  project_endpoint="$(
-    "${rstream_cli}" context list --output json |
-      jq -er --arg context "${context_name}" '
-        [.[] | select(.Name == $context)] |
-        if length == 1 then .[0].ProjectEndpoint else error("qualification context is not unique") end
-      '
-  )"
-  project_id="$(
-    "${rstream_cli}" --context "${context_name}" project list --output json |
-      jq -er --arg endpoint "${project_endpoint}" '
-        [.projects[] | select(.endpoint == $endpoint)] |
-        if length == 1 then .[0].id else error("qualification project is not unique") end
-      '
-  )"
   connect_resources="$(
     jq -cn --arg id "${tunnel_id}" --arg project "${project_id}" '{
       tunnels: {projects: [$project], scopes: {tunnels: {connect: {
@@ -412,7 +484,6 @@ if [[ "${edge_auth}" == true ]]; then
   source_endpoint="${source_endpoint}?rstream.token=${encoded_connect_token}"
 fi
 viewer_endpoint="${source_endpoint}"
-network_target_name="${producer_name}"
 if [[ "${uses_adapter}" == true ]]; then
   docker run --detach \
     --name "${distributor_name}" \
@@ -428,7 +499,6 @@ if [[ "${uses_adapter}" == true ]]; then
     "${distributor_image}" /qualification/mediamtx.yml >/dev/null
   distributor_started=1
   viewer_endpoint=http://distributor:8889/camera/whep
-  network_target_name="${distributor_name}"
 fi
 if [[ "${distribution_mode}" == mediamtx-native ]]; then
   native_source_endpoint="${source_base%/}/whep"
@@ -491,7 +561,6 @@ if [[ "${distribution_mode}" == mediamtx-native ]]; then
     "${distributor_image}" /qualification/native-mediamtx.json >/dev/null
   distributor_started=1
   viewer_endpoint=http://distributor:8889/camera/whep
-  network_target_name="${distributor_name}"
 fi
 
 docker run --detach \
@@ -592,12 +661,38 @@ resource_sampler_pid=$!
 
 sleep "${warmup_seconds}"
 write_phase baseline
-if [[ "${viewer_network_enabled}" == true ]]; then
+if [[ "${viewer_network_enabled}" == true || "${source_network_enabled}" == true ]]; then
   sleep "${duration_seconds}"
-  browser_ip="$(docker inspect --format "{{with index .NetworkSettings.Networks \"${network_name}\"}}{{.IPAddress}}{{end}}" "${browser_name}")"
-  browser_port="$(jq -er '.mediaDestinationPort | select(type == "number" and . >= 1 and . <= 65535)' "${output_directory}/collector-ready.json")"
-  if ! [[ "${browser_ip}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-    printf 'browser does not expose a usable IPv4 address: %s\n' "${browser_ip}" >&2
+  if [[ "${source_network_enabled}" == true ]]; then
+    impairment_name="source-network"
+    impairment_scope="producer-to-adapter"
+    impairment_target_name="${producer_name}"
+    impairment_destination_ip="$(docker inspect --format "{{with index .NetworkSettings.Networks \"${network_name}\"}}{{.IPAddress}}{{end}}" "${distributor_name}")"
+    impairment_destination_port=""
+    impairment_loss_percent="${source_loss_percent}"
+    impairment_capacity_kbps="${source_capacity_kbps}"
+    impairment_delay_milliseconds="${source_delay_milliseconds}"
+    impairment_jitter_milliseconds="${source_jitter_milliseconds}"
+    impairment_queue_packets="${source_queue_packets}"
+  else
+    impairment_name="viewer-network"
+    if [[ "${uses_mediamtx}" == true ]]; then
+      impairment_scope="distributor-to-browser"
+      impairment_target_name="${distributor_name}"
+    else
+      impairment_scope="producer-to-browser"
+      impairment_target_name="${producer_name}"
+    fi
+    impairment_destination_ip="$(docker inspect --format "{{with index .NetworkSettings.Networks \"${network_name}\"}}{{.IPAddress}}{{end}}" "${browser_name}")"
+    impairment_destination_port="$(jq -er '.mediaDestinationPort | select(type == "number" and . >= 1 and . <= 65535)' "${output_directory}/collector-ready.json")"
+    impairment_loss_percent="${viewer_loss_percent}"
+    impairment_capacity_kbps="${viewer_capacity_kbps}"
+    impairment_delay_milliseconds="${viewer_delay_milliseconds}"
+    impairment_jitter_milliseconds="${viewer_jitter_milliseconds}"
+    impairment_queue_packets="${viewer_queue_packets}"
+  fi
+  if ! [[ "${impairment_destination_ip}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+    printf 'network impairment destination is not a usable IPv4 address: %s\n' "${impairment_destination_ip}" >&2
     exit 1
   fi
   # shellcheck disable=SC2016
@@ -615,26 +710,36 @@ if [[ "${viewer_network_enabled}" == true ]]; then
     fi
     set -- "$@" loss random "${LOSS_PERCENT}%"
     "$@"
-    tc filter add dev eth0 protocol ip parent 1:0 prio 1 u32 \
+    set -- tc filter add dev eth0 protocol ip parent 1:0 prio 1 u32 \
       match ip protocol 17 0xff \
-      match ip dst "${BROWSER_IP}/32" \
-      match ip dport "${BROWSER_PORT}" 0xffff \
-      flowid 1:3
+      match ip dst "${DESTINATION_IP}/32"
+    if [ -n "${DESTINATION_PORT}" ]; then
+      set -- "$@" match ip dport "${DESTINATION_PORT}" 0xffff
+    fi
+    "$@" flowid 1:3
   '
-  write_phase viewer-network
+  write_phase "${impairment_name}"
   sleep "${duration_seconds}"
-  network_helper 'tc -j -s qdisc show dev eth0' >"${output_directory}/viewer-network-qdiscs.json"
-  network_helper 'tc -j -s filter show dev eth0 parent 1:0' >"${output_directory}/viewer-network-filters.json"
+  network_helper 'tc -j -s qdisc show dev eth0' >"${output_directory}/${impairment_name}-qdiscs.json"
+  network_helper 'tc -j -s filter show dev eth0 parent 1:0' >"${output_directory}/${impairment_name}-filters.json"
   jq -n \
-    --argjson loss_percent "${viewer_loss_percent}" \
-    --argjson capacity_kbps "${viewer_capacity_kbps}" \
-    --argjson delay_milliseconds "${viewer_delay_milliseconds}" \
-    --argjson jitter_milliseconds "${viewer_jitter_milliseconds}" \
-    --argjson queue_packets "${viewer_queue_packets}" \
-    --slurpfile qdiscs "${output_directory}/viewer-network-qdiscs.json" \
-    --slurpfile filters "${output_directory}/viewer-network-filters.json" '
+    --arg scope "${impairment_scope}" \
+    --arg destination_ip "${impairment_destination_ip}" \
+    --arg destination_port "${impairment_destination_port}" \
+    --argjson loss_percent "${impairment_loss_percent}" \
+    --argjson capacity_kbps "${impairment_capacity_kbps}" \
+    --argjson delay_milliseconds "${impairment_delay_milliseconds}" \
+    --argjson jitter_milliseconds "${impairment_jitter_milliseconds}" \
+    --argjson queue_packets "${impairment_queue_packets}" \
+    --slurpfile qdiscs "${output_directory}/${impairment_name}-qdiscs.json" \
+    --slurpfile filters "${output_directory}/${impairment_name}-filters.json" '
       {
         enabled: true,
+        scope: $scope,
+        destination: {
+          ip: $destination_ip,
+          port: (if $destination_port == "" then null else ($destination_port | tonumber) end)
+        },
         capacityKbps: $capacity_kbps,
         delayMilliseconds: $delay_milliseconds,
         jitterMilliseconds: $jitter_milliseconds,
@@ -643,7 +748,7 @@ if [[ "${viewer_network_enabled}" == true ]]; then
         qdisc: ([$qdiscs[0][] | select(.kind == "netem" and .handle == "30:")] | first),
         filters: $filters[0]
       }
-    ' >"${output_directory}/viewer-network.json"
+    ' >"${output_directory}/${impairment_name}.json"
   network_helper 'tc qdisc del dev eth0 root'
   write_phase recovery
   sleep "${recovery_seconds}"
@@ -746,6 +851,7 @@ jq -s \
   --argjson flexfec_repair_packets "${flexfec_repair_packets}" \
   --argjson playout_delay_hint_seconds "${playout_delay_hint_seconds}" \
   --slurpfile viewer_network "${output_directory}/viewer-network.json" \
+  --slurpfile source_network "${output_directory}/source-network.json" \
   --slurpfile native_source_profile "${output_directory}/native-source-profile.json" \
   -f "${script_directory}/result.jq" \
   "${output_directory}/samples.jsonl" >"${output_directory}/result.json"

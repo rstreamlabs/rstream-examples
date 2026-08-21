@@ -22,7 +22,9 @@ jq -n '{
 }' >"${fixture_directory}/signaling.json"
 jq -n '{components: {producer: {samples: 2}, browser: {samples: 2}}}' >"${fixture_directory}/resources.json"
 jq -n '{enabled: true, capacityKbps: 4000, delayMilliseconds: 0, jitterMilliseconds: 0, lossPercent: 0, queuePackets: 256, qdisc: {packets: 100, drops: 0}}' >"${fixture_directory}/network.json"
-jq -n '{}' >"${fixture_directory}/adapter.json"
+jq -n '{enabled: false, capacityKbps: 0, delayMilliseconds: 0, jitterMilliseconds: 0, lossPercent: 0, queuePackets: 0, qdisc: null, filters: []}' >"${fixture_directory}/source-network.json"
+jq -n '{invalid_fec: 0, reorder_late: 0, reorder_discarded: 0, repaired_rtx: 0, repaired_fec: 1, expired: 0}' \
+  >"${fixture_directory}/adapter.json"
 jq -n '{required: false}' >"${fixture_directory}/native-source-profile.json"
 jq -nc '
   def sample(phase; elapsed; frames; bytes; target): {
@@ -57,6 +59,7 @@ jq -nc '
     lossGuardTargetKbps: 0,
     lossTargetKbps: target,
     pacerPacingBitrateKbps: target,
+    pacerSentRTX: 0,
     pacerTargetBitrateKbps: target,
     twccFeedbackPackets: 1,
     pacerSentFEC: 1,
@@ -75,6 +78,8 @@ render_result() {
   local browser="${3:-${fixture_directory}/browser.json}"
   local native_source_profile="${4:-${fixture_directory}/native-source-profile.json}"
   local network="${5:-${fixture_directory}/network.json}"
+  local source_network="${6:-${fixture_directory}/source-network.json}"
+  local adapter="${7:-${fixture_directory}/adapter.json}"
   jq -s \
   --arg revision revision \
   --arg mode "${mode}" \
@@ -84,7 +89,7 @@ render_result() {
   --arg producer_image producer \
   --arg distributor_image '' \
   --arg browser_image browser \
-  --slurpfile adapter "${fixture_directory}/adapter.json" \
+  --slurpfile adapter "${adapter}" \
   --slurpfile browser "${browser}" \
   --slurpfile signaling "${fixture_directory}/signaling.json" \
   --slurpfile resources "${fixture_directory}/resources.json" \
@@ -95,6 +100,7 @@ render_result() {
   --argjson flexfec_repair_packets 1 \
   --argjson playout_delay_hint_seconds 0.2 \
   --slurpfile viewer_network "${network}" \
+  --slurpfile source_network "${source_network}" \
   --slurpfile native_source_profile "${native_source_profile}" \
   -f "${script_directory}/result.jq" \
   "$1"
@@ -124,6 +130,99 @@ render_result "${fixture_directory}/samples.jsonl" | jq -e '
     .viewerNetwork.framesDecodedDelta == 30 and
     .viewerNetwork.packetsLostNetChange == 0 and
     .viewerNetwork.recoveryFramesDecodedDelta == 330
+  ' >/dev/null
+
+jq -n '{enabled: false, capacityKbps: 0, delayMilliseconds: 0, jitterMilliseconds: 0, lossPercent: 0, queuePackets: 0, qdisc: null, filters: []}' \
+  >"${fixture_directory}/viewer-network-disabled.json"
+jq -n '{peerConnection: {nackNegotiated: true, twccNegotiated: true, rtxNegotiated: false, flexFECNegotiated: false}}' \
+  >"${fixture_directory}/distributed-browser.json"
+jq -n '{
+  enabled: true,
+  scope: "producer-to-adapter",
+  destination: {ip: "172.18.0.3", port: null},
+  capacityKbps: 4000,
+  delayMilliseconds: 0,
+  jitterMilliseconds: 0,
+  lossPercent: 0,
+  queuePackets: 256,
+  qdisc: {packets: 100, drops: 0},
+  filters: []
+}' >"${fixture_directory}/source-network-qualified.json"
+jq -c '
+  .phase |= if . == "viewer-network" then "source-network" else . end |
+  .adaptiveBitrateUpdates = (.elapsedMilliseconds / 1000 | floor) |
+  .twccFeedbackPackets = (.elapsedMilliseconds / 1000 | floor)
+' "${fixture_directory}/samples.jsonl" >"${fixture_directory}/source-network-samples.jsonl"
+render_result \
+  "${fixture_directory}/source-network-samples.jsonl" \
+  mediamtx \
+  "${fixture_directory}/distributed-browser.json" \
+  "${fixture_directory}/native-source-profile.json" \
+  "${fixture_directory}/viewer-network-disabled.json" \
+  "${fixture_directory}/source-network-qualified.json" | jq -e '
+    .networkImpairment.phase == "source-network" and
+    .sourceNetwork.scope == "producer-to-adapter" and
+    .sourceNetwork.destination.port == null and
+    .sourceNetwork.twccFeedbackPacketsDelta > 0 and
+    .sourceNetwork.adaptiveBitrateUpdatesDelta > 0 and
+    .gates.sourceNetworkCausality == true and
+    .gates.sourceNetworkResponse == true and
+    .gates.sourceTargetRecovery == true and
+    .passed == true
+  ' >/dev/null
+
+jq -n '{
+  enabled: true,
+  scope: "producer-to-adapter",
+  destination: {ip: "172.18.0.3", port: null},
+  capacityKbps: 0,
+  delayMilliseconds: 0,
+  jitterMilliseconds: 0,
+  lossPercent: 1,
+  queuePackets: 256,
+  qdisc: {packets: 1000, drops: 10},
+  filters: []
+}' >"${fixture_directory}/source-loss-qualified.json"
+jq -c '
+  .phase |= if . == "viewer-network" then "source-network" else . end |
+  .adaptiveBitrateUpdates = 0 |
+  .twccFeedbackPackets = (.elapsedMilliseconds / 1000 | floor) |
+  .pacerSentRTX = (.elapsedMilliseconds / 1000 | floor) |
+  .encoderTargetKbps = 8000 |
+  .twccTargetKbps = 8000
+' "${fixture_directory}/samples.jsonl" >"${fixture_directory}/source-loss-samples.jsonl"
+render_result \
+  "${fixture_directory}/source-loss-samples.jsonl" \
+  mediamtx \
+  "${fixture_directory}/distributed-browser.json" \
+  "${fixture_directory}/native-source-profile.json" \
+  "${fixture_directory}/viewer-network-disabled.json" \
+  "${fixture_directory}/source-loss-qualified.json" | jq -e '
+    .sourceNetwork.qdisc.drops == 10 and
+    .sourceNetwork.pacerSentRTXDelta > 0 and
+    .sourceNetwork.adaptiveBitrateUpdatesDelta == 0 and
+    .phases.sourceNetwork.encoderTargetKbps.medianLast10Seconds == 8000 and
+    .gates.sourceNetworkCausality == true and
+    .gates.sourceNetworkResponse == true and
+    .passed == true
+  ' >/dev/null
+
+jq '.repaired_rtx = 0 | .repaired_fec = 0' \
+  "${fixture_directory}/adapter.json" >"${fixture_directory}/adapter-without-repairs.json"
+render_result \
+  "${fixture_directory}/source-loss-samples.jsonl" \
+  mediamtx \
+  "${fixture_directory}/distributed-browser.json" \
+  "${fixture_directory}/native-source-profile.json" \
+  "${fixture_directory}/viewer-network-disabled.json" \
+  "${fixture_directory}/source-loss-qualified.json" \
+  "${fixture_directory}/adapter-without-repairs.json" | jq -e '
+    .sourceNetwork.qdisc.drops == 10 and
+    .sourceNetwork.pacerSentRTXDelta > 0 and
+    .adapter.repaired_rtx == 0 and
+    .adapter.repaired_fec == 0 and
+    .gates.sourceNetworkCausality == false and
+    .passed == false
   ' >/dev/null
 
 jq -c '

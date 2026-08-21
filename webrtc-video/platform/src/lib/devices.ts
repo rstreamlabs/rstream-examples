@@ -18,6 +18,7 @@ import { issueSourceCredentials } from "@/lib/video-source-resolution"
 import { mediaMTXPublisherCredential } from "@/lib/video-distributor"
 import { mediaMTXViewerCredential } from "@/lib/video-distributor"
 import { mediaMTXPath } from "@/lib/video-distributor"
+import { mediaMTXWHEPURL } from "@/lib/video-distributor-endpoint"
 import { videoDistributorMode } from "@/lib/video-distributor"
 import prisma from "@/lib/prisma"
 
@@ -393,7 +394,10 @@ export async function onlineTunnels(userId: string) {
 
 export async function onlineMediaMTXTunnel() {
   const env = requireRstreamEnv()
-  if (env.VIDEO_DISTRIBUTOR !== "mediamtx") {
+  if (
+    env.VIDEO_DISTRIBUTOR !== "mediamtx" ||
+    env.MEDIAMTX_EXPOSURE !== "rstream"
+  ) {
     return null
   }
   const rstream = getRstreamClient()
@@ -537,36 +541,46 @@ async function directViewerPayload(device: Device) {
 }
 
 async function mediaMTXViewerPayload(device: Device) {
-  const tunnel = await onlineMediaMTXTunnel()
-  if (!tunnel) {
+  const endpoint = await mediaMTXViewerEndpoint()
+  if (!endpoint) {
     return null
   }
   const path = mediaMTXPath(device.id)
   const [accessCredential, mediaCredential, turn] = await Promise.all([
-    createMediaMTXConnectToken(tunnel, path),
+    endpoint.kind === "rstream"
+      ? createMediaMTXConnectToken(endpoint.tunnel, path)
+      : Promise.resolve(null),
     Promise.resolve(mediaMTXViewerCredential(device.id)),
     turnPayload(device.id),
   ])
-  const base = publicUrl(tunnel)
-  if (!base) {
-    return null
-  }
-  const expiresAt = earliestDate(
-    accessCredential.expiresAt,
-    mediaCredential.expiresAt,
-  )
+  const expiresAt = accessCredential
+    ? earliestDate(accessCredential.expiresAt, mediaCredential.expiresAt)
+    : mediaCredential.expiresAt
   return {
     distributor: {
       kind: "mediamtx" as const,
-      whep: withToken(
-        `${base.replace(/\/$/, "")}/${path}/whep`,
-        accessCredential.token,
-      ),
+      whep: mediaMTXWHEPURL(endpoint.baseURL, path, accessCredential?.token),
       authorization: `Bearer ${mediaCredential.token}`,
       expiresAt: expiresAt.toISOString(),
     },
     turn,
   }
+}
+
+async function mediaMTXViewerEndpoint() {
+  const env = requireRstreamEnv()
+  if (env.MEDIAMTX_EXPOSURE === "public") {
+    return {
+      baseURL: env.MEDIAMTX_PUBLIC_URL ?? "",
+      kind: "public" as const,
+    }
+  }
+  const tunnel = await onlineMediaMTXTunnel()
+  if (!tunnel) {
+    return null
+  }
+  const baseURL = publicUrl(tunnel)
+  return baseURL ? { baseURL, kind: "rstream" as const, tunnel } : null
 }
 
 export async function mediaMTXSourcePayload(

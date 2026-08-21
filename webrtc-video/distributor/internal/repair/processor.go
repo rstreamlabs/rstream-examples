@@ -169,18 +169,23 @@ func (p *processor) run(ctx context.Context, input <-chan Packet, emit Emit, fee
 		defer observationTicker.Stop()
 	}
 	var timerC <-chan time.Time
+	var timerDeadline time.Time
 	for {
 		deadline, scheduled := p.nextDeadline()
 		if scheduled {
-			delay := time.Until(deadline)
-			if delay < 0 {
-				delay = 0
+			if timerC == nil || deadline.Before(timerDeadline) {
+				delay := time.Until(deadline)
+				if delay < 0 {
+					delay = 0
+				}
+				resetTimer(timer, delay)
+				timerC = timer.C
+				timerDeadline = deadline
 			}
-			resetTimer(timer, delay)
-			timerC = timer.C
-		} else {
+		} else if timerC != nil {
 			stopTimer(timer)
 			timerC = nil
+			timerDeadline = time.Time{}
 		}
 		select {
 		case <-ctx.Done():
@@ -196,6 +201,8 @@ func (p *processor) run(ctx context.Context, input <-chan Packet, emit Emit, fee
 				return p.stats, err
 			}
 		case now := <-timerC:
+			timerC = nil
+			timerDeadline = time.Time{}
 			if err := p.handleDeadline(now, emit, feedback); err != nil {
 				p.finishStats(observer.Observe)
 				return p.stats, err

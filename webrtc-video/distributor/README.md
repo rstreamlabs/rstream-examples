@@ -14,21 +14,57 @@ places this backend in the complete producer and Next.js series.
 
 ## Delivery profiles
 
-| Profile                       | Best fit                                              | Device uplinks | Source protection                                                     | Main gain                                                                     | Current limit                                                                                       |
-| ----------------------------- | ----------------------------------------------------- | -------------: | --------------------------------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Direct                        | one viewer, diagnosis, lowest moving-part count       | one per viewer | TWCC, NACK/RTX, FlexFEC, bounded pacer                                | shortest path and complete end-to-end feedback                                | device bandwidth grows with viewers                                                                 |
-| MediaMTX native WHEP pull     | sources whose WHEP contract MediaMTX 1.20 can satisfy |     one shared | NACK and TWCC                                                         | no adapter process or custom media code                                       | no RTX/FlexFEC or dynamic resolver; its source offer is not accepted by the strict rstream producer |
-| MediaMTX with rstream adapter | strict rstream producer and multi-viewer products     |     one shared | NACK/RTX/FlexFEC on the source leg; fresh NACK/TWCC on the viewer leg | fan-out without weakening the producer contract or multiplying device traffic | one additional WebRTC hop and two congestion domains to observe                                     |
+| Profile               | Device uplinks | Producer leg                                      | Viewer leg                     | Use it when                                                         |
+| --------------------- | -------------: | ------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------- |
+| Direct                | one per viewer | TWCC, NACK/RTX, FlexFEC, bounded pacer            | same end-to-end session        | one viewer needs the shortest path and end-to-end adaptation        |
+| MediaMTX native pull  |     one shared | NACK and negotiated TWCC with fixed source pacing | MediaMTX NACK and TWCC         | a static source accepts the reduced MediaMTX 1.20 offer             |
+| MediaMTX with adapter |     one shared | TWCC, NACK/RTX, FlexFEC, bounded pacer            | independent MediaMTX NACK/TWCC | a product needs dynamic sources, complete source repair and fan-out |
 
 The native profile is intentionally retained as an interoperability option. It
-removes an entire process when its smaller feature set and source contract are
-enough. It is not a compatibility mode for the rstream producer and does not
-silently relax the producer's WHEP validation. Draft 04 requires
+removes the adapter when its smaller feature set and static source contract are
+enough. The producer must opt into the bounded MediaMTX-native offer profile;
+strict profiles do not relax their WHEP validation. Draft 04 requires
 `rtcp-mux-only` and one common `msid` on the active media sections; MediaMTX
 1.20 emits neither in its source offer and its player does not complete a `406`
-counter-offer exchange. Native pull is therefore a no-go for the strict
-producer today. The adapter profile is the production path exercised by this
-repository.
+counter-offer exchange. The opt-in accepts only those two known differences,
+continues to require BUNDLE and RTCP multiplexing, and disables RTX, FlexFEC,
+and adaptive source encoding for that session. The adapter profile keeps the
+strict producer contract and is the reference product path.
+
+MediaMTX exposure is independent of these profiles. A public deployment gives
+the browser an HTTPS MediaMTX URL. A private deployment publishes the same
+WHEP listener with an authenticated rstream HTTP tunnel. In both cases media
+uses ICE over UDP or TURN; the HTTP endpoint carries signaling, not RTP.
+
+### Native pull for one static source
+
+Native pull uses the same producer binary with an explicit compatibility
+setting:
+
+```yaml
+web:
+  whep:
+    allowMediaMTXNativeOffer: true
+```
+
+Point one MediaMTX path at that producer. `wheps://` selects WHEP over HTTPS;
+when the producer tunnel enforces rstream edge authentication, place its
+short-lived connect token in `whepBearerToken`.
+
+```yaml
+paths:
+  camera:
+    source: wheps://producer.example/whep
+    whepBearerToken: "short-lived-rstream-connect-token"
+    sourceOnDemand: true
+```
+
+This profile is deliberately static: MediaMTX receives one source URL in its
+configuration and pulls it on first demand. It is useful for a small fixed
+deployment, but it does not provide the platform's per-device resolver or
+automatic direct fallback. The producer fixes pacing for this native source
+session because MediaMTX 1.20 does not negotiate the RTX/FlexFEC profile used
+by the adaptive adapter leg.
 
 The adapter terminates source repair before publishing a fresh downstream RTP
 flow. Source transport-wide sequence numbers never cross into the MediaMTX
@@ -123,6 +159,9 @@ keys can be overridden through its `MTX_...` environment convention.
 ```bash
 # Next.js
 VIDEO_DISTRIBUTOR=mediamtx
+MEDIAMTX_EXPOSURE=public
+MEDIAMTX_PUBLIC_URL=https://media.example
+MEDIAMTX_TUNNEL_NAME=
 MEDIAMTX_JWT_PRIVATE_KEY_BASE64=...
 MEDIAMTX_JWT_ADDITIONAL_JWKS='{"keys":[]}'
 MEDIAMTX_JWT_ISSUER=rstream-webrtc-video-platform
@@ -146,11 +185,20 @@ RSTREAM_SOURCE_RESOLVER_AUDIENCE=rstream-video-source-resolver
 RSTREAM_MEDIAMTX_URL=http://127.0.0.1:8889
 ```
 
-Publish `8889/tcp` through an HTTPS rstream tunnel and configure
-`MEDIAMTX_TUNNEL_NAME` on the platform with that tunnel name. UDP `8189` must
-either be reachable through the advertised host or be complemented by a STUN
-or TURN entry under `webrtcICEServers2`. The HTTP tunnel does not pretend
-to carry WebRTC media.
+The example above uses a public MediaMTX ingress. To keep the HTTP listener
+private, set `MEDIAMTX_EXPOSURE=rstream`, clear `MEDIAMTX_PUBLIC_URL`, publish
+`8889/tcp` through an authenticated rstream tunnel, and set
+`MEDIAMTX_TUNNEL_NAME` to its name. UDP `8189` must either be reachable through
+the advertised host or be complemented by a STUN or TURN entry under
+`webrtcICEServers2` in both exposure modes.
+
+The adapter can resolve sources in two ways. A static deployment sets exactly
+one `RSTREAM_SOURCE_URL`, plus `RSTREAM_SOURCE_AUTHORIZATION` when the source
+uses its own bearer. A product deployment sets `RSTREAM_SOURCE_RESOLVER_URL`
+and the distributor identity variables shown above. The resolver maps each
+`devices/<uuid>` path to fresh producer, publisher, and TURN credentials. The
+two source modes are mutually exclusive so a stale static URL cannot override
+product policy.
 
 JWTs bind `read` or `publish` to exactly one `devices/<uuid>` path. Browser
 tokens, adapter publisher tokens, producer credentials, and the resolver
@@ -262,3 +310,21 @@ producer target to a capacity step. The current single-rendition MediaMTX mode
 is intentionally rejected when the viewer cannot sustain the source rate;
 downstream feedback cannot create a lower rendition or control the shared
 producer encoder.
+
+The custom adapter has a separate causal test for its shared source leg. These
+variables shape UDP after it leaves the producer and only when its destination
+is the adapter:
+
+```bash
+RSTREAM_CONTEXT="<staging-context>" \
+RSTREAM_DISTRIBUTOR_MODE="mediamtx" \
+RSTREAM_DISTRIBUTOR_SOURCE_CAPACITY_KBPS="5000" \
+qualification/end-to-end/run.sh /tmp/rstream-video-source-capacity
+```
+
+Use `RSTREAM_DISTRIBUTOR_SOURCE_LOSS_PERCENT` for repair testing; delay,
+jitter, and queue controls use the same `SOURCE_` prefix. Source and viewer
+impairment cannot be enabled in one run because that would make the observed
+reaction causally ambiguous. The result records the selected network
+namespace, destination, traffic-control counters, TWCC response, encoder
+target, RTX/FlexFEC repair, decoded frame rate, freezes, and recovery.

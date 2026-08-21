@@ -13,6 +13,7 @@
     "format:check": "prettier --check .",
     "format": "prettier --write .",
     "mediamtx:key": "node scripts/generate-mediamtx-key.mjs",
+    "mediamtx:local": "./scripts/run-local-mediamtx.mjs",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
