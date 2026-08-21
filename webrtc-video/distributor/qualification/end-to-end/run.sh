@@ -180,15 +180,12 @@ network_helper() {
 
 process_resident_sample() {
   local container_name=$1
-  local key
   local pid
   local process_lines
   local proportional_kibibytes
   local resident_kibibytes
   local rss_kibibytes
   local source=process-pss
-  local unit
-  local value
   resident_kibibytes=0
   if ! process_lines="$(docker top "${container_name}" -eo pid,rss 2>/dev/null)"; then
     printf '0 process-unavailable'
@@ -199,13 +196,9 @@ process_resident_sample() {
       continue
     fi
     proportional_kibibytes=
-    if [[ -r "/proc/${pid}/smaps_rollup" ]]; then
-      while read -r key value unit; do
-        if [[ "${key}" == Pss: ]] && [[ "${value}" =~ ^[0-9]+$ ]] && [[ "${unit}" == kB ]]; then
-          proportional_kibibytes=${value}
-          break
-        fi
-      done <"/proc/${pid}/smaps_rollup"
+    if ! proportional_kibibytes="$(awk '$1 == "Pss:" && $2 ~ /^[0-9]+$/ && $3 == "kB" {print $2; exit}' "/proc/${pid}/smaps_rollup" 2>/dev/null)" \
+      || ! [[ "${proportional_kibibytes}" =~ ^[0-9]+$ ]]; then
+      proportional_kibibytes=
     fi
     if [[ -z "${proportional_kibibytes}" ]]; then
       proportional_kibibytes=${rss_kibibytes}
