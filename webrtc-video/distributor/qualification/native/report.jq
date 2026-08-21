@@ -43,7 +43,7 @@ def range(path): values(path) | if length == 0 then null else {minimum: min, max
     allRunnersSucceeded: ([$records[].status == 0] | all),
     allResultsPassed: ([$results[].passed == true] | length == $requested_runs and all),
     sameRevision: (($revisions | length) == 1 and ($revisions | first) == $revision),
-    sameImages: ($producer_images | length) == 1 and ($distributor_images | length) == 1 and ($browser_images | length) == 1,
+    sameImages: (($producer_images | length) == 1 and ($distributor_images | length) == 1 and ($browser_images | length) == 1),
     nativeModeOnly: ([$results[].mode == "mediamtx-native"] | length == $requested_runs and all),
     edgeAuthenticationEnabled: ([$results[].profile.edgeAuthentication == true] | length == $requested_runs and all),
     exactSourceLifecycle: ([$results[] | .nativeSourceProfile == {
