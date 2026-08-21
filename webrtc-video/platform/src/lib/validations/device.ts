@@ -30,58 +30,29 @@ export const createDeviceResponseSchema = z.object({
 })
 
 export const viewerPayloadSchema = z.object({
-  endpoints: z.object({
-    ws: z.string().url(),
-  }),
+  distributor: z.discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("direct"),
+      whep: z.string().url(),
+      authorization: z.string().max(8192),
+      expiresAt: z.string().datetime(),
+    }),
+    z.object({
+      kind: z.literal("mediamtx"),
+      whep: z.string().url(),
+      authorization: z.string().min(1).max(8192),
+      expiresAt: z.string().datetime(),
+    }),
+  ]),
   // Reuse the SDK TURN schema so the browser contract tracks rstream releases.
-  turn: turnCredentialsSchema,
+  turn: turnCredentialsSchema.extend({
+    expiresAt: z.string().datetime(),
+  }),
 })
 
-const sessionStatsSchema = z.object({
-  codec: z.string(),
-  twccEnabled: z.boolean(),
-  nackEnabled: z.boolean(),
-  rtxEnabled: z.boolean(),
-  flexFECEnabled: z.boolean(),
-  adaptiveBackend: z.enum(["off", "twcc-gcc"]),
-  adaptiveActive: z.boolean(),
-  estimatedBitrateBps: z.number().int(),
-  encoderTargetBitrateKbps: z.number().int(),
-  lastAppliedBitrateKbps: z.number().int(),
-})
-
-export const signalMessageSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("session.ready"),
-    viewerId: z.string().optional(),
-  }),
-  z.object({
-    type: z.literal("webrtc.answer"),
-    sdp: z.string(),
-  }),
-  z.object({
-    type: z.literal("webrtc.candidate"),
-    candidate: z.string().optional(),
-    sdpMid: z.string().nullable().optional(),
-    sdpMLineIndex: z.number().optional(),
-    usernameFragment: z.string().nullable().optional(),
-  }),
-  z.object({
-    type: z.literal("error"),
-    message: z.string().optional(),
-  }),
-  z.object({
-    type: z.literal("log"),
-    message: z.string().optional(),
-  }),
-  z.object({
-    type: z.literal("session.stats"),
-    stats: sessionStatsSchema.optional(),
-  }),
-  z.object({
-    type: z.literal("pong"),
-  }),
-])
+export const viewerDistributionPreferenceSchema = z
+  .enum(["automatic", "direct"])
+  .default("automatic")
 
 export const apiErrorSchema = z.object({
   error: z.string().min(1),
@@ -98,6 +69,8 @@ export type DeviceView = z.infer<typeof deviceViewSchema>
 export type ListDevicesResponse = z.infer<typeof listDevicesResponseSchema>
 export type CreateDeviceResponse = z.infer<typeof createDeviceResponseSchema>
 export type ViewerPayload = z.infer<typeof viewerPayloadSchema>
+export type ViewerDistributionPreference = z.infer<
+  typeof viewerDistributionPreferenceSchema
+>
 export type TurnCredentials = z.infer<typeof turnCredentialsSchema>
-export type SignalMessage = z.infer<typeof signalMessageSchema>
 export type WatchPayload = z.infer<typeof watchPayloadSchema>
