@@ -232,8 +232,8 @@ func (p *tokenBucketPacer) SetTargetBitrate(bitrate int) {
 	if bitrate <= 0 {
 		bitrate = 1
 	}
-	previous := p.setTargetBitrate(bitrate)
-	if bitrate < previous {
+	previous := p.targetBitrate.Swap(int64(bitrate))
+	if int64(bitrate) < previous {
 		p.rateDecreasePending.Store(true)
 	}
 	p.observeSustainedQueueDelay()
@@ -614,8 +614,7 @@ func (p *tokenBucketPacer) bytesPerSecond() float64 {
 }
 
 func (p *tokenBucketPacer) sustainedBytesPerSecond() float64 {
-	bitrate, conservative := p.pacingSnapshot()
-	return p.bytesPerSecondAtBitrateAndMode(bitrate, conservative)
+	return p.bytesPerSecondAtBitrate(p.targetBitrateValue())
 }
 
 func (p *tokenBucketPacer) maximumBurstBytes() float64 {
@@ -753,10 +752,10 @@ func drainPacketQueue(queue chan *pacedPacket) []*pacedPacket {
 }
 
 func (p *tokenBucketPacer) Stats() map[string]any {
-	targetBitrate, conservative := p.pacingSnapshot()
+	targetBitrate := p.targetBitrateValue()
 	return map[string]any{
 		"pacerTargetBitrateBps":                                   targetBitrate,
-		"pacerPacingBitrateBps":                                   int(math.Ceil(p.bytesPerSecondAtBitrateAndMode(targetBitrate, conservative) * 8)),
+		"pacerPacingBitrateBps":                                   int(math.Ceil(p.bytesPerSecondAtBitrate(targetBitrate) * 8)),
 		"pacerQueuePackets":                                       len(p.queueSlots),
 		"pacerQueueDrops":                                         p.queueDrops.Load(),
 		"pacerQueueDelayMilliseconds":                             float64(p.scheduledQueueDelay()) / float64(time.Millisecond),
@@ -939,54 +938,24 @@ func (p *tokenBucketPacer) recordRepairSent(kind repairKind, bytes int) {
 }
 
 func (p *tokenBucketPacer) packetBytesPerSecond(packet *pacedPacket) float64 {
-	bitrate, conservative := p.pacingSnapshot()
+	bitrate := p.targetBitrateValue()
 	if packet != nil && packet.repair == repairKindNone && packet.admittedBitrate > bitrate {
-		bitrate = packet.admittedBitrate
+		// A packetized frame cannot be partially discarded after admission. Pace
+		// that pre-decrease work at its admitted rate without applying burst
+		// headroom, then let current-rate media and repair use the regular pacing
+		// envelope. Keeping the entire session in a conservative mode would leave
+		// no capacity for retransmissions after the transition has completed.
+		return math.Max(1, float64(packet.admittedBitrate)/8)
 	}
-	return p.bytesPerSecondAtBitrateAndMode(bitrate, conservative)
+	return p.bytesPerSecondAtBitrate(bitrate)
 }
 
-func (p *tokenBucketPacer) bytesPerSecondAtBitrateAndMode(bitrate int, conservative bool) float64 {
-	factor := p.pacingFactor
-	if conservative {
-		factor = 1
-	}
-	return math.Max(1, float64(bitrate)*factor/8)
+func (p *tokenBucketPacer) bytesPerSecondAtBitrate(bitrate int) float64 {
+	return math.Max(1, float64(bitrate)*p.pacingFactor/8)
 }
 
 func (p *tokenBucketPacer) targetBitrateValue() int {
-	bitrate, _ := p.pacingSnapshot()
-	return bitrate
-}
-
-func (p *tokenBucketPacer) pacingSnapshot() (int, bool) {
-	value := p.targetBitrate.Load()
-	conservative := value < 0
-	if value < 0 {
-		value = -value
-	}
-	return int(value), conservative
-}
-
-func (p *tokenBucketPacer) conservativePacing() bool {
-	return p.targetBitrate.Load() < 0
-}
-
-func (p *tokenBucketPacer) setTargetBitrate(bitrate int) int {
-	for {
-		current := p.targetBitrate.Load()
-		previous := current
-		if previous < 0 {
-			previous = -previous
-		}
-		next := int64(bitrate)
-		if int64(bitrate) < previous || int64(bitrate) == previous && current < 0 {
-			next = -next
-		}
-		if p.targetBitrate.CompareAndSwap(current, next) {
-			return int(previous)
-		}
-	}
+	return int(p.targetBitrate.Load())
 }
 
 func (p *tokenBucketPacer) recordError(err error) {

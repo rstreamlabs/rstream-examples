@@ -193,17 +193,17 @@ func TestMinimumBitratePacerBoundsProtectedMediaEnvelope(t *testing.T) {
 	pacer.SetMediaTargetBitrate(3_000_000)
 	assertPacerEnvelope(3_000_000, 4_500_000, 6_750_000)
 	pacer.SetMediaTargetBitrate(100_000)
-	assertPacerEnvelope(500_000, 750_000, 750_000)
+	assertPacerEnvelope(500_000, 750_000, 1_125_000)
 }
 
-func TestTokenBucketPacerUsesConservativeEnvelopeAfterDecrease(t *testing.T) {
+func TestTokenBucketPacerRetainsRepairHeadroomAfterDecrease(t *testing.T) {
 	pacer := newTokenBucketPacer(5_000_000, 1.5, 16)
 	t.Cleanup(func() {
 		if err := pacer.Close(); err != nil {
 			t.Errorf("close pacer: %v", err)
 		}
 	})
-	assertEnvelope := func(target, pacing int, conservative bool) {
+	assertEnvelope := func(target, pacing int) {
 		t.Helper()
 		stats := pacer.Stats()
 		if got := stats["pacerTargetBitrateBps"]; got != target {
@@ -212,20 +212,17 @@ func TestTokenBucketPacerUsesConservativeEnvelopeAfterDecrease(t *testing.T) {
 		if got := stats["pacerPacingBitrateBps"]; got != pacing {
 			t.Fatalf("pacing bitrate = %v, want %d", got, pacing)
 		}
-		if pacer.conservativePacing() != conservative {
-			t.Fatalf("conservative pacing = %t, want %t", pacer.conservativePacing(), conservative)
-		}
 	}
-	assertEnvelope(5_000_000, 7_500_000, false)
+	assertEnvelope(5_000_000, 7_500_000)
 	pacer.SetTargetBitrate(3_000_000)
-	assertEnvelope(3_000_000, 3_000_000, true)
+	assertEnvelope(3_000_000, 4_500_000)
 	pacer.SetTargetBitrate(3_000_000)
-	assertEnvelope(3_000_000, 3_000_000, true)
+	assertEnvelope(3_000_000, 4_500_000)
 	pacer.SetTargetBitrate(4_000_000)
-	assertEnvelope(4_000_000, 6_000_000, false)
+	assertEnvelope(4_000_000, 6_000_000)
 }
 
-func TestTokenBucketPacerReportsAtomicConservativeEnvelope(t *testing.T) {
+func TestTokenBucketPacerReportsAtomicPacingEnvelope(t *testing.T) {
 	pacer := newTokenBucketPacer(4_000_000, 1.5, 16)
 	t.Cleanup(func() {
 		if err := pacer.Close(); err != nil {
@@ -247,7 +244,7 @@ func TestTokenBucketPacerReportsAtomicConservativeEnvelope(t *testing.T) {
 		if target != 3_000_000 && target != 4_000_000 {
 			t.Fatalf("unexpected target bitrate: %v", target)
 		}
-		if target == 3_000_000 && envelope != 3_000_000 {
+		if target == 3_000_000 && envelope != 4_500_000 {
 			t.Fatalf("decreased pacing snapshot: target=%v envelope=%v", target, envelope)
 		}
 		if target == 4_000_000 && envelope != 6_000_000 {
@@ -261,7 +258,7 @@ func TestTokenBucketPacerReportsAtomicConservativeEnvelope(t *testing.T) {
 	}
 }
 
-func TestTokenBucketPacerPreservesAdmittedFrameWithoutBurstHeadroomAfterDecrease(t *testing.T) {
+func TestTokenBucketPacerBoundsPreDecreaseFrameAndRetainsRepairHeadroom(t *testing.T) {
 	pacer := newTokenBucketPacer(5_000_000, 1.5, 16)
 	t.Cleanup(func() {
 		if err := pacer.Close(); err != nil {
@@ -273,9 +270,17 @@ func TestTokenBucketPacerPreservesAdmittedFrameWithoutBurstHeadroomAfterDecrease
 	if got := int(pacer.packetBytesPerSecond(packet) * 8); got != 5_000_000 {
 		t.Fatalf("decreased admitted-frame pacing bitrate = %d, want 5000000", got)
 	}
+	repair := &pacedPacket{repair: repairKindRetransmission}
+	if got := int(pacer.packetBytesPerSecond(repair) * 8); got != 4_500_000 {
+		t.Fatalf("decreased repair pacing bitrate = %d, want 4500000", got)
+	}
+	current := &pacedPacket{admittedBitrate: 3_000_000}
+	if got := int(pacer.packetBytesPerSecond(current) * 8); got != 4_500_000 {
+		t.Fatalf("current-frame pacing bitrate = %d, want 4500000", got)
+	}
 	pacer.SetTargetBitrate(4_000_000)
-	if got := int(pacer.packetBytesPerSecond(packet) * 8); got != 7_500_000 {
-		t.Fatalf("recovered admitted-frame pacing bitrate = %d, want 7500000", got)
+	if got := int(pacer.packetBytesPerSecond(packet) * 8); got != 5_000_000 {
+		t.Fatalf("still-pre-decrease frame pacing bitrate = %d, want 5000000", got)
 	}
 }
 
