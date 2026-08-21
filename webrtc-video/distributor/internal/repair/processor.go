@@ -14,15 +14,16 @@ import (
 const sequenceSpace = uint64(1 << 16)
 
 type Config struct {
-	MinNACKDelay time.Duration
-	MaxNACKDelay time.Duration
-	NACKRetry    time.Duration
-	PacketExpiry time.Duration
-	ReorderWait  time.Duration
-	MaxMissing   int
-	MaxPending   int
-	MaxNACKs     uint16
-	MaxNACKBatch int
+	MinNACKDelay     time.Duration
+	MaxNACKDelay     time.Duration
+	NACKRetry        time.Duration
+	PacketExpiry     time.Duration
+	ReorderWait      time.Duration
+	KeyFrameInterval time.Duration
+	MaxMissing       int
+	MaxPending       int
+	MaxNACKs         uint16
+	MaxNACKBatch     int
 }
 
 type Packet struct {
@@ -42,32 +43,39 @@ const (
 )
 
 type Stats struct {
-	Received            uint64
-	RTXReceived         uint64
-	FECCandidates       uint64
-	NACKCandidates      uint64
-	ReorderedBeforeNACK uint64
-	LateAfterNACK       uint64
-	RepairedRTX         uint64
-	RepairedFEC         uint64
-	DuplicateRTX        uint64
-	DuplicateFEC        uint64
-	Duplicates          uint64
-	NACKRequests        uint64
-	Expired             uint64
-	Discontinuities     uint64
-	ReorderSkipped      uint64
-	ReorderDiscarded    uint64
-	ReorderLate         uint64
-	LateRTX             uint64
-	LateFEC             uint64
-	ReorderPeak         int
-	NACKDelay           time.Duration
+	Received                  uint64
+	RTXReceived               uint64
+	FECCandidates             uint64
+	NACKCandidates            uint64
+	ReorderedBeforeNACK       uint64
+	LateAfterNACK             uint64
+	RepairedRTX               uint64
+	RepairedFEC               uint64
+	DuplicateRTX              uint64
+	DuplicateFEC              uint64
+	Duplicates                uint64
+	NACKRequests              uint64
+	Expired                   uint64
+	Discontinuities           uint64
+	ReorderSkipped            uint64
+	KeyFrameRequests          uint64
+	KeyFrameRequestsCoalesced uint64
+	ReorderDiscarded          uint64
+	ReorderLate               uint64
+	LateRTX                   uint64
+	LateFEC                   uint64
+	ReorderPeak               int
+	NACKDelay                 time.Duration
 }
 
 type Emit func(*rtp.Packet) error
 
-type Feedback func([]uint16) error
+type FeedbackEvent struct {
+	MissingSequences []uint16
+	RequestKeyFrame  bool
+}
+
+type Feedback func(FeedbackEvent) error
 
 type ObserverOptions struct {
 	Interval time.Duration
@@ -75,10 +83,11 @@ type ObserverOptions struct {
 }
 
 type processor struct {
-	config  Config
-	tracker tracker
-	reorder reorderBuffer
-	stats   Stats
+	config              Config
+	tracker             tracker
+	reorder             reorderBuffer
+	stats               Stats
+	lastKeyFrameRequest time.Time
 }
 
 type missingPacket struct {
@@ -111,15 +120,16 @@ type reorderBuffer struct {
 
 func DefaultConfig() Config {
 	return Config{
-		MinNACKDelay: 20 * time.Millisecond,
-		MaxNACKDelay: 100 * time.Millisecond,
-		NACKRetry:    50 * time.Millisecond,
-		PacketExpiry: time.Second,
-		ReorderWait:  300 * time.Millisecond,
-		MaxMissing:   4096,
-		MaxPending:   8192,
-		MaxNACKs:     10,
-		MaxNACKBatch: 200,
+		MinNACKDelay:     20 * time.Millisecond,
+		MaxNACKDelay:     100 * time.Millisecond,
+		NACKRetry:        50 * time.Millisecond,
+		PacketExpiry:     time.Second,
+		ReorderWait:      300 * time.Millisecond,
+		KeyFrameInterval: time.Second,
+		MaxMissing:       4096,
+		MaxPending:       8192,
+		MaxNACKs:         10,
+		MaxNACKBatch:     200,
 	}
 }
 
@@ -146,7 +156,7 @@ func ProcessObserved(ctx context.Context, config Config, input <-chan Packet, em
 }
 
 func (c Config) validate() error {
-	if c.MinNACKDelay <= 0 || c.MaxNACKDelay < c.MinNACKDelay || c.NACKRetry <= 0 || c.PacketExpiry <= c.MinNACKDelay || c.ReorderWait <= 0 {
+	if c.MinNACKDelay <= 0 || c.MaxNACKDelay < c.MinNACKDelay || c.NACKRetry <= 0 || c.PacketExpiry <= c.MinNACKDelay || c.ReorderWait <= 0 || c.KeyFrameInterval <= 0 {
 		return errors.New("repair durations are invalid")
 	}
 	if c.MaxMissing <= 0 || c.MaxMissing >= 1<<15 || c.MaxPending <= 0 || c.MaxNACKs == 0 || c.MaxNACKBatch <= 0 || c.MaxNACKBatch > c.MaxMissing {
@@ -173,12 +183,21 @@ func (p *processor) run(ctx context.Context, input <-chan Packet, emit Emit, fee
 	for {
 		deadline, scheduled := p.nextDeadline()
 		if scheduled {
-			if timerC == nil || deadline.Before(timerDeadline) {
-				delay := time.Until(deadline)
-				if delay < 0 {
-					delay = 0
+			now := time.Now()
+			if !deadline.After(now) {
+				if timerC != nil {
+					stopTimer(timer)
+					timerC = nil
+					timerDeadline = time.Time{}
 				}
-				resetTimer(timer, delay)
+				if err := p.handleDeadline(now, emit, feedback); err != nil {
+					p.finishStats(observer.Observe)
+					return p.stats, err
+				}
+				continue
+			}
+			if timerC == nil || deadline.Before(timerDeadline) {
+				resetTimer(timer, deadline.Sub(now))
 				timerC = timer.C
 				timerDeadline = deadline
 			}
@@ -196,9 +215,16 @@ func (p *processor) run(ctx context.Context, input <-chan Packet, emit Emit, fee
 				p.finishStats(observer.Observe)
 				return p.stats, nil
 			}
-			if err := p.handlePacket(packet, emit); err != nil {
+			resynchronized, err := p.handlePacket(packet, emit)
+			if err != nil {
 				p.finishStats(observer.Observe)
 				return p.stats, err
+			}
+			if resynchronized {
+				if err := p.requestKeyFrame(time.Now(), feedback); err != nil {
+					p.finishStats(observer.Observe)
+					return p.stats, err
+				}
 			}
 		case now := <-timerC:
 			timerC = nil
@@ -213,9 +239,9 @@ func (p *processor) run(ctx context.Context, input <-chan Packet, emit Emit, fee
 	}
 }
 
-func (p *processor) handlePacket(packet Packet, emit Emit) error {
+func (p *processor) handlePacket(packet Packet, emit Emit) (bool, error) {
 	if packet.RTP == nil {
-		return errors.New("received a nil RTP packet")
+		return false, errors.New("received a nil RTP packet")
 	}
 	if packet.ReceivedAt.IsZero() {
 		packet.ReceivedAt = time.Now()
@@ -229,28 +255,49 @@ func (p *processor) handlePacket(packet Packet, emit Emit) error {
 	}
 	extended, reset, repair, duplicate := p.tracker.observe(packet, &p.stats)
 	if duplicate {
-		return nil
+		return false, nil
 	}
 	packet.repair = repair
 	if reset {
 		p.reorder.reset(extended, &p.stats)
 	}
-	return p.reorder.push(extended, packet, &p.stats, emit)
+	resynchronized, err := p.reorder.push(extended, packet, &p.stats, emit)
+	return reset || resynchronized, err
 }
 
 func (p *processor) handleDeadline(now time.Time, emit Emit, feedback Feedback) error {
 	sequences := p.tracker.due(now, &p.stats)
 	if len(sequences) > 0 {
-		if err := feedback(sequences); err != nil {
+		if err := feedback(FeedbackEvent{MissingSequences: sequences}); err != nil {
 			return fmt.Errorf("send RTP feedback: %w", err)
 		}
 	}
-	return p.reorder.flushExpired(now, &p.stats, emit)
+	resynchronized, err := p.reorder.flushExpired(now, p.tracker.reorderWait(), &p.stats, emit)
+	if err != nil {
+		return err
+	}
+	if resynchronized {
+		return p.requestKeyFrame(now, feedback)
+	}
+	return nil
+}
+
+func (p *processor) requestKeyFrame(now time.Time, feedback Feedback) error {
+	if !p.lastKeyFrameRequest.IsZero() && now.Before(p.lastKeyFrameRequest.Add(p.config.KeyFrameInterval)) {
+		p.stats.KeyFrameRequestsCoalesced++
+		return nil
+	}
+	if err := feedback(FeedbackEvent{RequestKeyFrame: true}); err != nil {
+		return fmt.Errorf("request source key frame: %w", err)
+	}
+	p.lastKeyFrameRequest = now
+	p.stats.KeyFrameRequests++
+	return nil
 }
 
 func (p *processor) nextDeadline() (time.Time, bool) {
 	trackerDeadline, trackerScheduled := p.tracker.nextDeadline()
-	reorderDeadline, reorderScheduled := p.reorder.nextDeadline()
+	reorderDeadline, reorderScheduled := p.reorder.nextDeadline(p.tracker.reorderWait())
 	if !trackerScheduled {
 		return reorderDeadline, reorderScheduled
 	}
@@ -392,6 +439,10 @@ func (t *tracker) nackDelay() time.Duration {
 	return t.delay.value(t.config.MinNACKDelay, t.config.MaxNACKDelay)
 }
 
+func (t *tracker) reorderWait() time.Duration {
+	return t.config.ReorderWait
+}
+
 func (d *delayEstimator) observe(sample time.Duration) {
 	if sample <= 0 {
 		return
@@ -422,7 +473,7 @@ func (d *delayEstimator) value(minimum, maximum time.Duration) time.Duration {
 	return value
 }
 
-func (b *reorderBuffer) push(sequence uint64, packet Packet, stats *Stats, emit Emit) error {
+func (b *reorderBuffer) push(sequence uint64, packet Packet, stats *Stats, emit Emit) (bool, error) {
 	if !b.initialized {
 		b.initialized = true
 		b.expected = sequence
@@ -434,21 +485,37 @@ func (b *reorderBuffer) push(sequence uint64, packet Packet, stats *Stats, emit 
 		} else if packet.RecoveredFEC {
 			stats.LateFEC++
 		}
-		return nil
+		return false, nil
 	}
 	if sequence == b.expected {
 		if err := emitPacket(packet, stats, emit); err != nil {
-			return err
+			return false, err
 		}
 		b.expected++
-		return b.drain(packet.ReceivedAt, stats, emit)
+		return false, b.drain(packet.ReceivedAt, stats, emit)
 	}
 	if _, exists := b.pending[sequence]; exists {
 		stats.Duplicates++
-		return nil
+		return false, nil
 	}
+	resynchronized := false
 	if len(b.pending) >= b.config.MaxPending {
-		return fmt.Errorf("RTP reorder buffer reached its %d-packet limit", b.config.MaxPending)
+		var err error
+		resynchronized, err = b.advance(packet.ReceivedAt, stats, emit, true)
+		if err != nil {
+			return false, err
+		}
+		if sequence < b.expected {
+			stats.ReorderLate++
+			return resynchronized, nil
+		}
+		if sequence == b.expected {
+			if err := emitPacket(packet, stats, emit); err != nil {
+				return false, err
+			}
+			b.expected++
+			return resynchronized, b.drain(packet.ReceivedAt, stats, emit)
+		}
 	}
 	if b.pending == nil {
 		b.pending = make(map[uint64]Packet)
@@ -458,29 +525,76 @@ func (b *reorderBuffer) push(sequence uint64, packet Packet, stats *Stats, emit 
 	if b.gapStarted.IsZero() {
 		b.gapStarted = packet.ReceivedAt
 	}
-	return nil
+	return resynchronized, nil
 }
 
-func (b *reorderBuffer) flushExpired(now time.Time, stats *Stats, emit Emit) error {
-	if b.gapStarted.IsZero() || now.Sub(b.gapStarted) < b.config.ReorderWait {
-		return nil
+func (b *reorderBuffer) flushExpired(now time.Time, wait time.Duration, stats *Stats, emit Emit) (bool, error) {
+	if b.gapStarted.IsZero() || now.Sub(b.gapStarted) < wait {
+		return false, nil
 	}
+	sequences := make([]uint64, 0, len(b.pending))
+	for sequence := range b.pending {
+		sequences = append(sequences, sequence)
+	}
+	sort.Slice(sequences, func(left, right int) bool { return sequences[left] < sequences[right] })
+	earliestEvidence := make([]time.Time, len(sequences))
+	earliest := time.Time{}
+	for index := len(sequences) - 1; index >= 0; index-- {
+		receivedAt := b.pending[sequences[index]].ReceivedAt
+		if earliest.IsZero() || receivedAt.Before(earliest) {
+			earliest = receivedAt
+		}
+		earliestEvidence[index] = earliest
+	}
+	resynchronized := false
+	for index, sequence := range sequences {
+		packet, exists := b.pending[sequence]
+		if !exists {
+			continue
+		}
+		if sequence < b.expected {
+			delete(b.pending, sequence)
+			continue
+		}
+		if sequence > b.expected {
+			if now.Sub(earliestEvidence[index]) < wait {
+				b.gapStarted = earliestEvidence[index]
+				return resynchronized, nil
+			}
+			stats.ReorderSkipped += sequence - b.expected
+			b.expected = sequence
+			resynchronized = true
+		}
+		delete(b.pending, sequence)
+		if err := emitPacket(packet, stats, emit); err != nil {
+			return resynchronized, err
+		}
+		b.expected++
+	}
+	b.gapStarted = time.Time{}
+	return resynchronized, nil
+}
+
+func (b *reorderBuffer) advance(now time.Time, stats *Stats, emit Emit, forced bool) (bool, error) {
 	next, found := b.nearest()
 	if !found {
 		b.gapStarted = time.Time{}
-		return nil
+		return false, nil
 	}
 	stats.ReorderSkipped += next - b.expected
+	if forced {
+		stats.Discontinuities++
+	}
 	b.expected = next
 	b.gapStarted = time.Time{}
-	return b.drain(now, stats, emit)
+	return true, b.drain(now, stats, emit)
 }
 
-func (b *reorderBuffer) nextDeadline() (time.Time, bool) {
+func (b *reorderBuffer) nextDeadline(wait time.Duration) (time.Time, bool) {
 	if b.gapStarted.IsZero() {
 		return time.Time{}, false
 	}
-	return b.gapStarted.Add(b.config.ReorderWait), true
+	return b.gapStarted.Add(wait), true
 }
 
 func (b *reorderBuffer) reset(sequence uint64, stats *Stats) {
@@ -503,12 +617,25 @@ func (b *reorderBuffer) drain(now time.Time, stats *Stats, emit Emit) error {
 		}
 		b.expected++
 	}
+	b.refreshGapStarted(now)
+	return nil
+}
+
+func (b *reorderBuffer) refreshGapStarted(fallback time.Time) {
 	if len(b.pending) == 0 {
 		b.gapStarted = time.Time{}
-	} else if b.gapStarted.IsZero() {
-		b.gapStarted = now
+		return
 	}
-	return nil
+	earliest := time.Time{}
+	for _, packet := range b.pending {
+		if earliest.IsZero() || packet.ReceivedAt.Before(earliest) {
+			earliest = packet.ReceivedAt
+		}
+	}
+	if earliest.IsZero() {
+		earliest = fallback
+	}
+	b.gapStarted = earliest
 }
 
 func (b *reorderBuffer) nearest() (uint64, bool) {

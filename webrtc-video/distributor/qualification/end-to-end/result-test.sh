@@ -23,8 +23,9 @@ jq -n '{
 jq -n '{components: {producer: {samples: 2}, browser: {samples: 2}}}' >"${fixture_directory}/resources.json"
 jq -n '{enabled: true, capacityKbps: 4000, delayMilliseconds: 0, jitterMilliseconds: 0, lossPercent: 0, queuePackets: 256, qdisc: {packets: 100, drops: 0}}' >"${fixture_directory}/network.json"
 jq -n '{enabled: false, capacityKbps: 0, delayMilliseconds: 0, jitterMilliseconds: 0, lossPercent: 0, queuePackets: 0, qdisc: null, filters: []}' >"${fixture_directory}/source-network.json"
-jq -n '{invalid_fec: 0, reorder_late: 0, reorder_discarded: 0, repaired_rtx: 0, repaired_fec: 1, expired: 0}' \
+jq -n '{invalid_fec: 0, reorder_late: 0, reorder_skipped: 0, reorder_discarded: 0, discontinuities: 0, key_frame_requests: 0, damaged_source_frames_dropped: 0, damaged_source_packets_dropped: 0, repaired_rtx: 0, repaired_fec: 1, expired: 0}' \
   >"${fixture_directory}/adapter.json"
+jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 0}' >"${fixture_directory}/runtime-health.json"
 jq -n '{required: false}' >"${fixture_directory}/native-source-profile.json"
 jq -nc '
   def sample(phase; elapsed; frames; bytes; target): {
@@ -90,6 +91,7 @@ render_result() {
   --arg distributor_image '' \
   --arg browser_image browser \
   --slurpfile adapter "${adapter}" \
+  --slurpfile runtime_health "${fixture_directory}/runtime-health.json" \
   --slurpfile browser "${browser}" \
   --slurpfile signaling "${fixture_directory}/signaling.json" \
   --slurpfile resources "${fixture_directory}/resources.json" \
@@ -114,9 +116,10 @@ render_result "${fixture_directory}/samples.jsonl" | jq -e '
     .profile.recoverySeconds == 1 and
     .profile.flexFEC == {mediaPackets: 5, repairPackets: 1} and
     .profile.playoutDelayHintSeconds == 0.2 and
-    .profile.acceptance.capacityTransitionGraceMilliseconds == 3000 and
-    .profile.acceptance.maximumCapacityTransitionFreezeSeconds == 1 and
+    .profile.acceptance.capacityTransitionGraceMilliseconds == 4000 and
+    .profile.acceptance.maximumCapacityTransitionFreezeSeconds == 3 and
     .profile.acceptance.maximumContinuousImpairmentFreezeRatio == 0.02 and
+    .profile.acceptance.maximumDroppedFrameRatio == 0.01 and
     .profile.acceptance.minimumFrameRateRatio == 0.8 and
     .setupMilliseconds == 750 and
     .setup.whepPostDurationMilliseconds == 200 and
@@ -124,6 +127,7 @@ render_result "${fixture_directory}/samples.jsonl" | jq -e '
     .setup.peerToFirstDecodedFrameMilliseconds == 750 and
     .teardown.whepDeleteDurationMilliseconds == 125 and
     .gates.qualityEvidence == true and
+    .gates.runtimeMediaIntegrity == true and
     .phases.baseline.averageDecodedQP == 25 and
     .phases.recovery.encoderTargetKbps.sustainedMinimumLast10Seconds == 7000 and
     .phases.recovery.encoderTargetKbps.medianLast10Seconds == 7000 and
@@ -170,6 +174,59 @@ render_result \
     .gates.sourceTargetRecovery == true and
     .passed == true
   ' >/dev/null
+
+jq -c '
+  if .phase == "source-network" and .elapsedMilliseconds == 3000 then
+    .framesDropped = 1
+  else . end
+' "${fixture_directory}/source-network-samples.jsonl" >"${fixture_directory}/excessive-frame-drop-samples.jsonl"
+render_result \
+  "${fixture_directory}/excessive-frame-drop-samples.jsonl" \
+  mediamtx \
+  "${fixture_directory}/distributed-browser.json" \
+  "${fixture_directory}/native-source-profile.json" \
+  "${fixture_directory}/viewer-network-disabled.json" \
+  "${fixture_directory}/source-network-qualified.json" | jq -e '
+    .sourceNetwork.frameDropRatio > .profile.acceptance.maximumDroppedFrameRatio and
+    .gates.sourceNetworkResponse == false and
+    .passed == false
+  ' >/dev/null
+
+jq '.reorder_skipped = 10 | .expired = 8 | .reorder_late = 2 | .key_frame_requests = 1 | .damaged_source_frames_dropped = 1 | .damaged_source_packets_dropped = 4' \
+  "${fixture_directory}/adapter.json" >"${fixture_directory}/adapter-accounted-loss.json"
+render_result \
+  "${fixture_directory}/source-network-samples.jsonl" \
+  mediamtx \
+  "${fixture_directory}/distributed-browser.json" \
+  "${fixture_directory}/native-source-profile.json" \
+  "${fixture_directory}/viewer-network-disabled.json" \
+  "${fixture_directory}/source-network-qualified.json" \
+  "${fixture_directory}/adapter-accounted-loss.json" | jq -e '
+    .gates.adapterIntegrity == true and
+    .passed == true
+  ' >/dev/null
+
+jq '.reorder_skipped = 11' \
+  "${fixture_directory}/adapter-accounted-loss.json" >"${fixture_directory}/adapter-unaccounted-loss.json"
+render_result \
+  "${fixture_directory}/source-network-samples.jsonl" \
+  mediamtx \
+  "${fixture_directory}/distributed-browser.json" \
+  "${fixture_directory}/native-source-profile.json" \
+  "${fixture_directory}/viewer-network-disabled.json" \
+  "${fixture_directory}/source-network-qualified.json" \
+  "${fixture_directory}/adapter-unaccounted-loss.json" | jq -e '
+    .gates.adapterIntegrity == false and
+    .passed == false
+  ' >/dev/null
+
+jq -n '{fatalErrors: 0, h264PacketizationErrors: 1, packetLossWarnings: 0}' >"${fixture_directory}/runtime-health.json"
+render_result "${fixture_directory}/samples.jsonl" | jq -e '
+  .runtimeHealth.h264PacketizationErrors == 1 and
+  .gates.runtimeMediaIntegrity == false and
+  .passed == false
+' >/dev/null
+jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 0}' >"${fixture_directory}/runtime-health.json"
 
 jq -n '{
   enabled: true,
@@ -345,15 +402,15 @@ jq -c '
   if .phase == "viewer-network" and .elapsedMilliseconds == 3000 then
     .framesDecoded = 83 |
     .freezeCount = 1 |
-    .totalFreezesDurationSeconds = 1.03
+    .totalFreezesDurationSeconds = 3.03
   elif .phase == "recovery" then
     .freezeCount = 1 |
-    .totalFreezesDurationSeconds = 1.03
+    .totalFreezesDurationSeconds = 3.03
   else . end
 ' "${fixture_directory}/samples.jsonl" >"${fixture_directory}/degraded-samples.jsonl"
 render_result "${fixture_directory}/degraded-samples.jsonl" | jq -e '
   .phases.viewerNetwork.decodedFramesPerSecond == 23 and
-  .viewerNetwork.freezeRatio == 1.03 and
+  .viewerNetwork.freezeRatio == 3.03 and
   .gates.playback == false and
   .gates.viewerNetworkRecovery == false and
   .passed == false

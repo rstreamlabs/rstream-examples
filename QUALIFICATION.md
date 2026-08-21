@@ -53,6 +53,31 @@ Every graph must retain its source data and generator. Axes, units, phases,
 thresholds, and anomalies must be explicit. A graph is supporting evidence,
 not a substitute for an automated verdict.
 
+## Visual evidence
+
+Published charts share one visual language across the repository. Use a light
+background, the repository's neutral text and grid colors, green for a passing
+measured response, blue for a configured input or reference, amber for a
+threshold or warning, and red only for a failed gate or product limitation.
+Color must never be the only way to distinguish a signal.
+
+Each chart answers one engineering question. If two signals do not need the
+same time axis to establish cause and response, split them. Keep legends,
+method notes, and verdicts outside the plotting area; label every axis and use
+human-readable units. A reader at mobile width must be able to identify the
+injected condition, the measured response, and the acceptance boundary without
+zooming or reading the raw report.
+
+Charts are generated from the machine-readable evidence of a clean run. The
+generator and source data are versioned with the report, and a renderer test
+protects dimensions, escaping, labels, and required series. Do not hand-edit a
+generated chart, normalize a failed result into a pass, or publish a chart from
+a dirty working tree as release evidence.
+
+The user guide carries only the charts needed to support its principal claims.
+The qualification report retains the full counter set, manifests, detailed
+tables, and reproduction commands.
+
 ## Failure and performance scenarios
 
 Each pack selects scenarios that challenge its actual architecture. The

@@ -400,6 +400,7 @@ jq -n '{enabled: false, capacityKbps: 0, delayMilliseconds: 0, jitterMillisecond
 jq -n '{enabled: false, capacityKbps: 0, delayMilliseconds: 0, jitterMilliseconds: 0, lossPercent: 0, queuePackets: 0, qdisc: null, filters: []}' \
   >"${output_directory}/source-network.json"
 jq -n '{}' >"${output_directory}/adapter-result.json"
+jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 0}' >"${output_directory}/runtime-health.json"
 jq -n '{required: false}' >"${output_directory}/native-source-profile.json"
 
 printf 'Building producer and browser images\n'
@@ -808,6 +809,17 @@ if [[ "${distribution_mode}" == mediamtx-native ]]; then
     >"${output_directory}/native-source-profile.tmp.json"
   mv "${output_directory}/native-source-profile.tmp.json" "${output_directory}/native-source-profile.json"
 fi
+if [[ "${uses_mediamtx}" == true ]]; then
+  runtime_fatal_errors="$(grep -Eic '(^|[[:space:]])(ERR|FTL)([[:space:]]|$)|panic:|fatal error:' "${output_directory}/distributor.log" || true)"
+  runtime_h264_errors="$(grep -Eic 'invalid FU-A packet|non-starting FU-A|invalid H264|invalid NALU|unable to decode.*H264' "${output_directory}/distributor.log" || true)"
+  runtime_packet_loss_warnings="$(grep -Eic '[0-9]+ RTP packets lost' "${output_directory}/distributor.log" || true)"
+  jq -n \
+    --argjson fatal_errors "${runtime_fatal_errors}" \
+    --argjson h264_errors "${runtime_h264_errors}" \
+    --argjson packet_loss_warnings "${runtime_packet_loss_warnings}" \
+    '{fatalErrors: $fatal_errors, h264PacketizationErrors: $h264_errors, packetLossWarnings: $packet_loss_warnings}' \
+    >"${output_directory}/runtime-health.json"
+fi
 
 if [[ ! -s "${output_directory}/resource-samples.jsonl" ]]; then
   printf 'container resource sampler did not produce data\n' >&2
@@ -841,6 +853,7 @@ jq -s \
   --arg distributor_image "$(if [[ "${uses_mediamtx}" == true ]]; then docker image inspect --format '{{.Id}}' "${distributor_image}"; fi)" \
   --arg browser_image "$(docker image inspect --format '{{.Id}}' "${browser_image}")" \
   --slurpfile adapter "${output_directory}/adapter-result.json" \
+  --slurpfile runtime_health "${output_directory}/runtime-health.json" \
   --slurpfile browser "${output_directory}/browser.json" \
   --slurpfile signaling "${output_directory}/signaling-events.json" \
   --slurpfile resources "${output_directory}/resources.json" \

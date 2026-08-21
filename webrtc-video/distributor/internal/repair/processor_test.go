@@ -94,7 +94,7 @@ func TestProcessorDropsDuplicateMediaAndRepairCandidatesBeforeReordering(t *test
 		{RTP: rtpPacket(10), ReceivedAt: started.Add(2 * time.Millisecond), RecoveredFEC: true},
 		{RTP: rtpPacket(10), ReceivedAt: started.Add(3 * time.Millisecond), RecoveredRTX: true},
 	} {
-		if err := instance.handlePacket(packet, emit); err != nil {
+		if _, err := instance.handlePacket(packet, emit); err != nil {
 			t.Fatalf("handle packet: %v", err)
 		}
 	}
@@ -120,7 +120,7 @@ func TestProcessorCountsOnlyRepairsDeliveredInsideTheReorderWindow(t *testing.T)
 		packetAt(12, started.Add(time.Millisecond)),
 		{RTP: rtpPacket(11), ReceivedAt: started.Add(2 * time.Millisecond), RecoveredRTX: true},
 	} {
-		if err := instance.handlePacket(packet, emit); err != nil {
+		if _, err := instance.handlePacket(packet, emit); err != nil {
 			t.Fatalf("handle packet: %v", err)
 		}
 	}
@@ -129,16 +129,16 @@ func TestProcessorCountsOnlyRepairsDeliveredInsideTheReorderWindow(t *testing.T)
 	}
 	late := processor{config: config, tracker: tracker{config: config}, reorder: reorderBuffer{config: config}}
 	emitted = emitted[:0]
-	if err := late.handlePacket(packetAt(20, started), emit); err != nil {
+	if _, err := late.handlePacket(packetAt(20, started), emit); err != nil {
 		t.Fatalf("handle first packet: %v", err)
 	}
-	if err := late.handlePacket(packetAt(22, started.Add(time.Millisecond)), emit); err != nil {
+	if _, err := late.handlePacket(packetAt(22, started.Add(time.Millisecond)), emit); err != nil {
 		t.Fatalf("handle post-gap packet: %v", err)
 	}
-	if err := late.reorder.flushExpired(started.Add(config.ReorderWait+time.Millisecond), &late.stats, emit); err != nil {
+	if _, err := late.reorder.flushExpired(started.Add(config.ReorderWait+time.Millisecond), config.ReorderWait, &late.stats, emit); err != nil {
 		t.Fatalf("flush reorder window: %v", err)
 	}
-	if err := late.handlePacket(Packet{RTP: rtpPacket(21), ReceivedAt: started.Add(config.ReorderWait + 2*time.Millisecond), RecoveredFEC: true}, emit); err != nil {
+	if _, err := late.handlePacket(Packet{RTP: rtpPacket(21), ReceivedAt: started.Add(config.ReorderWait + 2*time.Millisecond), RecoveredFEC: true}, emit); err != nil {
 		t.Fatalf("handle late repair: %v", err)
 	}
 	if late.stats.RepairedFEC != 0 || late.stats.LateFEC != 1 || late.stats.ReorderLate != 1 || !slices.Equal(emitted, []uint16{20, 22}) {
@@ -163,6 +163,23 @@ func TestTrackerAdaptsNACKDelayToObservedReorderingWithinBounds(t *testing.T) {
 	}
 }
 
+func TestTrackerKeepsTheBoundedRealtimeReorderWindowAfterLateRepair(t *testing.T) {
+	config := DefaultConfig()
+	tracker := tracker{config: config}
+	stats := Stats{}
+	started := time.Unix(100, 0)
+	tracker.observe(packetAt(1, started), &stats)
+	tracker.observe(packetAt(3, started.Add(time.Millisecond)), &stats)
+	tracker.observe(Packet{
+		RTP:          rtpPacket(2),
+		ReceivedAt:   started.Add(701 * time.Millisecond),
+		RecoveredRTX: true,
+	}, &stats)
+	if wait := tracker.reorderWait(); wait != config.ReorderWait {
+		t.Fatalf("reorder wait = %s, want bounded realtime budget %s", wait, config.ReorderWait)
+	}
+}
+
 func TestProcessEmitsOrderedPacketsAndSkipsUnrepairedGapAfterBound(t *testing.T) {
 	config := DefaultConfig()
 	config.MinNACKDelay = 5 * time.Millisecond
@@ -172,7 +189,7 @@ func TestProcessEmitsOrderedPacketsAndSkipsUnrepairedGapAfterBound(t *testing.T)
 	config.ReorderWait = 20 * time.Millisecond
 	input := make(chan Packet, 3)
 	emitted := make(chan uint16, 3)
-	feedback := make(chan []uint16, 8)
+	feedback := make(chan FeedbackEvent, 8)
 	result := make(chan struct {
 		stats Stats
 		err   error
@@ -183,9 +200,9 @@ func TestProcessEmitsOrderedPacketsAndSkipsUnrepairedGapAfterBound(t *testing.T)
 		stats, err := Process(ctx, config, input, func(packet *rtp.Packet) error {
 			emitted <- packet.SequenceNumber
 			return nil
-		}, func(sequences []uint16) error {
-			copyOfSequences := append([]uint16(nil), sequences...)
-			feedback <- copyOfSequences
+		}, func(event FeedbackEvent) error {
+			event.MissingSequences = append([]uint16(nil), event.MissingSequences...)
+			feedback <- event
 			return nil
 		})
 		result <- struct {
@@ -217,11 +234,195 @@ func TestProcessEmitsOrderedPacketsAndSkipsUnrepairedGapAfterBound(t *testing.T)
 	if completed.err != nil {
 		t.Fatalf("process packets: %v", completed.err)
 	}
-	if completed.stats.ReorderSkipped != 1 || completed.stats.NACKRequests == 0 {
+	if completed.stats.ReorderSkipped != 1 || completed.stats.NACKRequests == 0 || completed.stats.KeyFrameRequests != 1 {
 		t.Fatalf("unexpected processor stats: %+v", completed.stats)
 	}
-	if len(feedback) == 0 {
-		t.Fatal("missing packet did not produce feedback")
+	foundNACK := false
+	foundKeyFrame := false
+	for len(feedback) > 0 {
+		event := <-feedback
+		foundNACK = foundNACK || len(event.MissingSequences) > 0
+		foundKeyFrame = foundKeyFrame || event.RequestKeyFrame
+	}
+	if !foundNACK || !foundKeyFrame {
+		t.Fatalf("feedback NACK=%t keyframe=%t, want both", foundNACK, foundKeyFrame)
+	}
+}
+
+func TestReorderBufferExpiresEveryAgedGapInOneBoundedPass(t *testing.T) {
+	config := DefaultConfig()
+	wait := 20 * time.Millisecond
+	buffer := reorderBuffer{config: config}
+	stats := Stats{}
+	emitted := make([]uint16, 0, 4)
+	emit := func(packet *rtp.Packet) error {
+		emitted = append(emitted, packet.SequenceNumber)
+		return nil
+	}
+	started := time.Unix(100, 0)
+	for _, packet := range []Packet{
+		packetAt(1, started),
+		packetAt(3, started.Add(time.Millisecond)),
+		packetAt(5, started.Add(2*time.Millisecond)),
+		packetAt(7, started.Add(3*time.Millisecond)),
+	} {
+		if _, err := buffer.push(uint64(packet.RTP.SequenceNumber), packet, &stats, emit); err != nil {
+			t.Fatalf("push packet: %v", err)
+		}
+	}
+	resynchronized, err := buffer.flushExpired(started.Add(wait+4*time.Millisecond), wait, &stats, emit)
+	if err != nil {
+		t.Fatalf("flush expired gaps: %v", err)
+	}
+	if !resynchronized || !slices.Equal(emitted, []uint16{1, 3, 5, 7}) {
+		t.Fatalf("resynchronized=%t emitted=%v, want every aged packet released", resynchronized, emitted)
+	}
+	if stats.ReorderSkipped != 3 || len(buffer.pending) != 0 || !buffer.gapStarted.IsZero() {
+		t.Fatalf("stats=%+v pending=%d gap=%s", stats, len(buffer.pending), buffer.gapStarted)
+	}
+}
+
+func TestReorderBufferKeepsANewerGapInsideItsOwnWindow(t *testing.T) {
+	config := DefaultConfig()
+	wait := 20 * time.Millisecond
+	buffer := reorderBuffer{config: config}
+	stats := Stats{}
+	emitted := make([]uint16, 0, 3)
+	emit := func(packet *rtp.Packet) error {
+		emitted = append(emitted, packet.SequenceNumber)
+		return nil
+	}
+	started := time.Unix(100, 0)
+	for _, packet := range []Packet{
+		packetAt(1, started),
+		packetAt(3, started.Add(time.Millisecond)),
+		packetAt(5, started.Add(15*time.Millisecond)),
+	} {
+		if _, err := buffer.push(uint64(packet.RTP.SequenceNumber), packet, &stats, emit); err != nil {
+			t.Fatalf("push packet: %v", err)
+		}
+	}
+	resynchronized, err := buffer.flushExpired(started.Add(25*time.Millisecond), wait, &stats, emit)
+	if err != nil {
+		t.Fatalf("flush expired gaps: %v", err)
+	}
+	if !resynchronized || !slices.Equal(emitted, []uint16{1, 3}) {
+		t.Fatalf("resynchronized=%t emitted=%v, want only the aged gap released", resynchronized, emitted)
+	}
+	if stats.ReorderSkipped != 1 || len(buffer.pending) != 1 || buffer.gapStarted != started.Add(15*time.Millisecond) {
+		t.Fatalf("stats=%+v pending=%d gap=%s", stats, len(buffer.pending), buffer.gapStarted)
+	}
+}
+
+func TestProcessResynchronizesBeforeTheReorderBufferCanOverflow(t *testing.T) {
+	config := DefaultConfig()
+	config.ReorderWait = time.Hour
+	config.MaxPending = 4
+	input := make(chan Packet, 8)
+	started := time.Now()
+	input <- packetAt(1, started)
+	for sequence := uint16(3); sequence <= 7; sequence++ {
+		input <- packetAt(sequence, started)
+	}
+	close(input)
+	emitted := make([]uint16, 0, 6)
+	feedback := make([]FeedbackEvent, 0, 1)
+	stats, err := Process(context.Background(), config, input, func(packet *rtp.Packet) error {
+		emitted = append(emitted, packet.SequenceNumber)
+		return nil
+	}, func(event FeedbackEvent) error {
+		feedback = append(feedback, event)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("process bounded burst: %v", err)
+	}
+	if !slices.Equal(emitted, []uint16{1, 3, 4, 5, 6, 7}) {
+		t.Fatalf("emitted packets = %v, want bounded resynchronization", emitted)
+	}
+	if stats.ReorderSkipped != 1 || stats.Discontinuities != 1 || stats.KeyFrameRequests != 1 || stats.ReorderDiscarded != 0 {
+		t.Fatalf("resynchronization stats = %+v", stats)
+	}
+	if len(feedback) != 1 || !feedback[0].RequestKeyFrame || len(feedback[0].MissingSequences) != 0 {
+		t.Fatalf("resynchronization feedback = %+v, want one key-frame request", feedback)
+	}
+}
+
+func TestProcessRequestsAKeyFrameAfterALargeSequenceDiscontinuity(t *testing.T) {
+	config := DefaultConfig()
+	config.MaxMissing = 4
+	config.MaxNACKBatch = 4
+	input := make(chan Packet, 2)
+	started := time.Now()
+	input <- packetAt(1, started)
+	input <- packetAt(10, started.Add(time.Millisecond))
+	close(input)
+	feedback := make([]FeedbackEvent, 0, 1)
+	stats, err := Process(context.Background(), config, input, func(*rtp.Packet) error { return nil }, func(event FeedbackEvent) error {
+		feedback = append(feedback, event)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("process sequence discontinuity: %v", err)
+	}
+	if stats.Discontinuities != 1 || stats.KeyFrameRequests != 1 || len(feedback) != 1 || !feedback[0].RequestKeyFrame {
+		t.Fatalf("discontinuity stats=%+v feedback=%+v", stats, feedback)
+	}
+}
+
+func TestProcessPropagatesAKeyFrameRequestFailure(t *testing.T) {
+	config := DefaultConfig()
+	config.MinNACKDelay = time.Nanosecond
+	config.MaxNACKDelay = time.Nanosecond
+	config.ReorderWait = time.Nanosecond
+	input := make(chan Packet, 2)
+	t.Cleanup(func() { close(input) })
+	started := time.Now().Add(-time.Second)
+	input <- packetAt(1, started)
+	input <- packetAt(3, started)
+	wantErr := errors.New("key-frame feedback unavailable")
+	done := make(chan error, 1)
+	go func() {
+		_, err := Process(context.Background(), config, input, func(*rtp.Packet) error { return nil }, func(event FeedbackEvent) error {
+			if event.RequestKeyFrame {
+				return wantErr
+			}
+			return nil
+		})
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("process error = %v, want key-frame feedback error", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("key-frame feedback failure did not stop the processor")
+	}
+}
+
+func TestProcessorCoalescesKeyFrameRequestsInsideTheBoundedInterval(t *testing.T) {
+	config := DefaultConfig()
+	instance := processor{config: config}
+	requests := 0
+	feedback := func(event FeedbackEvent) error {
+		if event.RequestKeyFrame {
+			requests++
+		}
+		return nil
+	}
+	started := time.Unix(100, 0)
+	for _, at := range []time.Time{
+		started,
+		started.Add(config.KeyFrameInterval / 2),
+		started.Add(config.KeyFrameInterval),
+	} {
+		if err := instance.requestKeyFrame(at, feedback); err != nil {
+			t.Fatalf("request key frame: %v", err)
+		}
+	}
+	if requests != 2 || instance.stats.KeyFrameRequests != 2 || instance.stats.KeyFrameRequestsCoalesced != 1 {
+		t.Fatalf("requests=%d stats=%+v, want two emitted and one coalesced", requests, instance.stats)
 	}
 }
 
@@ -246,7 +447,7 @@ func TestProcessDoesNotPostponeExpiredReorderDeadlineUnderSaturatedInput(t *test
 		_, err := Process(ctx, config, input, func(packet *rtp.Packet) error {
 			emitted <- packet.SequenceNumber
 			return nil
-		}, func([]uint16) error { return nil })
+		}, func(FeedbackEvent) error { return nil })
 		done <- err
 	}()
 	for {
@@ -280,7 +481,7 @@ func TestProcessCancellationAndFeedbackFailureTerminateOnce(t *testing.T) {
 	feedbackErr := errors.New("feedback unavailable")
 	done := make(chan error, 1)
 	go func() {
-		_, err := Process(context.Background(), config, input, func(*rtp.Packet) error { return nil }, func([]uint16) error { return feedbackErr })
+		_, err := Process(context.Background(), config, input, func(*rtp.Packet) error { return nil }, func(FeedbackEvent) error { return feedbackErr })
 		done <- err
 	}()
 	now := time.Now()
@@ -298,7 +499,7 @@ func TestProcessCancellationAndFeedbackFailureTerminateOnce(t *testing.T) {
 	cancelInput := make(chan Packet)
 	cancelDone := make(chan error, 1)
 	go func() {
-		_, err := Process(cancelCtx, DefaultConfig(), cancelInput, func(*rtp.Packet) error { return nil }, func([]uint16) error { return nil })
+		_, err := Process(cancelCtx, DefaultConfig(), cancelInput, func(*rtp.Packet) error { return nil }, func(FeedbackEvent) error { return nil })
 		cancelDone <- err
 	}()
 	cancel()
@@ -319,7 +520,7 @@ func TestProcessSupportsConcurrentCancellationAndInputClose(t *testing.T) {
 		input := make(chan Packet)
 		done := make(chan struct{})
 		go func() {
-			_, _ = Process(ctx, DefaultConfig(), input, func(*rtp.Packet) error { return nil }, func([]uint16) error { return nil })
+			_, _ = Process(ctx, DefaultConfig(), input, func(*rtp.Packet) error { return nil }, func(FeedbackEvent) error { return nil })
 			close(done)
 		}()
 		var workers sync.WaitGroup
@@ -354,7 +555,7 @@ func TestProcessObservedPublishesLiveAndFinalSnapshots(t *testing.T) {
 			DefaultConfig(),
 			input,
 			func(*rtp.Packet) error { return nil },
-			func([]uint16) error { return nil },
+			func(FeedbackEvent) error { return nil },
 			ObserverOptions{Interval: 5 * time.Millisecond, Observe: func(stats Stats) { observed <- stats }},
 		)
 		done <- struct {
@@ -397,7 +598,7 @@ func TestProcessObservedRejectsPartialObserverConfiguration(t *testing.T) {
 			DefaultConfig(),
 			input,
 			func(*rtp.Packet) error { return nil },
-			func([]uint16) error { return nil },
+			func(FeedbackEvent) error { return nil },
 			options,
 		)
 		if err == nil {
@@ -414,7 +615,7 @@ func TestSequentialHotPathDoesNotAllocatePerPacket(t *testing.T) {
 	allocations := testing.AllocsPerRun(1000, func() {
 		packet.RTP.SequenceNumber++
 		packet.ReceivedAt = packet.ReceivedAt.Add(time.Microsecond)
-		if err := instance.handlePacket(packet, emit); err != nil {
+		if _, err := instance.handlePacket(packet, emit); err != nil {
 			panic(err)
 		}
 	})

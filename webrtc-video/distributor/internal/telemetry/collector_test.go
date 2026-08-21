@@ -24,9 +24,9 @@ func TestAggregatorAccumulatesMonotonicAttemptsAndBoundedStates(t *testing.T) {
 	aggregator := newAggregator()
 	now := time.Unix(100, 0)
 	messages := []message{
-		{Version: 1, ProcessID: testProcessID, AttemptID: testAttemptID, Sequence: 1, State: StateActive, Counters: Counters{Received: 10, RepairedRTX: 1, SourceICERestarts: 1, SourceCredentialRefreshFailures: 1}},
-		{Version: 1, ProcessID: testProcessID, AttemptID: testAttemptID, Sequence: 2, State: StateActive, DroppedSnapshots: 2, Counters: Counters{Received: 15, RepairedRTX: 3, SourceICERestarts: 2, SourceCredentialRefreshFailures: 2}},
-		{Version: 1, ProcessID: testProcessID, AttemptID: testAttemptID, Sequence: 3, State: StateIdle, Outcome: OutcomeFailed, Completed: true, DroppedSnapshots: 2, Counters: Counters{Received: 20, RepairedRTX: 4, SourceICERestarts: 3, SourceCredentialRefreshFailures: 4}},
+		{Version: 1, ProcessID: testProcessID, AttemptID: testAttemptID, Sequence: 1, State: StateActive, Counters: Counters{Received: 10, RepairedRTX: 1, ReorderSkipped: 2, Discontinuities: 1, KeyFrameRequests: 1, KeyFrameRequestsCoalesced: 2, DamagedSourceFramesDropped: 1, DamagedSourcePacketsDropped: 3, SourceICERestarts: 1, SourceCredentialRefreshFailures: 1}},
+		{Version: 1, ProcessID: testProcessID, AttemptID: testAttemptID, Sequence: 2, State: StateActive, DroppedSnapshots: 2, Counters: Counters{Received: 15, RepairedRTX: 3, ReorderSkipped: 4, Discontinuities: 2, KeyFrameRequests: 2, KeyFrameRequestsCoalesced: 4, DamagedSourceFramesDropped: 2, DamagedSourcePacketsDropped: 5, SourceICERestarts: 2, SourceCredentialRefreshFailures: 2}},
+		{Version: 1, ProcessID: testProcessID, AttemptID: testAttemptID, Sequence: 3, State: StateIdle, Outcome: OutcomeFailed, Completed: true, DroppedSnapshots: 2, Counters: Counters{Received: 20, RepairedRTX: 4, ReorderSkipped: 7, Discontinuities: 3, KeyFrameRequests: 3, KeyFrameRequestsCoalesced: 6, DamagedSourceFramesDropped: 4, DamagedSourcePacketsDropped: 9, SourceICERestarts: 3, SourceCredentialRefreshFailures: 4}},
 		{Version: 1, ProcessID: testProcessID, Sequence: 4, State: StateBackoff, RetryAfterMilliseconds: 1500, DroppedSnapshots: 2},
 	}
 	for _, value := range messages {
@@ -41,6 +41,12 @@ func TestAggregatorAccumulatesMonotonicAttemptsAndBoundedStates(t *testing.T) {
 		`rstream_video_distributor_retry_after_seconds 1.5`,
 		`rstream_video_distributor_repaired_packets_total{repair="rtx"} 4`,
 		`rstream_video_distributor_source_packets_total{kind="media"} 20`,
+		`rstream_video_distributor_reorder_skipped_packets_total 7`,
+		`rstream_video_distributor_source_discontinuities_total 3`,
+		`rstream_video_distributor_key_frame_requests_total 3`,
+		`rstream_video_distributor_key_frame_requests_coalesced_total 6`,
+		`rstream_video_distributor_damaged_source_frames_dropped_total 4`,
+		`rstream_video_distributor_damaged_source_packets_dropped_total 9`,
 		`rstream_video_distributor_source_ice_restarts_total 3`,
 		`rstream_video_distributor_source_credential_refresh_failures_total 4`,
 		`rstream_video_distributor_telemetry_dropped_snapshots_total 2`,
@@ -73,6 +79,33 @@ func TestAggregatorRejectsCounterRegressionAndOverlappingAttempts(t *testing.T) 
 		if err := aggregator.apply(value, now); err == nil {
 			t.Fatalf("invalid telemetry was accepted: %+v", value)
 		}
+	}
+}
+
+func TestCounterArithmeticPreservesEveryCounter(t *testing.T) {
+	previous := Counters{
+		Received: 1, RTXReceived: 2, SourceFEC: 3, FECCandidates: 4, Duplicates: 5,
+		DuplicateRTX: 6, DuplicateFEC: 7, RepairedRTX: 8, RepairedFEC: 9, LateRTX: 10,
+		LateFEC: 11, ReorderLate: 12, ReorderSkipped: 13, Discontinuities: 14,
+		KeyFrameRequests: 15, KeyFrameRequestsCoalesced: 16, ReorderDiscarded: 17, InvalidFEC: 18, NACKRequests: 19,
+		Expired: 20, SourceICERestarts: 21, SourceCredentialRefreshFailures: 22,
+		DamagedSourceFramesDropped: 23, DamagedSourcePacketsDropped: 24,
+	}
+	delta := Counters{
+		Received: 21, RTXReceived: 20, SourceFEC: 19, FECCandidates: 18, Duplicates: 17,
+		DuplicateRTX: 16, DuplicateFEC: 15, RepairedRTX: 14, RepairedFEC: 13, LateRTX: 12,
+		LateFEC: 11, ReorderLate: 10, ReorderSkipped: 9, Discontinuities: 8,
+		KeyFrameRequests: 8, KeyFrameRequestsCoalesced: 7, ReorderDiscarded: 6, InvalidFEC: 5, NACKRequests: 4,
+		Expired: 3, SourceICERestarts: 2, SourceCredentialRefreshFailures: 1,
+		DamagedSourceFramesDropped: 9, DamagedSourcePacketsDropped: 10,
+	}
+	current, ok := addCounters(previous, delta)
+	if !ok {
+		t.Fatal("valid counter addition overflowed")
+	}
+	got, ok := counterDelta(current, previous)
+	if !ok || got != delta {
+		t.Fatalf("counter round trip = %+v, %t, want %+v", got, ok, delta)
 	}
 }
 

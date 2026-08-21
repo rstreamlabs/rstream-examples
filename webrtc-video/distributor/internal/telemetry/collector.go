@@ -428,7 +428,7 @@ func removeStaleSocket(socketPath string) error {
 }
 
 func counterDelta(current Counters, previous Counters) (Counters, bool) {
-	values := [18][2]uint64{
+	values := [24][2]uint64{
 		{current.Received, previous.Received},
 		{current.RTXReceived, previous.RTXReceived},
 		{current.SourceFEC, previous.SourceFEC},
@@ -441,6 +441,12 @@ func counterDelta(current Counters, previous Counters) (Counters, bool) {
 		{current.LateRTX, previous.LateRTX},
 		{current.LateFEC, previous.LateFEC},
 		{current.ReorderLate, previous.ReorderLate},
+		{current.ReorderSkipped, previous.ReorderSkipped},
+		{current.Discontinuities, previous.Discontinuities},
+		{current.KeyFrameRequests, previous.KeyFrameRequests},
+		{current.KeyFrameRequestsCoalesced, previous.KeyFrameRequestsCoalesced},
+		{current.DamagedSourceFramesDropped, previous.DamagedSourceFramesDropped},
+		{current.DamagedSourcePacketsDropped, previous.DamagedSourcePacketsDropped},
 		{current.ReorderDiscarded, previous.ReorderDiscarded},
 		{current.InvalidFEC, previous.InvalidFEC},
 		{current.NACKRequests, previous.NACKRequests},
@@ -466,6 +472,12 @@ func counterDelta(current Counters, previous Counters) (Counters, bool) {
 		LateRTX:                         current.LateRTX - previous.LateRTX,
 		LateFEC:                         current.LateFEC - previous.LateFEC,
 		ReorderLate:                     current.ReorderLate - previous.ReorderLate,
+		ReorderSkipped:                  current.ReorderSkipped - previous.ReorderSkipped,
+		Discontinuities:                 current.Discontinuities - previous.Discontinuities,
+		KeyFrameRequests:                current.KeyFrameRequests - previous.KeyFrameRequests,
+		KeyFrameRequestsCoalesced:       current.KeyFrameRequestsCoalesced - previous.KeyFrameRequestsCoalesced,
+		DamagedSourceFramesDropped:      current.DamagedSourceFramesDropped - previous.DamagedSourceFramesDropped,
+		DamagedSourcePacketsDropped:     current.DamagedSourcePacketsDropped - previous.DamagedSourcePacketsDropped,
 		ReorderDiscarded:                current.ReorderDiscarded - previous.ReorderDiscarded,
 		InvalidFEC:                      current.InvalidFEC - previous.InvalidFEC,
 		NACKRequests:                    current.NACKRequests - previous.NACKRequests,
@@ -476,7 +488,7 @@ func counterDelta(current Counters, previous Counters) (Counters, bool) {
 }
 
 func addCounters(left Counters, right Counters) (Counters, bool) {
-	values := [18][2]uint64{
+	values := [24][2]uint64{
 		{left.Received, right.Received},
 		{left.RTXReceived, right.RTXReceived},
 		{left.SourceFEC, right.SourceFEC},
@@ -489,6 +501,12 @@ func addCounters(left Counters, right Counters) (Counters, bool) {
 		{left.LateRTX, right.LateRTX},
 		{left.LateFEC, right.LateFEC},
 		{left.ReorderLate, right.ReorderLate},
+		{left.ReorderSkipped, right.ReorderSkipped},
+		{left.Discontinuities, right.Discontinuities},
+		{left.KeyFrameRequests, right.KeyFrameRequests},
+		{left.KeyFrameRequestsCoalesced, right.KeyFrameRequestsCoalesced},
+		{left.DamagedSourceFramesDropped, right.DamagedSourceFramesDropped},
+		{left.DamagedSourcePacketsDropped, right.DamagedSourcePacketsDropped},
 		{left.ReorderDiscarded, right.ReorderDiscarded},
 		{left.InvalidFEC, right.InvalidFEC},
 		{left.NACKRequests, right.NACKRequests},
@@ -496,7 +514,7 @@ func addCounters(left Counters, right Counters) (Counters, bool) {
 		{left.SourceICERestarts, right.SourceICERestarts},
 		{left.SourceCredentialRefreshFailures, right.SourceCredentialRefreshFailures},
 	}
-	var result [18]uint64
+	var result [24]uint64
 	for index, value := range values {
 		sum, carry := bits.Add64(value[0], value[1], 0)
 		if carry != 0 {
@@ -517,12 +535,18 @@ func addCounters(left Counters, right Counters) (Counters, bool) {
 		LateRTX:                         result[9],
 		LateFEC:                         result[10],
 		ReorderLate:                     result[11],
-		ReorderDiscarded:                result[12],
-		InvalidFEC:                      result[13],
-		NACKRequests:                    result[14],
-		Expired:                         result[15],
-		SourceICERestarts:               result[16],
-		SourceCredentialRefreshFailures: result[17],
+		ReorderSkipped:                  result[12],
+		Discontinuities:                 result[13],
+		KeyFrameRequests:                result[14],
+		KeyFrameRequestsCoalesced:       result[15],
+		DamagedSourceFramesDropped:      result[16],
+		DamagedSourcePacketsDropped:     result[17],
+		ReorderDiscarded:                result[18],
+		InvalidFEC:                      result[19],
+		NACKRequests:                    result[20],
+		Expired:                         result[21],
+		SourceICERestarts:               result[22],
+		SourceCredentialRefreshFailures: result[23],
 	}, true
 }
 
@@ -553,6 +577,12 @@ func writeCounterFamilies(output *strings.Builder, counters Counters) {
 		{"rstream_video_distributor_nack_requests_total", "Total RTP sequence numbers requested through NACK feedback.", counters.NACKRequests},
 		{"rstream_video_distributor_expired_missing_packets_total", "Total missing packets abandoned after bounded repair attempts.", counters.Expired},
 		{"rstream_video_distributor_reorder_late_packets_total", "Total packets received after their sequence had left the reorder window.", counters.ReorderLate},
+		{"rstream_video_distributor_reorder_skipped_packets_total", "Total missing RTP sequence numbers skipped after the bounded repair window.", counters.ReorderSkipped},
+		{"rstream_video_distributor_source_discontinuities_total", "Total source sequence discontinuities that required bounded resynchronization.", counters.Discontinuities},
+		{"rstream_video_distributor_key_frame_requests_total", "Total source key-frame requests emitted after an unrepaired discontinuity.", counters.KeyFrameRequests},
+		{"rstream_video_distributor_key_frame_requests_coalesced_total", "Total source key-frame requests suppressed by the bounded feedback rate limiter.", counters.KeyFrameRequestsCoalesced},
+		{"rstream_video_distributor_damaged_source_frames_dropped_total", "Total incomplete H.264 source frames withheld from MediaMTX after unrepaired sequence gaps.", counters.DamagedSourceFramesDropped},
+		{"rstream_video_distributor_damaged_source_packets_dropped_total", "Total H.264 source packets withheld while waiting for a complete access-unit boundary.", counters.DamagedSourcePacketsDropped},
 		{"rstream_video_distributor_reorder_discarded_packets_total", "Total buffered packets discarded during teardown or discontinuity handling.", counters.ReorderDiscarded},
 		{"rstream_video_distributor_invalid_fec_packets_total", "Total FlexFEC packets rejected by the decoder.", counters.InvalidFEC},
 		{"rstream_video_distributor_source_ice_restarts_total", "Total source ICE generations renewed before their credentials expired.", counters.SourceICERestarts},

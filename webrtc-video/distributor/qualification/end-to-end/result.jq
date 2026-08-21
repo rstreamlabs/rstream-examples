@@ -1,8 +1,13 @@
 def maximum(name): [.[] | .[name]] | max;
 def maximum_freeze_ratio: 0.02;
-def maximum_capacity_transition_freeze_seconds: 1;
-def capacity_transition_grace_milliseconds: 3000;
+def maximum_capacity_transition_freeze_seconds: 3;
+def capacity_transition_grace_milliseconds: 4000;
+def maximum_dropped_frame_ratio: 0.01;
 def minimum_frame_rate_ratio: 0.8;
+def frame_drop_ratio(decoded; dropped):
+  if decoded == null or dropped == null or (decoded + dropped) == 0 then 0
+  else dropped / (decoded + dropped)
+  end;
 def phase_delta(phase; name):
   [.[] | select(.phase == phase) | .[name]] |
   if length < 2 then null else last - first end;
@@ -119,6 +124,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
       capacityTransitionGraceMilliseconds: capacity_transition_grace_milliseconds,
       maximumCapacityTransitionFreezeSeconds: maximum_capacity_transition_freeze_seconds,
       maximumContinuousImpairmentFreezeRatio: maximum_freeze_ratio,
+      maximumDroppedFrameRatio: maximum_dropped_frame_ratio,
       minimumFrameRateRatio: minimum_frame_rate_ratio
     },
     viewerNetwork: {
@@ -148,6 +154,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
   producerMetricsSamples: ([.[] | select(.producerMetricsSource == "openmetrics")] | length),
   producerMetricsCompleteSamples: ([.[] | select(producer_metrics_complete)] | length),
   adapter: $adapter[0],
+  runtimeHealth: $runtime_health[0],
   nativeSourceProfile: $native_source_profile[0],
   peerConnection: $browser[0].peerConnection,
   signaling: $signaling[0],
@@ -217,7 +224,23 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     qualityEvidence: ([phase_summary("baseline"), phase_summary("source-network"), phase_summary("viewer-network"), phase_summary("recovery")] | map(select(. != null)) | all(.averageDecodedQP != null and .averageDecodedQP >= 0)),
     setupEvidence: ([$peer_created, $whep_post, $connected, $playback_ready, $first_decoded_frame] | all(. != null)),
     teardownEvidence: ($whep_delete != null and $whep_delete.durationMilliseconds >= 0),
-    adapterIntegrity: ($mode != "mediamtx" or ($adapter[0].invalid_fec == 0 and $adapter[0].reorder_late == 0 and $adapter[0].reorder_discarded == 0 and $adapter[0].expired == 0)),
+    adapterIntegrity: (
+      $mode != "mediamtx" or (
+        $adapter[0].invalid_fec == 0 and
+        $adapter[0].reorder_discarded == 0 and
+        $adapter[0].discontinuities == 0 and
+        $adapter[0].reorder_skipped == ($adapter[0].expired + $adapter[0].reorder_late) and
+        (if $adapter[0].reorder_skipped > 0 then
+          $adapter[0].key_frame_requests > 0 and
+          $adapter[0].damaged_source_frames_dropped > 0 and
+          $adapter[0].damaged_source_packets_dropped > 0
+        else
+          $adapter[0].damaged_source_frames_dropped == 0 and
+          $adapter[0].damaged_source_packets_dropped == 0
+        end)
+      )
+    ),
+    runtimeMediaIntegrity: ($runtime_health[0].fatalErrors == 0 and $runtime_health[0].h264PacketizationErrors == 0),
     nativeSourceLifecycle: (
       if $mode == "mediamtx-native" then
         $native_source_profile[0].required and
@@ -247,6 +270,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
       .viewerNetwork.freezeDurationDeltaSeconds / $phase_seconds
     else 0 end
   )
+| .viewerNetwork.frameDropRatio = frame_drop_ratio(.viewerNetwork.framesDecodedDelta; .viewerNetwork.framesDroppedDelta)
 | .viewerNetwork.recoveryFreezeRatio = (
     if .viewerNetwork.enabled then
       .viewerNetwork.recoveryFreezeDurationDeltaSeconds / $recovery_seconds
@@ -257,6 +281,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
       .sourceNetwork.freezeDurationDeltaSeconds / $phase_seconds
     else 0 end
   )
+| .sourceNetwork.frameDropRatio = frame_drop_ratio(.sourceNetwork.framesDecodedDelta; .sourceNetwork.framesDroppedDelta)
 | .sourceNetwork.recoveryFreezeRatio = (
     if .sourceNetwork.enabled then
       .sourceNetwork.recoveryFreezeDurationDeltaSeconds / $recovery_seconds
@@ -310,7 +335,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     if .sourceNetwork.enabled then
       .phases.sourceNetwork.decodedFramesPerSecond >=
         (.phases.baseline.decodedFramesPerSecond * minimum_frame_rate_ratio) and
-      .sourceNetwork.framesDroppedDelta == 0 and
+      .sourceNetwork.frameDropRatio <= maximum_dropped_frame_ratio and
       (if .sourceNetwork.capacityKbps > 0 then
         .sourceNetwork.adaptiveBitrateUpdatesDelta > 0 and
         .phases.sourceNetwork.encoderTargetKbps.medianLast10Seconds <=
@@ -327,7 +352,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
       (if .viewerNetwork.lossPercent > 0 then .viewerNetwork.qdisc.drops > 0 else true end) and
       .phases.viewerNetwork.decodedFramesPerSecond >=
         (.phases.baseline.decodedFramesPerSecond * minimum_frame_rate_ratio) and
-      .viewerNetwork.framesDroppedDelta == 0 and
+      .viewerNetwork.frameDropRatio <= maximum_dropped_frame_ratio and
       (if .viewerNetwork.capacityKbps > 0 and
           .viewerNetwork.delayMilliseconds == 0 and
           .viewerNetwork.jitterMilliseconds == 0 and

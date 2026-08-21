@@ -45,6 +45,8 @@ type Result struct {
 	Repair                          repair.Stats
 	SourceFECPackets                uint64
 	InvalidFEC                      uint64
+	DamagedSourceFramesDropped      uint64
+	DamagedSourcePacketsDropped     uint64
 	SourceICERestarts               uint64
 	SourceCredentialRefreshFailures uint64
 }
@@ -510,6 +512,10 @@ func forward(
 		workerCount++
 	}
 	var decoder fecDecoder
+	continuity := newH264ContinuityFilter(incoming.track.Codec().MimeType == webrtc.MimeTypeH264)
+	sequenceRewriter := rtpSequenceRewriter{}
+	var damagedSourceFramesDropped atomic.Uint64
+	var damagedSourcePacketsDropped atomic.Uint64
 	if incoming.track.FecSSRC() != 0 {
 		workerCount++
 		decoder = flexfec.NewDecoder03(
@@ -550,26 +556,40 @@ func forward(
 			repair.DefaultConfig(),
 			packets,
 			func(packet *rtp.Packet) error {
+				forward, damaged := continuity.accept(packet)
+				if damaged {
+					damagedSourceFramesDropped.Add(1)
+				}
+				if !forward {
+					damagedSourcePacketsDropped.Add(1)
+					return nil
+				}
+				sequenceRewriter.rewrite(packet)
 				stripSourceExtensions(packet)
 				return output.WriteRTP(packet)
 			},
-			func(sequences []uint16) error {
+			func(event repair.FeedbackEvent) error {
+				if event.RequestKeyFrame {
+					return requestSourceKeyFrame(sourcePeer, uint32(incoming.track.SSRC()))
+				}
 				return sourcePeer.WriteRTCP([]rtcp.Packet{&rtcp.TransportLayerNack{
 					MediaSSRC: uint32(incoming.track.SSRC()),
-					Nacks:     rtcp.NackPairsFromSequenceNumbers(sequences),
+					Nacks:     rtcp.NackPairsFromSequenceNumbers(event.MissingSequences),
 				}})
 			},
-			repairObserver(options.observe, &sourceFEC, &invalidFEC, sourceICERestarts, sourceCredentialRefreshFailures),
+			repairObserver(options.observe, &sourceFEC, &invalidFEC, &damagedSourceFramesDropped, &damagedSourcePacketsDropped, sourceICERestarts, sourceCredentialRefreshFailures),
 		)
 		results <- workerResult{name: "repair processor", stats: stats, hasStats: true, err: processErr}
 	}()
-	return superviseWorkers(ctx, cancel, results, workerCount, &sourceFEC, &invalidFEC, sourceICERestarts, sourceCredentialRefreshFailures, shutdown, workerShutdownTimeout)
+	return superviseWorkers(ctx, cancel, results, workerCount, &sourceFEC, &invalidFEC, &damagedSourceFramesDropped, &damagedSourcePacketsDropped, sourceICERestarts, sourceCredentialRefreshFailures, shutdown, workerShutdownTimeout)
 }
 
 func repairObserver(
 	observe func(Result),
 	sourceFEC *atomic.Uint64,
 	invalidFEC *atomic.Uint64,
+	damagedSourceFramesDropped *atomic.Uint64,
+	damagedSourcePacketsDropped *atomic.Uint64,
 	sourceICERestarts *atomic.Uint64,
 	sourceCredentialRefreshFailures *atomic.Uint64,
 ) repair.ObserverOptions {
@@ -583,6 +603,8 @@ func repairObserver(
 				Repair:                          stats,
 				SourceFECPackets:                sourceFEC.Load(),
 				InvalidFEC:                      invalidFEC.Load(),
+				DamagedSourceFramesDropped:      damagedSourceFramesDropped.Load(),
+				DamagedSourcePacketsDropped:     damagedSourcePacketsDropped.Load(),
 				SourceICERestarts:               sourceICERestarts.Load(),
 				SourceCredentialRefreshFailures: sourceCredentialRefreshFailures.Load(),
 			})
@@ -625,6 +647,8 @@ func superviseWorkers(
 	workerCount int,
 	sourceFEC *atomic.Uint64,
 	invalidFEC *atomic.Uint64,
+	damagedSourceFramesDropped *atomic.Uint64,
+	damagedSourcePacketsDropped *atomic.Uint64,
 	sourceICERestarts *atomic.Uint64,
 	sourceCredentialRefreshFailures *atomic.Uint64,
 	shutdown func() error,
@@ -664,6 +688,8 @@ func superviseWorkers(
 	}
 	result.InvalidFEC = invalidFEC.Load()
 	result.SourceFECPackets = sourceFEC.Load()
+	result.DamagedSourceFramesDropped = damagedSourceFramesDropped.Load()
+	result.DamagedSourcePacketsDropped = damagedSourcePacketsDropped.Load()
 	result.SourceICERestarts = sourceICERestarts.Load()
 	result.SourceCredentialRefreshFailures = sourceCredentialRefreshFailures.Load()
 	return result, runErr

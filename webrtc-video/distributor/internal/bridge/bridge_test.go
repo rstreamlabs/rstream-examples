@@ -206,6 +206,8 @@ func TestSuperviseWorkersMarksIncompleteShutdownAsFatal(t *testing.T) {
 	results <- workerResult{name: "failed worker", err: errors.New("source stopped")}
 	var sourceFEC atomic.Uint64
 	var invalidFEC atomic.Uint64
+	var damagedSourceFramesDropped atomic.Uint64
+	var damagedSourcePacketsDropped atomic.Uint64
 	var sourceICERestarts atomic.Uint64
 	var sourceCredentialRefreshFailures atomic.Uint64
 	shutdown := func() error {
@@ -214,7 +216,7 @@ func TestSuperviseWorkersMarksIncompleteShutdownAsFatal(t *testing.T) {
 		}
 		return errors.Join(source.Close(), destination.Close())
 	}
-	_, err = superviseWorkers(ctx, cancel, results, baseWorkerCount, &sourceFEC, &invalidFEC, &sourceICERestarts, &sourceCredentialRefreshFailures, shutdown, 10*time.Millisecond)
+	_, err = superviseWorkers(ctx, cancel, results, baseWorkerCount, &sourceFEC, &invalidFEC, &damagedSourceFramesDropped, &damagedSourcePacketsDropped, &sourceICERestarts, &sourceCredentialRefreshFailures, shutdown, 10*time.Millisecond)
 	if !errors.Is(err, ErrWorkerShutdownTimeout) {
 		t.Fatalf("supervise error = %v, want worker shutdown timeout", err)
 	}
@@ -521,23 +523,27 @@ func TestRefreshSessionCredentialsKeepsUsableCredentials(t *testing.T) {
 func TestRepairObserverPublishesBoundedLiveSnapshots(t *testing.T) {
 	var sourceFEC atomic.Uint64
 	var invalidFEC atomic.Uint64
+	var damagedSourceFramesDropped atomic.Uint64
+	var damagedSourcePacketsDropped atomic.Uint64
 	var sourceICERestarts atomic.Uint64
 	var sourceCredentialRefreshFailures atomic.Uint64
 	sourceFEC.Store(7)
 	invalidFEC.Store(2)
+	damagedSourceFramesDropped.Store(5)
+	damagedSourcePacketsDropped.Store(9)
 	sourceICERestarts.Store(1)
 	sourceCredentialRefreshFailures.Store(4)
 	observed := make(chan Result, 1)
-	options := repairObserver(func(result Result) { observed <- result }, &sourceFEC, &invalidFEC, &sourceICERestarts, &sourceCredentialRefreshFailures)
+	options := repairObserver(func(result Result) { observed <- result }, &sourceFEC, &invalidFEC, &damagedSourceFramesDropped, &damagedSourcePacketsDropped, &sourceICERestarts, &sourceCredentialRefreshFailures)
 	if options.Interval != metricsObservationInterval || options.Observe == nil {
 		t.Fatalf("observer options = %+v", options)
 	}
 	options.Observe(repair.Stats{Received: 11, RepairedRTX: 3})
 	result := <-observed
-	if result.Repair.Received != 11 || result.Repair.RepairedRTX != 3 || result.SourceFECPackets != 7 || result.InvalidFEC != 2 || result.SourceICERestarts != 1 || result.SourceCredentialRefreshFailures != 4 {
+	if result.Repair.Received != 11 || result.Repair.RepairedRTX != 3 || result.SourceFECPackets != 7 || result.InvalidFEC != 2 || result.DamagedSourceFramesDropped != 5 || result.DamagedSourcePacketsDropped != 9 || result.SourceICERestarts != 1 || result.SourceCredentialRefreshFailures != 4 {
 		t.Fatalf("observed result = %+v", result)
 	}
-	if disabled := repairObserver(nil, &sourceFEC, &invalidFEC, &sourceICERestarts, &sourceCredentialRefreshFailures); disabled.Observe != nil || disabled.Interval != 0 {
+	if disabled := repairObserver(nil, &sourceFEC, &invalidFEC, &damagedSourceFramesDropped, &damagedSourcePacketsDropped, &sourceICERestarts, &sourceCredentialRefreshFailures); disabled.Observe != nil || disabled.Interval != 0 {
 		t.Fatalf("disabled observer = %+v", disabled)
 	}
 }

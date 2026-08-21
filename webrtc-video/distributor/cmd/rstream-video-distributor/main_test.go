@@ -36,17 +36,22 @@ func TestTelemetryCountersPreserveEveryBoundedRepairValue(t *testing.T) {
 		Repair: repair.Stats{
 			Received: 1, RTXReceived: 2, FECCandidates: 3, Duplicates: 4, DuplicateRTX: 5, DuplicateFEC: 6,
 			RepairedRTX: 7, RepairedFEC: 8, LateRTX: 9, LateFEC: 10, ReorderLate: 11, ReorderDiscarded: 12,
+			ReorderSkipped: 19, Discontinuities: 20, KeyFrameRequests: 21, KeyFrameRequestsCoalesced: 22,
 			NACKRequests: 13, Expired: 14,
 		},
 		SourceFECPackets:                15,
 		InvalidFEC:                      16,
+		DamagedSourceFramesDropped:      23,
+		DamagedSourcePacketsDropped:     24,
 		SourceICERestarts:               17,
 		SourceCredentialRefreshFailures: 18,
 	}
 	want := telemetry.Counters{
 		Received: 1, RTXReceived: 2, FECCandidates: 3, Duplicates: 4, DuplicateRTX: 5, DuplicateFEC: 6,
 		RepairedRTX: 7, RepairedFEC: 8, LateRTX: 9, LateFEC: 10, ReorderLate: 11, ReorderDiscarded: 12,
+		ReorderSkipped: 19, Discontinuities: 20, KeyFrameRequests: 21, KeyFrameRequestsCoalesced: 22,
 		NACKRequests: 13, Expired: 14, SourceFEC: 15, InvalidFEC: 16, SourceICERestarts: 17, SourceCredentialRefreshFailures: 18,
+		DamagedSourceFramesDropped: 23, DamagedSourcePacketsDropped: 24,
 	}
 	if got := telemetryCounters(result); got != want {
 		t.Fatalf("telemetry counters = %+v, want %+v", got, want)

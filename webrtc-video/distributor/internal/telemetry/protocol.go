@@ -33,6 +33,12 @@ type Counters struct {
 	LateRTX                         uint64 `json:"lateRtx"`
 	LateFEC                         uint64 `json:"lateFec"`
 	ReorderLate                     uint64 `json:"reorderLate"`
+	ReorderSkipped                  uint64 `json:"reorderSkipped"`
+	Discontinuities                 uint64 `json:"discontinuities"`
+	KeyFrameRequests                uint64 `json:"keyFrameRequests"`
+	KeyFrameRequestsCoalesced       uint64 `json:"keyFrameRequestsCoalesced"`
+	DamagedSourceFramesDropped      uint64 `json:"damagedSourceFramesDropped"`
+	DamagedSourcePacketsDropped     uint64 `json:"damagedSourcePacketsDropped"`
 	ReorderDiscarded                uint64 `json:"reorderDiscarded"`
 	InvalidFEC                      uint64 `json:"invalidFec"`
 	NACKRequests                    uint64 `json:"nackRequests"`
