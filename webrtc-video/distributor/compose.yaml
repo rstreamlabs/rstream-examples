@@ -1,0 +1,22 @@
+services:
+  distributor:
+    build:
+      context: .
+    image: rstream-video-distributor:local
+    init: true
+    restart: unless-stopped
+    env_file:
+      - ${DISTRIBUTOR_ENV_FILE:-distributor.env}
+    ports:
+      - "127.0.0.1:8889:8889/tcp"
+      - "8189:8189/udp"
+      - "127.0.0.1:9998:9998/tcp"
+      - "127.0.0.1:9999:9999/tcp"
+    cap_drop:
+      - ALL
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 10s
+    tmpfs:
+      - /tmp:size=16m,mode=1777
