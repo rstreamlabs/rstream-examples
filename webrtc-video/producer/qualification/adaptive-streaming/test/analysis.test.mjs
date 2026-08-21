@@ -10,6 +10,7 @@ import {
   samplesBeforeNetworkTransition,
   summarizeHostCPU,
   summarizeNetworkMobility,
+  summarizeSignaling,
   summarizeSetup,
 } from "../lib/analysis.mjs";
 import {
@@ -217,6 +218,34 @@ test("uses the settled controlled path as the congestion reference", () => {
       name,
     );
   }
+  const mobilityResult = analyze(
+    samples,
+    { ...manifest, networkMobility: { subject: "producer" } },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    [
+      {
+        name: "conditioning-started",
+        observedAt: new Date(startedAt + 16_000).toISOString(),
+      },
+      {
+        name: "constrained-started",
+        observedAt: new Date(startedAt + 31_000).toISOString(),
+      },
+    ],
+  );
+  assert.equal(
+    mobilityResult.assertions.some(
+      (assertion) => assertion.name === "capacity-experiment-settled",
+    ),
+    false,
+  );
 });
 
 test("measures recovery residency without hiding sustained oscillation", () => {
@@ -282,8 +311,10 @@ test("summarizes one bounded Trickle ICE mobility event", () => {
       remoteCandidatePort: 60_000,
       remoteCandidateProtocol: "udp",
       remoteCandidatesReceived: 2,
-      webSocketCloseCount: 0,
-      webSocketsCreated: 1,
+      whepFailedRequests: 0,
+      whepRestartPatches: 0,
+      whepSessionCreates: 1,
+      whepSessionDeletes: 0,
     },
     {
       elapsedMilliseconds: 11_000,
@@ -292,8 +323,10 @@ test("summarizes one bounded Trickle ICE mobility event", () => {
       phase: "mobility",
       playback: "Buffering",
       remoteCandidatesReceived: 2,
-      webSocketCloseCount: 0,
-      webSocketsCreated: 1,
+      whepFailedRequests: 0,
+      whepRestartPatches: 0,
+      whepSessionCreates: 1,
+      whepSessionDeletes: 0,
     },
     {
       elapsedMilliseconds: 14_000,
@@ -309,8 +342,10 @@ test("summarizes one bounded Trickle ICE mobility event", () => {
       remoteCandidatePort: 60_001,
       remoteCandidateProtocol: "udp",
       remoteCandidatesReceived: 3,
-      webSocketCloseCount: 0,
-      webSocketsCreated: 1,
+      whepFailedRequests: 0,
+      whepRestartPatches: 1,
+      whepSessionCreates: 1,
+      whepSessionDeletes: 0,
     },
   ];
   assert.deepEqual(summarizeNetworkMobility(samples), {
@@ -320,8 +355,76 @@ test("summarizes one bounded Trickle ICE mobility event", () => {
     maximumUnavailableMilliseconds: 3000,
     peerConnectionsCreated: 1,
     trickledRemoteCandidates: 1,
-    webSocketCloses: 0,
-    webSocketsCreated: 1,
+    whepFailedRequests: 0,
+    whepRestartPatches: 1,
+    whepSessionCreates: 1,
+    whepSessionDeletes: 0,
+  });
+});
+
+test("summarizes the complete WHEP resource lifecycle", () => {
+  const summary = summarizeSignaling({
+    events: [
+      { kind: "whep-request", method: "POST", status: 201 },
+      { kind: "whep-request", method: "PATCH", status: 204 },
+      { kind: "whep-request", method: "DELETE", status: 200 },
+    ],
+    whepCandidatePatches: 1,
+    whepFailedRequests: 0,
+    whepRestartPatches: 0,
+    whepSessionCreates: 1,
+    whepSessionDeletes: 1,
+  });
+  assert.deepEqual(summary, {
+    available: true,
+    candidatePatches: 1,
+    closeCredentialRefreshFailed: false,
+    closeOutcome: null,
+    failedRequests: 0,
+    restartPatches: 0,
+    sessionCreates: 1,
+    sessionDeletes: 1,
+    unsuccessfulRequests: 0,
+  });
+  assert.equal(
+    summarizeSignaling({
+      events: [{ kind: "whep-request", method: "DELETE", status: 404 }],
+      whepFailedRequests: 1,
+      whepSessionCreates: 1,
+      whepSessionDeletes: 0,
+    }).unsuccessfulRequests,
+    0,
+  );
+  assert.deepEqual(
+    summarizeSignaling({
+      closeResult: {
+        credentialRefreshFailed: true,
+        outcome: "http-error",
+      },
+      events: [],
+    }),
+    {
+      available: true,
+      candidatePatches: 0,
+      closeCredentialRefreshFailed: true,
+      closeOutcome: "http-error",
+      failedRequests: 0,
+      restartPatches: 0,
+      sessionCreates: 0,
+      sessionDeletes: 0,
+      unsuccessfulRequests: 0,
+    },
+  );
+  assert.deepEqual(summarizeSignaling(null), {
+    available: false,
+    candidatePatches: 0,
+    closeCredentialRefreshFailed: false,
+    closeOutcome: null,
+    failedRequests: 0,
+    restartPatches: 0,
+    sessionCreates: 0,
+    sessionDeletes: 0,
+    unsuccessfulRequests: 0,
   });
 });
 
@@ -1451,6 +1554,24 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
       (assertion) => assertion.name === "rtcp-keyframe-feedback",
     ).passed,
     false,
+  );
+  const outageRTCPRecovery = analyze(
+    samples.map((sample, index) => ({
+      ...sample,
+      phase: index === 51 ? "mobility" : sample.phase,
+      pliCount: index >= 51 ? 1 : 0,
+      recoveryKeyFrameFailures: 0,
+      recoveryKeyFrameRequests: 0,
+      rtcpKeyFrameRequests: 0,
+    })),
+    { ...manifest, networkMobility: { subject: "producer" } },
+  );
+  assert.equal(outageRTCPRecovery.routableBrowserPLIRequests, 0);
+  assert.equal(
+    outageRTCPRecovery.assertions.find(
+      (assertion) => assertion.name === "rtcp-keyframe-feedback",
+    ).passed,
+    true,
   );
   const malformedRTCPRecovery = analyze(
     samples.map((sample, index) => ({

@@ -16,7 +16,6 @@ import (
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/logs"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/tunnel"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/web"
-	rtc "github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/webrtc"
 	"github.com/rstreamlabs/rstream-go"
 )
 
@@ -285,11 +284,10 @@ func newTestApp(cfg config.Config) *App {
 	}
 	instance.web = web.NewServer(
 		logger,
-		logHub,
 		func(context.Context) (*rstream.TURNCredentials, error) {
 			return nil, errors.New("not implemented")
 		},
-		func(context.Context, func(rtc.SignalMessage) error) (*rtc.Session, error) {
+		func(context.Context) (web.Session, error) {
 			return nil, errors.New("not implemented")
 		},
 	)

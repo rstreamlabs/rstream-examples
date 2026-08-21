@@ -1,9 +1,10 @@
 FROM node:24-bookworm AS web
 WORKDIR /src
-COPY package.json package-lock.json ./
+COPY producer/package.json producer/package-lock.json ./
 RUN npm ci
-COPY tailwind.config.js tsconfig.json ./
-COPY internal/web/embed ./internal/web/embed
+COPY producer/tailwind.config.js producer/tsconfig.json ./
+COPY producer/internal/web/embed ./internal/web/embed
+COPY shared ../shared
 RUN npm run build
 
 FROM golang:1.26.6-bookworm AS build
@@ -15,10 +16,10 @@ RUN apt-get update \
         pkg-config \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
-COPY go.mod go.sum ./
+COPY producer/go.mod producer/go.sum ./
 RUN go mod download
-COPY cmd ./cmd
-COPY internal ./internal
+COPY producer/cmd ./cmd
+COPY producer/internal ./internal
 COPY --from=web /src/internal/web/generated ./internal/web/generated
 RUN CGO_ENABLED=1 go build -trimpath -o /out/webrtc-video-producer ./cmd/webrtc-video-producer
 
@@ -35,8 +36,8 @@ RUN apt-get update \
 RUN useradd --create-home --uid 10001 rstream
 WORKDIR /app
 COPY --from=build /out/webrtc-video-producer ./webrtc-video-producer
-COPY config.test-pattern.h264.twcc-gcc.yaml ./config.yaml
-COPY qualification/adaptive-streaming/sample-host-cpu.sh /usr/local/bin/rstream-sample-host-cpu
+COPY producer/config.test-pattern.h264.twcc-gcc.yaml ./config.yaml
+COPY producer/qualification/adaptive-streaming/sample-host-cpu.sh /usr/local/bin/rstream-sample-host-cpu
 USER rstream
 ENTRYPOINT ["/app/webrtc-video-producer"]
 CMD ["-config", "/app/config.yaml"]

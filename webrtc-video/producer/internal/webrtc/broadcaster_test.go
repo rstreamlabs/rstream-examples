@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pion/interceptor"
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v4"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/config"
@@ -23,6 +24,10 @@ type fakeBandwidthEstimator struct {
 
 type rejectingBandwidthEstimator struct {
 	admitted chan media.AccessUnit
+}
+
+type roundTripObservingEstimator struct {
+	observed chan time.Duration
 }
 
 type recordingKeyFrameRequester struct {
@@ -57,6 +62,89 @@ func (r *rejectingBandwidthEstimator) AdmitMediaFrame(size int, keyFrame bool) m
 	return mediaFrameAdmission{requestKeyFrame: true}
 }
 
+func (r *roundTripObservingEstimator) GetTargetBitrate() int {
+	return 0
+}
+
+func (r *roundTripObservingEstimator) OnTargetBitrateChange(func(int)) {}
+
+func (r *roundTripObservingEstimator) GetStats() map[string]any {
+	return nil
+}
+
+func (r *roundTripObservingEstimator) observeRoundTripTime(roundTripTime time.Duration) {
+	r.observed <- roundTripTime
+}
+
+func TestReceptionReportRoundTripTime(t *testing.T) {
+	arrival := time.Date(2026, time.August, 21, 12, 0, 0, 0, time.UTC)
+	report := rtcp.ReceptionReport{
+		LastSenderReport: compactNTPTime(arrival.Add(-175 * time.Millisecond)),
+		Delay:            compactNTPDuration(25 * time.Millisecond),
+	}
+	roundTripTime, ok := receptionReportRoundTripTime(report, arrival)
+	if !ok {
+		t.Fatal("valid reception report did not produce an RTT")
+	}
+	if delta := roundTripTime - 150*time.Millisecond; delta < -time.Millisecond || delta > time.Millisecond {
+		t.Fatalf("round-trip time = %v, want 150ms", roundTripTime)
+	}
+	if _, ok := receptionReportRoundTripTime(rtcp.ReceptionReport{}, arrival); ok {
+		t.Fatal("report without a last sender report produced an RTT")
+	}
+	invalid := rtcp.ReceptionReport{
+		LastSenderReport: compactNTPTime(arrival.Add(-10 * time.Millisecond)),
+		Delay:            compactNTPDuration(100 * time.Millisecond),
+	}
+	if _, ok := receptionReportRoundTripTime(invalid, arrival); ok {
+		t.Fatal("report with a delay beyond its arrival interval produced an RTT")
+	}
+}
+
+func TestSessionUsesShortestValidReceptionReportRTT(t *testing.T) {
+	const mediaSSRC = 42
+	arrival := time.Date(2026, time.August, 21, 12, 0, 0, 0, time.UTC)
+	estimator := &roundTripObservingEstimator{observed: make(chan time.Duration, 1)}
+	session := &Session{estimator: estimator}
+	session.observeRoundTripTime([]rtcp.ReceptionReport{
+		{
+			SSRC:             mediaSSRC,
+			LastSenderReport: compactNTPTime(arrival.Add(-250 * time.Millisecond)),
+			Delay:            compactNTPDuration(50 * time.Millisecond),
+		},
+		{
+			SSRC:             mediaSSRC + 1,
+			LastSenderReport: compactNTPTime(arrival.Add(-125 * time.Millisecond)),
+			Delay:            compactNTPDuration(25 * time.Millisecond),
+		},
+		{
+			SSRC:             mediaSSRC,
+			LastSenderReport: compactNTPTime(arrival.Add(-175 * time.Millisecond)),
+			Delay:            compactNTPDuration(25 * time.Millisecond),
+		},
+	}, mediaSSRC, arrival)
+	select {
+	case observed := <-estimator.observed:
+		if delta := observed - 150*time.Millisecond; delta < -time.Millisecond || delta > time.Millisecond {
+			t.Fatalf("observed RTT = %v, want 150ms", observed)
+		}
+	default:
+		t.Fatal("session did not forward the reception report RTT")
+	}
+}
+
+func TestSessionUsesCachedOutboundMediaSSRCWithoutSenderLookup(t *testing.T) {
+	session := &Session{}
+	session.mediaSSRC.Store(42)
+	if mediaSSRC := session.outboundMediaSSRC(); mediaSSRC != 42 {
+		t.Fatalf("outbound media SSRC = %d, want 42", mediaSSRC)
+	}
+}
+
+func compactNTPDuration(value time.Duration) uint32 {
+	return uint32(uint64(value) * (1 << 16) / uint64(time.Second))
+}
+
 func (r *recordingKeyFrameRequester) Info() media.EncoderInfo {
 	return media.EncoderInfo{}
 }
@@ -80,12 +168,105 @@ func (nonRequestingEncoder) SetTargetBitrateKbps(int) error {
 	return nil
 }
 
+func TestSessionCloseCannotLeaveANetworkRecoveryTimer(t *testing.T) {
+	logger := logs.NewLogger(logs.NewHub(16), false)
+	const iterations = 1000
+	for iteration := 0; iteration < iterations; iteration++ {
+		session := &Session{id: "test", logger: logger, closed: make(chan struct{})}
+		start := make(chan struct{})
+		var workers sync.WaitGroup
+		workers.Add(2)
+		go func() {
+			defer workers.Done()
+			<-start
+			session.scheduleNetworkRecovery("test")
+		}()
+		go func() {
+			defer workers.Done()
+			<-start
+			session.Close("test")
+		}()
+		close(start)
+		workers.Wait()
+		session.recoveryMu.Lock()
+		recovery := session.recovery
+		session.recoveryMu.Unlock()
+		if recovery != nil {
+			recovery.Stop()
+			t.Fatalf("iteration %d retained a recovery timer after close", iteration)
+		}
+	}
+}
+
 func (fakeSourceFactory) New() (media.Source, error) {
 	return &fakeSource{subs: make(map[chan media.AccessUnit]struct{})}, nil
 }
 
 type fakeSource struct {
 	subs map[chan media.AccessUnit]struct{}
+}
+
+type lifecycleTestSource struct {
+	startEntered chan struct{}
+	startRelease <-chan struct{}
+	startErr     error
+	startOnce    sync.Once
+	mu           sync.Mutex
+	starts       int
+	closes       int
+}
+
+type sequenceSourceFactory struct {
+	mu      sync.Mutex
+	sources []*lifecycleTestSource
+	calls   int
+}
+
+func (f *sequenceSourceFactory) New() (media.Source, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.calls >= len(f.sources) {
+		return nil, errors.New("test source sequence exhausted")
+	}
+	source := f.sources[f.calls]
+	f.calls++
+	return source, nil
+}
+
+func (s *lifecycleTestSource) Start(context.Context) error {
+	s.mu.Lock()
+	s.starts++
+	s.mu.Unlock()
+	s.startOnce.Do(func() {
+		if s.startEntered != nil {
+			close(s.startEntered)
+		}
+	})
+	if s.startRelease != nil {
+		<-s.startRelease
+	}
+	return s.startErr
+}
+
+func (s *lifecycleTestSource) Stop() error {
+	return nil
+}
+
+func (s *lifecycleTestSource) Subscribe() (<-chan media.AccessUnit, func()) {
+	return make(chan media.AccessUnit), func() {}
+}
+
+func (s *lifecycleTestSource) Close() error {
+	s.mu.Lock()
+	s.closes++
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *lifecycleTestSource) counts() (int, int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.starts, s.closes
 }
 
 type closedSourceFactory struct{}
@@ -96,7 +277,7 @@ func (closedSourceFactory) New() (media.Source, error) {
 	return closedSource{}, nil
 }
 
-func (closedSource) Start() error {
+func (closedSource) Start(context.Context) error {
 	return nil
 }
 
@@ -114,7 +295,7 @@ func (closedSource) Close() error {
 	return nil
 }
 
-func (s *fakeSource) Start() error {
+func (s *fakeSource) Start(context.Context) error {
 	return nil
 }
 
@@ -139,6 +320,510 @@ func (s *fakeSource) Close() error {
 		delete(s.subs, ch)
 	}
 	return nil
+}
+
+func TestSharedSourceInitializationDoesNotBlockBroadcasterClose(t *testing.T) {
+	startEntered := make(chan struct{})
+	startRelease := make(chan struct{})
+	source := &lifecycleTestSource{startEntered: startEntered, startRelease: startRelease}
+	factory := &sequenceSourceFactory{sources: []*lifecycleTestSource{source}}
+	cfg := config.Default()
+	cfg.WebRTC.UseTURN = false
+	broadcaster, err := NewBroadcaster(cfg, factory, nil, logs.NewLogger(logs.NewHub(16), false))
+	if err != nil {
+		t.Fatalf("create broadcaster: %v", err)
+	}
+	acquired := make(chan error, 1)
+	go func() {
+		_, _, err := broadcaster.acquireSharedSource(context.Background())
+		acquired <- err
+	}()
+	<-startEntered
+	closed := make(chan error, 1)
+	go func() { closed <- broadcaster.Close() }()
+	select {
+	case err := <-closed:
+		if err != nil {
+			t.Fatalf("close broadcaster: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("broadcaster close blocked behind source startup")
+	}
+	close(startRelease)
+	if err := <-acquired; err == nil || err.Error() != "the broadcaster is closed" {
+		t.Fatalf("acquire error = %v, want broadcaster closed", err)
+	}
+	starts, closes := source.counts()
+	if starts != 1 || closes != 1 {
+		t.Fatalf("source lifecycle = %d start(s), %d close(s); want 1, 1", starts, closes)
+	}
+}
+
+func TestSharedSourceInitializationFailureIsRetriedSerially(t *testing.T) {
+	startEntered := make(chan struct{})
+	startRelease := make(chan struct{})
+	startFailure := errors.New("pipeline startup failed")
+	failedSource := &lifecycleTestSource{startEntered: startEntered, startRelease: startRelease, startErr: startFailure}
+	replacementSource := &lifecycleTestSource{}
+	factory := &sequenceSourceFactory{sources: []*lifecycleTestSource{failedSource, replacementSource}}
+	cfg := config.Default()
+	cfg.WebRTC.UseTURN = false
+	broadcaster, err := NewBroadcaster(cfg, factory, nil, logs.NewLogger(logs.NewHub(16), false))
+	if err != nil {
+		t.Fatalf("create broadcaster: %v", err)
+	}
+	t.Cleanup(func() { _ = broadcaster.Close() })
+	first := make(chan error, 1)
+	second := make(chan error, 1)
+	secondRelease := make(chan func(), 1)
+	go func() {
+		_, _, err := broadcaster.acquireSharedSource(context.Background())
+		first <- err
+	}()
+	<-startEntered
+	go func() {
+		_, release, err := broadcaster.acquireSharedSource(context.Background())
+		if err == nil {
+			secondRelease <- release
+		}
+		second <- err
+	}()
+	select {
+	case err := <-second:
+		t.Fatalf("second acquire bypassed active initialization: %v", err)
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(startRelease)
+	if err := <-first; !errors.Is(err, startFailure) {
+		t.Fatalf("first acquire error = %v, want %v", err, startFailure)
+	}
+	if err := <-second; err != nil {
+		t.Fatalf("replacement acquire: %v", err)
+	}
+	(<-secondRelease)()
+	failedStarts, failedCloses := failedSource.counts()
+	replacementStarts, replacementCloses := replacementSource.counts()
+	if failedStarts != 1 || failedCloses != 1 {
+		t.Fatalf("failed source lifecycle = %d start(s), %d close(s); want 1, 1", failedStarts, failedCloses)
+	}
+	if replacementStarts != 1 || replacementCloses != 1 {
+		t.Fatalf("replacement lifecycle = %d start(s), %d close(s); want 1, 1", replacementStarts, replacementCloses)
+	}
+}
+
+func TestSharedSourceInitializationWaitHonorsCancellation(t *testing.T) {
+	startEntered := make(chan struct{})
+	startRelease := make(chan struct{})
+	source := &lifecycleTestSource{startEntered: startEntered, startRelease: startRelease}
+	factory := &sequenceSourceFactory{sources: []*lifecycleTestSource{source}}
+	cfg := config.Default()
+	cfg.WebRTC.UseTURN = false
+	broadcaster, err := NewBroadcaster(cfg, factory, nil, logs.NewLogger(logs.NewHub(16), false))
+	if err != nil {
+		t.Fatalf("create broadcaster: %v", err)
+	}
+	type acquisition struct {
+		release func()
+		err     error
+	}
+	first := make(chan acquisition, 1)
+	go func() {
+		_, release, acquireErr := broadcaster.acquireSharedSource(context.Background())
+		first <- acquisition{release: release, err: acquireErr}
+	}()
+	<-startEntered
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, _, err = broadcaster.acquireSharedSource(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled acquire error = %v, want context cancellation", err)
+	}
+	close(startRelease)
+	result := <-first
+	if result.err != nil {
+		t.Fatalf("first acquire: %v", result.err)
+	}
+	result.release()
+	if err := broadcaster.Close(); err != nil {
+		t.Fatalf("close broadcaster: %v", err)
+	}
+	factory.mu.Lock()
+	calls := factory.calls
+	factory.mu.Unlock()
+	if calls != 1 {
+		t.Fatalf("source factory calls = %d, want 1", calls)
+	}
+}
+
+func TestStaleSharedSourceReleaseCannotDecrementReplacementUsers(t *testing.T) {
+	stale := &lifecycleTestSource{}
+	replacement := &lifecycleTestSource{}
+	broadcaster := &Broadcaster{sharedSource: replacement, sharedUsers: 1}
+	broadcaster.releaseSharedSource(stale)
+	broadcaster.mu.Lock()
+	users := broadcaster.sharedUsers
+	current := broadcaster.sharedSource
+	broadcaster.mu.Unlock()
+	if users != 1 || current != replacement {
+		t.Fatalf("replacement state changed after stale release: users=%d current=%p", users, current)
+	}
+	_, staleCloses := stale.counts()
+	_, replacementCloses := replacement.counts()
+	if staleCloses != 0 || replacementCloses != 0 {
+		t.Fatalf("stale release closed a source: stale=%d replacement=%d", staleCloses, replacementCloses)
+	}
+}
+
+func TestWHEPTrickleICEAndRestartKeepOnePeerConnection(t *testing.T) {
+	cfg := config.Default()
+	cfg.WebRTC.UseTURN = false
+	cfg.WebRTC.Adaptive.Enabled = false
+	cfg.Web.WHEP.RequireConfiguredFeatures = false
+	logger := logs.NewLogger(logs.NewHub(32), false)
+	broadcaster, err := NewBroadcaster(cfg, fakeSourceFactory{}, nil, logger)
+	if err != nil {
+		t.Fatalf("create broadcaster: %v", err)
+	}
+	defer func() { _ = broadcaster.Close() }()
+	session, err := broadcaster.OpenSession(context.Background())
+	if err != nil {
+		t.Fatalf("open WHEP session: %v", err)
+	}
+	defer session.Close("test complete")
+	client, err := webrtc.NewPeerConnection(webrtc.Configuration{BundlePolicy: webrtc.BundlePolicyMaxBundle})
+	if err != nil {
+		t.Fatalf("create WHEP client: %v", err)
+	}
+	defer func() { _ = client.Close() }()
+	if _, err := client.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly}); err != nil {
+		t.Fatalf("add WHEP receive transceiver: %v", err)
+	}
+	connected := make(chan struct{})
+	var connectedOnce sync.Once
+	client.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+		if state == webrtc.PeerConnectionStateConnected {
+			connectedOnce.Do(func() { close(connected) })
+		}
+	})
+	offer, err := client.CreateOffer(nil)
+	if err != nil {
+		t.Fatalf("create WHEP offer: %v", err)
+	}
+	gathered := webrtc.GatheringCompletePromise(client)
+	if err := client.SetLocalDescription(offer); err != nil {
+		t.Fatalf("set WHEP local offer: %v", err)
+	}
+	whepOffer := addRTCPMuxOnly(offer.SDP)
+	offerCtx, cancelOffer := context.WithTimeout(context.Background(), 5*time.Second)
+	answer, err := session.HandleWHEPOffer(offerCtx, whepOffer)
+	cancelOffer()
+	if err != nil {
+		t.Fatalf("handle WHEP offer: %v", err)
+	}
+	if !strings.Contains(answer, "a=candidate:") {
+		t.Fatalf("WHEP answer does not contain gathered ICE candidates:\n%s", answer)
+	}
+	if err := client.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: answer}); err != nil {
+		t.Fatalf("set WHEP remote answer: %v", err)
+	}
+	select {
+	case <-gathered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("WHEP client candidate gathering timed out")
+	}
+	clientCandidates, err := iceFragmentFromAnswer(client.LocalDescription().SDP)
+	if err != nil {
+		t.Fatalf("encode client ICE candidates: %v", err)
+	}
+	candidateCtx, cancelCandidates := context.WithTimeout(context.Background(), 5*time.Second)
+	response, err := session.HandleWHEPICE(candidateCtx, clientCandidates, false)
+	cancelCandidates()
+	if err != nil {
+		t.Fatalf("trickle client ICE candidates: %v", err)
+	} else if response != "" {
+		t.Fatalf("trickle response = %q, want empty", response)
+	}
+	select {
+	case <-connected:
+	case <-time.After(5 * time.Second):
+		t.Fatal("WHEP peer connection did not connect")
+	}
+	initialRemote := client.RemoteDescription().SDP
+	restartOffer, err := client.CreateOffer(&webrtc.OfferOptions{ICERestart: true})
+	if err != nil {
+		t.Fatalf("create WHEP ICE restart offer: %v", err)
+	}
+	restartGathered := webrtc.GatheringCompletePromise(client)
+	if err := client.SetLocalDescription(restartOffer); err != nil {
+		t.Fatalf("set WHEP ICE restart offer: %v", err)
+	}
+	select {
+	case <-restartGathered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("WHEP ICE restart candidate gathering timed out")
+	}
+	restartRequest, err := iceFragmentFromAnswer(client.LocalDescription().SDP)
+	if err != nil {
+		t.Fatalf("encode WHEP ICE restart request: %v", err)
+	}
+	serverRemoteBefore := session.pc.RemoteDescription().SDP
+	cancelledCtx, cancelRestart := context.WithCancel(context.Background())
+	cancelRestart()
+	if _, err := session.HandleWHEPICE(cancelledCtx, restartRequest, true); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled ICE restart error = %v, want context cancellation", err)
+	}
+	if session.isClosed() {
+		t.Fatal("cancelled WHEP ICE restart closed the producer session")
+	}
+	if got := session.pc.RemoteDescription().SDP; got != serverRemoteBefore {
+		t.Fatal("cancelled WHEP ICE restart mutated the existing ICE session")
+	}
+	restartCtx, cancelFinalRestart := context.WithTimeout(context.Background(), 15*time.Second)
+	restartAnswer, err := session.HandleWHEPICE(restartCtx, restartRequest, true)
+	cancelFinalRestart()
+	if err != nil {
+		t.Fatalf("handle WHEP ICE restart: %v", err)
+	}
+	if strings.TrimSpace(restartAnswer) == "" {
+		t.Fatal("WHEP ICE restart returned no answer fragment")
+	}
+	answerFragment, err := parseWHEPICEFragment(restartAnswer)
+	if err != nil {
+		t.Fatalf("parse WHEP ICE restart answer: %v", err)
+	}
+	updatedAnswer, err := replaceICECredentials(initialRemote, answerFragment.ufrag, answerFragment.pwd)
+	if err != nil {
+		t.Fatalf("apply WHEP ICE restart answer credentials: %v", err)
+	}
+	if err := client.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: updatedAnswer}); err != nil {
+		t.Fatalf("set WHEP ICE restart answer: %v", err)
+	}
+	for _, candidate := range answerFragment.candidates {
+		if err := client.AddICECandidate(candidate); err != nil {
+			t.Fatalf("apply WHEP ICE restart answer candidate: %v", err)
+		}
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for client.ConnectionState() != webrtc.PeerConnectionStateConnected {
+		if time.Now().After(deadline) {
+			t.Fatalf("WHEP peer did not recover after ICE restart: %s", client.ConnectionState())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if session.isClosed() {
+		t.Fatal("WHEP ICE restart replaced or closed the producer session")
+	}
+}
+
+func TestRefreshWHEPICERenewsConfigurationWithoutHoldingSessionLocks(t *testing.T) {
+	cfg := config.Default()
+	cfg.WebRTC.UseTURN = false
+	cfg.WebRTC.Adaptive.Enabled = false
+	logger := logs.NewLogger(logs.NewHub(16), false)
+	broadcaster, err := NewBroadcaster(cfg, fakeSourceFactory{}, nil, logger)
+	if err != nil {
+		t.Fatalf("create broadcaster: %v", err)
+	}
+	defer func() { _ = broadcaster.Close() }()
+	session, err := broadcaster.OpenSession(context.Background())
+	if err != nil {
+		t.Fatalf("open session: %v", err)
+	}
+	defer session.Close("test complete")
+	refreshes := 0
+	session.refreshICEServers = func(ctx context.Context) ([]webrtc.ICEServer, map[string]string, error) {
+		refreshes++
+		return []webrtc.ICEServer{{URLs: []string{"stun:relay.example:3478"}}}, map[string]string{"udp": "turn:relay.example:3478?transport=udp"}, ctx.Err()
+	}
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := session.RefreshWHEPICE(cancelled); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled refresh error = %v, want context cancellation", err)
+	}
+	if refreshes != 0 {
+		t.Fatalf("cancelled refresh calls = %d, want 0", refreshes)
+	}
+	if err := session.RefreshWHEPICE(context.Background()); err != nil {
+		t.Fatalf("refresh ICE configuration: %v", err)
+	}
+	if refreshes != 1 {
+		t.Fatalf("refresh calls = %d, want 1", refreshes)
+	}
+	configuration := session.pc.GetConfiguration()
+	if len(configuration.ICEServers) != 1 || configuration.ICEServers[0].URLs[0] != "stun:relay.example:3478" {
+		t.Fatalf("refreshed ICE configuration = %+v", configuration.ICEServers)
+	}
+	path := &ICEPathStats{LocalRelayProtocol: "udp"}
+	session.iceConfigMu.RLock()
+	completeICEPathURL(path, session.turnURLs)
+	session.iceConfigMu.RUnlock()
+	if path.LocalCandidateURL != "turn:relay.example:3478?transport=udp" {
+		t.Fatalf("refreshed TURN URL = %q", path.LocalCandidateURL)
+	}
+}
+
+func TestRefreshWHEPICEFetchesCredentialsBeforeSerializingPeerMutation(t *testing.T) {
+	cfg := config.Default()
+	cfg.WebRTC.UseTURN = false
+	cfg.WebRTC.Adaptive.Enabled = false
+	logger := logs.NewLogger(logs.NewHub(16), false)
+	broadcaster, err := NewBroadcaster(cfg, fakeSourceFactory{}, nil, logger)
+	if err != nil {
+		t.Fatalf("create broadcaster: %v", err)
+	}
+	defer func() { _ = broadcaster.Close() }()
+	session, err := broadcaster.OpenSession(context.Background())
+	if err != nil {
+		t.Fatalf("open session: %v", err)
+	}
+	defer session.Close("test complete")
+	fetched := make(chan struct{})
+	session.refreshICEServers = func(context.Context) ([]webrtc.ICEServer, map[string]string, error) {
+		close(fetched)
+		return nil, nil, nil
+	}
+	session.signalingMu.Lock()
+	done := make(chan error, 1)
+	go func() { done <- session.RefreshWHEPICE(context.Background()) }()
+	select {
+	case <-fetched:
+	case <-time.After(time.Second):
+		session.signalingMu.Unlock()
+		t.Fatal("credential fetch waited for the signaling lock")
+	}
+	select {
+	case err := <-done:
+		session.signalingMu.Unlock()
+		t.Fatalf("peer mutation bypassed signaling serialization: %v", err)
+	default:
+	}
+	session.signalingMu.Unlock()
+	if err := <-done; err != nil {
+		t.Fatalf("refresh ICE configuration: %v", err)
+	}
+}
+
+func TestWHEPOfferAllowsOnlyTheBoundedMediaMTXTransportDowngrade(t *testing.T) {
+	cfg := config.Default()
+	cfg.WebRTC.UseTURN = false
+	cfg.WebRTC.Adaptive.Enabled = false
+	cfg.WebRTC.Interceptors.FlexFEC = true
+	cfg.WebRTC.Interceptors.FlexFECMediaPackets = 5
+	cfg.WebRTC.Interceptors.FlexFECRepairPackets = 1
+	cfg.Web.WHEP.AllowMediaMTXNativeOffer = true
+	logger := logs.NewLogger(logs.NewHub(32), false)
+	broadcaster, err := NewBroadcaster(cfg, fakeSourceFactory{}, nil, logger)
+	if err != nil {
+		t.Fatalf("create broadcaster: %v", err)
+	}
+	defer func() { _ = broadcaster.Close() }()
+	session, err := broadcaster.OpenSession(context.Background())
+	if err != nil {
+		t.Fatalf("open WHEP session: %v", err)
+	}
+	defer session.Close("test complete")
+	mediaEngine := &webrtc.MediaEngine{}
+	if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType:    webrtc.MimeTypeH264,
+			ClockRate:   90000,
+			SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f",
+		},
+		PayloadType: 106,
+	}, webrtc.RTPCodecTypeVideo); err != nil {
+		t.Fatalf("register MediaMTX H264 codec: %v", err)
+	}
+	interceptors := &interceptor.Registry{}
+	if err := webrtc.ConfigureNack(mediaEngine, interceptors); err != nil {
+		t.Fatalf("configure MediaMTX NACK: %v", err)
+	}
+	if err := webrtc.ConfigureTWCCSender(mediaEngine, interceptors); err != nil {
+		t.Fatalf("configure MediaMTX TWCC: %v", err)
+	}
+	client, err := webrtc.NewAPI(
+		webrtc.WithMediaEngine(mediaEngine),
+		webrtc.WithInterceptorRegistry(interceptors),
+	).NewPeerConnection(webrtc.Configuration{BundlePolicy: webrtc.BundlePolicyMaxBundle})
+	if err != nil {
+		t.Fatalf("create MediaMTX-style WHEP client: %v", err)
+	}
+	defer func() { _ = client.Close() }()
+	if _, err := client.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly}); err != nil {
+		t.Fatalf("add MediaMTX video transceiver: %v", err)
+	}
+	offer, err := client.CreateOffer(nil)
+	if err != nil {
+		t.Fatalf("create MediaMTX WHEP offer: %v", err)
+	}
+	gathered := webrtc.GatheringCompletePromise(client)
+	if err := client.SetLocalDescription(offer); err != nil {
+		t.Fatalf("set MediaMTX WHEP offer: %v", err)
+	}
+	select {
+	case <-gathered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("MediaMTX WHEP client candidate gathering timed out")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	strictSession, err := broadcaster.OpenSession(context.Background())
+	if err != nil {
+		t.Fatalf("open strict WHEP session: %v", err)
+	}
+	strictAnswer, strictErr := strictSession.HandleWHEPOffer(ctx, addRTCPMuxOnly(client.LocalDescription().SDP))
+	if strictSession.mediaMTXNative.Load() {
+		t.Fatal("strict WHEP offer activated the MediaMTX native source policy")
+	}
+	strictSession.Close("strict downgrade test complete")
+	if strictErr == nil || !strings.Contains(strictErr.Error(), "rtx, flexfec") {
+		t.Fatalf("strict WHEP downgrade error = %v, want missing RTX and FlexFEC", strictErr)
+	}
+	if strictAnswer != "" {
+		t.Fatalf("rejected strict WHEP answer = %q, want empty", strictAnswer)
+	}
+	answer, err := session.HandleWHEPOffer(ctx, client.LocalDescription().SDP)
+	if err != nil {
+		t.Fatalf("handle bounded MediaMTX native WHEP offer: %v", err)
+	}
+	stats := session.StatsSnapshot()
+	if !stats.TWCCNegotiated || !stats.NACKNegotiated {
+		t.Fatalf("MediaMTX session did not negotiate TWCC and NACK: %+v", stats)
+	}
+	if stats.RTXNegotiated || stats.FlexFECNegotiated {
+		t.Fatalf("MediaMTX session unexpectedly negotiated RTX or FlexFEC: %+v", stats)
+	}
+	if !session.mediaMTXNative.Load() {
+		t.Fatal("MediaMTX offer did not activate the native source policy")
+	}
+	if stats.AdaptiveActive {
+		t.Fatal("MediaMTX native source activated per-viewer adaptive encoding")
+	}
+	if target, ok := session.TargetBitrate(); !ok || target != cfg.InitialBitrateKbps()*1000 {
+		t.Fatalf("MediaMTX native target bitrate = %d, available = %t", target, ok)
+	}
+	if err := client.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: answer}); err != nil {
+		t.Fatalf("apply MediaMTX native WHEP answer: %v", err)
+	}
+}
+
+func TestTransportNegotiationRequiresTWCCFeedbackAndHeaderExtension(t *testing.T) {
+	parameters := webrtc.RTPSendParameters{RTPParameters: webrtc.RTPParameters{
+		Codecs: []webrtc.RTPCodecParameters{
+			{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, RTCPFeedback: []webrtc.RTCPFeedback{{Type: "nack"}, {Type: webrtc.TypeRTCPFBTransportCC}}}},
+			{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeRTX}},
+			{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeFlexFEC03}},
+		},
+		HeaderExtensions: []webrtc.RTPHeaderExtensionParameter{{URI: transportCCHeaderExtensionURI}},
+	}}
+	negotiation := transportNegotiationFromParameters(parameters)
+	if !negotiation.twcc || !negotiation.nack || !negotiation.rtx || !negotiation.flexFEC {
+		t.Fatalf("complete transport negotiation = %+v", negotiation)
+	}
+	parameters.HeaderExtensions = nil
+	negotiation = transportNegotiationFromParameters(parameters)
+	if negotiation.twcc {
+		t.Fatal("TWCC reported as negotiated without its RTP header extension")
+	}
 }
 
 func TestSnapshotBandwidthStatsPreservesControllerSignals(t *testing.T) {
@@ -362,6 +1047,41 @@ func TestSessionCloseCancelsRecoveryKeyFrameRetry(t *testing.T) {
 	}
 }
 
+func TestWHEPSessionRequestsKeyFrameImmediatelyAfterConnection(t *testing.T) {
+	encoder := &recordingKeyFrameRequester{requested: make(chan struct{}, 1)}
+	session := &Session{
+		id:      "viewer",
+		encoder: encoder,
+		logger:  logs.NewLogger(logs.NewHub(8), false),
+		closed:  make(chan struct{}),
+	}
+	defer session.Close("test complete")
+	session.whep.Store(true)
+	session.handleConnected()
+	if got := len(encoder.requested); got != 1 {
+		t.Fatalf("startup key-frame requests = %d, want 1 before handleConnected returns", got)
+	}
+	if stats := session.StatsSnapshot(); stats.RecoveryKeyFrameRequests != 1 {
+		t.Fatalf("recovery key-frame requests = %d, want 1", stats.RecoveryKeyFrameRequests)
+	}
+}
+
+func TestDirectSessionDoesNotScheduleStartupKeyFrame(t *testing.T) {
+	session := &Session{
+		id:     "viewer",
+		logger: logs.NewLogger(logs.NewHub(8), false),
+		closed: make(chan struct{}),
+	}
+	defer session.Close("test complete")
+	session.handleConnected()
+	session.keyFrameMu.Lock()
+	timer := session.keyFrameRequestTimer
+	session.keyFrameMu.Unlock()
+	if timer != nil {
+		t.Fatal("direct connection scheduled a WHEP startup key frame")
+	}
+}
+
 func TestSessionForwardsRTCPKeyFrameFeedbackToEncoder(t *testing.T) {
 	encoder := &recordingKeyFrameRequester{requested: make(chan struct{}, 2)}
 	session := &Session{
@@ -467,17 +1187,22 @@ func TestBroadcasterHonorsMaxViewers(t *testing.T) {
 	defer func() {
 		_ = broadcaster.Close()
 	}()
-	session, err := broadcaster.OpenSession(context.Background(), func(SignalMessage) error {
-		return nil
-	})
+	session, err := broadcaster.OpenSession(context.Background())
 	if err != nil {
 		t.Fatalf("failed to open the first session: %v", err)
 	}
-	defer session.Close("test cleanup")
-	if _, err := broadcaster.OpenSession(context.Background(), func(SignalMessage) error {
-		return nil
-	}); err == nil {
-		t.Fatal("expected the second viewer to be rejected")
+	if _, err := broadcaster.OpenSession(context.Background()); !errors.Is(err, ErrSessionCapacity) {
+		t.Fatalf("second viewer error = %v, want ErrSessionCapacity", err)
+	}
+	session.Close("release viewer slot")
+	replacement, err := broadcaster.OpenSession(context.Background())
+	if err != nil {
+		t.Fatalf("failed to reuse the released viewer slot: %v", err)
+	}
+	replacement.Close("test cleanup")
+	stats := broadcaster.MetricsSnapshot()
+	if stats.ActiveSessions != 0 || stats.OpeningSessions != 0 {
+		t.Fatalf("viewer slots after replacement close = active %d, opening %d; want zero", stats.ActiveSessions, stats.OpeningSessions)
 	}
 }
 
@@ -492,9 +1217,7 @@ func TestBroadcasterRemovesSessionWhenSourceStopsDuringOpen(t *testing.T) {
 	defer func() {
 		_ = broadcaster.Close()
 	}()
-	session, err := broadcaster.OpenSession(context.Background(), func(SignalMessage) error {
-		return nil
-	})
+	session, err := broadcaster.OpenSession(context.Background())
 	if err != nil {
 		t.Fatalf("failed to open the session: %v", err)
 	}
@@ -515,126 +1238,5 @@ func TestBroadcasterRemovesSessionWhenSourceStopsDuringOpen(t *testing.T) {
 			t.Fatalf("expected no active sessions, got %d", count)
 		}
 		time.Sleep(10 * time.Millisecond)
-	}
-}
-
-func TestSessionBuffersICECandidatesBeforeOffer(t *testing.T) {
-	cfg := config.Default()
-	cfg.WebRTC.UseTURN = false
-	logger := logs.NewLogger(logs.NewHub(16), false)
-	broadcaster, err := NewBroadcaster(cfg, fakeSourceFactory{}, nil, logger)
-	if err != nil {
-		t.Fatalf("failed to create the broadcaster: %v", err)
-	}
-	defer func() {
-		_ = broadcaster.Close()
-	}()
-	session, err := broadcaster.OpenSession(context.Background(), func(SignalMessage) error {
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("failed to open the session: %v", err)
-	}
-	defer session.Close("test cleanup")
-	mid := "0"
-	line := uint16(0)
-	if err := session.AddICECandidate(
-		"candidate:1 1 udp 2122260223 127.0.0.1 12345 typ host",
-		&mid,
-		&line,
-		nil,
-	); err != nil {
-		t.Fatalf("expected early ICE candidate to be buffered, got %v", err)
-	}
-	if got := len(session.pendingICE); got != 1 {
-		t.Fatalf("expected one buffered candidate, got %d", got)
-	}
-	offerer, err := webrtc.NewPeerConnection(webrtc.Configuration{})
-	if err != nil {
-		t.Fatalf("failed to create offer peer: %v", err)
-	}
-	defer func() {
-		_ = offerer.Close()
-	}()
-	if _, err := offerer.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, webrtc.RTPTransceiverInit{
-		Direction: webrtc.RTPTransceiverDirectionRecvonly,
-	}); err != nil {
-		t.Fatalf("failed to add offer transceiver: %v", err)
-	}
-	offer, err := offerer.CreateOffer(nil)
-	if err != nil {
-		t.Fatalf("failed to create offer: %v", err)
-	}
-	if err := offerer.SetLocalDescription(offer); err != nil {
-		t.Fatalf("failed to set local offer: %v", err)
-	}
-	if err := session.HandleOffer(offer.SDP); err != nil {
-		t.Fatalf("expected offer to flush buffered candidates, got %v", err)
-	}
-	if got := len(session.pendingICE); got != 0 {
-		t.Fatalf("expected no buffered candidates after offer, got %d", got)
-	}
-}
-
-func TestSessionLimitsBufferedICECandidatesBeforeOffer(t *testing.T) {
-	cfg := config.Default()
-	cfg.WebRTC.UseTURN = false
-	logger := logs.NewLogger(logs.NewHub(16), false)
-	broadcaster, err := NewBroadcaster(cfg, fakeSourceFactory{}, nil, logger)
-	if err != nil {
-		t.Fatalf("failed to create the broadcaster: %v", err)
-	}
-	defer func() {
-		_ = broadcaster.Close()
-	}()
-	session, err := broadcaster.OpenSession(context.Background(), func(SignalMessage) error {
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("failed to open the session: %v", err)
-	}
-	defer session.Close("test cleanup")
-	mid := "0"
-	line := uint16(0)
-	for i := 0; i < maxPendingICECandidates; i++ {
-		candidate := "candidate:1 1 udp 2122260223 127.0.0.1 12345 typ host"
-		if err := session.AddICECandidate(candidate, &mid, &line, nil); err != nil {
-			t.Fatalf("expected candidate %d to be buffered, got %v", i, err)
-		}
-	}
-	if err := session.AddICECandidate(
-		"candidate:2 1 udp 2122260223 127.0.0.1 12346 typ host",
-		&mid,
-		&line,
-		nil,
-	); err == nil {
-		t.Fatal("expected excess pending ICE candidate to be rejected")
-	}
-}
-
-func TestSessionLimitsBufferedICECandidateBytesBeforeOffer(t *testing.T) {
-	cfg := config.Default()
-	cfg.WebRTC.UseTURN = false
-	logger := logs.NewLogger(logs.NewHub(16), false)
-	broadcaster, err := NewBroadcaster(cfg, fakeSourceFactory{}, nil, logger)
-	if err != nil {
-		t.Fatalf("failed to create the broadcaster: %v", err)
-	}
-	defer func() {
-		_ = broadcaster.Close()
-	}()
-	session, err := broadcaster.OpenSession(context.Background(), func(SignalMessage) error {
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("failed to open the session: %v", err)
-	}
-	defer session.Close("test cleanup")
-	mid := "0"
-	line := uint16(0)
-	candidate := "candidate:1 1 udp 2122260223 127.0.0.1 12345 typ host " +
-		strings.Repeat("x", maxPendingICECandidateBytes)
-	if err := session.AddICECandidate(candidate, &mid, &line, nil); err == nil {
-		t.Fatal("expected oversized pending ICE candidate to be rejected")
 	}
 }

@@ -1,16 +1,18 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/config"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/logs"
-	rtc "github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/webrtc"
 	"github.com/rstreamlabs/rstream-go"
 )
 
@@ -18,11 +20,10 @@ func TestStatusReturnsLowercaseTunnelAuthFields(t *testing.T) {
 	hub := logs.NewHub(16)
 	server := NewServer(
 		logs.NewLogger(hub, false),
-		hub,
 		func(context.Context) (*rstream.TURNCredentials, error) {
 			return nil, errors.New("not implemented")
 		},
-		func(context.Context, func(rtc.SignalMessage) error) (*rtc.Session, error) {
+		func(context.Context) (Session, error) {
 			return nil, errors.New("not implemented")
 		},
 	)
@@ -62,11 +63,10 @@ func TestViewerFaviconDoesNotCreateABrowserConsoleError(t *testing.T) {
 	hub := logs.NewHub(16)
 	server := NewServer(
 		logs.NewLogger(hub, false),
-		hub,
 		func(context.Context) (*rstream.TURNCredentials, error) {
 			return nil, errors.New("not implemented")
 		},
-		func(context.Context, func(rtc.SignalMessage) error) (*rtc.Session, error) {
+		func(context.Context) (Session, error) {
 			return nil, errors.New("not implemented")
 		},
 	)
@@ -81,15 +81,14 @@ func TestViewerFaviconDoesNotCreateABrowserConsoleError(t *testing.T) {
 	}
 }
 
-func TestAPITURNFailureIsLoggedAndReturned(t *testing.T) {
+func TestAPITURNFailureKeepsBackendDetailsInLogs(t *testing.T) {
 	hub := logs.NewHub(16)
 	server := NewServer(
 		logs.NewLogger(hub, false),
-		hub,
 		func(context.Context) (*rstream.TURNCredentials, error) {
 			return nil, errors.New("credential backend unavailable")
 		},
-		func(context.Context, func(rtc.SignalMessage) error) (*rtc.Session, error) {
+		func(context.Context) (Session, error) {
 			return nil, errors.New("not implemented")
 		},
 	)
@@ -99,12 +98,16 @@ func TestAPITURNFailureIsLoggedAndReturned(t *testing.T) {
 	if res.Code != http.StatusInternalServerError {
 		t.Fatalf("TURN status = %d, want %d", res.Code, http.StatusInternalServerError)
 	}
+	responseBody := res.Body.Bytes()
+	if bytes.Contains(responseBody, []byte("credential backend unavailable")) {
+		t.Fatal("TURN response exposed the backend failure")
+	}
 	var body map[string]string
-	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+	if err := json.Unmarshal(responseBody, &body); err != nil {
 		t.Fatalf("decode TURN error response: %v", err)
 	}
-	if body["error"] != "credential backend unavailable" {
-		t.Fatalf("TURN error = %q, want backend failure", body["error"])
+	if body["error"] != "failed to issue TURN credentials" {
+		t.Fatalf("TURN error = %q, want stable public failure", body["error"])
 	}
 	entries := hub.Recent()
 	if len(entries) != 1 {
@@ -118,16 +121,42 @@ func TestAPITURNFailureIsLoggedAndReturned(t *testing.T) {
 	}
 }
 
+func TestAPITURNIncludesAnAbsoluteCredentialDeadline(t *testing.T) {
+	before := time.Now()
+	server := NewServer(
+		logs.NewLogger(logs.NewHub(16), false),
+		func(context.Context) (*rstream.TURNCredentials, error) {
+			return &rstream.TURNCredentials{URLs: []string{"turn:relay.example:3478?transport=udp"}, Username: "viewer", Credential: "secret", TTL: 600}, nil
+		},
+		func(context.Context) (Session, error) { return nil, errors.New("not implemented") },
+	)
+	response := httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/turn", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("TURN status = %d, want %d", response.Code, http.StatusOK)
+	}
+	var payload struct {
+		Username  string    `json:"username"`
+		ExpiresAt time.Time `json:"expiresAt"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode TURN response: %v", err)
+	}
+	if payload.Username != "viewer" || payload.ExpiresAt.Before(before.Add(599*time.Second)) || payload.ExpiresAt.After(time.Now().Add(601*time.Second)) {
+		t.Fatalf("TURN response = username %q expiration %s", payload.Username, payload.ExpiresAt)
+	}
+}
+
 func TestSameOriginAllowsBrowserViewerOrigin(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "https://viewer.example/ws", nil)
 	req.Host = "viewer.example"
 	req.Header.Set("Origin", "https://viewer.example")
 	if !sameOrigin(req) {
-		t.Fatal("expected same-origin websocket upgrade to be allowed")
+		t.Fatal("expected same-origin browser request to be allowed")
 	}
 	req.Header.Set("Origin", "https://viewer.example:443")
 	if !sameOrigin(req) {
-		t.Fatal("expected same-origin websocket upgrade with default HTTPS port to be allowed")
+		t.Fatal("expected same-origin browser request with default HTTPS port to be allowed")
 	}
 }
 
@@ -136,7 +165,7 @@ func TestSameOriginRejectsCrossOriginViewerOrigin(t *testing.T) {
 	req.Host = "viewer.example"
 	req.Header.Set("Origin", "https://evil.example")
 	if sameOrigin(req) {
-		t.Fatal("expected cross-origin websocket upgrade to be rejected")
+		t.Fatal("expected cross-origin browser request to be rejected")
 	}
 	req.Header.Set("Origin", "https://viewer.example:444")
 	if sameOrigin(req) {
@@ -145,27 +174,34 @@ func TestSameOriginRejectsCrossOriginViewerOrigin(t *testing.T) {
 }
 
 func TestProvisioningModeAllowsProductViewerOrigin(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "https://device-tunnel.example/ws", nil)
+	req.Host = "device-tunnel.example"
+	req.Header.Set("Origin", "https://platform.example")
+	if !browserOrigin(req) {
+		t.Fatal("expected product viewer origin to be allowed in provisioning mode")
+	}
+	req.Header.Set("Origin", "not a URL")
+	if browserOrigin(req) {
+		t.Fatal("expected invalid Origin header to be rejected")
+	}
+}
+
+func TestWHEPRoutesRemainAvailableWhenViewerUIIsDisabled(t *testing.T) {
 	hub := logs.NewHub(16)
 	server := NewServer(
 		logs.NewLogger(hub, false),
-		hub,
-		func(context.Context) (*rstream.TURNCredentials, error) {
-			return nil, errors.New("not implemented")
-		},
-		func(context.Context, func(rtc.SignalMessage) error) (*rtc.Session, error) {
+		nil,
+		func(context.Context) (Session, error) {
 			return nil, errors.New("not implemented")
 		},
 		ServerOptions{Viewer: false},
 	)
-	req := httptest.NewRequest(http.MethodGet, "https://device-tunnel.example/ws", nil)
-	req.Host = "device-tunnel.example"
-	req.Header.Set("Origin", "https://platform.example")
-	if !server.upgrader.CheckOrigin(req) {
-		t.Fatal("expected product viewer origin to be allowed in provisioning mode")
-	}
-	req.Header.Set("Origin", "not a URL")
-	if server.upgrader.CheckOrigin(req) {
-		t.Fatal("expected invalid Origin header to be rejected")
+	req := httptest.NewRequest(http.MethodPost, "/whep", strings.NewReader("v=0\r\n"))
+	req.Header.Set("Content-Type", "application/sdp")
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusInternalServerError {
+		t.Fatalf("WHEP status = %d, want %d", res.Code, http.StatusInternalServerError)
 	}
 }
 

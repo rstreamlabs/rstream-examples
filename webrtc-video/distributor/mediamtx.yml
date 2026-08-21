@@ -1,0 +1,49 @@
+logLevel: info
+logDestinations: [stdout]
+
+authMethod: jwt
+authJWTJWKS: https://platform.invalid/api/video/distributor/jwks
+authJWTClaimKey: mediamtx_permissions
+authJWTExclude:
+  - action: metrics
+authJWTIssuer: replace-with-the-platform-issuer
+authJWTAudience: replace-with-the-platform-audience
+
+api: false
+metrics: true
+metricsAddress: :9998
+pprof: false
+playback: false
+
+rtsp: false
+rtmp: false
+hls: false
+srt: false
+moq: false
+
+webrtc: true
+webrtcAddress: :8889
+webrtcEncryption: false
+webrtcAllowOrigins: [https://platform.invalid]
+webrtcTrustedProxies: []
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: ""
+webrtcIPsFromInterfaces: true
+webrtcIPsFromInterfacesList: []
+webrtcAdditionalHosts: []
+webrtcICEServers2: []
+webrtcSTUNGatherTimeout: 5s
+webrtcHandshakeTimeout: 10s
+webrtcTrackGatherTimeout: 5s
+
+pathDefaults:
+  source: publisher
+  overridePublisher: false
+  maxReaders: 8
+  runOnDemand: /usr/local/bin/rstream-video-distributor
+  runOnDemandRestart: false
+  runOnDemandStartTimeout: 15s
+  runOnDemandCloseAfter: 5s
+
+paths:
+  all_others:

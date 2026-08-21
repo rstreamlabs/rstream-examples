@@ -3,6 +3,7 @@ package webrtc
 import (
 	"math"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/pion/interceptor"
@@ -19,6 +20,21 @@ type recordingPacer struct {
 }
 
 type recordingWriter struct{}
+
+type blockingFirstTargetPacer struct {
+	recordingPacer
+	calls   atomic.Uint32
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (p *blockingFirstTargetPacer) SetTargetBitrate(bitrate int) {
+	if p.calls.Add(1) == 1 {
+		close(p.entered)
+		<-p.release
+	}
+	p.recordingPacer.SetTargetBitrate(bitrate)
+}
 
 func (*recordingWriter) Write(
 	header *rtp.Header,
@@ -178,6 +194,159 @@ func TestMinimumBitratePacerBoundsProtectedMediaEnvelope(t *testing.T) {
 	assertPacerEnvelope(3_000_000, 4_500_000, 6_750_000)
 	pacer.SetMediaTargetBitrate(100_000)
 	assertPacerEnvelope(500_000, 750_000, 1_125_000)
+}
+
+func TestTokenBucketPacerRetainsRepairHeadroomAfterDecrease(t *testing.T) {
+	pacer := newTokenBucketPacer(5_000_000, 1.5, 16)
+	t.Cleanup(func() {
+		if err := pacer.Close(); err != nil {
+			t.Errorf("close pacer: %v", err)
+		}
+	})
+	assertEnvelope := func(target, pacing int) {
+		t.Helper()
+		stats := pacer.Stats()
+		if got := stats["pacerTargetBitrateBps"]; got != target {
+			t.Fatalf("target bitrate = %v, want %d", got, target)
+		}
+		if got := stats["pacerPacingBitrateBps"]; got != pacing {
+			t.Fatalf("pacing bitrate = %v, want %d", got, pacing)
+		}
+	}
+	assertEnvelope(5_000_000, 7_500_000)
+	pacer.SetTargetBitrate(3_000_000)
+	assertEnvelope(3_000_000, 4_500_000)
+	pacer.SetTargetBitrate(3_000_000)
+	assertEnvelope(3_000_000, 4_500_000)
+	pacer.SetTargetBitrate(4_000_000)
+	assertEnvelope(4_000_000, 6_000_000)
+}
+
+func TestTokenBucketPacerReportsAtomicPacingEnvelope(t *testing.T) {
+	pacer := newTokenBucketPacer(4_000_000, 1.5, 16)
+	t.Cleanup(func() {
+		if err := pacer.Close(); err != nil {
+			t.Errorf("close pacer: %v", err)
+		}
+	})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range 100_000 {
+			pacer.SetTargetBitrate(3_000_000)
+			pacer.SetTargetBitrate(4_000_000)
+		}
+	}()
+	for {
+		stats := pacer.Stats()
+		target := stats["pacerTargetBitrateBps"]
+		envelope := stats["pacerPacingBitrateBps"]
+		if target != 3_000_000 && target != 4_000_000 {
+			t.Fatalf("unexpected target bitrate: %v", target)
+		}
+		if target == 3_000_000 && envelope != 4_500_000 {
+			t.Fatalf("decreased pacing snapshot: target=%v envelope=%v", target, envelope)
+		}
+		if target == 4_000_000 && envelope != 6_000_000 {
+			t.Fatalf("recovered pacing snapshot: target=%v envelope=%v", target, envelope)
+		}
+		select {
+		case <-done:
+			return
+		default:
+		}
+	}
+}
+
+func TestTokenBucketPacerBoundsPreDecreaseFrameAndRetainsRepairHeadroom(t *testing.T) {
+	pacer := newTokenBucketPacer(5_000_000, 1.5, 16)
+	t.Cleanup(func() {
+		if err := pacer.Close(); err != nil {
+			t.Errorf("close pacer: %v", err)
+		}
+	})
+	packet := &pacedPacket{admittedBitrate: 5_000_000}
+	pacer.SetTargetBitrate(3_000_000)
+	if got := int(pacer.packetBytesPerSecond(packet) * 8); got != 5_000_000 {
+		t.Fatalf("decreased admitted-frame pacing bitrate = %d, want 5000000", got)
+	}
+	repair := &pacedPacket{repair: repairKindRetransmission}
+	if got := int(pacer.packetBytesPerSecond(repair) * 8); got != 4_500_000 {
+		t.Fatalf("decreased repair pacing bitrate = %d, want 4500000", got)
+	}
+	current := &pacedPacket{admittedBitrate: 3_000_000}
+	if got := int(pacer.packetBytesPerSecond(current) * 8); got != 4_500_000 {
+		t.Fatalf("current-frame pacing bitrate = %d, want 4500000", got)
+	}
+	pacer.SetTargetBitrate(4_000_000)
+	if got := int(pacer.packetBytesPerSecond(packet) * 8); got != 5_000_000 {
+		t.Fatalf("still-pre-decrease frame pacing bitrate = %d, want 5000000", got)
+	}
+}
+
+func TestMinimumBitratePacerKeepsNativeSourceAtItsFixedEnvelope(t *testing.T) {
+	delegate := &recordingPacer{}
+	protection := flexFECProtection{mediaPackets: 4, repairPackets: 2}
+	pacer := wrapMinimumBitratePacerWithProtection(delegate, 500_000, protection)
+	pacer.UseFixedMediaTargetBitrate(5_000_000)
+	var group sync.WaitGroup
+	for bitrate := 100_000; bitrate <= 8_000_000; bitrate += 100_000 {
+		group.Add(2)
+		go func() {
+			defer group.Done()
+			pacer.SetTargetBitrate(bitrate)
+		}()
+		go func() {
+			defer group.Done()
+			pacer.SetMediaTargetBitrate(bitrate)
+		}()
+	}
+	group.Wait()
+	pacer.SetTargetBitrate(1)
+	delegate.mu.Lock()
+	defer delegate.mu.Unlock()
+	if got := delegate.bitrates[len(delegate.bitrates)-1]; got != 7_500_000 {
+		t.Fatalf("fixed protected wire target = %d, want 7500000", got)
+	}
+	for _, bitrate := range delegate.bitrates {
+		if bitrate != 7_500_000 {
+			t.Fatalf("fixed protected wire target changed to %d", bitrate)
+		}
+	}
+}
+
+func TestMinimumBitratePacerSerializesFixedModeWithAnInFlightControllerUpdate(t *testing.T) {
+	delegate := &blockingFirstTargetPacer{entered: make(chan struct{}), release: make(chan struct{})}
+	pacer := wrapMinimumBitratePacer(delegate, 500_000)
+	controllerDone := make(chan struct{})
+	go func() {
+		pacer.SetMediaTargetBitrate(1_000_000)
+		close(controllerDone)
+	}()
+	<-delegate.entered
+	fixedDone := make(chan struct{})
+	go func() {
+		pacer.UseFixedMediaTargetBitrate(5_000_000)
+		close(fixedDone)
+	}()
+	select {
+	case <-fixedDone:
+		close(delegate.release)
+		<-controllerDone
+		t.Fatal("fixed mode bypassed the in-flight target update")
+	default:
+	}
+	close(delegate.release)
+	<-controllerDone
+	<-fixedDone
+	delegate.mu.Lock()
+	defer delegate.mu.Unlock()
+	if len(delegate.bitrates) != 2 {
+		t.Fatalf("target writes = %d, want 2", len(delegate.bitrates))
+	}
+	if got := delegate.bitrates[len(delegate.bitrates)-1]; got != 5_000_000 {
+		t.Fatalf("final fixed target = %d, want 5000000", got)
+	}
 }
 
 func TestMinimumBitratePacerPreservesUnusedHeadroomWithLighterFlexFEC(t *testing.T) {

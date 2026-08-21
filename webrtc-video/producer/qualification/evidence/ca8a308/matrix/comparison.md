@@ -8,12 +8,12 @@ Generated at 2026-08-17T02:21:05.440Z from repository revision `ca8a308907aaa566
 
 Every run applies the same outbound network profile: 4 Mbit/s capacity, 120ms, 30ms, and 2% random packet loss. Direct runs shape the peer media flow on an isolated Docker bridge. Relay runs force both peers through one managed TURN/UDP path and shape the producer-to-TURN transport. HTTP publication and rstream signaling are never shaped.
 
-| Path   | Protection       | Passed runs | Decoded fps median [min–max] | Avg QP median [min–max] | Frozen median [min–max] | Received kbps median [min–max] | Max RTT ms median [min–max] |
-| ------ | ---------------- | ----------: | ---------------------------: | ----------------------: | ----------------------: | -----------------------------: | --------------------------: |
-| direct | nack-rtx         |         2/3 |             29.2 [28.9–29.5] |        31.6 [31.3–31.6] |         4.1% [2.5–5.8%] |               1898 [1888–1908] |               217 [197–232] |
-| relay  | nack-rtx         |         0/3 |             28.2 [28.0–28.6] |        31.3 [31.3–31.4] |      16.2% [12.8–17.0%] |               1899 [1894–1912] |               321 [317–342] |
-| direct | nack-rtx-flexfec |         3/3 |             29.9 [29.7–29.9] |        31.5 [31.2–31.5] |         0.6% [0.6–2.4%] |               2428 [2415–2459] |               195 [195–199] |
-| relay  | nack-rtx-flexfec |         3/3 |             29.6 [29.5–29.6] |        31.4 [31.3–31.4] |         3.6% [2.1–4.3%] |               2460 [2454–2465] |               306 [251–313] |
+| Path | Protection | Passed runs | Decoded fps median [min–max] | Avg QP median [min–max] | Frozen median [min–max] | Received kbps median [min–max] | Max RTT ms median [min–max] |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| direct | nack-rtx | 2/3 | 29.2 [28.9–29.5] | 31.6 [31.3–31.6] | 4.1% [2.5–5.8%] | 1898 [1888–1908] | 217 [197–232] |
+| relay | nack-rtx | 0/3 | 28.2 [28.0–28.6] | 31.3 [31.3–31.4] | 16.2% [12.8–17.0%] | 1899 [1894–1912] | 321 [317–342] |
+| direct | nack-rtx-flexfec | 3/3 | 29.9 [29.7–29.9] | 31.5 [31.2–31.5] | 0.6% [0.6–2.4%] | 2428 [2415–2459] | 195 [195–199] |
+| relay | nack-rtx-flexfec | 3/3 | 29.6 [29.5–29.6] | 31.4 [31.3–31.4] | 3.6% [2.1–4.3%] | 2460 [2454–2465] | 306 [251–313] |
 
 ## Acceptance criteria
 

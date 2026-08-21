@@ -1,6 +1,10 @@
 {
   "name": "webrtc-video-platform",
   "private": true,
+  "allowScripts": {
+    "@prisma/engines@7.9.0": true,
+    "prisma@7.9.0": true
+  },
   "scripts": {
     "build": "npm run prisma:generate && next build",
     "check-types": "npm run prisma:generate && tsc --noEmit",
@@ -8,12 +12,17 @@
     "dev": "npm run prisma:generate && next dev",
     "format:check": "prettier --check .",
     "format": "prettier --write .",
+    "mediamtx:key": "node scripts/generate-mediamtx-key.mjs",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "smoke:dev": "node scripts/smoke-dev.mjs",
     "start": "next start",
-    "test": "npm run typecheck",
+    "test": "npm run test:unit && npm run typecheck",
+    "test:mediamtx-auth": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/mediamtx-auth.integration.mjs",
+    "test:rstream-edge-auth": "node --env-file-if-exists=.env.local scripts/rstream-edge-auth.integration.mjs",
+    "test:rstream-edge-auth:context": "node scripts/rstream-edge-auth-context.integration.mjs",
+    "test:unit": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test scripts/*.test.mjs",
     "typecheck": "npm run check-types",
     "verify": "npm run test && npm run build"
   },
@@ -48,6 +57,7 @@
   },
   "overrides": {
     "@hono/node-server": "1.19.13",
+    "deepmerge-ts": "8.0.1",
     "fast-uri": "4.1.2",
     "find-my-way": "9.7.0",
     "hono": "4.12.27",

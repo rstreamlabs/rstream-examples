@@ -49,6 +49,7 @@ type Controller struct {
 	lossSource              func() float64
 	requestRecoveryKeyFrame func()
 	latestEstimate          atomic.Int64
+	active                  atomic.Bool
 	updates                 chan struct{}
 	close                   chan struct{}
 	done                    chan struct{}
@@ -81,7 +82,6 @@ func NewController(
 		done:                    make(chan struct{}),
 		snapshot: Snapshot{
 			Backend:                  backend.Name(),
-			Active:                   true,
 			EncoderTargetBitrateKbps: info.TargetBitrateKbps,
 			LastAppliedBitrateKbps:   info.TargetBitrateKbps,
 		},
@@ -90,6 +90,7 @@ func NewController(
 
 func (c *Controller) Start() {
 	c.start.Do(func() {
+		c.active.Store(true)
 		go c.run()
 	})
 }
@@ -113,7 +114,9 @@ func (c *Controller) UpdateEstimatedBitrate(bps int) {
 func (c *Controller) Snapshot() Snapshot {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.snapshot
+	snapshot := c.snapshot
+	snapshot.Active = c.active.Load()
+	return snapshot
 }
 
 func (c *Controller) Close() {
@@ -127,7 +130,10 @@ func (c *Controller) Close() {
 }
 
 func (c *Controller) run() {
-	defer close(c.done)
+	defer func() {
+		c.active.Store(false)
+		close(c.done)
+	}()
 	ticker := time.NewTicker(c.interval)
 	defer ticker.Stop()
 	var lastUpdateAttempt time.Time

@@ -3,6 +3,7 @@ package webrtc
 import (
 	"math"
 	"sync"
+	"time"
 
 	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/pkg/gcc"
@@ -17,6 +18,8 @@ type minimumBitratePacer struct {
 	delegate       gcc.Pacer
 	minimumBitrate int
 	protection     flexFECProtection
+	targetMu       sync.Mutex
+	fixedMediaRate int
 	writersMu      sync.Mutex
 	writers        map[uint32]interceptor.RTPWriter
 }
@@ -142,7 +145,20 @@ func (p *minimumBitratePacer) setTransportCCExtension(
 	}
 }
 
+func (p *minimumBitratePacer) observeRoundTripTime(roundTripTime time.Duration) {
+	observer, ok := p.delegate.(interface{ observeRoundTripTime(time.Duration) })
+	if ok {
+		observer.observeRoundTripTime(roundTripTime)
+	}
+}
+
 func (p *minimumBitratePacer) SetTargetBitrate(bitrate int) {
+	p.targetMu.Lock()
+	defer p.targetMu.Unlock()
+	if p.fixedMediaRate > 0 {
+		p.delegate.SetTargetBitrate(wireBitrate(p.fixedMediaRate, p.protection))
+		return
+	}
 	// GCC estimates the complete paced traffic envelope. Forward that wire
 	// budget unchanged so repair traffic is not counted a second time.
 	minimumWireBitrate := wireBitrate(p.minimumBitrate, p.protection)
@@ -153,11 +169,26 @@ func (p *minimumBitratePacer) SetTargetBitrate(bitrate int) {
 }
 
 func (p *minimumBitratePacer) SetMediaTargetBitrate(bitrate int) {
+	p.targetMu.Lock()
+	defer p.targetMu.Unlock()
+	if p.fixedMediaRate > 0 {
+		bitrate = p.fixedMediaRate
+	}
 	// Local controls, including the media floor and loss guard, operate on
 	// encoder bitrate. Reserve the configured repair share before pacing it.
 	if bitrate < p.minimumBitrate {
 		bitrate = p.minimumBitrate
 	}
+	p.delegate.SetTargetBitrate(wireBitrate(bitrate, p.protection))
+}
+
+func (p *minimumBitratePacer) UseFixedMediaTargetBitrate(bitrate int) {
+	if bitrate <= 0 {
+		return
+	}
+	p.targetMu.Lock()
+	defer p.targetMu.Unlock()
+	p.fixedMediaRate = bitrate
 	p.delegate.SetTargetBitrate(wireBitrate(bitrate, p.protection))
 }
 

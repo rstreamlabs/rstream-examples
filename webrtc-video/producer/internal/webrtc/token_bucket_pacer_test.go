@@ -343,7 +343,7 @@ func TestTokenBucketPacerPrioritizesRepairWithoutReorderingQueuedMedia(t *testin
 	}
 }
 
-func TestTokenBucketPacerCoalescesOnlyPendingRetransmissions(t *testing.T) {
+func TestTokenBucketPacerCoalescesPendingAndSuppressesRecentRetransmissions(t *testing.T) {
 	pacer := newTokenBucketPacer(10_000_000, 1, 64)
 	entered := make(chan struct{})
 	release := make(chan struct{})
@@ -410,19 +410,111 @@ func TestTokenBucketPacerCoalescesOnlyPendingRetransmissions(t *testing.T) {
 		[]byte{0x12, 0x34, 2},
 		nil,
 	); err != nil {
-		t.Fatalf("queue retransmission after prior delivery: %v", err)
+		t.Fatalf("suppress retransmission after prior delivery: %v", err)
 	}
 	select {
 	case actual := <-written:
-		if actual != 11 {
-			t.Fatalf("written SSRC = %d, want 11", actual)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("a retransmission for the same packet was not accepted after prior delivery")
+		t.Fatalf("recent duplicate retransmission was written for SSRC %d", actual)
+	case <-time.After(25 * time.Millisecond):
+	}
+	if got := pacer.Stats()["pacerRetransmissionPacketsSuppressed"]; got != uint64(1) {
+		t.Fatalf("suppressed retransmissions = %v, want 1", got)
 	}
 	if err := pacer.Close(); err != nil {
 		t.Fatalf("close pacer: %v", err)
 	}
+}
+
+func TestTokenBucketPacerRetransmissionWindowFollowsObservedRTT(t *testing.T) {
+	pacer := newTokenBucketPacer(10_000_000, 1, 16)
+	t.Cleanup(func() {
+		if err := pacer.Close(); err != nil {
+			t.Errorf("close pacer: %v", err)
+		}
+	})
+	key := retransmissionKey{ssrc: 11, originalSequence: 0x1234}
+	start := time.Unix(100, 0)
+	pacer.observeRoundTripTime(60 * time.Millisecond)
+	if got := pacer.reserveRetransmissionAt(key, start); got != retransmissionReserved {
+		t.Fatalf("initial reservation = %v, want reserved", got)
+	}
+	pacer.markRetransmissionSent(key, start)
+	if got := pacer.reserveRetransmissionAt(key, start.Add(65*time.Millisecond-time.Nanosecond)); got != retransmissionRecentlySent {
+		t.Fatalf("reservation before retry window = %v, want recently sent", got)
+	}
+	if got := pacer.reserveRetransmissionAt(key, start.Add(65*time.Millisecond)); got != retransmissionReserved {
+		t.Fatalf("reservation at retry window = %v, want reserved", got)
+	}
+	pacer.releaseRetransmission(key)
+	if got := pacer.Stats()["pacerRetransmissionMinimumIntervalMilliseconds"]; got != float64(65) {
+		t.Fatalf("minimum retransmission interval = %v, want 65ms", got)
+	}
+}
+
+func TestTokenBucketPacerSmoothsAndBoundsObservedRTT(t *testing.T) {
+	pacer := newTokenBucketPacer(10_000_000, 1, 16)
+	t.Cleanup(func() {
+		if err := pacer.Close(); err != nil {
+			t.Errorf("close pacer: %v", err)
+		}
+	})
+	pacer.observeRoundTripTime(60 * time.Millisecond)
+	pacer.observeRoundTripTime(140 * time.Millisecond)
+	if got := pacer.retransmissionRTT(); got != 70*time.Millisecond {
+		t.Fatalf("smoothed RTT = %v, want 70ms", got)
+	}
+	pacer.observeRoundTripTime(-time.Millisecond)
+	pacer.observeRoundTripTime(maximumObservedRTT + time.Nanosecond)
+	if got := pacer.retransmissionRTT(); got != 70*time.Millisecond {
+		t.Fatalf("RTT after invalid observations = %v, want 70ms", got)
+	}
+}
+
+func TestTokenBucketPacerDoesNotThrottleAnUnsentRetransmission(t *testing.T) {
+	pacer := newTokenBucketPacer(10_000_000, 1, 16)
+	t.Cleanup(func() {
+		if err := pacer.Close(); err != nil {
+			t.Errorf("close pacer: %v", err)
+		}
+	})
+	key := retransmissionKey{ssrc: 11, originalSequence: 0x1234}
+	now := time.Unix(100, 0)
+	if got := pacer.reserveRetransmissionAt(key, now); got != retransmissionReserved {
+		t.Fatalf("initial reservation = %v, want reserved", got)
+	}
+	pacer.releaseRetransmission(key)
+	if got := pacer.reserveRetransmissionAt(key, now); got != retransmissionReserved {
+		t.Fatalf("reservation after unsent release = %v, want reserved", got)
+	}
+	pacer.releaseRetransmission(key)
+}
+
+func TestTokenBucketPacerPrunesCompletedRetransmissionWindows(t *testing.T) {
+	pacer := newTokenBucketPacer(10_000_000, 1, 16)
+	t.Cleanup(func() {
+		if err := pacer.Close(); err != nil {
+			t.Errorf("close pacer: %v", err)
+		}
+	})
+	start := time.Unix(100, 0)
+	for sequence := range uint16(128) {
+		key := retransmissionKey{ssrc: 11, originalSequence: sequence}
+		if got := pacer.reserveRetransmissionAt(key, start); got != retransmissionReserved {
+			t.Fatalf("reservation %d = %v, want reserved", sequence, got)
+		}
+		pacer.markRetransmissionSent(key, start)
+	}
+	trigger := retransmissionKey{ssrc: 11, originalSequence: 129}
+	if got := pacer.reserveRetransmissionAt(trigger, start.Add(2*time.Second)); got != retransmissionReserved {
+		t.Fatalf("prune-trigger reservation = %v, want reserved", got)
+	}
+	pacer.retransmissionMu.Lock()
+	recent := len(pacer.recentRetransmissions)
+	pacer.retransmissionMu.Unlock()
+	if recent != 0 {
+		t.Fatalf("retained completed retransmission windows = %d, want 0", recent)
+	}
+	pacer.releaseRetransmission(trigger)
 }
 
 func TestTokenBucketPacerDoesNotInterleaveRepairInsidePrimaryFrame(t *testing.T) {

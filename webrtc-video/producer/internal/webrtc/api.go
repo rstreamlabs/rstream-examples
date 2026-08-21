@@ -297,6 +297,18 @@ func (e *associatedStreamBandwidthEstimator) AdmitMediaFrame(
 	return controller.AdmitMediaFrame(size, keyFrame)
 }
 
+func (e *associatedStreamBandwidthEstimator) observeRoundTripTime(roundTripTime time.Duration) {
+	if e.pacer != nil {
+		e.pacer.observeRoundTripTime(roundTripTime)
+	}
+}
+
+func (e *associatedStreamBandwidthEstimator) UseFixedMediaTargetBitrate(bitrate int) {
+	if e.pacer != nil {
+		e.pacer.UseFixedMediaTargetBitrate(bitrate)
+	}
+}
+
 func wireBitrate(mediaBitrateBps int, protection flexFECProtection) int {
 	if !protection.enabled() || mediaBitrateBps <= 0 {
 		return mediaBitrateBps

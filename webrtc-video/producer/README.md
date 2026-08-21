@@ -2,9 +2,9 @@
 
 This example streams video from a device to a browser with WebRTC, publishes the viewer through an `rstream` HTTP tunnel, and uses the managed `rstream` STUN/TURN service for ICE connectivity.
 
-The sample includes a complete device-side path: an embedded viewer UI, signaling on the same origin as the page, TURN credential bootstrap, H.264 and AV1 reference profiles, shared or per-viewer pipeline allocation, optional adaptive bitrate driven by TWCC/GCC, and Linux distribution builds that produce a standalone binary.
+The sample includes a complete device-side path: an embedded viewer UI, WHEP on the same origin as the page, TURN credential bootstrap, H.264 and AV1 reference profiles, shared or per-viewer pipeline allocation, optional adaptive bitrate driven by TWCC/GCC, and Linux distribution builds that produce a standalone binary.
 
-The process model is intentionally simple. One Go binary serves the viewer page locally, exposes the signaling WebSocket and TURN bootstrap endpoints, runs the GStreamer capture pipeline, and sends media with Pion. `rstream` provides the public entrypoint, tunnel authentication, tunnel reconnection, and TURN credential generation.
+The process model is intentionally simple. One Go binary serves the viewer page locally, exposes a WHEP endpoint and TURN bootstrap endpoint, runs the GStreamer capture pipeline, and sends media with Pion. `rstream` provides the public entrypoint, tunnel authentication, tunnel reconnection, and TURN credential generation.
 
 Treat this repository as a reference base rather than a fixed product. The profiles and build scripts are meant to be adapted to the capture device, encoder, authentication mode, and operational constraints of the deployment you actually want to run.
 
@@ -22,12 +22,12 @@ The [standalone guide](https://rstream.io/guides/build-device-to-browser-webrtc-
 establishes the reference media path between one producer and one browser. The
 [Next.js guide](https://rstream.io/guides/integrate-webrtc-video-streaming-into-a-nextjs-platform-with-rstream)
 runs this producer in provisioning mode and adds device identity, viewer
-authorization, fleet state, and product policy. Signaling and media still
-terminate on the producer; Next.js does not proxy them.
+authorization, fleet state, and product policy. WHEP and media still terminate
+on the selected media backend; Next.js does not proxy them.
 
-The MediaMTX guide will add a distribution adapter to the same codebase. One
-adaptive device upstream will feed MediaMTX, which can then serve several
-viewers without multiplying device uplink usage. Direct WebRTC remains
+The MediaMTX guide adds an on-demand distribution adapter around the same
+codebase. One adaptive device upstream feeds MediaMTX, which can then serve
+several viewers without multiplying device uplink usage. Direct WebRTC remains
 available for one-to-one sessions and transport diagnosis; ICE still chooses
 direct or TURN connectivity for that session.
 
@@ -37,16 +37,15 @@ implementation to operate and qualify. The control plane decides who may start
 or watch a stream. The distribution plane decides whether the encoded stream
 goes to one browser or to a fan-out tier.
 
-Fan-out creates two congestion domains. MediaMTX feedback drives this
-producer's shared upstream; each viewer has a separate downstream control loop.
-The MediaMTX integration will qualify feedback, retransmission, repair, and
-latency on both legs. Producer OpenMetrics describe the device uplink, while
-MediaMTX and browser telemetry describe viewer delivery.
+Fan-out creates two congestion domains. The adapter terminates repair on this
+producer's shared upstream; MediaMTX and each viewer establish a separate
+downstream control loop. Producer OpenMetrics describe the device uplink,
+while MediaMTX and browser telemetry describe viewer delivery.
 
 ## Integration paths
 
 This producer is the application-controlled path for products that combine
-browser signaling, managed TURN, ICE recovery, congestion-aware encoding,
+WHEP session control, managed TURN, ICE recovery, congestion-aware encoding,
 bounded media queues, packet repair, and session diagnostics. `rstream-go`
 places tunnel lifecycle, cancellation, and recovery policy inside the same Go
 process as the media application.
@@ -61,9 +60,9 @@ video product.
 
 ## Standalone path
 
-The local HTTP server serves the embedded page and the small API surface the page needs: signaling, TURN bootstrap, and status endpoints. On the media side, a GStreamer pipeline produces H.264 or AV1 access units and passes them to a WebRTC sender built on top of Pion. `rstream-go` publishes that local server through an HTTP tunnel and keeps the public URL available.
+The local HTTP server serves the embedded page and the small API surface the page needs: WHEP resources, TURN bootstrap, and status endpoints. On the media side, a GStreamer pipeline produces H.264 or AV1 access units and passes them to a WebRTC sender built on top of Pion. `rstream-go` publishes that local server through an HTTP tunnel and keeps the public URL available.
 
-That layout keeps signaling, TURN bootstrap, and viewer delivery on the same origin while avoiding any extra backend dedicated to this example.
+That layout keeps WHEP, TURN bootstrap, and viewer delivery on the same origin while avoiding any extra backend dedicated to this example.
 
 ## Requirements
 
@@ -150,7 +149,7 @@ When the tunnel is ready, the process prints the public URL:
 info  Public URL: https://xxxxxxxx.t.<cluster-domain>
 ```
 
-Open that URL in a browser and wait for the sample status to load. Select an ICE policy, then click `Start streaming`. The page opens the signaling WebSocket on the tunnel origin, requests TURN credentials from the local process, and attaches the remote video track once the WebRTC session is established. A working session shows `Peer: connected`, `ICE: connected` or `completed`, and `Playback: Playing`.
+Open that URL in a browser and wait for the sample status to load. Select an ICE policy, then click `Start streaming`. The page creates a WHEP resource on the tunnel origin, trickles ICE candidates over HTTP, requests TURN credentials from the local process, and attaches the remote video track once the WebRTC session is established. A working session shows `Peer: connected`, `ICE: connected` or `completed`, and `Playback: Playing`.
 
 The viewer page also includes an ICE path selector. `Auto` keeps the default behavior, `Direct` disables TURN on the browser side, and `Relay only` forces the browser to use TURN. That selector only affects the browser peer; it does not override `webrtc.useTurn` in the Go process.
 
@@ -167,7 +166,11 @@ That serves the viewer on `http://127.0.0.1:8080`.
 The repository ships a small set of reference YAML files so you can start from known working configurations.
 
 - `config.h264.yaml` and `config.av1.yaml` use a test-pattern source and are useful when you want to validate the WebRTC path itself.
-- `config.provisioning.h264.yaml` keeps the H.264 media path and moves tunnel credentials and TURN credentials to a product API.
+- `config.provisioning.h264.yaml` applies the qualified adaptive H.264,
+  NACK/RTX, and one-per-five FlexFEC profile while moving tunnel and TURN
+  credentials to a product API. It admits one upstream session so direct and
+  distributed delivery never run competing feedback loops against one shared
+  encoder.
 - `config.macos-webcam.h264.yaml` and `config.macos-webcam.av1.yaml` are the macOS webcam variants built around `avfvideosrc`.
 - `config.raspberry-pi-camera.h264.yaml` and `config.raspberry-pi-camera.av1.yaml` are the Raspberry Pi variants built around `libcamerasrc`.
 - The `.twcc-gcc.yaml` variants enable adaptive bitrate. The plain variants keep TWCC enabled but leave the encoder on a fixed target bitrate.
@@ -237,22 +240,30 @@ sum(rate(rstream_video_producer_encoded_frames_total[1m]))
 
 # Seconds since the capture pipeline produced a frame
 time() - rstream_video_producer_last_encoded_frame_timestamp_seconds
+
+# Longest RTT used to suppress a duplicate RTX request
+rstream_video_producer_pacer_maximum_retransmission_round_trip_time_seconds
+
+# Duplicate RTX requests avoided before they consume wire capacity
+sum(rate(rstream_video_producer_pacer_repair_discarded_packets_total{repair="rtx",reason=~"coalesced|suppressed"}[1m]))
 ```
 
 The current gauges separate the TWCC media estimate and encoder media target
 from the pacer's sustained wire budget and short-burst allowance. They also
 expose packet-loss ratio, delay estimate, queue depth, queue delay, and active
-loss guards. Counters cover source backpressure, frame admission drops,
-adaptive updates, key-frame recovery, malformed feedback, RTX and FlexFEC
-traffic, and repair packets discarded before transmission. The OpenMetrics
-response emits HELP and TYPE metadata for every family, plus UNIT metadata for
-values expressed in bytes, bytes per second, or seconds.
+loss guards. The repair view includes the current RTT-derived RTX suppression
+window and the number of duplicate requests coalesced or suppressed before they
+consume wire capacity. Counters cover source backpressure, frame admission
+drops, adaptive updates, key-frame recovery, malformed feedback, RTX and
+FlexFEC traffic, and repair packets discarded before transmission. The
+OpenMetrics response emits HELP and TYPE metadata for every family, plus UNIT
+metadata for values expressed in bytes, bytes per second, or seconds.
 
 ### Tunnel publication and authentication
 
 `tunnel.enabled` decides whether the process publishes the local server through `rstream` or stays local-only.
 
-`tunnel.transport.mode` controls the producer-to-rstream upstream session. The default `auto` mode prefers QUIC and falls back to TLS while opening the control channel, then keeps that choice for the client lifetime. The published tunnel remains a standard HTTP tunnel for the browser UI, signaling WebSocket, and API endpoints; this setting only changes how the Go producer connects to the rstream engine.
+`tunnel.transport.mode` controls the producer-to-rstream upstream session. The default `auto` mode prefers QUIC and falls back to TLS while opening the control channel, then keeps that choice for the client lifetime. The published tunnel remains a standard HTTP tunnel for the browser UI, WHEP resources, and API endpoints; this setting only changes how the Go producer connects to the rstream engine.
 
 ```yaml
 tunnel:
@@ -340,7 +351,7 @@ webrtc:
   iceTransportPolicy: all # or relay
 ```
 
-The signaling path uses Trickle ICE: both peers exchange candidates as soon as they are discovered. If the selected network path disappears during playback, the browser keeps the same WebRTC session and sends a new offer with ICE restart enabled. The producer keeps the session open during that recovery window and only closes it if ICE does not reconnect.
+The WHEP path uses Trickle ICE: both peers exchange candidates as soon as they are discovered. If the selected network path disappears during playback, the browser keeps the same WebRTC session and sends a new offer with ICE restart enabled. The producer keeps the session open during that recovery window and only closes it if ICE does not reconnect.
 
 ### Codecs and media pipelines
 
@@ -472,11 +483,11 @@ the result, so the measured trade-offs remain tied to an exact implementation.
 | Frame size and cadence |                                                   1920x1080 at 30 fps | Exercises a real live-video workload while remaining reproducible. If the link cannot sustain the quality floor, add a measured resolution/frame-rate ladder instead of compressing this fixed profile indefinitely.                                                                                                                                                                     |
 | x264 latency controls  |                                `zerolatency`, `veryfast`, `bframes=0` | Avoids frame reordering and deep encoder buffering. The `zerolatency` tune owns its internally coherent lookahead and threading choices; duplicating those private tune settings in the pipeline made the profile harder to reason about without establishing a measured benefit. A slower preset may improve compression, but it spends CPU and can add latency on constrained devices. |
 | Key-frame policy       |                                        `key-int-max=60`, `scenecut=0` | Gives the qualification source a deterministic maximum two-second GOP at 30 fps, so recovery runs are comparable. Content-driven production encoders may re-enable scene cuts after measuring their key-frame bursts.                                                                                                                                                                    |
-| Encoder VBV            |                                                                250 ms | Bounds the encoder-side rate reservoir while retaining enough room for normal frame-size variation. It is one component of latency, not a promise that end-to-end delay is 250 ms.                                                                                                                                                                                                       |
+| Encoder VBV            |                                                                100 ms | Bounds the encoder-side rate reservoir while retaining enough room for normal frame-size variation. It is one component of latency, not a promise that end-to-end delay is 100 ms.                                                                                                                                                                                                       |
 | Initial encoder target |                                                              5 Mbit/s | Starts 1080p with useful quality before TWCC has accumulated enough feedback. A high startup target can briefly overshoot a smaller access link, which is why the pacer still enforces the current wire budget.                                                                                                                                                                          |
 | Adaptive range         |                                                            2–8 Mbit/s | The 2 Mbit/s floor protects fixed 1080p quality observed through x264 QP; the ceiling bounds CPU and link demand. Operating below the floor calls for a source ladder, not a hidden quality collapse.                                                                                                                                                                                    |
-| Update hysteresis      |                               2 s, 10% increases, immediate decreases | Filters optimistic estimator noise while keeping the encoder aligned with the protected-wire pacing budget. Decreases bypass the periodic increase gate; increases remain progressive.                                                                                                                                                                                                   |
-| Increase limit         |                                    15%, at most 500 kbit/s per update | Makes recovery progressive and observable instead of creating a large optimistic burst after congestion clears.                                                                                                                                                                                                                                                                          |
+| Update hysteresis      |                               2 s, 10% increases, immediate decreases | Filters optimistic estimator noise while keeping the encoder aligned with the protected-wire pacing budget. Decreases bypass the periodic increase gate.                                                                                                                                                                                                                                 |
+| Recovery gate          |                               At most 1% loss, followed by a 5 s hold | Prevents a delayed optimistic estimate from raising the encoder while loss is still active. After the hold, the encoder follows GCC's current bounded target rather than applying a second application-side ramp that would starve the estimator of probe traffic.                                                                                                                       |
 | Pacing and admission   | 1.5x burst allowance over GCC's wire target, 225 ms admission ceiling | Media, proactive repair, and retransmissions share one sustained capacity budget. The bounded burst allowance drains encoded access units and timely repair without raising the long-term wire target. Over-budget access units are rejected whole before RTP packetization.                                                                                                             |
 | Repair scheduling      |                 One repair packet per scheduling burst; 225 ms expiry | Gives RTX a prompt opportunity without starving current media, and discards a repair packet once its playback value is lower than the latency it would add.                                                                                                                                                                                                                              |
 | FlexFEC                |                              One repair packet per five media packets | Adds moderate proactive protection for lossy, higher-RTT paths where reactive RTX can arrive after the playout window. Stronger ratios remain explicit stress profiles; leave FlexFEC disabled when measured NACK/RTX recovery is sufficient or the link cannot afford the overhead.                                                                                                     |
@@ -524,6 +535,14 @@ relay-to-direct QP gap while requiring 1920x1080 output throughout the run. This
 catches a stream that remains at 30 fps only by compressing the image too
 aggressively, without pretending that sender QP alone is an end-to-end image
 similarity score.
+
+The release matrix asks Chromium for a 200 ms minimum playout target. This is
+an explicit resilience profile for lossy and higher-jitter links, not latency
+silently added by the producer. The interactive player leaves Chromium on its
+automatic policy. A product that applies the resilient profile should set the
+receiver hint deliberately, expose that latency choice in its own policy, and
+repeat the qualification on its target browsers; a lower-latency profile
+accepts less time for RTX or FlexFEC recovery.
 
 ### Viewer limits and pipeline allocation
 

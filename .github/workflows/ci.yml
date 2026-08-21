@@ -27,6 +27,7 @@ jobs:
           set -euo pipefail
           scripts=(
             published-tcp-ssh/ssh/entrypoint.sh
+            webrtc-video/distributor/scripts/image-smoke.sh
             webrtc-video/producer/build-gstreamer-static-linux.sh
             webrtc-video/producer/build-static-linux.sh
             webrtc-video/producer/qualification/adaptive-streaming/sample-host-cpu.sh
@@ -47,11 +48,35 @@ jobs:
             webrtc-video/producer/qualification/adaptive-streaming/run-matrix.sh
             webrtc-video/producer/qualification/adaptive-streaming/run.sh
             webrtc-video/producer/qualification/adaptive-streaming/traffic-control.sh
+            webrtc-video/distributor/qualification/end-to-end/run.sh
+            webrtc-video/distributor/qualification/end-to-end/mode.sh
+            webrtc-video/distributor/qualification/end-to-end/mode-test.sh
+            webrtc-video/distributor/qualification/end-to-end/resource-report-test.sh
+            webrtc-video/distributor/qualification/end-to-end/result-test.sh
+            webrtc-video/distributor/qualification/comparison/report-test.sh
+            webrtc-video/distributor/qualification/comparison/run.sh
+            webrtc-video/distributor/qualification/fanout/report-test.sh
+            webrtc-video/distributor/qualification/fanout/run.sh
+            webrtc-video/distributor/qualification/matrix/report-test.sh
+            webrtc-video/distributor/qualification/matrix/run-test.sh
+            webrtc-video/distributor/qualification/matrix/fixtures/comparison-run.sh
+            webrtc-video/distributor/qualification/matrix/fixtures/fanout-run.sh
+            webrtc-video/distributor/qualification/matrix/run.sh
+            webrtc-video/distributor/qualification/native/report-test.sh
+            webrtc-video/distributor/qualification/native/run.sh
           )
           shellcheck "${bash_scripts[@]}"
           for script in "${bash_scripts[@]}"; do
             bash -n "$script"
           done
+          webrtc-video/distributor/qualification/fanout/report-test.sh
+          webrtc-video/distributor/qualification/end-to-end/resource-report-test.sh
+          webrtc-video/distributor/qualification/end-to-end/result-test.sh
+          webrtc-video/distributor/qualification/end-to-end/mode-test.sh
+          webrtc-video/distributor/qualification/comparison/report-test.sh
+          webrtc-video/distributor/qualification/matrix/report-test.sh
+          webrtc-video/distributor/qualification/matrix/run-test.sh
+          webrtc-video/distributor/qualification/native/report-test.sh
           PYTHONPATH=netcat-media-streaming/qualification python3 -m unittest \
             netcat-media-streaming/qualification/test_analyze_frames.py \
             netcat-media-streaming/qualification/test_analyze_logs.py \
@@ -287,6 +312,24 @@ jobs:
         working-directory: webrtc-video/platform
         shell: bash
         run: npm ci
+      - name: Install pinned MediaMTX test binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          container="rstream-mediamtx-platform-${GITHUB_RUN_ID}"
+          trap 'docker rm --force "$container" >/dev/null 2>&1 || true' EXIT
+          docker create --name "$container" \
+            bluenviron/mediamtx:1.20.0@sha256:86e63af28616d5e5a18540d7b031b6510bd4cbf1a3c7d224f9e2976f02aefbfb
+          docker cp "$container:/mediamtx" "${RUNNER_TEMP}/mediamtx"
+          chmod 0555 "${RUNNER_TEMP}/mediamtx"
+          printf '%s\n' "$RUNNER_TEMP" >>"$GITHUB_PATH"
+      - name: Test WHEP client, reconnect policy, and MediaMTX authorization
+        working-directory: webrtc-video/platform
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test:unit
+          npm run test:mediamtx-auth
       - name: Typecheck
         working-directory: webrtc-video/platform
         shell: bash
@@ -307,6 +350,44 @@ jobs:
         working-directory: webrtc-video/platform
         shell: bash
         run: npm audit --omit=dev --audit-level=high
+  webrtc-video-distributor:
+    name: WebRTC video distributor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version-file: webrtc-video/distributor/go.mod
+          cache-dependency-path: webrtc-video/distributor/go.sum
+      - name: Install pinned MediaMTX test binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          container="rstream-mediamtx-distributor-${GITHUB_RUN_ID}"
+          trap 'docker rm --force "$container" >/dev/null 2>&1 || true' EXIT
+          docker create --name "$container" \
+            bluenviron/mediamtx:1.20.0@sha256:86e63af28616d5e5a18540d7b031b6510bd4cbf1a3c7d224f9e2976f02aefbfb
+          docker cp "$container:/mediamtx" "${RUNNER_TEMP}/mediamtx"
+          chmod 0555 "${RUNNER_TEMP}/mediamtx"
+          printf '%s\n' "$RUNNER_TEMP" >>"$GITHUB_PATH"
+      - name: Verify bounded and concurrent behavior
+        working-directory: webrtc-video/distributor
+        shell: bash
+        run: make verify
+      - name: Run static analysis
+        working-directory: webrtc-video/distributor
+        shell: bash
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.7.0 ./...
+      - name: Scan reachable Go vulnerabilities
+        working-directory: webrtc-video/distributor
+        shell: bash
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+      - name: Qualify MediaMTX fan-out and source repair
+        working-directory: webrtc-video/distributor
+        shell: bash
+        run: make integration
   webrtc-video-producer:
     name: WebRTC video streaming
     runs-on: ubuntu-latest
@@ -346,6 +427,14 @@ jobs:
         working-directory: webrtc-video/producer
         shell: bash
         run: go test -race ./...
+      - name: Run static analysis
+        working-directory: webrtc-video/producer
+        shell: bash
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.7.0 ./...
+      - name: Scan reachable Go vulnerabilities
+        working-directory: webrtc-video/producer
+        shell: bash
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
       - name: Test adaptive-streaming qualification analyzer
         working-directory: webrtc-video/producer/qualification/adaptive-streaming
         shell: bash

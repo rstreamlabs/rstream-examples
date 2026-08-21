@@ -3,49 +3,65 @@ package webrtc
 import "github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/config"
 
 type ProducerStats struct {
-	ActiveSessions                int
-	OpeningSessions               int
-	EstimatedBitrateBps           int64
-	EncoderTargetBitrateBps       int64
-	PacerTargetBitrateBps         int64
-	PacerPacingBitrateBps         int64
-	PacerQueuePackets             int64
-	MaximumPacketLossRatio        float64
-	MaximumDelayEstimateSeconds   float64
-	MaximumPacerQueueDelaySeconds float64
-	LossGuardActiveSessions       int
-	AdaptiveBitrateUpdates        uint64
-	AdaptiveBitrateFailures       uint64
-	RecoveryKeyFrameRequests      uint64
-	RecoveryKeyFrameCoalesced     uint64
-	RecoveryKeyFrameFailures      uint64
-	RTCPKeyFrameRequests          uint64
-	RTCPMalformedFeedback         uint64
-	LossGuardReductions           uint64
-	LossGuardRecoveries           uint64
-	PacerQueueDrops               uint64
-	PacerMediaFrameDrops          uint64
-	PacerMediaByteDrops           uint64
-	PacerRepairPacketsExpired     uint64
-	PacerRepairPacketsTrimmed     uint64
-	PacerRTXPacketsExpired        uint64
-	PacerRTXPacketsCoalesced      uint64
-	PacerFECPacketsExpired        uint64
-	PacerRTXPacketsTrimmed        uint64
-	PacerFECPacketsTrimmed        uint64
-	PacerSentPrimary              uint64
-	PacerSentPrimaryBytes         uint64
-	PacerSentRepair               uint64
-	PacerSentRTX                  uint64
-	PacerSentRTXBytes             uint64
-	PacerSentFEC                  uint64
-	PacerSentFECBytes             uint64
-	StaleBitrateCallbacks         uint64
-	TWCCFeedbackPackets           uint64
-	TWCCMalformedFeedback         uint64
-	TWCCPaddingStatuses           uint64
-	TWCCReportedLost              uint64
-	TWCCReportedStatuses          uint64
+	ActiveSessions                  int
+	OpeningSessions                 int
+	TWCCNegotiatedSessions          int
+	NACKNegotiatedSessions          int
+	RTXNegotiatedSessions           int
+	FlexFECNegotiatedSessions       int
+	EstimatedBitrateBps             int64
+	LossControllerTargetBitrateBps  int64
+	DelayControllerTargetBitrateBps int64
+	DelayControllerIncreaseSessions int
+	DelayControllerDecreaseSessions int
+	DelayControllerHoldSessions     int
+	DelayControllerNormalSessions   int
+	DelayControllerOveruseSessions  int
+	DelayControllerUnderuseSessions int
+	EncoderTargetBitrateBps         int64
+	PacerTargetBitrateBps           int64
+	PacerPacingBitrateBps           int64
+	PacerQueuePackets               int64
+	MaximumPacketLossRatio          float64
+	MaximumDelayEstimateSeconds     float64
+	MaximumPacerQueueDelaySeconds   float64
+	MaximumRTXRTTSeconds            float64
+	MaximumRTXRetryIntervalSeconds  float64
+	LossGuardActiveSessions         int
+	LossGuardTargetBitrateBps       int64
+	AdaptiveBitrateUpdates          uint64
+	AdaptiveBitrateFailures         uint64
+	RecoveryKeyFrameRequests        uint64
+	RecoveryKeyFrameCoalesced       uint64
+	RecoveryKeyFrameFailures        uint64
+	RTCPKeyFrameRequests            uint64
+	RTCPMalformedFeedback           uint64
+	LossGuardReductions             uint64
+	LossGuardRecoveries             uint64
+	PacerQueueDrops                 uint64
+	PacerMediaFrameDrops            uint64
+	PacerMediaByteDrops             uint64
+	PacerRepairPacketsExpired       uint64
+	PacerRepairPacketsTrimmed       uint64
+	PacerRTXPacketsExpired          uint64
+	PacerRTXPacketsCoalesced        uint64
+	PacerRTXPacketsSuppressed       uint64
+	PacerFECPacketsExpired          uint64
+	PacerRTXPacketsTrimmed          uint64
+	PacerFECPacketsTrimmed          uint64
+	PacerSentPrimary                uint64
+	PacerSentPrimaryBytes           uint64
+	PacerSentRepair                 uint64
+	PacerSentRTX                    uint64
+	PacerSentRTXBytes               uint64
+	PacerSentFEC                    uint64
+	PacerSentFECBytes               uint64
+	StaleBitrateCallbacks           uint64
+	TWCCFeedbackPackets             uint64
+	TWCCMalformedFeedback           uint64
+	TWCCPaddingStatuses             uint64
+	TWCCReportedLost                uint64
+	TWCCReportedStatuses            uint64
 }
 
 type producerTotals struct {
@@ -119,6 +135,18 @@ func (t *producerTotals) add(other producerTotals) {
 
 func addActiveSessionStats(producer *ProducerStats, session SessionStats, sharedMedia bool) {
 	addProducerTotals(producer, producerTotalsFromSession(session))
+	if session.TWCCNegotiated {
+		producer.TWCCNegotiatedSessions++
+	}
+	if session.NACKNegotiated {
+		producer.NACKNegotiatedSessions++
+	}
+	if session.RTXNegotiated {
+		producer.RTXNegotiatedSessions++
+	}
+	if session.FlexFECNegotiated {
+		producer.FlexFECNegotiatedSessions++
+	}
 	producer.EstimatedBitrateBps += int64(session.EstimatedBitrateBps)
 	encoderTarget := int64(session.EncoderTargetBitrateKbps) * 1000
 	if sharedMedia {
@@ -136,8 +164,29 @@ func addActiveSessionStats(producer *ProducerStats, session SessionStats, shared
 	producer.MaximumPacketLossRatio = max(producer.MaximumPacketLossRatio, bandwidth.AverageLoss)
 	producer.MaximumDelayEstimateSeconds = max(producer.MaximumDelayEstimateSeconds, bandwidth.DelayEstimateMs/1000)
 	producer.MaximumPacerQueueDelaySeconds = max(producer.MaximumPacerQueueDelaySeconds, bandwidth.PacerQueueDelayMs/1000)
+	producer.MaximumRTXRTTSeconds = max(producer.MaximumRTXRTTSeconds, bandwidth.PacerRTXRoundTripTimeMs/1000)
+	producer.MaximumRTXRetryIntervalSeconds = max(producer.MaximumRTXRetryIntervalSeconds, bandwidth.PacerRTXRetryIntervalMs/1000)
+	producer.LossControllerTargetBitrateBps += int64(bandwidth.LossTargetBitrateBps)
+	producer.DelayControllerTargetBitrateBps += int64(bandwidth.DelayTargetBitrateBps)
+	switch bandwidth.State {
+	case "increase":
+		producer.DelayControllerIncreaseSessions++
+	case "decrease":
+		producer.DelayControllerDecreaseSessions++
+	case "hold":
+		producer.DelayControllerHoldSessions++
+	}
+	switch bandwidth.Usage {
+	case "normal":
+		producer.DelayControllerNormalSessions++
+	case "overuse":
+		producer.DelayControllerOveruseSessions++
+	case "underuse":
+		producer.DelayControllerUnderuseSessions++
+	}
 	if bandwidth.LossGuardActive {
 		producer.LossGuardActiveSessions++
+		producer.LossGuardTargetBitrateBps += int64(bandwidth.LossGuardTargetBitrateBps)
 	}
 }
 
@@ -159,6 +208,7 @@ func addProducerTotals(producer *ProducerStats, totals producerTotals) {
 	producer.PacerRepairPacketsTrimmed += bandwidth.PacerRepairPacketsTrimmed
 	producer.PacerRTXPacketsExpired += bandwidth.PacerRTXPacketsExpired
 	producer.PacerRTXPacketsCoalesced += bandwidth.PacerRTXPacketsCoalesced
+	producer.PacerRTXPacketsSuppressed += bandwidth.PacerRTXPacketsSuppressed
 	producer.PacerFECPacketsExpired += bandwidth.PacerFECPacketsExpired
 	producer.PacerRTXPacketsTrimmed += bandwidth.PacerRTXPacketsTrimmed
 	producer.PacerFECPacketsTrimmed += bandwidth.PacerFECPacketsTrimmed
@@ -187,6 +237,7 @@ func addBandwidthCounters(target *BandwidthStats, source BandwidthStats) {
 	target.PacerRepairPacketsTrimmed += source.PacerRepairPacketsTrimmed
 	target.PacerRTXPacketsExpired += source.PacerRTXPacketsExpired
 	target.PacerRTXPacketsCoalesced += source.PacerRTXPacketsCoalesced
+	target.PacerRTXPacketsSuppressed += source.PacerRTXPacketsSuppressed
 	target.PacerFECPacketsExpired += source.PacerFECPacketsExpired
 	target.PacerRTXPacketsTrimmed += source.PacerRTXPacketsTrimmed
 	target.PacerFECPacketsTrimmed += source.PacerFECPacketsTrimmed

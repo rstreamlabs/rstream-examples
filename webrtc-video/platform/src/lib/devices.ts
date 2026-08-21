@@ -1,5 +1,6 @@
 import { APP_LABEL } from "@/lib/rstream-labels"
 import { createHash } from "crypto"
+import { credentialExpiresAt } from "@/lib/video-distributor-token"
 import { DEVICE_LABEL } from "@/lib/rstream-labels"
 import { getRstreamClient } from "@/lib/rstream"
 import { HTTPError } from "@/lib/error"
@@ -9,8 +10,15 @@ import { rstreamConfigMissingMessage } from "@/lib/env"
 import { rstreamEnvResult } from "@/lib/env"
 import { type Device } from "@/prisma/generated/client"
 import { type DeviceView } from "@/lib/validations/device"
+import { type ViewerDistributionPreference } from "@/lib/validations/device"
+import { type MediaMTXSourcePurpose } from "@/lib/validations/video-distributor"
 import { type Tunnel } from "@rstreamlabs/rstream/tunnel"
 import { USER_LABEL } from "@/lib/rstream-labels"
+import { issueSourceCredentials } from "@/lib/video-source-resolution"
+import { mediaMTXPublisherCredential } from "@/lib/video-distributor"
+import { mediaMTXViewerCredential } from "@/lib/video-distributor"
+import { mediaMTXPath } from "@/lib/video-distributor"
+import { videoDistributorMode } from "@/lib/video-distributor"
 import prisma from "@/lib/prisma"
 
 const maxDevicesPerUser = 20
@@ -18,11 +26,15 @@ const maxDeviceCreationsPerWindow = 5
 const deviceCreationWindowMs = 60 * 60 * 1000
 const maxTurnCredentialsPerWindow = 20
 const turnCredentialWindowMs = 60 * 1000
-const turnCredentialTTLSeconds = 10 * 60
 
 type MemoryQuota = {
   count: number
   expiresAt: number
+}
+
+type ExpiringConnectToken = {
+  expiresAt: Date
+  token: string
 }
 
 declare global {
@@ -205,8 +217,24 @@ export async function createViewerToken(
   device: Pick<Device, "id" | "userId">,
   tunnel: Tunnel,
 ) {
+  return createDeviceConnectToken(device, tunnel, "^/whep(?:/[^/?#]{1,256})?$")
+}
+
+export async function createWHEPSourceToken(
+  device: Pick<Device, "id" | "userId">,
+  tunnel: Tunnel,
+) {
+  return createDeviceConnectToken(device, tunnel, "^/whep(?:/[^/?#]{1,256})?$")
+}
+
+async function createDeviceConnectToken(
+  device: Pick<Device, "id" | "userId">,
+  tunnel: Tunnel,
+  pathRegex: string,
+) {
   const env = requireRstreamEnv()
   const rstream = getRstreamClient()
+  const issuedAt = new Date()
   const token = await rstream.auth.createAuthToken({
     expires_in: env.VIEWER_TOKEN_TTL_SECONDS,
     resources: {
@@ -219,10 +247,11 @@ export async function createViewerToken(
                 status: "online",
                 protocol: "http",
                 publish: true,
+                token_auth: true,
                 labels: labels(device),
               },
               params: {
-                path: { regex: "^/ws$" },
+                path: { regex: pathRegex },
               },
             },
           },
@@ -230,7 +259,46 @@ export async function createViewerToken(
       },
     },
   })
-  return token.token
+  return {
+    expiresAt: credentialExpiresAt(issuedAt, env.VIEWER_TOKEN_TTL_SECONDS),
+    token: token.token,
+  } satisfies ExpiringConnectToken
+}
+
+async function createMediaMTXConnectToken(tunnel: Tunnel, path: string) {
+  const env = requireRstreamEnv()
+  const rstream = getRstreamClient()
+  const escapedPath = escapeRegex(path)
+  const issuedAt = new Date()
+  const token = await rstream.auth.createAuthToken({
+    expires_in: env.VIEWER_TOKEN_TTL_SECONDS,
+    resources: {
+      tunnels: {
+        scopes: {
+          tunnels: {
+            connect: {
+              filters: {
+                id: tunnel.id,
+                status: "online",
+                protocol: "http",
+                publish: true,
+                token_auth: true,
+              },
+              params: {
+                path: {
+                  regex: `^/${escapedPath}/whep(?:/[^/?#]{1,256})?$`,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  return {
+    expiresAt: credentialExpiresAt(issuedAt, env.VIEWER_TOKEN_TTL_SECONDS),
+    token: token.token,
+  } satisfies ExpiringConnectToken
 }
 
 export async function createWatchToken(userId: string) {
@@ -323,6 +391,24 @@ export async function onlineTunnels(userId: string) {
   })
 }
 
+export async function onlineMediaMTXTunnel() {
+  const env = requireRstreamEnv()
+  if (env.VIDEO_DISTRIBUTOR !== "mediamtx") {
+    return null
+  }
+  const rstream = getRstreamClient()
+  const activeTunnels = await rstream.tunnels.list({
+    limit: 20,
+    filters: {
+      name: env.MEDIAMTX_TUNNEL_NAME,
+      status: "online",
+      publish: true,
+      protocol: "http",
+    },
+  })
+  return newestTunnel(activeTunnels)
+}
+
 function newestTunnel(tunnels: Tunnel[]) {
   return (
     [...tunnels].sort((left, right) => {
@@ -367,10 +453,15 @@ export async function turnPayload(deviceId: string) {
     turnCredentialWindowMs,
   )
   // TURN credentials are minted on demand and expire quickly for each viewer.
-  return rstream.turn.createCredentials({
+  const issuedAt = new Date()
+  const credentials = await rstream.turn.createCredentials({
     keyringBaseUrl: env.RSTREAM_TURN_KEYRING_BASE_URL,
-    ttlSeconds: turnCredentialTTLSeconds,
+    ttlSeconds: env.TURN_CREDENTIAL_TTL_SECONDS,
   })
+  return {
+    ...credentials,
+    expiresAt: credentialExpiresAt(issuedAt, credentials.ttl).toISOString(),
+  }
 }
 
 function requireRstreamEnv() {
@@ -408,12 +499,25 @@ function withToken(rawUrl: string, token: string) {
   return url.toString()
 }
 
-export async function viewerPayload(device: Device) {
+export async function viewerPayload(
+  device: Device,
+  distribution: ViewerDistributionPreference = "automatic",
+) {
+  if (distribution === "automatic" && videoDistributorMode() === "mediamtx") {
+    const distributed = await mediaMTXViewerPayload(device)
+    if (distributed) {
+      return distributed
+    }
+  }
+  return directViewerPayload(device)
+}
+
+async function directViewerPayload(device: Device) {
   const tunnel = await onlineTunnel(device)
   if (!tunnel) {
     return null
   }
-  const [token, turn] = await Promise.all([
+  const [credential, turn] = await Promise.all([
     createViewerToken(device, tunnel),
     turnPayload(device.id),
   ])
@@ -421,12 +525,93 @@ export async function viewerPayload(device: Device) {
   if (!base) {
     return null
   }
-  const httpBase = base.replace(/\/$/, "")
-  const wsBase = httpBase.replace(/^http/, "ws")
   return {
-    endpoints: {
-      ws: withToken(`${wsBase}/ws`, token),
+    distributor: {
+      kind: "direct" as const,
+      whep: withToken(`${base.replace(/\/$/, "")}/whep`, credential.token),
+      authorization: "",
+      expiresAt: credential.expiresAt.toISOString(),
     },
     turn,
   }
+}
+
+async function mediaMTXViewerPayload(device: Device) {
+  const tunnel = await onlineMediaMTXTunnel()
+  if (!tunnel) {
+    return null
+  }
+  const path = mediaMTXPath(device.id)
+  const [accessCredential, mediaCredential, turn] = await Promise.all([
+    createMediaMTXConnectToken(tunnel, path),
+    Promise.resolve(mediaMTXViewerCredential(device.id)),
+    turnPayload(device.id),
+  ])
+  const base = publicUrl(tunnel)
+  if (!base) {
+    return null
+  }
+  const expiresAt = earliestDate(
+    accessCredential.expiresAt,
+    mediaCredential.expiresAt,
+  )
+  return {
+    distributor: {
+      kind: "mediamtx" as const,
+      whep: withToken(
+        `${base.replace(/\/$/, "")}/${path}/whep`,
+        accessCredential.token,
+      ),
+      authorization: `Bearer ${mediaCredential.token}`,
+      expiresAt: expiresAt.toISOString(),
+    },
+    turn,
+  }
+}
+
+export async function mediaMTXSourcePayload(
+  device: Device,
+  purpose: MediaMTXSourcePurpose,
+) {
+  const tunnel = await onlineTunnel(device)
+  if (!tunnel) {
+    return null
+  }
+  const credentials = await issueSourceCredentials(purpose, {
+    issueSource: () => createWHEPSourceToken(device, tunnel),
+    issueDestination: async () => mediaMTXPublisherCredential(device.id),
+    issueTURN: () => turnPayload(device.id),
+  })
+  const base = publicUrl(tunnel)
+  if (!base) {
+    return null
+  }
+  const expiresAt = earliestDate(
+    credentials.source.expiresAt,
+    credentials.destination.expiresAt,
+  )
+  return {
+    url: withToken(`${base.replace(/\/$/, "")}/whep`, credentials.source.token),
+    authorization: "",
+    destinationAuthorization: `Bearer ${credentials.destination.token}`,
+    iceServers: credentials.turn
+      ? [
+          {
+            urls: credentials.turn.urls,
+            username: credentials.turn.username,
+            credential: credentials.turn.credential,
+            expiresAt: credentials.turn.expiresAt,
+          },
+        ]
+      : [],
+    expiresAt: expiresAt.toISOString(),
+  }
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function earliestDate(left: Date, right: Date) {
+  return left < right ? left : right
 }

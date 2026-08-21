@@ -17,10 +17,15 @@ type producerProvider interface {
 	MetricsSnapshot() rtc.ProducerStats
 }
 
+type whepProvider interface {
+	WHEPInitialRequests() map[string]uint64
+}
+
 type Collector struct {
 	cfg                           config.Config
 	source                        sourceProvider
 	producer                      producerProvider
+	whep                          whepProvider
 	descriptors                   []*prometheus.Desc
 	info                          *prometheus.Desc
 	featureEnabled                *prometheus.Desc
@@ -33,7 +38,12 @@ type Collector struct {
 	sourceDeliveryDroppedFrames   *prometheus.Desc
 	sourceErrors                  *prometheus.Desc
 	sessions                      *prometheus.Desc
+	whepInitialRequests           *prometheus.Desc
+	transportNegotiatedSessions   *prometheus.Desc
 	estimatedAvailableBytesSecond *prometheus.Desc
+	controllerTargetBytesSecond   *prometheus.Desc
+	delayControllerStateSessions  *prometheus.Desc
+	delayControllerUsageSessions  *prometheus.Desc
 	encoderTargetBytesSecond      *prometheus.Desc
 	pacerTargetBytesSecond        *prometheus.Desc
 	pacerPacingBytesSecond        *prometheus.Desc
@@ -41,7 +51,10 @@ type Collector struct {
 	packetLossRatio               *prometheus.Desc
 	delayEstimateSeconds          *prometheus.Desc
 	pacerQueueDelaySeconds        *prometheus.Desc
+	retransmissionRTTSeconds      *prometheus.Desc
+	retransmissionIntervalSeconds *prometheus.Desc
 	lossGuardActiveSessions       *prometheus.Desc
+	lossGuardTargetBytesSecond    *prometheus.Desc
 	adaptiveUpdates               *prometheus.Desc
 	keyFrameRequests              *prometheus.Desc
 	keyFrameRequestsCoalesced     *prometheus.Desc
@@ -61,11 +74,12 @@ type Collector struct {
 	twccPaddingStatuses           *prometheus.Desc
 }
 
-func NewCollector(cfg config.Config, source sourceProvider, producer producerProvider) *Collector {
+func NewCollector(cfg config.Config, source sourceProvider, producer producerProvider, whep whepProvider) *Collector {
 	c := &Collector{
 		cfg:      cfg,
 		source:   source,
 		producer: producer,
+		whep:     whep,
 		info: newDesc(
 			namespace+"_info",
 			"Static information about this video producer.",
@@ -136,12 +150,43 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 			[]string{"state"},
 			nil,
 		),
+		whepInitialRequests: newDesc(
+			namespace+"_whep_initial_requests_total",
+			"Total initial WHEP session requests by bounded outcome.",
+			[]string{"outcome"},
+			nil,
+		),
+		transportNegotiatedSessions: newDesc(
+			namespace+"_transport_negotiated_sessions",
+			"Current WebRTC sessions that negotiated each configured transport feature.",
+			[]string{"feature"},
+			nil,
+		),
 		estimatedAvailableBytesSecond: newDesc(
 			namespace+"_twcc_estimated_available_bytes_per_second",
 			"Sum of the current media throughput available to encoders after reserving configured repair capacity across active sessions.",
 			nil,
 			nil,
 			"bytes_per_second",
+		),
+		controllerTargetBytesSecond: newDesc(
+			namespace+"_twcc_controller_target_bytes_per_second",
+			"Sum of current TWCC controller bitrate targets across active sessions, before the lower loss or delay target is selected.",
+			[]string{"controller"},
+			nil,
+			"bytes_per_second",
+		),
+		delayControllerStateSessions: newDesc(
+			namespace+"_twcc_delay_controller_state_sessions",
+			"Current sessions in each delay controller rate-control state.",
+			[]string{"state"},
+			nil,
+		),
+		delayControllerUsageSessions: newDesc(
+			namespace+"_twcc_delay_controller_usage_sessions",
+			"Current sessions by delay controller link-usage classification.",
+			[]string{"usage"},
+			nil,
 		),
 		encoderTargetBytesSecond: newDesc(
 			namespace+"_encoder_target_bytes_per_second",
@@ -190,11 +235,32 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 			nil,
 			"seconds",
 		),
+		retransmissionRTTSeconds: newDesc(
+			namespace+"_pacer_maximum_retransmission_round_trip_time_seconds",
+			"Highest round-trip time used to pace retransmission retries among active sessions.",
+			nil,
+			nil,
+			"seconds",
+		),
+		retransmissionIntervalSeconds: newDesc(
+			namespace+"_pacer_maximum_retransmission_interval_seconds",
+			"Highest minimum interval between retries of the same RTP packet among active sessions.",
+			nil,
+			nil,
+			"seconds",
+		),
 		lossGuardActiveSessions: newDesc(
 			namespace+"_loss_guard_active_sessions",
 			"Current sessions whose loss guard is constraining bitrate recovery.",
 			nil,
 			nil,
+		),
+		lossGuardTargetBytesSecond: newDesc(
+			namespace+"_loss_guard_target_bytes_per_second",
+			"Sum of current loss guard bitrate ceilings across sessions actively constrained by the guard.",
+			nil,
+			nil,
+			"bytes_per_second",
 		),
 		adaptiveUpdates: newDesc(
 			namespace+"_adaptive_bitrate_updates_total",
@@ -313,7 +379,12 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 		c.sourceDeliveryDroppedFrames,
 		c.sourceErrors,
 		c.sessions,
+		c.whepInitialRequests,
+		c.transportNegotiatedSessions,
 		c.estimatedAvailableBytesSecond,
+		c.controllerTargetBytesSecond,
+		c.delayControllerStateSessions,
+		c.delayControllerUsageSessions,
 		c.encoderTargetBytesSecond,
 		c.pacerTargetBytesSecond,
 		c.pacerPacingBytesSecond,
@@ -321,7 +392,10 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 		c.packetLossRatio,
 		c.delayEstimateSeconds,
 		c.pacerQueueDelaySeconds,
+		c.retransmissionRTTSeconds,
+		c.retransmissionIntervalSeconds,
 		c.lossGuardActiveSessions,
+		c.lossGuardTargetBytesSecond,
 		c.adaptiveUpdates,
 		c.keyFrameRequests,
 		c.keyFrameRequestsCoalesced,
@@ -387,7 +461,26 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(c.sourceErrors, prometheus.CounterValue, float64(source.PipelineErrors), "runtime")
 	ch <- prometheus.MustNewConstMetric(c.sessions, prometheus.GaugeValue, float64(producer.ActiveSessions), "active")
 	ch <- prometheus.MustNewConstMetric(c.sessions, prometheus.GaugeValue, float64(producer.OpeningSessions), "opening")
+	whepRequests := map[string]uint64(nil)
+	if c.whep != nil {
+		whepRequests = c.whep.WHEPInitialRequests()
+	}
+	for _, outcome := range []string{"created", "invalid", "rate_limited", "capacity_limited", "negotiation_failed", "internal_failed", "response_failed"} {
+		ch <- prometheus.MustNewConstMetric(c.whepInitialRequests, prometheus.CounterValue, float64(whepRequests[outcome]), outcome)
+	}
+	ch <- prometheus.MustNewConstMetric(c.transportNegotiatedSessions, prometheus.GaugeValue, float64(producer.TWCCNegotiatedSessions), "twcc")
+	ch <- prometheus.MustNewConstMetric(c.transportNegotiatedSessions, prometheus.GaugeValue, float64(producer.NACKNegotiatedSessions), "nack")
+	ch <- prometheus.MustNewConstMetric(c.transportNegotiatedSessions, prometheus.GaugeValue, float64(producer.RTXNegotiatedSessions), "rtx")
+	ch <- prometheus.MustNewConstMetric(c.transportNegotiatedSessions, prometheus.GaugeValue, float64(producer.FlexFECNegotiatedSessions), "flexfec")
 	ch <- prometheus.MustNewConstMetric(c.estimatedAvailableBytesSecond, prometheus.GaugeValue, bitsToBytes(producer.EstimatedBitrateBps))
+	ch <- prometheus.MustNewConstMetric(c.controllerTargetBytesSecond, prometheus.GaugeValue, bitsToBytes(producer.LossControllerTargetBitrateBps), "loss")
+	ch <- prometheus.MustNewConstMetric(c.controllerTargetBytesSecond, prometheus.GaugeValue, bitsToBytes(producer.DelayControllerTargetBitrateBps), "delay")
+	ch <- prometheus.MustNewConstMetric(c.delayControllerStateSessions, prometheus.GaugeValue, float64(producer.DelayControllerIncreaseSessions), "increase")
+	ch <- prometheus.MustNewConstMetric(c.delayControllerStateSessions, prometheus.GaugeValue, float64(producer.DelayControllerDecreaseSessions), "decrease")
+	ch <- prometheus.MustNewConstMetric(c.delayControllerStateSessions, prometheus.GaugeValue, float64(producer.DelayControllerHoldSessions), "hold")
+	ch <- prometheus.MustNewConstMetric(c.delayControllerUsageSessions, prometheus.GaugeValue, float64(producer.DelayControllerNormalSessions), "normal")
+	ch <- prometheus.MustNewConstMetric(c.delayControllerUsageSessions, prometheus.GaugeValue, float64(producer.DelayControllerOveruseSessions), "overuse")
+	ch <- prometheus.MustNewConstMetric(c.delayControllerUsageSessions, prometheus.GaugeValue, float64(producer.DelayControllerUnderuseSessions), "underuse")
 	ch <- prometheus.MustNewConstMetric(c.encoderTargetBytesSecond, prometheus.GaugeValue, bitsToBytes(producer.EncoderTargetBitrateBps))
 	ch <- prometheus.MustNewConstMetric(c.pacerTargetBytesSecond, prometheus.GaugeValue, bitsToBytes(producer.PacerTargetBitrateBps))
 	ch <- prometheus.MustNewConstMetric(c.pacerPacingBytesSecond, prometheus.GaugeValue, bitsToBytes(producer.PacerPacingBitrateBps))
@@ -395,7 +488,10 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(c.packetLossRatio, prometheus.GaugeValue, producer.MaximumPacketLossRatio)
 	ch <- prometheus.MustNewConstMetric(c.delayEstimateSeconds, prometheus.GaugeValue, producer.MaximumDelayEstimateSeconds)
 	ch <- prometheus.MustNewConstMetric(c.pacerQueueDelaySeconds, prometheus.GaugeValue, producer.MaximumPacerQueueDelaySeconds)
+	ch <- prometheus.MustNewConstMetric(c.retransmissionRTTSeconds, prometheus.GaugeValue, producer.MaximumRTXRTTSeconds)
+	ch <- prometheus.MustNewConstMetric(c.retransmissionIntervalSeconds, prometheus.GaugeValue, producer.MaximumRTXRetryIntervalSeconds)
 	ch <- prometheus.MustNewConstMetric(c.lossGuardActiveSessions, prometheus.GaugeValue, float64(producer.LossGuardActiveSessions))
+	ch <- prometheus.MustNewConstMetric(c.lossGuardTargetBytesSecond, prometheus.GaugeValue, bitsToBytes(producer.LossGuardTargetBitrateBps))
 	ch <- prometheus.MustNewConstMetric(c.adaptiveUpdates, prometheus.CounterValue, float64(producer.AdaptiveBitrateUpdates), "applied")
 	ch <- prometheus.MustNewConstMetric(c.adaptiveUpdates, prometheus.CounterValue, float64(producer.AdaptiveBitrateFailures), "failed")
 	ch <- prometheus.MustNewConstMetric(c.keyFrameRequests, prometheus.CounterValue, float64(producer.RecoveryKeyFrameRequests), "recovery")
@@ -414,6 +510,7 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(c.pacerRepairPacketsDiscarded, prometheus.CounterValue, float64(producer.PacerRTXPacketsTrimmed), "rtx", "trimmed")
 	ch <- prometheus.MustNewConstMetric(c.pacerRepairPacketsDiscarded, prometheus.CounterValue, float64(producer.PacerFECPacketsTrimmed), "fec", "trimmed")
 	ch <- prometheus.MustNewConstMetric(c.pacerRepairPacketsDiscarded, prometheus.CounterValue, float64(producer.PacerRTXPacketsCoalesced), "rtx", "coalesced")
+	ch <- prometheus.MustNewConstMetric(c.pacerRepairPacketsDiscarded, prometheus.CounterValue, float64(producer.PacerRTXPacketsSuppressed), "rtx", "suppressed")
 	ch <- prometheus.MustNewConstMetric(c.pacerSentPackets, prometheus.CounterValue, float64(producer.PacerSentPrimary), "primary")
 	ch <- prometheus.MustNewConstMetric(c.pacerSentPackets, prometheus.CounterValue, float64(producer.PacerSentRTX), "rtx")
 	ch <- prometheus.MustNewConstMetric(c.pacerSentPackets, prometheus.CounterValue, float64(producer.PacerSentFEC), "fec")

@@ -15,6 +15,7 @@ GST_PKG_CONFIG_PACKAGES := \
 	gstreamer-base-1.0 \
 	gstreamer-app-1.0
 WEB_SOURCES := \
+	../shared/whep-client.ts \
 	./internal/web/embed/app.ts \
 	./internal/web/embed/index.html \
 	./internal/web/embed/input.css \
@@ -31,7 +32,7 @@ else
 BUILD_PREREQS := check-build-tools css
 endif
 
-.PHONY: check-go check-c-compiler check-pkg-config check-gstreamer-dev check-npm check-build-tools check-web-tools css build build-provisioning build-no-web run run-local test test-provisioning verify format check-format clean dist dist-linux-amd64 dist-linux-arm64
+.PHONY: check-go check-c-compiler check-pkg-config check-gstreamer-dev check-npm check-build-tools check-web-tools css build build-provisioning build-no-web run run-local test test-race test-gcc-regression test-provisioning vet verify format check-format clean dist dist-linux-amd64 dist-linux-arm64
 
 check-go:
 	@command -v go >/dev/null 2>&1 || { \
@@ -106,10 +107,19 @@ test: check-build-tools css
 	npm run check:ts
 	go test ./...
 
+test-race: check-build-tools css
+	go test -race ./...
+
+test-gcc-regression: check-go
+	go test -count=1 -race -run '^Test(RateControllerIncreaseDoesNotReduceTarget|RateControllerRecoversMultiplicativelyToPreDecreaseTarget|RateControllerRecoveryStopsAtPreDecreaseTarget|RateControllerTracksAndRecoversADecreasedTarget|SendSideBWEAppliesConfiguredBoundsToLossController|LossBasedBWEHonorsConfiguredBitrateBounds)$$' github.com/pion/interceptor/pkg/gcc
+
 test-provisioning: check-build-tools
 	go test -tags noembeddedweb ./...
 
-verify: check-format test test-provisioning build
+vet: check-build-tools css
+	go vet ./...
+
+verify: check-format vet test test-race test-gcc-regression test-provisioning build
 
 format:
 	npm run format
@@ -130,7 +140,7 @@ dist-linux-amd64:
 		-f $(DOCKERFILE_LINUX) \
 		--target export \
 		--output type=local,dest=./dist/linux-amd64 \
-		.
+		..
 
 dist-linux-arm64:
 	rm -rf ./dist/linux-arm64
@@ -140,4 +150,4 @@ dist-linux-arm64:
 		-f $(DOCKERFILE_LINUX) \
 		--target export \
 		--output type=local,dest=./dist/linux-arm64 \
-		.
+		..

@@ -88,18 +88,17 @@ func New(cfg config.Config) (*App, error) {
 	}
 	instance.web = web.NewServer(
 		logger,
-		logHub,
 		func(ctx context.Context) (*rstream.TURNCredentials, error) {
 			return turn.Credentials(ctx)
 		},
-		func(ctx context.Context, send func(rtc.SignalMessage) error) (*rtc.Session, error) {
-			return broadcaster.OpenSession(ctx, send)
+		func(ctx context.Context) (web.Session, error) {
+			return broadcaster.OpenSession(ctx)
 		},
 		web.ServerOptions{
 			Viewer: cfg.Web.Viewer.Enabled,
 		},
 	)
-	instance.metrics = producerMetrics.NewHandler(cfg, sourceFactory, broadcaster)
+	instance.metrics = producerMetrics.NewHandler(cfg, sourceFactory, broadcaster, instance.web)
 	return instance, nil
 }
 
@@ -143,7 +142,7 @@ func (a *App) Run(ctx context.Context) error {
 			return fmt.Errorf("failed to listen on %s: %w", a.cfg.Server.Listen, err)
 		}
 		a.info.LocalURL = "http://" + localListener.Addr().String()
-		localServer = &http.Server{Handler: handler}
+		localServer = newHTTPServer(handler)
 		a.logger.Info("Local URL: %s", a.info.LocalURL)
 	}
 	var metricsServerErrors <-chan error
@@ -277,7 +276,7 @@ func (a *App) serveTunnelOnce(
 	defer func() { _ = tunnelManager.Close() }()
 	a.setTunnelInfo(tunnelManager)
 	a.logger.Info("Public URL: %s", tunnelManager.PublicURL())
-	server := &http.Server{Handler: handler}
+	server := newHTTPServer(handler)
 	serverErrors := serveHTTP(server, tunnelManager.Listener())
 	select {
 	case err := <-serverErrors:
@@ -353,4 +352,14 @@ func serveHTTP(server *http.Server, listener net.Listener) <-chan error {
 		errCh <- server.Serve(listener)
 	}()
 	return errCh
+}
+
+func newHTTPServer(handler http.Handler) *http.Server {
+	return &http.Server{
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       time.Minute,
+	}
 }

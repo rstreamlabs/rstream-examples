@@ -15,12 +15,16 @@ import (
 
 func main() {
 	contextName := flag.String("context", "", "rstream CLI context to resolve")
+	embeddedViewer := flag.Bool("embedded-viewer", true, "serve the same-origin embedded viewer")
 	flexFEC := flag.Bool("flex-fec", false, "enable FlexFEC in the qualification producer profiles")
 	flexFECMediaPackets := flag.Uint("flex-fec-media-packets", producerconfig.DefaultFlexFECMediaPackets, "media packets in each FlexFEC protection group")
 	flexFECRepairPackets := flag.Uint("flex-fec-repair-packets", producerconfig.DefaultFlexFECRepairPackets, "repair packets generated for each FlexFEC protection group")
 	outputDirectory := flag.String("output-directory", "", "private runtime directory")
 	producerConfig := flag.String("producer-config", "", "producer configuration used to derive the direct reference")
+	allowMediaMTXNativeOffer := flag.Bool("allow-mediamtx-native-offer", false, "allow the explicitly qualified native MediaMTX WHEP profile")
 	producerTURNPolicy := flag.String("producer-turn-policy", "disabled", "producer TURN policy: disabled, auto, or relay")
+	producerTURNTTL := flag.String("producer-turn-ttl", "", "optional short-lived TURN credential duration used for renewal qualification")
+	tunnelTokenAuth := flag.Bool("tunnel-token-auth", false, "require a connect token on the qualification producer tunnel")
 	turnTransport := flag.String("turn-transport", "", "optional TURN transport filter")
 	flag.Parse()
 	protection := flexFECConfig{
@@ -28,7 +32,7 @@ func main() {
 		mediaPackets:  *flexFECMediaPackets,
 		repairPackets: *flexFECRepairPackets,
 	}
-	if err := run(*contextName, *outputDirectory, *producerConfig, *producerTURNPolicy, *turnTransport, protection); err != nil {
+	if err := run(*contextName, *outputDirectory, *producerConfig, *producerTURNPolicy, *producerTURNTTL, *turnTransport, *embeddedViewer, *tunnelTokenAuth, *allowMediaMTXNativeOffer, protection); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -40,7 +44,7 @@ type flexFECConfig struct {
 	repairPackets uint
 }
 
-func run(contextName, outputDirectory, producerConfigPath, producerTURNPolicy, turnTransport string, flexFEC flexFECConfig) error {
+func run(contextName, outputDirectory, producerConfigPath, producerTURNPolicy, producerTURNTTL, turnTransport string, embeddedViewer, tunnelTokenAuth, allowMediaMTXNativeOffer bool, flexFEC flexFECConfig) error {
 	contextName = strings.TrimSpace(contextName)
 	outputDirectory = strings.TrimSpace(outputDirectory)
 	if contextName == "" {
@@ -128,13 +132,13 @@ func run(contextName, outputDirectory, producerConfigPath, producerTURNPolicy, t
 	if err := writePrivate(filepath.Join(outputDirectory, "runtime.env"), []byte(environment)); err != nil {
 		return fmt.Errorf("write private runtime environment: %w", err)
 	}
-	if err := writeProducerConfigs(producerConfigPath, outputDirectory, producerTURNPolicy, turnTransport, flexFEC); err != nil {
+	if err := writeProducerConfigs(producerConfigPath, outputDirectory, producerTURNPolicy, producerTURNTTL, turnTransport, embeddedViewer, tunnelTokenAuth, allowMediaMTXNativeOffer, flexFEC); err != nil {
 		return err
 	}
 	return nil
 }
 
-func writeProducerConfigs(sourcePath, outputDirectory, producerTURNPolicy, turnTransport string, flexFEC flexFECConfig) error {
+func writeProducerConfigs(sourcePath, outputDirectory, producerTURNPolicy, producerTURNTTL, turnTransport string, embeddedViewer, tunnelTokenAuth, allowMediaMTXNativeOffer bool, flexFEC flexFECConfig) error {
 	sourcePath = strings.TrimSpace(sourcePath)
 	if sourcePath == "" {
 		return errors.New("producer config is required")
@@ -144,8 +148,16 @@ func writeProducerConfigs(sourcePath, outputDirectory, producerTURNPolicy, turnT
 		return fmt.Errorf("load producer config: %w", err)
 	}
 	cfg.WebRTC.Interceptors.FlexFEC = flexFEC.enabled
+	cfg.Web.Viewer.Enabled = embeddedViewer
+	cfg.Web.WHEP.AllowMediaMTXNativeOffer = allowMediaMTXNativeOffer
+	cfg.Tunnel.Auth.Token = tunnelTokenAuth
 	cfg.WebRTC.Interceptors.FlexFECMediaPackets = uint32(flexFEC.mediaPackets)
 	cfg.WebRTC.Interceptors.FlexFECRepairPackets = uint32(flexFEC.repairPackets)
+	cfg.Metrics.Enabled = true
+	cfg.Metrics.Listen = "0.0.0.0:9090"
+	if producerTURNTTL = strings.TrimSpace(producerTURNTTL); producerTURNTTL != "" {
+		cfg.TURN.TTL = producerTURNTTL
+	}
 	switch producerTURNPolicy = strings.ToLower(strings.TrimSpace(producerTURNPolicy)); producerTURNPolicy {
 	case "disabled":
 		cfg.WebRTC.UseTURN = false
@@ -178,6 +190,7 @@ func writeProducerConfigs(sourcePath, outputDirectory, producerTURNPolicy, turnT
 	direct := cfg
 	direct.Server.Listen = "0.0.0.0:8080"
 	direct.Tunnel.Enabled = false
+	direct.Tunnel.Auth.Token = false
 	direct.Tunnel.Reconnect.Enabled = false
 	direct.WebRTC.UseTURN = false
 	direct.WebRTC.ICETransportPolicy = producerconfig.ICETransportPolicyAll

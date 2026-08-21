@@ -1,7 +1,7 @@
 import { HTTPError } from "@/lib/error"
 import { Buffer } from "node:buffer"
 import { recordDevicePresenceFromWebhookEvent } from "@/lib/rstream-webhook"
-import { RstreamWebhookResource } from "@rstreamlabs/tunnels"
+import { verifiedRstreamWebhookEvent } from "@/lib/rstream-webhook-verification"
 import { rstreamWebhookSigningSecret } from "@/lib/env"
 import { type NextRequest } from "next/server"
 import { withError } from "@/lib/error"
@@ -43,17 +43,9 @@ async function verifiedWebhookEvent(
   signingSecret: string,
 ) {
   try {
-    // The SDK validates the signature and returns the typed webhook event.
-    return await new RstreamWebhookResource().event(
-      rawBody,
-      signature,
-      signingSecret,
-    )
-  } catch (err) {
-    throw new HTTPError(
-      400,
-      err instanceof Error ? err.message : "Invalid rstream webhook payload.",
-    )
+    return await verifiedRstreamWebhookEvent(rawBody, signature, signingSecret)
+  } catch {
+    throw new HTTPError(400, "Invalid rstream webhook payload.")
   }
 }
 

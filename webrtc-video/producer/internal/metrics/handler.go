@@ -8,9 +8,9 @@ import (
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/config"
 )
 
-func NewHandler(cfg config.Config, source sourceProvider, producer producerProvider) http.Handler {
+func NewHandler(cfg config.Config, source sourceProvider, producer producerProvider, whep whepProvider) http.Handler {
 	registry := prometheus.NewRegistry()
-	registry.MustRegister(NewCollector(cfg, source, producer))
+	registry.MustRegister(NewCollector(cfg, source, producer, whep))
 	metricsHandler := promhttp.HandlerFor(registry, promhttp.HandlerOpts{
 		EnableOpenMetrics: true,
 		ErrorHandling:     promhttp.HTTPErrorOnError,

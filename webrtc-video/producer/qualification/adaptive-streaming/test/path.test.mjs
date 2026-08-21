@@ -44,6 +44,17 @@ test("checks direct and relay policies from both candidate sides", () => {
   );
 });
 
+test("qualifies a distributor viewer leg without inventing source diagnostics", () => {
+  const viewer = sample("host", "host", 1, 2);
+  viewer.producerLocalCandidateType = "";
+  viewer.producerRemoteCandidateType = "";
+  assert.equal(pathMatchesPolicy(viewer, "direct", "viewer"), true);
+  assert.equal(pathMatchesPolicy(viewer, "direct"), false);
+  const stability = new PathStability(1000, "viewer");
+  assert.equal(stability.observe(viewer, 0), false);
+  assert.equal(stability.observe(viewer, 1000), true);
+});
+
 function sample(localType, remoteType, localPort, remotePort) {
   return {
     localCandidateAddress: "192.0.2.1",

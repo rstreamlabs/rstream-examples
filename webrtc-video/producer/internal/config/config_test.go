@@ -25,6 +25,12 @@ func TestDefaultConfigIsValid(t *testing.T) {
 	if cfg.Metrics.Listen != DefaultMetricsListen {
 		t.Fatalf("default metrics listen = %q, want %q", cfg.Metrics.Listen, DefaultMetricsListen)
 	}
+	if !cfg.Web.WHEP.RequireConfiguredFeatures {
+		t.Fatal("WHEP must reject transport feature downgrades by default")
+	}
+	if cfg.Web.WHEP.AllowMediaMTXNativeOffer {
+		t.Fatal("WHEP must remain strict by default")
+	}
 }
 
 func TestMetricsListenValidation(t *testing.T) {
@@ -178,6 +184,47 @@ func TestReferenceConfigsAreValid(t *testing.T) {
 	}
 }
 
+func TestProvisioningReferenceKeepsQualifiedMediaProfile(t *testing.T) {
+	t.Setenv("API_URL", "https://video.example.com")
+	t.Setenv("DEVICE_SECRET", "dev_test_secret")
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("failed to resolve the test file location")
+	}
+	path := filepath.Clean(filepath.Join(filepath.Dir(filename), "..", "..", "config.provisioning.h264.yaml"))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("load provisioning reference: %v", err)
+	}
+	if cfg.Web.Viewer.Enabled {
+		t.Fatal("provisioning reference must not embed the standalone viewer")
+	}
+	if !cfg.Web.WHEP.RequireConfiguredFeatures {
+		t.Fatal("provisioning reference must enforce its WHEP feature contract")
+	}
+	if cfg.Web.WHEP.AllowMediaMTXNativeOffer {
+		t.Fatal("provisioning reference must keep strict WHEP offer validation")
+	}
+	if cfg.WebRTC.MaxViewers != 1 || cfg.MediaMode() != MediaModeShared {
+		t.Fatalf("provisioning feedback ownership = maxViewers %d, media mode %q; want one shared session", cfg.WebRTC.MaxViewers, cfg.MediaMode())
+	}
+	interceptors := cfg.WebRTC.Interceptors
+	if !interceptors.TWCC || !interceptors.NACK || !interceptors.RTX || !interceptors.FlexFEC {
+		t.Fatalf("provisioning repair profile = TWCC %t, NACK %t, RTX %t, FlexFEC %t; want all enabled", interceptors.TWCC, interceptors.NACK, interceptors.RTX, interceptors.FlexFEC)
+	}
+	if interceptors.FlexFECMediaPackets != 5 || interceptors.FlexFECRepairPackets != 1 {
+		t.Fatalf("provisioning FlexFEC ratio = %d/%d, want 1 repair per 5 media", interceptors.FlexFECRepairPackets, interceptors.FlexFECMediaPackets)
+	}
+	if cfg.AdaptiveBackend() != AdaptiveBackendTWCCGCC {
+		t.Fatalf("provisioning adaptive backend = %q, want %q", cfg.AdaptiveBackend(), AdaptiveBackendTWCCGCC)
+	}
+	for _, fragment := range []string{"vbv-buf-capacity=100", "option-string=scenecut=0", "bframes=0", "alignment=au"} {
+		if !strings.Contains(cfg.Media.Pipeline, fragment) {
+			t.Fatalf("provisioning media pipeline is missing %q", fragment)
+		}
+	}
+}
+
 func TestRemoteProvisioningDoesNotRequireLocalTunnelAuth(t *testing.T) {
 	cfg := Default()
 	cfg.Tunnel.Provisioning.Mode = TunnelProvisioningModeRemote
@@ -186,6 +233,45 @@ func TestRemoteProvisioningDoesNotRequireLocalTunnelAuth(t *testing.T) {
 	cfg.Tunnel.Auth = TunnelAuthConfig{}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected remote provisioning without local tunnel auth to be valid, got %v", err)
+	}
+}
+
+func TestRemoteProvisioningAcceptsLoopbackHTTP(t *testing.T) {
+	cfg := Default()
+	cfg.Tunnel.Provisioning.Mode = TunnelProvisioningModeRemote
+	cfg.Tunnel.Provisioning.Endpoint = "http://127.0.0.1:3000/control"
+	cfg.Tunnel.Provisioning.Secret = "dev_test_secret"
+	cfg.Tunnel.Auth = TunnelAuthConfig{}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected loopback HTTP provisioning to be valid, got %v", err)
+	}
+}
+
+func TestRemoteProvisioningRejectsUnsafeEndpointAndSecret(t *testing.T) {
+	tests := []struct {
+		name     string
+		endpoint string
+		secret   string
+	}{
+		{name: "remote HTTP", endpoint: "http://video.example.com", secret: "secret"},
+		{name: "unsupported scheme", endpoint: "ftp://video.example.com", secret: "secret"},
+		{name: "user information", endpoint: "https://user@video.example.com", secret: "secret"},
+		{name: "query", endpoint: "https://video.example.com?target=other", secret: "secret"},
+		{name: "fragment", endpoint: "https://video.example.com#secret", secret: "secret"},
+		{name: "header injection", endpoint: "https://video.example.com", secret: "secret\r\ninjected"},
+		{name: "oversized secret", endpoint: "https://video.example.com", secret: strings.Repeat("x", MaxProvisioningSecretBytes+1)},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := Default()
+			cfg.Tunnel.Provisioning.Mode = TunnelProvisioningModeRemote
+			cfg.Tunnel.Provisioning.Endpoint = test.endpoint
+			cfg.Tunnel.Provisioning.Secret = test.secret
+			cfg.Tunnel.Auth = TunnelAuthConfig{}
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("expected unsafe remote provisioning configuration to fail validation")
+			}
+		})
 	}
 }
 
@@ -347,6 +433,21 @@ func TestTURNTransportsRejectUnknownValue(t *testing.T) {
 	cfg.TURN.Transports = []string{"quic"}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("expected an unsupported TURN transport to fail validation")
+	}
+}
+
+func TestTURNTTLRejectsNonPositiveAndUnboundedValues(t *testing.T) {
+	for _, value := range []string{"0s", "-1s", "24h0m0.000000001s"} {
+		cfg := Default()
+		cfg.TURN.TTL = value
+		if err := cfg.Validate(); err == nil {
+			t.Fatalf("TURN TTL %q passed validation", value)
+		}
+	}
+	cfg := Default()
+	cfg.TURN.TTL = MaxTURNTTL.String()
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("maximum TURN TTL failed validation: %v", err)
 	}
 }
 

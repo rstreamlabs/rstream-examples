@@ -1,14 +1,30 @@
-import { appendFile, mkdir, rename, writeFile } from "node:fs/promises";
+import {
+  appendFile,
+  mkdir,
+  readFile,
+  rename,
+  writeFile,
+} from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { createServer } from "node:http";
 import process from "node:process";
 import { chromium } from "playwright-core";
+import { collectProducerOpenMetrics } from "./lib/openmetrics.mjs";
 import { readPhase } from "./lib/phase.mjs";
 import { PathStability, pathMatchesPolicy } from "./lib/path.mjs";
+import { redactError, redactSensitiveText } from "./lib/redaction.mjs";
+import { negotiatedVideoCodecs } from "./lib/sdp-codecs.mjs";
 
 const argumentsByName = parseArguments(process.argv.slice(2));
-const url = requiredArgument(argumentsByName, "url");
+const requestedURL = argumentsByName.get("url") || "";
+const whepEndpoint = argumentsByName.get("whep-endpoint") || "";
+if ((requestedURL === "") === (whepEndpoint === "")) {
+  throw new Error("exactly one of --url or --whep-endpoint is required");
+}
 const outputDirectory = requiredArgument(argumentsByName, "output-directory");
 const phaseFile = requiredArgument(argumentsByName, "phase-file");
+const producerMetricsURL = argumentsByName.get("producer-metrics-url") || "";
+const pathScope = whepEndpoint ? "viewer" : "end-to-end";
 const icePolicy = argumentsByName.get("ice-policy") || "relay";
 if (!new Set(["direct", "relay"]).has(icePolicy)) {
   throw new Error(`ice-policy must be direct or relay, got ${icePolicy}`);
@@ -49,8 +65,15 @@ const signalingPath = `${outputDirectory}/signaling-events.json`;
 const failurePath = `${outputDirectory}/collector-failure.json`;
 let browser;
 let page;
+let viewerServer;
 
 try {
+  let url = requestedURL;
+  if (!url) {
+    const viewer = await startQualificationViewer(whepEndpoint);
+    url = viewer.url;
+    viewerServer = viewer.server;
+  }
   browser = await chromium.launch({
     executablePath: browserExecutable,
     headless: true,
@@ -65,18 +88,21 @@ try {
   });
   await context.addInitScript(() => {
     const NativeRTCPeerConnection = window.RTCPeerConnection;
-    const NativeWebSocket = window.WebSocket;
+    const nativeFetch = window.fetch.bind(window);
     const peers = [];
-    const sockets = [];
     const telemetry = {
       events: [],
       iceRestartOffers: 0,
+      latestSessionStats: null,
       lastOfferUfrag: "",
       localCandidatesSent: 0,
       offersSent: 0,
       remoteCandidatesReceived: 0,
-      webSocketCloseCount: 0,
-      webSocketOpenCount: 0,
+      whepCandidatePatches: 0,
+      whepFailedRequests: 0,
+      whepRestartPatches: 0,
+      whepSessionCreates: 0,
+      whepSessionDeletes: 0,
     };
     const record = (kind, fields = {}) => {
       telemetry.events.push({
@@ -97,6 +123,14 @@ try {
           writable: false,
         });
         record("peer-created", { peerID });
+        this.addEventListener("icecandidate", (event) => {
+          record(
+            event.candidate ? "local-candidate" : "local-candidates-complete",
+            {
+              peerID,
+            },
+          );
+        });
         for (const [eventName, stateName] of [
           ["connectionstatechange", "connectionState"],
           ["iceconnectionstatechange", "iceConnectionState"],
@@ -115,123 +149,138 @@ try {
       value: peers,
       writable: false,
     });
-    Object.defineProperty(window, "__rstreamQualificationSockets", {
-      configurable: false,
-      enumerable: false,
-      value: sockets,
-      writable: false,
-    });
     Object.defineProperty(window, "__rstreamQualificationTelemetry", {
       configurable: false,
       enumerable: false,
       value: telemetry,
       writable: false,
     });
-    Object.defineProperty(window, "__rstreamQualificationSessionStats", {
-      configurable: false,
-      enumerable: false,
-      value: { latest: null },
-      writable: false,
-    });
-    class QualificationWebSocket extends NativeWebSocket {
-      constructor(...args) {
-        super(...args);
-        sockets.push(this);
-        const socketID = sockets.length;
-        Object.defineProperty(this, "__rstreamQualificationID", {
-          configurable: false,
-          enumerable: false,
-          value: socketID,
-          writable: false,
-        });
-        record("websocket-created", { socketID });
-        this.addEventListener("open", () => {
-          telemetry.webSocketOpenCount += 1;
-          record("websocket-open", { socketID });
-        });
-        this.addEventListener("close", (event) => {
-          telemetry.webSocketCloseCount += 1;
-          record("websocket-close", {
-            code: event.code,
-            clean: event.wasClean,
-            socketID,
-          });
-        });
-        this.addEventListener("message", (event) => {
-          if (typeof event.data !== "string") {
-            return;
-          }
-          try {
-            const message = JSON.parse(event.data);
-            if (message?.type === "session.stats" && message.stats) {
-              window.__rstreamQualificationSessionStats.latest = message.stats;
-            } else if (message?.type === "webrtc.candidate") {
-              telemetry.remoteCandidatesReceived += 1;
-            }
-          } catch {
-            // Non-JSON application frames are irrelevant to this collector.
-          }
-        });
-      }
-
-      send(data) {
-        if (typeof data === "string") {
-          try {
-            const message = JSON.parse(data);
-            if (message?.type === "webrtc.offer") {
-              telemetry.offersSent += 1;
-              const ufrag = /^a=ice-ufrag:(.+)$/m.exec(message.sdp || "")?.[1];
-              if (
-                ufrag &&
-                telemetry.lastOfferUfrag &&
-                ufrag !== telemetry.lastOfferUfrag
-              ) {
-                telemetry.iceRestartOffers += 1;
-              }
-              if (ufrag) {
-                telemetry.lastOfferUfrag = ufrag;
-              }
-              record("offer-sent", {
-                iceGeneration: telemetry.iceRestartOffers + 1,
-                socketID: this.__rstreamQualificationID,
-              });
-            } else if (message?.type === "webrtc.candidate") {
-              telemetry.localCandidatesSent += 1;
-            }
-          } catch {
-            // Non-JSON application frames are irrelevant to this collector.
-          }
-        }
-        super.send(data);
-      }
-    }
     window.RTCPeerConnection = QualificationRTCPeerConnection;
-    window.WebSocket = QualificationWebSocket;
+    window.fetch = async (input, init = {}) => {
+      const request = input instanceof Request ? input : null;
+      const requestURL = new URL(request?.url ?? String(input), location.href);
+      const method = (init.method ?? request?.method ?? "GET").toUpperCase();
+      const headers = new Headers(request?.headers);
+      for (const [name, value] of new Headers(init.headers)) {
+        headers.set(name, value);
+      }
+      const body = typeof init.body === "string" ? init.body : "";
+      const whep = /\/whep(?:\/|$)/.test(requestURL.pathname);
+      const diagnostics = requestURL.pathname.startsWith(
+        "/api/diagnostics/sessions/",
+      );
+      const candidateCount = countCandidates(body);
+      const patchUfrag = /^a=ice-ufrag:(.+)$/m.exec(body)?.[1] ?? "";
+      const restart =
+        whep &&
+        method === "PATCH" &&
+        patchUfrag !== "" &&
+        telemetry.lastOfferUfrag !== "" &&
+        patchUfrag !== telemetry.lastOfferUfrag;
+      if (whep && method === "POST") {
+        telemetry.offersSent += 1;
+        const ufrag = /^a=ice-ufrag:(.+)$/m.exec(body)?.[1] ?? "";
+        if (ufrag) {
+          telemetry.lastOfferUfrag = ufrag;
+        }
+      } else if (whep && method === "PATCH") {
+        telemetry.localCandidatesSent += candidateCount;
+        if (restart) {
+          telemetry.iceRestartOffers += 1;
+          telemetry.whepRestartPatches += 1;
+          telemetry.lastOfferUfrag = patchUfrag;
+        } else {
+          telemetry.whepCandidatePatches += 1;
+        }
+      }
+      const startedAt = performance.now();
+      try {
+        const response = await nativeFetch(input, init);
+        if (whep) {
+          if (method === "POST" && [201, 406].includes(response.status)) {
+            telemetry.whepSessionCreates += 1;
+          } else if (
+            method === "DELETE" &&
+            (response.ok || [404, 410].includes(response.status))
+          ) {
+            telemetry.whepSessionDeletes += 1;
+          }
+          record("whep-request", {
+            candidateCount,
+            durationMilliseconds: Math.round(performance.now() - startedAt),
+            method,
+            restart,
+            status: response.status,
+          });
+          void response
+            .clone()
+            .text()
+            .then((value) => {
+              const remoteCandidates = countCandidates(value);
+              telemetry.remoteCandidatesReceived += remoteCandidates;
+              if (remoteCandidates > 0) {
+                record("remote-candidates", {
+                  count: remoteCandidates,
+                  method,
+                  restart,
+                });
+              }
+            })
+            .catch(() => {});
+        }
+        if (diagnostics && response.ok) {
+          void response
+            .clone()
+            .json()
+            .then((value) => {
+              telemetry.latestSessionStats = value;
+            })
+            .catch(() => {});
+        }
+        return response;
+      } catch (error) {
+        if (whep) {
+          telemetry.whepFailedRequests += 1;
+          record("whep-request-failed", {
+            durationMilliseconds: Math.round(performance.now() - startedAt),
+            method,
+            restart,
+          });
+        }
+        throw error;
+      }
+    };
+
+    function countCandidates(value) {
+      return (value.match(/^a=candidate:/gm) || []).length;
+    }
   });
   page = await context.newPage();
   page.on("console", (message) => {
     if (message.type() === "error") {
       const location = message.location();
       const source = location.url
-        ? ` (${location.url}:${location.lineNumber || 0}:${location.columnNumber || 0})`
+        ? ` (${redactSensitiveText(location.url)}:${location.lineNumber || 0}:${location.columnNumber || 0})`
         : "";
       process.stderr.write(
-        `browser console error: ${message.text()}${source}\n`,
+        `browser console error: ${redactSensitiveText(message.text())}${source}\n`,
       );
     }
   });
   page.on("pageerror", (error) => {
-    process.stderr.write(`browser page error: ${error.message}\n`);
+    process.stderr.write(
+      `browser page error: ${redactSensitiveText(error.message)}\n`,
+    );
   });
   page.on("requestfailed", (request) => {
     process.stderr.write(
-      `browser request failed: ${request.method()} ${request.url()} (${request.failure()?.errorText || "unknown error"})\n`,
+      `browser request failed: ${request.method()} ${redactSensitiveText(request.url())} (${redactSensitiveText(request.failure()?.errorText || "unknown error")})\n`,
     );
   });
   page.on("response", (response) => {
     if (response.status() >= 400) {
       process.stderr.write(
-        `browser response error: ${response.status()} ${response.request().method()} ${response.url()}\n`,
+        `browser response error: ${response.status()} ${response.request().method()} ${redactSensitiveText(response.url())}\n`,
       );
     }
   });
@@ -287,14 +336,48 @@ try {
     undefined,
     { timeout: 90_000 },
   );
+  await page.evaluate(() => {
+    const telemetry = window.__rstreamQualificationTelemetry;
+    telemetry?.events?.push({
+      elapsedMilliseconds: Math.round(performance.now()),
+      kind: "playback-ready",
+    });
+  });
+  await page.waitForFunction(
+    async () => {
+      const peers = window.__rstreamQualificationPeers || [];
+      const peer = [...peers]
+        .reverse()
+        .find((candidate) => candidate.connectionState !== "closed");
+      if (!peer) {
+        return false;
+      }
+      const reports = await peer.getStats();
+      return [...reports.values()].some(
+        (report) =>
+          report.type === "inbound-rtp" &&
+          (report.kind === "video" || report.mediaType === "video") &&
+          (report.framesDecoded || 0) > 0,
+      );
+    },
+    undefined,
+    { timeout: 30_000 },
+  );
+  await page.evaluate(() => {
+    const telemetry = window.__rstreamQualificationTelemetry;
+    telemetry?.events?.push({
+      elapsedMilliseconds: Math.round(performance.now()),
+      kind: "first-decoded-frame",
+    });
+  });
   let initialSample = null;
   let pathStable = false;
-  const pathStability = new PathStability(3000);
+  const pathStability = new PathStability(3000, pathScope);
   const pathDeadline = performance.now() + 30_000;
   while (performance.now() < pathDeadline) {
     initialSample = await collectSample(page);
     if (
-      pathMatchesPolicy(initialSample, icePolicy) &&
+      pathMatchesPolicy(initialSample, icePolicy, pathScope) &&
       pathStability.observe(initialSample, performance.now())
     ) {
       pathStable = true;
@@ -338,6 +421,12 @@ try {
   while (performance.now() - startedAt < maximumDurationSeconds * 1000) {
     const phase = await readPhase(phaseFile);
     const sample = await collectSample(page);
+    if (producerMetricsURL) {
+      Object.assign(
+        sample,
+        await collectProducerOpenMetrics(producerMetricsURL),
+      );
+    }
     sample.capturedAt = new Date().toISOString();
     sample.elapsedMilliseconds = Math.round(performance.now() - startedAt);
     sample.phase = phase.name;
@@ -367,24 +456,143 @@ try {
     );
   }
 } catch (error) {
-  const normalized = normalizeError(error);
+  const normalized = redactError(normalizeError(error));
+  const pageContext = await collectFailureContext(page);
   await writeJSONAtomic(failurePath, {
     failedAt: new Date().toISOString(),
     message: normalized.message,
+    page: pageContext,
     stack: normalized.stack,
   });
   throw normalized;
 } finally {
   if (page) {
-    await writeJSONAtomic(
-      signalingPath,
-      await collectSignalingMetadata(page),
-    ).catch(() => {});
     await page.click("#disconnect").catch(() => {});
+    await page
+      .waitForFunction(
+        () => {
+          const viewer = window.__rstreamQualificationViewer;
+          const telemetry = window.__rstreamQualificationTelemetry;
+          return (
+            (!viewer || viewer.closeResult) &&
+            (!telemetry ||
+              telemetry.whepSessionCreates === 0 ||
+              telemetry.whepSessionDeletes >= telemetry.whepSessionCreates)
+          );
+        },
+        undefined,
+        { timeout: 6000 },
+      )
+      .catch(() => {});
+    await collectSignalingMetadata(page)
+      .then((metadata) => writeJSONAtomic(signalingPath, metadata))
+      .catch(() => {});
   }
   if (browser) {
     await browser.close().catch(() => {});
   }
+  if (viewerServer) {
+    await closeServer(viewerServer).catch(() => {});
+  }
+}
+
+async function collectFailureContext(activePage) {
+  if (!activePage || activePage.isClosed()) {
+    return null;
+  }
+  try {
+    const context = await activePage.evaluate(() => {
+      const text = (selector) =>
+        document.querySelector(selector)?.textContent?.trim() || "";
+      return {
+        ice: text("#ice-status"),
+        log: text("#log").slice(-4096),
+        peer: text("#peer-status"),
+        playback: text("#playback-status"),
+        signaling: text("#signaling-status"),
+      };
+    });
+    return Object.fromEntries(
+      Object.entries(context).map(([name, value]) => [
+        name,
+        redactSensitiveText(value),
+      ]),
+    );
+  } catch {
+    return null;
+  }
+}
+
+async function startQualificationViewer(endpoint) {
+  const bundle = await readFile(new URL("./viewer.js", import.meta.url));
+  const config = JSON.stringify({ authorization: "", endpoint }).replaceAll(
+    "<",
+    "\\u003c",
+  );
+  const html = `<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>rstream qualification viewer</title></head>
+  <body>
+    <video id="video" autoplay muted playsinline></video>
+    <button id="connect" disabled>Connect</button>
+    <button id="disconnect" disabled>Disconnect</button>
+    <select id="turn-policy"><option value="direct">Direct</option><option value="relay">Relay</option></select>
+    <span id="peer-status">Peer: idle</span>
+    <span id="playback-status">Idle</span>
+    <span id="signaling-status">Idle</span>
+    <span id="twcc-target-status">-</span>
+    <span id="encoder-target-status">-</span>
+    <script>window.__rstreamQualificationViewer=${config}</script>
+    <script type="module" src="/viewer.js"></script>
+  </body>
+</html>`;
+  const server = createServer((request, response) => {
+    if (request.method !== "GET") {
+      response.writeHead(405, { Allow: "GET" }).end();
+      return;
+    }
+    if (request.url === "/viewer.js") {
+      response
+        .writeHead(200, {
+          "Cache-Control": "no-store",
+          "Content-Type": "application/javascript; charset=utf-8",
+        })
+        .end(bundle);
+      return;
+    }
+    if (request.url === "/" || request.url === "/favicon.ico") {
+      if (request.url === "/favicon.ico") {
+        response.writeHead(204).end();
+      } else {
+        response
+          .writeHead(200, {
+            "Cache-Control": "no-store",
+            "Content-Security-Policy":
+              "default-src 'self'; connect-src http: https:; media-src blob:; script-src 'self' 'unsafe-inline'",
+            "Content-Type": "text/html; charset=utf-8",
+          })
+          .end(html);
+      }
+      return;
+    }
+    response.writeHead(404).end();
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    throw new Error("qualification viewer did not bind a TCP address");
+  }
+  return { server, url: `http://127.0.0.1:${address.port}/` };
+}
+
+function closeServer(server) {
+  return new Promise((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
+    server.closeAllConnections();
+  });
 }
 
 async function collectSample(activePage) {
@@ -439,15 +647,17 @@ async function collectSample(activePage) {
     const videoReceiver = peer
       .getReceivers()
       .find((receiver) => receiver.track?.kind === "video");
-    const sessionStats = window.__rstreamQualificationSessionStats?.latest;
     const telemetry = window.__rstreamQualificationTelemetry || {};
-    const sockets = window.__rstreamQualificationSockets || [];
-    const socket =
-      [...sockets]
-        .reverse()
-        .find((candidate) => candidate.readyState === WebSocket.OPEN) ||
-      sockets.at(-1);
+    const sessionStats = telemetry.latestSessionStats;
     const bandwidth = sessionStats?.bandwidth;
+    const bandwidthNumber = (value) =>
+      bandwidth === undefined ? null : (value ?? 0);
+    const bandwidthKbps = (value) => {
+      const bitrate = bandwidthNumber(value);
+      return bitrate === null ? null : bitrate / 1000;
+    };
+    const sessionNumber = (value) =>
+      sessionStats === null || sessionStats === undefined ? null : (value ?? 0);
     const text = (selector) =>
       document.querySelector(selector)?.textContent?.trim() || "";
     return {
@@ -455,13 +665,13 @@ async function collectSample(activePage) {
       codecID: inbound?.codecId || "",
       currentRoundTripTimeSeconds: selectedPair?.currentRoundTripTime ?? null,
       decoderImplementation: inbound?.decoderImplementation || "",
-      delayControllerState: bandwidth?.state || "",
-      delayControllerUsage: bandwidth?.usage || "",
+      delayControllerState:
+        bandwidth === undefined ? null : (bandwidth.state ?? ""),
+      delayControllerUsage:
+        bandwidth === undefined ? null : (bandwidth.usage ?? ""),
       delayEstimateMilliseconds: bandwidth?.delayEstimateMs ?? null,
       delayMeasurementMilliseconds: bandwidth?.delayMeasurementMs ?? null,
-      delayTargetKbps: bandwidth?.delayTargetBitrateBps
-        ? bandwidth.delayTargetBitrateBps / 1000
-        : 0,
+      delayTargetKbps: bandwidthKbps(bandwidth?.delayTargetBitrateBps),
       delayThresholdMilliseconds: bandwidth?.delayThresholdMs ?? null,
       estimatedPlayoutTimestamp: inbound?.estimatedPlayoutTimestamp ?? null,
       framesDecoded: inbound?.framesDecoded || 0,
@@ -480,65 +690,98 @@ async function collectSample(activePage) {
       localCandidateProtocol: localCandidate?.protocol || "",
       localCandidateType: localCandidate?.candidateType || "",
       lossAverage: bandwidth?.averageLoss ?? null,
-      lossGuardActive: bandwidth?.lossGuardActive || false,
-      lossGuardTargetKbps: bandwidth?.lossGuardTargetBitrateBps
-        ? bandwidth.lossGuardTargetBitrateBps / 1000
-        : 0,
-      lossGuardLastObservedLoss:
-        bandwidth?.lossGuardLastObservedLoss ?? null,
-      lossGuardReductions: bandwidth?.lossGuardReductions || 0,
-      lossGuardRecoveries: bandwidth?.lossGuardRecoveries || 0,
-      flexFECMediaPackets: bandwidth?.flexFECMediaPackets || 0,
-      flexFECRepairPackets: bandwidth?.flexFECRepairPackets || 0,
-      lossTargetKbps: bandwidth?.lossTargetBitrateBps
-        ? bandwidth.lossTargetBitrateBps / 1000
-        : 0,
+      lossGuardActive:
+        bandwidth === undefined ? null : Boolean(bandwidth.lossGuardActive),
+      lossGuardTargetKbps: bandwidthKbps(bandwidth?.lossGuardTargetBitrateBps),
+      lossGuardLastObservedLoss: bandwidth?.lossGuardLastObservedLoss ?? null,
+      lossGuardReductions: bandwidthNumber(bandwidth?.lossGuardReductions),
+      lossGuardRecoveries: bandwidthNumber(bandwidth?.lossGuardRecoveries),
+      flexFECMediaPackets: bandwidthNumber(bandwidth?.flexFECMediaPackets),
+      flexFECRepairPackets: bandwidthNumber(bandwidth?.flexFECRepairPackets),
+      lossTargetKbps: bandwidthKbps(bandwidth?.lossTargetBitrateBps),
       nackCount: inbound?.nackCount || 0,
       packetsDiscarded: inbound?.packetsDiscarded || 0,
       packetsLost: inbound?.packetsLost || 0,
       packetsReceived: inbound?.packetsReceived || 0,
-      pacerTargetBitrateKbps: bandwidth?.pacerTargetBitrateBps
-        ? bandwidth.pacerTargetBitrateBps / 1000
-        : 0,
-      pacerPacingBitrateKbps: bandwidth?.pacerPacingBitrateBps
-        ? bandwidth.pacerPacingBitrateBps / 1000
-        : 0,
-      pacerQueueDrops: bandwidth?.pacerQueueDrops || 0,
-      pacerQueueDelayMilliseconds: bandwidth?.pacerQueueDelayMs || 0,
-      pacerMaximumQueueDelayMilliseconds: bandwidth?.pacerMaximumDelayMs || 0,
-      pacerMaximumPrimaryDelayMilliseconds:
-        bandwidth?.pacerMaximumPrimaryDelayMs || 0,
-      pacerMaximumRepairDelayMilliseconds:
-        bandwidth?.pacerMaximumRepairDelayMs || 0,
-      pacerMaximumRTXDelayMilliseconds: bandwidth?.pacerMaximumRTXDelayMs || 0,
-      pacerMaximumFECDelayMilliseconds: bandwidth?.pacerMaximumFECDelayMs || 0,
-      pacerMaximumSustainedDelayMilliseconds:
-        bandwidth?.pacerMaximumSustainedDelayMs || 0,
-      pacerMaximumAdmittedDelayMilliseconds:
-        bandwidth?.pacerMaximumAdmittedDelayMs || 0,
-      pacerKeyFrameReserveBytes: bandwidth?.pacerKeyFrameReserveBytes || 0,
-      pacerMediaFramesDropped: bandwidth?.pacerMediaFrameDrops || 0,
-      pacerMediaBytesDropped: bandwidth?.pacerMediaByteDrops || 0,
-      pacerRepairPacketsExpired: bandwidth?.pacerRepairPacketsExpired || 0,
-      pacerRepairPacketsTrimmed: bandwidth?.pacerRepairPacketsTrimmed || 0,
-      pacerRTXPacketsExpired: bandwidth?.pacerRTXPacketsExpired || 0,
-      pacerRTXPacketsCoalesced: bandwidth?.pacerRTXPacketsCoalesced || 0,
-      pacerFECPacketsExpired: bandwidth?.pacerFECPacketsExpired || 0,
-      pacerRTXPacketsTrimmed: bandwidth?.pacerRTXPacketsTrimmed || 0,
-      pacerFECPacketsTrimmed: bandwidth?.pacerFECPacketsTrimmed || 0,
-      pacerQueuePackets: bandwidth?.pacerQueuePackets || 0,
-      pacerSentPrimary: bandwidth?.pacerSentPrimary || 0,
-      pacerSentRepair: bandwidth?.pacerSentRepair || 0,
-      pacerSentRTX: bandwidth?.pacerSentRTX || 0,
-      pacerSentFEC: bandwidth?.pacerSentFEC || 0,
-      adaptiveBitrateUpdates: sessionStats?.adaptiveBitrateUpdates || 0,
-      adaptiveBitrateFailures: sessionStats?.adaptiveBitrateFailures || 0,
-      staleBitrateCallbacks: bandwidth?.staleBitrateCallbacks || 0,
-      twccFeedbackPackets: bandwidth?.twccFeedbackPackets || 0,
-      twccMalformedFeedback: bandwidth?.twccMalformedFeedback || 0,
-      twccPaddingStatuses: bandwidth?.twccPaddingStatuses || 0,
-      twccReportedLost: bandwidth?.twccReportedLost || 0,
-      twccReportedStatuses: bandwidth?.twccReportedStatuses || 0,
+      pacerTargetBitrateKbps: bandwidthKbps(bandwidth?.pacerTargetBitrateBps),
+      pacerPacingBitrateKbps: bandwidthKbps(bandwidth?.pacerPacingBitrateBps),
+      pacerQueueDrops: bandwidthNumber(bandwidth?.pacerQueueDrops),
+      pacerQueueDelayMilliseconds: bandwidthNumber(
+        bandwidth?.pacerQueueDelayMs,
+      ),
+      pacerMaximumQueueDelayMilliseconds: bandwidthNumber(
+        bandwidth?.pacerMaximumDelayMs,
+      ),
+      pacerMaximumPrimaryDelayMilliseconds: bandwidthNumber(
+        bandwidth?.pacerMaximumPrimaryDelayMs,
+      ),
+      pacerMaximumRepairDelayMilliseconds: bandwidthNumber(
+        bandwidth?.pacerMaximumRepairDelayMs,
+      ),
+      pacerMaximumRTXDelayMilliseconds: bandwidthNumber(
+        bandwidth?.pacerMaximumRTXDelayMs,
+      ),
+      pacerMaximumFECDelayMilliseconds: bandwidthNumber(
+        bandwidth?.pacerMaximumFECDelayMs,
+      ),
+      pacerMaximumSustainedDelayMilliseconds: bandwidthNumber(
+        bandwidth?.pacerMaximumSustainedDelayMs,
+      ),
+      pacerMaximumAdmittedDelayMilliseconds: bandwidthNumber(
+        bandwidth?.pacerMaximumAdmittedDelayMs,
+      ),
+      pacerKeyFrameReserveBytes: bandwidthNumber(
+        bandwidth?.pacerKeyFrameReserveBytes,
+      ),
+      pacerMediaFramesDropped: bandwidthNumber(bandwidth?.pacerMediaFrameDrops),
+      pacerMediaBytesDropped: bandwidthNumber(bandwidth?.pacerMediaByteDrops),
+      pacerRepairPacketsExpired: bandwidthNumber(
+        bandwidth?.pacerRepairPacketsExpired,
+      ),
+      pacerRepairPacketsTrimmed: bandwidthNumber(
+        bandwidth?.pacerRepairPacketsTrimmed,
+      ),
+      pacerRTXPacketsExpired: bandwidthNumber(
+        bandwidth?.pacerRTXPacketsExpired,
+      ),
+      pacerRTXPacketsCoalesced: bandwidthNumber(
+        bandwidth?.pacerRTXPacketsCoalesced,
+      ),
+      pacerRTXPacketsSuppressed: bandwidthNumber(
+        bandwidth?.pacerRTXPacketsSuppressed,
+      ),
+      pacerRetransmissionRTTMilliseconds: bandwidthNumber(
+        bandwidth?.pacerRetransmissionRTTMs,
+      ),
+      pacerRetransmissionIntervalMilliseconds: bandwidthNumber(
+        bandwidth?.pacerRetransmissionIntervalMs,
+      ),
+      pacerFECPacketsExpired: bandwidthNumber(
+        bandwidth?.pacerFECPacketsExpired,
+      ),
+      pacerRTXPacketsTrimmed: bandwidthNumber(
+        bandwidth?.pacerRTXPacketsTrimmed,
+      ),
+      pacerFECPacketsTrimmed: bandwidthNumber(
+        bandwidth?.pacerFECPacketsTrimmed,
+      ),
+      pacerQueuePackets: bandwidthNumber(bandwidth?.pacerQueuePackets),
+      pacerSentPrimary: bandwidthNumber(bandwidth?.pacerSentPrimary),
+      pacerSentRepair: bandwidthNumber(bandwidth?.pacerSentRepair),
+      pacerSentRTX: bandwidthNumber(bandwidth?.pacerSentRTX),
+      pacerSentFEC: bandwidthNumber(bandwidth?.pacerSentFEC),
+      adaptiveBitrateUpdates: sessionNumber(
+        sessionStats?.adaptiveBitrateUpdates,
+      ),
+      adaptiveBitrateFailures: sessionNumber(
+        sessionStats?.adaptiveBitrateFailures,
+      ),
+      staleBitrateCallbacks: bandwidthNumber(bandwidth?.staleBitrateCallbacks),
+      twccFeedbackPackets: bandwidthNumber(bandwidth?.twccFeedbackPackets),
+      twccMalformedFeedback: bandwidthNumber(bandwidth?.twccMalformedFeedback),
+      twccPaddingStatuses: bandwidthNumber(bandwidth?.twccPaddingStatuses),
+      twccReportedLost: bandwidthNumber(bandwidth?.twccReportedLost),
+      twccReportedStatuses: bandwidthNumber(bandwidth?.twccReportedStatuses),
       peerConnectionState: peer.connectionState,
       peerConnectionID: peer.__rstreamQualificationID || 0,
       peerConnectionsCreated: peers.length,
@@ -570,18 +813,25 @@ async function collectSample(activePage) {
       localCandidatesSent: telemetry.localCandidatesSent || 0,
       offersSent: telemetry.offersSent || 0,
       remoteCandidatesReceived: telemetry.remoteCandidatesReceived || 0,
-      webSocketCloseCount: telemetry.webSocketCloseCount || 0,
-      webSocketID: socket?.__rstreamQualificationID || 0,
-      webSocketOpenCount: telemetry.webSocketOpenCount || 0,
-      webSocketsCreated: sockets.length,
-      webSocketState: socket?.readyState ?? WebSocket.CLOSED,
-      recoveryKeyFrameRequests: sessionStats?.recoveryKeyFrameRequests || 0,
-      recoveryKeyFrameCoalesced: sessionStats?.recoveryKeyFrameCoalesced || 0,
-      recoveryKeyFrameFailures: sessionStats?.recoveryKeyFrameFailures || 0,
-      rtcpKeyFrameRequests: sessionStats?.rtcpKeyFrameRequests || 0,
-      rtcpMalformedFeedback: sessionStats?.rtcpMalformedFeedback || 0,
+      whepCandidatePatches: telemetry.whepCandidatePatches || 0,
+      whepFailedRequests: telemetry.whepFailedRequests || 0,
+      whepRestartPatches: telemetry.whepRestartPatches || 0,
+      whepSessionCreates: telemetry.whepSessionCreates || 0,
+      whepSessionDeletes: telemetry.whepSessionDeletes || 0,
+      recoveryKeyFrameRequests: sessionNumber(
+        sessionStats?.recoveryKeyFrameRequests,
+      ),
+      recoveryKeyFrameCoalesced: sessionNumber(
+        sessionStats?.recoveryKeyFrameCoalesced,
+      ),
+      recoveryKeyFrameFailures: sessionNumber(
+        sessionStats?.recoveryKeyFrameFailures,
+      ),
+      rtcpKeyFrameRequests: sessionNumber(sessionStats?.rtcpKeyFrameRequests),
+      rtcpMalformedFeedback: sessionNumber(sessionStats?.rtcpMalformedFeedback),
       retransmittedBytesReceived: inbound?.retransmittedBytesReceived || 0,
       retransmittedPacketsReceived: inbound?.retransmittedPacketsReceived || 0,
+      qpSum: inbound?.qpSum ?? null,
       totalDecodeTimeSeconds: inbound?.totalDecodeTime ?? null,
       fecPacketsDiscarded: inbound?.fecPacketsDiscarded || 0,
       fecPacketsReceived: inbound?.fecPacketsReceived || 0,
@@ -596,7 +846,7 @@ async function collectSample(activePage) {
     function parseBitrateKbps(value) {
       const match = value.match(/^([0-9]+(?:\.[0-9]+)?)\s*(Mbps|kbps)$/i);
       if (!match) {
-        return 0;
+        return null;
       }
       const amount = Number.parseFloat(match[1]);
       return match[2].toLowerCase() === "mbps" ? amount * 1000 : amount;
@@ -608,22 +858,24 @@ async function collectSignalingMetadata(activePage) {
   return activePage.evaluate(() => {
     const telemetry = window.__rstreamQualificationTelemetry || {};
     return {
+      closeResult: window.__rstreamQualificationViewer?.closeResult || null,
       events: telemetry.events || [],
       iceRestartOffers: telemetry.iceRestartOffers || 0,
       localCandidatesSent: telemetry.localCandidatesSent || 0,
       offersSent: telemetry.offersSent || 0,
-      peerConnectionsCreated:
-        window.__rstreamQualificationPeers?.length || 0,
+      peerConnectionsCreated: window.__rstreamQualificationPeers?.length || 0,
       remoteCandidatesReceived: telemetry.remoteCandidatesReceived || 0,
-      webSocketCloseCount: telemetry.webSocketCloseCount || 0,
-      webSocketOpenCount: telemetry.webSocketOpenCount || 0,
-      webSocketsCreated: window.__rstreamQualificationSockets?.length || 0,
+      whepCandidatePatches: telemetry.whepCandidatePatches || 0,
+      whepFailedRequests: telemetry.whepFailedRequests || 0,
+      whepRestartPatches: telemetry.whepRestartPatches || 0,
+      whepSessionCreates: telemetry.whepSessionCreates || 0,
+      whepSessionDeletes: telemetry.whepSessionDeletes || 0,
     };
   });
 }
 
 async function collectPeerMetadata(activePage) {
-  return activePage.evaluate(() => {
+  const metadata = await activePage.evaluate(() => {
     const peers = window.__rstreamQualificationPeers || [];
     const peer = [...peers]
       .reverse()
@@ -631,26 +883,8 @@ async function collectPeerMetadata(activePage) {
     if (!peer) {
       throw new Error("the page has no active RTCPeerConnection");
     }
-    const codecs = peer
-      .getTransceivers()
-      .flatMap(
-        (transceiver) => transceiver.receiver.getParameters().codecs || [],
-      )
-      .map((codec) => ({
-        channels: codec.channels || null,
-        clockRate: codec.clockRate || null,
-        mimeType: codec.mimeType || "",
-        payloadType: codec.payloadType ?? null,
-        sdpFmtpLine: codec.sdpFmtpLine || "",
-      }));
     return {
-      codecs,
-      flexFECNegotiated: codecs.some(
-        (codec) => codec.mimeType.toLowerCase() === "video/flexfec-03",
-      ),
-      rtxNegotiated: codecs.some(
-        (codec) => codec.mimeType.toLowerCase() === "video/rtx",
-      ),
+      remoteDescription: peer.remoteDescription?.sdp || "",
       transceivers: peer.getTransceivers().map((transceiver) => ({
         currentDirection: transceiver.currentDirection || "",
         direction: transceiver.direction,
@@ -659,6 +893,25 @@ async function collectPeerMetadata(activePage) {
       })),
     };
   });
+  const codecs = negotiatedVideoCodecs(metadata.remoteDescription);
+  return {
+    codecs,
+    flexFECNegotiated: codecs.some(
+      (codec) => codec.mimeType.toLowerCase() === "video/flexfec-03",
+    ),
+    nackNegotiated: codecs.some((codec) =>
+      codec.rtcpFeedback.some(
+        (value) => value === "nack" || value.startsWith("nack "),
+      ),
+    ),
+    rtxNegotiated: codecs.some(
+      (codec) => codec.mimeType.toLowerCase() === "video/rtx",
+    ),
+    twccNegotiated: codecs.some((codec) =>
+      codec.rtcpFeedback.includes("transport-cc"),
+    ),
+    transceivers: metadata.transceivers,
+  };
 }
 
 async function navigateWithRetries(activePage, target, attempts) {
@@ -673,7 +926,7 @@ async function navigateWithRetries(activePage, target, attempts) {
     } catch (error) {
       lastError = normalizeError(error);
       process.stderr.write(
-        `browser navigation attempt ${attempt}/${attempts} failed: ${lastError.message}\n`,
+        `browser navigation attempt ${attempt}/${attempts} failed: ${redactSensitiveText(lastError.message)}\n`,
       );
       await activePage.goto("about:blank").catch(() => {});
       if (attempt < attempts) {
@@ -682,7 +935,7 @@ async function navigateWithRetries(activePage, target, attempts) {
     }
   }
   throw new Error(
-    `failed to load ${target} after ${attempts} attempts: ${lastError?.message || "unknown error"}`,
+    `failed to load ${redactSensitiveText(target)} after ${attempts} attempts: ${redactSensitiveText(lastError?.message || "unknown error")}`,
   );
 }
 

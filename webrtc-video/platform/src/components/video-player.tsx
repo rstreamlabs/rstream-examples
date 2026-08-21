@@ -1,6 +1,5 @@
 "use client"
 
-import { type MutableRefObject } from "react"
 import { type RefObject } from "react"
 import { useEffect } from "react"
 import { useRef } from "react"
@@ -8,49 +7,35 @@ import { useState } from "react"
 
 import { apiErrorSchema } from "@/lib/validations/device"
 import { Button } from "@/components/ui/button"
-import { signalMessageSchema } from "@/lib/validations/device"
+import { type ViewerPayload } from "@/lib/validations/device"
 import { viewerPayloadSchema } from "@/lib/validations/device"
+import { PlaybackHealthTracker } from "@/lib/video-playback-health"
+import { minimumUsableFramesPerSecond } from "@/lib/video-playback-health"
+import {
+  type ViewerClientCallbacks,
+  type ViewerPhase,
+  ViewerSessionController,
+  viewerRequestSignal,
+} from "@/lib/viewer-session"
+import { WHEPClient, type WHEPCloseResult } from "@/lib/whep-client"
 
-type PlayerPhase =
-  "connecting" | "reconnecting" | "blocked" | "error" | "playing"
-
-type ViewerSessionOptions = {
-  cleanupRef: MutableRefObject<(() => void) | null>
-  deviceId: string
-  fail: (err: unknown) => void
-  isCurrent: () => boolean
-  reconnectAttempt: number
-  setPhase: (phase: PlayerPhase) => void
-  videoRef: RefObject<HTMLVideoElement | null>
+type VideoDistributor = {
+  allowLegacyWildcardETag: boolean
 }
-
-// WebRTC callbacks need current mutable flags without triggering React renders.
-type ViewerSessionState = {
-  offerPending: boolean
-  reconnectTimer: number | null
-  restartTimer: number | null
-  stopped: boolean
-}
-
-const maxSessionReconnects = 5
-const maxPendingRemoteCandidates = 64
-const sessionReconnectBaseDelayMs = 1000
-const sessionReconnectJitterMs = 250
-const sessionReconnectMaxDelayMs = 15000
 
 // sessionRef guards against React Strict Mode remounts and stale callbacks.
 export function VideoPlayer({ deviceId }: { deviceId: string }) {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const cleanupRef = useRef<(() => void) | null>(null)
   const sessionRef = useRef(0)
-  const [phase, setPhase] = useState<PlayerPhase>("connecting")
+  const [phase, setPhase] = useState<ViewerPhase>("connecting")
   const [error, setError] = useState<string | null>(null)
   const [retryKey, setRetryKey] = useState(0)
   useEffect(() => {
     const session = sessionRef.current + 1
     sessionRef.current = session
     const isCurrent = () => sessionRef.current === session
-    const setCurrentPhase = (nextPhase: PlayerPhase) => {
+    let playbackMonitor: ReturnType<typeof monitorPlayback> | null = null
+    const setCurrentPhase = (nextPhase: ViewerPhase) => {
       if (isCurrent()) {
         setPhase(nextPhase)
       }
@@ -59,28 +44,61 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
       if (!isCurrent()) {
         return
       }
-      cleanupRef.current?.()
-      cleanupRef.current = null
       setPhase("error")
       setError(errorMessage(err))
     }
     setError(null)
     setPhase("connecting")
-    void startViewerSession({
-      cleanupRef,
-      deviceId,
-      fail,
-      isCurrent,
-      reconnectAttempt: 0,
-      setPhase: setCurrentPhase,
-      videoRef,
-    }).catch(fail)
+    let controller: ViewerSessionController<ViewerPayload, RTCTrackEvent>
+    controller = new ViewerSessionController<ViewerPayload, RTCTrackEvent>({
+      backend: (viewer) => viewer.distributor.kind,
+      createClient: createViewerClient,
+      excludeBackendAfterFailure: (backend) => backend === "mediamtx",
+      onFailure: fail,
+      onPhase: setCurrentPhase,
+      onSessionReset: () => {
+        playbackMonitor?.stop()
+        playbackMonitor = null
+        if (isCurrent() && videoRef.current) {
+          videoRef.current.srcObject = null
+        }
+      },
+      onTrack: (event, viewer) => {
+        playbackMonitor?.stop()
+        playbackMonitor = null
+        attachTrack(event, videoRef, isCurrent, setCurrentPhase)
+        if (viewer.distributor.kind === "mediamtx" && videoRef.current) {
+          playbackMonitor = monitorPlayback(
+            videoRef.current,
+            event.track.getSettings().frameRate,
+            () => {
+              const cause = new Error(
+                "MediaMTX playback stayed below the usable frame rate",
+              )
+              if (controller.excludeCurrentBackend(cause)) {
+                window.dispatchEvent(
+                  new CustomEvent("rstream:video-distributor-fallback", {
+                    detail: { from: "mediamtx", to: "direct" },
+                  }),
+                )
+              }
+            },
+          )
+        }
+      },
+      resolve: (signal, excludedBackend) =>
+        fetchViewer(deviceId, signal, excludedBackend),
+    })
+    void controller.start().catch(fail)
     return () => {
       if (isCurrent()) {
         sessionRef.current += 1
       }
-      cleanupRef.current?.()
-      cleanupRef.current = null
+      void controller.stop()
+      playbackMonitor?.stop()
+      if (videoRef.current) {
+        videoRef.current.srcObject = null
+      }
     }
   }, [deviceId, retryKey])
   async function playCurrentStream() {
@@ -145,24 +163,26 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
   )
 }
 
-// Trickle ICE can race SDP exchange, so candidates may need short queues.
-async function startViewerSession({
-  cleanupRef,
-  deviceId,
-  fail,
-  isCurrent,
-  reconnectAttempt,
-  setPhase,
-  videoRef,
-}: ViewerSessionOptions) {
-  cleanupRef.current?.()
-  cleanupRef.current = null
-  setPhase("connecting")
-  const viewer = await fetchViewer(deviceId)
-  if (!isCurrent()) {
-    return
-  }
-  const peer = new RTCPeerConnection({
+const videoDistributors: Record<
+  ViewerPayload["distributor"]["kind"],
+  VideoDistributor
+> = {
+  direct: { allowLegacyWildcardETag: false },
+  // MediaMTX 1.20 uses "*" for the initial ETag. This exception stays local to
+  // that backend while rstream's producer and the shared client remain strict.
+  mediamtx: { allowLegacyWildcardETag: true },
+}
+
+function createViewerClient(
+  viewer: ViewerPayload,
+  callbacks: ViewerClientCallbacks<ViewerPayload, RTCTrackEvent>,
+) {
+  const distributor = videoDistributors[viewer.distributor.kind]
+  return new WHEPClient({
+    allowLegacyWildcardETag: distributor.allowLegacyWildcardETag,
+    authorization: viewer.distributor.authorization,
+    credentialExpiresAt: viewer.distributor.expiresAt,
+    endpoint: viewer.distributor.whep,
     iceServers: [
       {
         urls: viewer.turn.urls,
@@ -170,191 +190,69 @@ async function startViewerSession({
         credential: viewer.turn.credential,
       },
     ],
+    iceCredentialExpiresAt: viewer.turn.expiresAt,
+    onClose: (result) => reportWHEPClose(result, viewer.distributor.kind),
+    onError: callbacks.onError,
+    onTrack: callbacks.onTrack,
+    refreshCredentials: async (signal) => {
+      const refreshed = await callbacks.refresh(signal)
+      return {
+        authorization: refreshed.distributor.authorization,
+        endpoint: refreshed.distributor.whep,
+        expiresAt: refreshed.distributor.expiresAt,
+        iceServers: [
+          {
+            urls: refreshed.turn.urls,
+            username: refreshed.turn.username,
+            credential: refreshed.turn.credential,
+          },
+        ],
+        iceExpiresAt: refreshed.turn.expiresAt,
+      }
+    },
   })
-  const socket = new WebSocket(viewer.endpoints.ws)
-  const sessionState: ViewerSessionState = {
-    offerPending: false,
-    reconnectTimer: null,
-    restartTimer: null,
-    stopped: false,
+}
+
+function reportWHEPClose(
+  result: WHEPCloseResult,
+  distributor: ViewerPayload["distributor"]["kind"],
+) {
+  const detail = { ...result, distributor }
+  window.dispatchEvent(new CustomEvent("rstream:whep-close", { detail }))
+  if (
+    result.credentialRefreshFailed ||
+    !["already-absent", "deleted", "not-established"].includes(result.outcome)
+  ) {
+    console.warn("WHEP remote session cleanup was incomplete", detail)
   }
-  const pendingRemoteCandidates: RTCIceCandidateInit[] = []
-  const pendingLocalCandidates: RTCIceCandidateInit[] = []
-  const options = {
-    cleanupRef,
-    deviceId,
-    fail,
-    isCurrent,
-    reconnectAttempt,
-    setPhase,
-    videoRef,
+}
+
+function attachTrack(
+  event: RTCTrackEvent,
+  videoRef: RefObject<HTMLVideoElement | null>,
+  isCurrent: () => boolean,
+  setPhase: (phase: ViewerPhase) => void,
+) {
+  if (!isCurrent() || !videoRef.current) {
+    return
   }
-  async function sendLocalOffer({ iceRestart = false } = {}) {
-    if (sessionState.offerPending || !isCurrent()) {
-      return
-    }
-    if (socket.readyState !== WebSocket.OPEN) {
-      throw new Error("Signaling is not open")
-    }
-    sessionState.offerPending = true
-    try {
-      const offer = await peer.createOffer(
-        iceRestart ? { iceRestart: true } : undefined,
-      )
-      await peer.setLocalDescription(offer)
-      socket.send(
-        JSON.stringify({
-          type: "webrtc.offer",
-          sdp: offer.sdp,
-        }),
-      )
-      flushLocalCandidates()
-    } finally {
-      sessionState.offerPending = false
-    }
-  }
-  function sendLocalCandidate(candidate: RTCIceCandidateInit) {
-    if (socket.readyState !== WebSocket.OPEN) {
-      return
-    }
-    socket.send(
-      JSON.stringify({
-        type: "webrtc.candidate",
-        ...candidate,
-      }),
-    )
-  }
-  function flushLocalCandidates() {
-    while (pendingLocalCandidates.length > 0) {
-      const candidate = pendingLocalCandidates.shift()
-      if (candidate) {
-        sendLocalCandidate(candidate)
+  const stream = event.streams[0] ?? new MediaStream([event.track])
+  const video = videoRef.current
+  video.autoplay = true
+  video.muted = true
+  video.playsInline = true
+  video.srcObject = stream
+  void playVideo(video)
+    .then(() => {
+      if (isCurrent()) {
+        setPhase("playing")
       }
-    }
-  }
-  function scheduleIceRestart() {
-    if (
-      sessionState.restartTimer ||
-      peer.signalingState !== "stable" ||
-      socket.readyState !== WebSocket.OPEN ||
-      !isCurrent()
-    ) {
-      return
-    }
-    setPhase("reconnecting")
-    sessionState.restartTimer = window.setTimeout(() => {
-      sessionState.restartTimer = null
-      if (!isCurrent()) {
-        return
+    })
+    .catch(() => {
+      if (isCurrent()) {
+        setPhase("blocked")
       }
-      void sendLocalOffer({ iceRestart: true }).catch(fail)
-    }, 500)
-  }
-  function scheduleSessionReconnect() {
-    if (sessionState.stopped || sessionState.reconnectTimer || !isCurrent()) {
-      return
-    }
-    if (options.reconnectAttempt >= maxSessionReconnects) {
-      fail(new Error("Viewer reconnect limit reached."))
-      return
-    }
-    const nextAttempt = options.reconnectAttempt + 1
-    setPhase("reconnecting")
-    sessionState.reconnectTimer = window.setTimeout(() => {
-      sessionState.reconnectTimer = null
-      if (sessionState.stopped || !isCurrent()) {
-        return
-      }
-      void startViewerSession({
-        ...options,
-        reconnectAttempt: nextAttempt,
-      }).catch(fail)
-    }, sessionReconnectDelay(nextAttempt))
-  }
-  cleanupRef.current = () => {
-    sessionState.stopped = true
-    if (sessionState.restartTimer) {
-      window.clearTimeout(sessionState.restartTimer)
-      sessionState.restartTimer = null
-    }
-    if (sessionState.reconnectTimer) {
-      window.clearTimeout(sessionState.reconnectTimer)
-      sessionState.reconnectTimer = null
-    }
-    socket.close()
-    peer.close()
-    if (videoRef.current) {
-      videoRef.current.srcObject = null
-    }
-  }
-  peer.addTransceiver("video", { direction: "recvonly" })
-  peer.ontrack = (event) => {
-    const stream = event.streams[0]
-    if (!isCurrent() || !videoRef.current || !stream) {
-      return
-    }
-    const video = videoRef.current
-    video.autoplay = true
-    video.muted = true
-    video.playsInline = true
-    video.srcObject = stream
-    void playVideo(video)
-      .then(() => {
-        if (isCurrent()) {
-          setPhase("playing")
-        }
-      })
-      .catch(() => {
-        if (isCurrent()) {
-          setPhase("blocked")
-        }
-      })
-  }
-  peer.onconnectionstatechange = () => {
-    switch (peer.connectionState) {
-      case "disconnected":
-      case "failed":
-        scheduleIceRestart()
-        break
-      default:
-        break
-    }
-  }
-  peer.oniceconnectionstatechange = () => {
-    switch (peer.iceConnectionState) {
-      case "disconnected":
-      case "failed":
-        scheduleIceRestart()
-        break
-      default:
-        break
-    }
-  }
-  peer.onicecandidate = (event) => {
-    if (!event.candidate || socket.readyState !== WebSocket.OPEN) {
-      return
-    }
-    const candidate = event.candidate.toJSON()
-    if (sessionState.offerPending) {
-      pendingLocalCandidates.push(candidate)
-      return
-    }
-    sendLocalCandidate(candidate)
-  }
-  socket.onopen = () => {
-    void sendLocalOffer().catch(fail)
-  }
-  socket.onmessage = (event) => {
-    void handleMessage(peer, event.data, pendingRemoteCandidates).catch(fail)
-  }
-  socket.onerror = () => {
-    if (isCurrent()) {
-      setPhase("reconnecting")
-    }
-  }
-  socket.onclose = () => {
-    scheduleSessionReconnect()
-  }
+    })
 }
 
 async function playVideo(video: HTMLVideoElement) {
@@ -384,78 +282,15 @@ function waitForMediaReady(video: HTMLVideoElement) {
   })
 }
 
-function sessionReconnectDelay(attempt: number) {
-  const exponentialDelay = sessionReconnectBaseDelayMs * 2 ** (attempt - 1)
-  const boundedDelay = Math.min(exponentialDelay, sessionReconnectMaxDelayMs)
-  const jitter = Math.floor(Math.random() * sessionReconnectJitterMs)
-  return boundedDelay + jitter
-}
-
-async function handleMessage(
-  peer: RTCPeerConnection,
-  data: unknown,
-  pendingRemoteCandidates: RTCIceCandidateInit[],
+async function fetchViewer(
+  deviceId: string,
+  signal: AbortSignal,
+  excludedBackend: string | null,
 ) {
-  const parsed = signalMessageSchema.safeParse(JSON.parse(String(data)))
-  if (!parsed.success) {
-    throw new Error("Unexpected signaling message")
-  }
-  switch (parsed.data.type) {
-    case "webrtc.answer":
-      await peer.setRemoteDescription({
-        type: "answer",
-        sdp: parsed.data.sdp,
-      })
-      await flushRemoteCandidates(peer, pendingRemoteCandidates)
-      break
-    case "webrtc.candidate":
-      if (!parsed.data.candidate) {
-        return
-      }
-      await addRemoteCandidate(peer, pendingRemoteCandidates, {
-        candidate: parsed.data.candidate,
-        sdpMid: parsed.data.sdpMid ?? null,
-        sdpMLineIndex: parsed.data.sdpMLineIndex,
-        usernameFragment: parsed.data.usernameFragment ?? null,
-      })
-      break
-    case "error":
-      throw new Error(parsed.data.message ?? "Producer returned an error")
-    default:
-      break
-  }
-}
-
-async function addRemoteCandidate(
-  peer: RTCPeerConnection,
-  pendingRemoteCandidates: RTCIceCandidateInit[],
-  candidate: RTCIceCandidateInit,
-) {
-  if (!peer.remoteDescription) {
-    if (pendingRemoteCandidates.length >= maxPendingRemoteCandidates) {
-      throw new Error("Too many pending remote ICE candidates")
-    }
-    pendingRemoteCandidates.push(candidate)
-    return
-  }
-  await peer.addIceCandidate(candidate)
-}
-
-async function flushRemoteCandidates(
-  peer: RTCPeerConnection,
-  pendingRemoteCandidates: RTCIceCandidateInit[],
-) {
-  while (pendingRemoteCandidates.length > 0) {
-    const candidate = pendingRemoteCandidates.shift()
-    if (candidate) {
-      await peer.addIceCandidate(candidate)
-    }
-  }
-}
-
-async function fetchViewer(deviceId: string) {
-  const response = await fetch(`/api/devices/${deviceId}/viewer`, {
+  const query = excludedBackend === "mediamtx" ? "?distribution=direct" : ""
+  const response = await fetch(`/api/devices/${deviceId}/viewer${query}`, {
     method: "POST",
+    signal: viewerRequestSignal(signal),
   })
   const body = await responseJSON(response)
   if (!response.ok) {
@@ -464,12 +299,84 @@ async function fetchViewer(deviceId: string) {
   return viewerPayloadSchema.parse(body)
 }
 
+function monitorPlayback(
+  video: HTMLVideoElement,
+  expectedFramesPerSecond: number | undefined,
+  onUnhealthy: () => void,
+) {
+  const tracker = new PlaybackHealthTracker({
+    minimumFramesPerSecond: minimumUsableFramesPerSecond(
+      expectedFramesPerSecond,
+    ),
+  })
+  let stopped = false
+  const sample = () => {
+    if (stopped) {
+      return
+    }
+    const decodedFrames = decodedVideoFrames(video)
+    if (decodedFrames === null) {
+      tracker.reset()
+      return
+    }
+    let unhealthy = false
+    try {
+      unhealthy = tracker.observe({
+        active:
+          document.visibilityState === "visible" &&
+          !video.paused &&
+          !video.ended &&
+          video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA,
+        decodedFrames,
+        timeMilliseconds: performance.now(),
+      })
+    } catch {
+      tracker.reset()
+      return
+    }
+    if (unhealthy) {
+      stopped = true
+      window.clearInterval(timer)
+      onUnhealthy()
+    }
+  }
+  const timer = window.setInterval(sample, 1000)
+  sample()
+  return {
+    stop: () => {
+      if (stopped) {
+        return
+      }
+      stopped = true
+      window.clearInterval(timer)
+    },
+  }
+}
+
+function decodedVideoFrames(video: HTMLVideoElement) {
+  let quality: VideoPlaybackQuality | undefined
+  try {
+    quality = video.getVideoPlaybackQuality?.()
+  } catch {
+    return null
+  }
+  if (quality && Number.isFinite(quality.totalVideoFrames)) {
+    return quality.totalVideoFrames
+  }
+  const legacy = video as HTMLVideoElement & {
+    webkitDecodedFrameCount?: number
+  }
+  return Number.isFinite(legacy.webkitDecodedFrameCount)
+    ? Number(legacy.webkitDecodedFrameCount)
+    : null
+}
+
 async function responseJSON(response: Response): Promise<unknown> {
   return response.json()
 }
 
 function phaseLabel(
-  phase: Exclude<PlayerPhase, "blocked" | "error" | "playing">,
+  phase: Exclude<ViewerPhase, "blocked" | "error" | "playing">,
 ) {
   return phase === "reconnecting" ? "Reconnecting" : "Connecting"
 }

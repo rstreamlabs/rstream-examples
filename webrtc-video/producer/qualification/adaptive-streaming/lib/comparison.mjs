@@ -311,64 +311,72 @@ export function renderComparisonSVG(result) {
       unit: "share of phase · lower is better",
     },
   ];
-  const width = 1200;
-  const height = 620;
-  const startX = 45;
-  const panelWidth = 330;
-  const panelGap = 55;
-  const plotTop = 145;
-  const baselineY = 475;
-  const plotHeight = baselineY - plotTop;
-  const barWidth = 56;
-  const barGap = 21;
+  const width = 720;
+  const height = 1280;
+  const startX = 28;
+  const plotLeft = 190;
+  const plotRight = width - 32;
+  const plotWidth = plotRight - plotLeft;
+  const panelTop = 142;
+  const panelHeight = 330;
   const panel = (definition, index) => {
-    const x = startX + index * (panelWidth + panelGap);
+    const top = panelTop + index * panelHeight;
     const scale = (value) =>
-      baselineY -
+      plotLeft +
       Math.max(
         0,
-        Math.min(plotHeight, (value / definition.maximum) * plotHeight),
+        Math.min(plotWidth, (value / definition.maximum) * plotWidth),
       );
-    const gateY = scale(definition.gate);
+    const gateX = scale(definition.gate);
     const bars = groups
       .map((group, groupIndex) => {
         const distribution = group.summary[definition.field];
-        const barX = x + 10 + groupIndex * (barWidth + barGap);
-        const centerX = barX + barWidth / 2;
-        const medianY = scale(distribution.median);
-        const maximumY = scale(distribution.maximum);
-        const minimumY = scale(distribution.minimum);
+        const barY = top + 86 + groupIndex * 49;
+        const centerY = barY + 15;
+        const medianX = scale(distribution.median);
+        const maximumX = scale(distribution.maximum);
+        const minimumX = scale(distribution.minimum);
         const [pathLabel, profileLabel] = group.label.split(" ");
-        return `<rect x="${round(barX)}" y="${round(medianY)}" width="${barWidth}" height="${round(baselineY - medianY)}" rx="5" fill="${group.color}" fill-opacity="0.88"/>
-    <line x1="${round(centerX)}" y1="${round(maximumY)}" x2="${round(centerX)}" y2="${round(minimumY)}" stroke="#0f172a" stroke-width="2"/>
-    <line x1="${round(centerX - 8)}" y1="${round(maximumY)}" x2="${round(centerX + 8)}" y2="${round(maximumY)}" stroke="#0f172a" stroke-width="2"/>
-    <line x1="${round(centerX - 8)}" y1="${round(minimumY)}" x2="${round(centerX + 8)}" y2="${round(minimumY)}" stroke="#0f172a" stroke-width="2"/>
-    <text x="${round(centerX)}" y="${round(Math.min(medianY, maximumY) - 10)}" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">${definition.format(distribution.median)}</text>
-    <text x="${round(centerX)}" y="502" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">${pathLabel}</text>
-    <text x="${round(centerX)}" y="519" text-anchor="middle" font-size="12" fill="#475569">${profileLabel}</text>`;
+        const labelInside = medianX > plotRight - 90;
+        const labelX = labelInside
+          ? medianX - 10
+          : Math.min(plotRight - 6, Math.max(medianX, maximumX) + 10);
+        const labelAnchor = labelInside ? "end" : "start";
+        const labelColor = labelInside ? "#ffffff" : "#0f172a";
+        return `<text x="${startX}" y="${barY + 21}" font-size="19" font-weight="650" fill="#0f172a">${pathLabel}</text>
+    <text x="${startX + 72}" y="${barY + 21}" font-size="18" fill="#475569">${profileLabel}</text>
+    <rect x="${plotLeft}" y="${barY}" width="${round(Math.max(1, medianX - plotLeft))}" height="30" rx="5" fill="${group.color}" fill-opacity="0.9"/>
+    <line x1="${round(minimumX)}" y1="${centerY}" x2="${round(maximumX)}" y2="${centerY}" stroke="#0f172a" stroke-width="3"/>
+    <line x1="${round(minimumX)}" y1="${centerY - 7}" x2="${round(minimumX)}" y2="${centerY + 7}" stroke="#0f172a" stroke-width="3"/>
+    <line x1="${round(maximumX)}" y1="${centerY - 7}" x2="${round(maximumX)}" y2="${centerY + 7}" stroke="#0f172a" stroke-width="3"/>
+    <text x="${round(labelX)}" y="${barY + 22}" text-anchor="${labelAnchor}" font-size="18" font-weight="750" fill="${labelColor}">${definition.format(distribution.median)}</text>`;
       })
       .join("\n    ");
-    return `<text x="${x}" y="104" font-size="18" font-weight="700" fill="#0f172a">${definition.title}</text>
-  <text x="${x}" y="127" font-size="13" fill="#475569">${definition.unit}</text>
-  <line x1="${x}" y1="${baselineY}" x2="${x + panelWidth}" y2="${baselineY}" stroke="#94a3b8"/>
-  <line x1="${x}" y1="${round(gateY)}" x2="${x + panelWidth}" y2="${round(gateY)}" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="6 5"/>
-  <rect x="${x + panelWidth - 90}" y="${round(gateY - 18)}" width="90" height="18" fill="#ffffff"/>
-  <text x="${x + panelWidth - 4}" y="${round(gateY - 5)}" text-anchor="end" font-size="12" font-weight="600" fill="#b91c1c">${definition.gateLabel}</text>
+    return `<rect x="${startX}" y="${top}" width="${width - startX * 2}" height="${panelHeight - 18}" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="${startX + 18}" y="${top + 34}" font-size="26" font-weight="750" fill="#0f172a">${definition.title}</text>
+  <text x="${startX + 18}" y="${top + 61}" font-size="18" fill="#475569">${definition.unit}</text>
+  <line x1="${plotLeft}" y1="${top + 74}" x2="${plotLeft}" y2="${top + 282}" stroke="#cbd5e1"/>
+  <line x1="${plotRight}" y1="${top + 74}" x2="${plotRight}" y2="${top + 282}" stroke="#cbd5e1"/>
+  <line x1="${round(gateX)}" y1="${top + 74}" x2="${round(gateX)}" y2="${top + 282}" stroke="#dc2626" stroke-width="2" stroke-dasharray="7 6"/>
+  <text x="${round(gateX - 6)}" y="${top + 72}" text-anchor="end" font-size="17" font-weight="650" fill="#b91c1c">${definition.gateLabel}</text>
+  <text x="${plotLeft}" y="${top + 304}" font-size="16" fill="#64748b">0</text>
+  <text x="${plotRight}" y="${top + 304}" text-anchor="end" font-size="16" fill="#64748b">${definition.format(definition.maximum)}</text>
   ${bars}`;
   };
   const passColor = result.passed ? "#047857" : "#b91c1c";
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title description">
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title description" style="font-family:system-ui,sans-serif">
   <title id="title">Adaptive streaming direct and rstream comparison</title>
   <desc id="description">Median decoded frames per second, H.264 quantization, and frozen-time percentage with minimum and maximum whiskers across three direct and three rstream relay runs per protection profile.</desc>
   <rect width="100%" height="100%" fill="#ffffff"/>
-  <text x="${startX}" y="34" font-size="22" font-weight="700" fill="#0f172a">Adaptive video through direct and rstream relay paths</text>
-  <text x="${startX}" y="61" font-size="14" fill="#475569">${escapeXML(formatCapacity(result.impairment?.capacityKbps))} · ${escapeXML(result.impairment?.delay || "unknown delay")} one-way delay · ${escapeXML(result.impairment?.jitter || "unknown jitter")} jitter · ${escapeXML(result.impairment?.loss || "unknown loss")} loss · medians and min–max across three runs</text>
-  <text x="${width - 45}" y="34" text-anchor="end" font-size="17" font-weight="700" fill="${passColor}">${result.passed ? "PASS" : "FAIL"}</text>
+  <text x="${startX}" y="38" font-size="28" font-weight="750" fill="#0f172a">Direct and relay media quality</text>
+  <text x="${startX}" y="76" font-size="19" fill="#475569">${escapeXML(formatCapacity(result.impairment?.capacityKbps))} · ${escapeXML(result.impairment?.delay || "unknown delay")} one-way delay · ${escapeXML(result.impairment?.jitter || "unknown jitter")} jitter · ${escapeXML(result.impairment?.loss || "unknown loss")} loss</text>
+  <text x="${startX}" y="106" font-size="18" fill="#64748b">Medians and min–max across three independent runs</text>
+  <text x="${width - startX}" y="38" text-anchor="end" font-size="22" font-weight="750" fill="${passColor}">${result.passed ? "PASS" : "FAIL"}</text>
   ${panels.map(panel).join("\n  ")}
-  <text x="${startX}" y="566" font-size="13" fill="#475569">Base: NACK + RTX</text>
-  <text x="${startX + 155}" y="566" font-size="13" fill="#475569">Full: NACK + RTX + one FlexFEC repair packet per five media packets</text>
-  <text x="${startX}" y="594" font-size="12" fill="#64748b">Bars show the median. Whiskers show the minimum and maximum selected result; red lines are release gates.</text>
+  <text x="${startX}" y="1167" font-size="18" fill="#475569">Base · NACK + RTX</text>
+  <text x="${startX}" y="1197" font-size="18" fill="#475569">Full · NACK + RTX + one FlexFEC packet per five media packets</text>
+  <text x="${startX}" y="1237" font-size="17" fill="#64748b">Bars show medians; whiskers show min–max; dashed red lines are release gates.</text>
 </svg>
 `;
 }
