@@ -813,6 +813,35 @@ test("WHEP client rejects ambiguous edge credentials", () => {
   )
 })
 
+test("WHEP client preserves the browser fetch receiver", async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async function (_input, init) {
+    assert.equal(this, globalThis)
+    if (init.method === "POST") {
+      return response(initialAnswer, 201, {
+        "Content-Type": "application/sdp",
+        ETag: '"generation-1"',
+        Location: "/whep/session-1",
+      })
+    }
+    return response(null, 200)
+  }
+  try {
+    const client = new WHEPClient({
+      authorization: "",
+      endpoint: "https://edge.example/whep",
+      iceServers: [],
+      onError: () => {},
+      onTrack: () => {},
+      peerFactory: () => new FakePeer(),
+    })
+    await client.start()
+    await client.close()
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test("WHEP client bounds stalled signaling requests", async () => {
   let aborted = false
   const peer = new FakePeer()

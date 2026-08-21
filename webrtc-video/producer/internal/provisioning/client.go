@@ -65,7 +65,7 @@ func NewClient(cfg config.Config) (*Client, error) {
 	transport := baseTransport.Clone()
 	transport.DialContext = dialer.DialContext
 	transport.DisableKeepAlives = true
-	transport.ForceAttemptHTTP2 = false
+	transport.ForceAttemptHTTP2 = true
 	return &Client{
 		endpoint: parsed,
 		secret:   secret,

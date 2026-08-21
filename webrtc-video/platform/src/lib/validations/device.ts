@@ -35,18 +35,18 @@ export const viewerPayloadSchema = z.object({
       kind: z.literal("direct"),
       whep: z.string().url(),
       authorization: z.string().max(8192),
-      expiresAt: z.string().datetime(),
+      expiresAt: z.string().datetime({ offset: true }),
     }),
     z.object({
       kind: z.literal("mediamtx"),
       whep: z.string().url(),
       authorization: z.string().min(1).max(8192),
-      expiresAt: z.string().datetime(),
+      expiresAt: z.string().datetime({ offset: true }),
     }),
   ]),
   // Reuse the SDK TURN schema so the browser contract tracks rstream releases.
   turn: turnCredentialsSchema.extend({
-    expiresAt: z.string().datetime(),
+    expiresAt: z.string().datetime({ offset: true }),
   }),
 })
 

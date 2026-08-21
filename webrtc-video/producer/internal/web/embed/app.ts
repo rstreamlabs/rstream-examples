@@ -1,7 +1,7 @@
-import { turnCredentialsSchema } from "@rstreamlabs/rstream/turn";
 import { z } from "zod";
 
 import { WHEPClient } from "../../../../shared/whep-client";
+import { expiringTurnCredentialsSchema } from "./contracts";
 import { ICERestartTimers, iceRestartDisposition } from "./ice-recovery";
 
 type TURNPolicy = "auto" | "direct" | "relay";
@@ -46,10 +46,6 @@ const sessionStatsSchema = z.object({
 
 const errorResponseSchema = z.object({
   error: z.string().optional(),
-});
-
-const expiringTurnCredentialsSchema = turnCredentialsSchema.extend({
-  expiresAt: z.string().datetime(),
 });
 
 type SampleInfo = z.infer<typeof sampleInfoSchema>;

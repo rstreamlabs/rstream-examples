@@ -114,17 +114,20 @@ try {
   })
   assert.equal(patched.status, 204)
   const requestsBeforeRejection = upstreamRequests.length
-  const outsideScope = edgeURL(new URL("/admin", base), connectToken)
-  assert.equal(
-    (
-      await request(outsideScope, {
-        headers: { Authorization: "Bearer application-token" },
-        method: "GET",
-      })
-    ).status,
-    403,
-  )
-  assert.equal(upstreamRequests.length, requestsBeforeRejection)
+  for (const path of ["/ws", "/api/status", "/metrics", "/admin"]) {
+    const outsideScope = edgeURL(new URL(path, base), connectToken)
+    assert.equal(
+      (
+        await request(outsideScope, {
+          headers: { Authorization: "Bearer application-token" },
+          method: "GET",
+        })
+      ).status,
+      403,
+      `${path} escaped the WHEP-only credential scope`,
+    )
+    assert.equal(upstreamRequests.length, requestsBeforeRejection)
+  }
   assert.equal(
     (
       await request(new URL("/whep", base), {

@@ -28,6 +28,10 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const sessionRef = useRef(0)
   const [phase, setPhase] = useState<ViewerPhase>("connecting")
+  const [distributor, setDistributor] = useState<
+    ViewerPayload["distributor"]["kind"] | null
+  >(null)
+  const [mediaMTXFallback, setMediaMTXFallback] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [retryKey, setRetryKey] = useState(0)
   useEffect(() => {
@@ -49,16 +53,27 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
     }
     setError(null)
     setPhase("connecting")
+    setDistributor(null)
+    setMediaMTXFallback(false)
     let controller: ViewerSessionController<ViewerPayload, RTCTrackEvent>
     controller = new ViewerSessionController<ViewerPayload, RTCTrackEvent>({
       backend: (viewer) => viewer.distributor.kind,
       createClient: createViewerClient,
-      excludeBackendAfterFailure: (backend) => backend === "mediamtx",
+      excludeBackendAfterFailure: (backend) => {
+        const excluded = backend === "mediamtx"
+        if (excluded && isCurrent()) {
+          setMediaMTXFallback(true)
+        }
+        return excluded
+      },
       onFailure: fail,
       onPhase: setCurrentPhase,
       onSessionReset: () => {
         playbackMonitor?.stop()
         playbackMonitor = null
+        if (isCurrent()) {
+          setDistributor(null)
+        }
         if (isCurrent() && videoRef.current) {
           videoRef.current.srcObject = null
         }
@@ -76,6 +91,9 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
                 "MediaMTX playback stayed below the usable frame rate",
               )
               if (controller.excludeCurrentBackend(cause)) {
+                if (isCurrent()) {
+                  setMediaMTXFallback(true)
+                }
                 window.dispatchEvent(
                   new CustomEvent("rstream:video-distributor-fallback", {
                     detail: { from: "mediamtx", to: "direct" },
@@ -86,8 +104,13 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
           )
         }
       },
-      resolve: (signal, excludedBackend) =>
-        fetchViewer(deviceId, signal, excludedBackend),
+      resolve: async (signal, excludedBackend) => {
+        const viewer = await fetchViewer(deviceId, signal, excludedBackend)
+        if (isCurrent()) {
+          setDistributor(viewer.distributor.kind)
+        }
+        return viewer
+      },
     })
     void controller.start().catch(fail)
     return () => {
@@ -158,6 +181,17 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
             Retry
           </Button>
         </div>
+      ) : null}
+      {distributor ? (
+        <p className="text-xs text-muted-foreground" aria-live="polite">
+          Distribution path:{" "}
+          <span className="font-medium text-foreground">
+            {distributor === "mediamtx" ? "MediaMTX" : "Direct"}
+            {distributor === "direct" && mediaMTXFallback
+              ? " (MediaMTX fallback)"
+              : ""}
+          </span>
+        </p>
       ) : null}
     </div>
   )
