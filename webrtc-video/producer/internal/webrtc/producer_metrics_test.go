@@ -11,50 +11,58 @@ func TestProducerMetricsRemainMonotonicAfterSessionRetirement(t *testing.T) {
 	session := &Session{
 		id: "session",
 		estimator: fakeBandwidthEstimator{stats: map[string]any{
-			"averageLoss":                                    0.025,
-			"lossTargetBitrate":                              2_000_000,
-			"delayTargetBitrate":                             3_000_000,
-			"state":                                          "decrease",
-			"usage":                                          "overuse",
-			"delayEstimate":                                  18.0,
-			"pacerTargetBitrateBps":                          4_000_000,
-			"pacerPacingBitrateBps":                          6_000_000,
-			"pacerQueuePackets":                              3,
-			"pacerQueueDelayMilliseconds":                    4.5,
-			"lossGuardActive":                                true,
-			"lossGuardTargetBitrate":                         1_500_000,
-			"lossGuardLastObservedLoss":                      0.2,
-			"lossGuardReductions":                            uint64(7),
-			"lossGuardRecoveries":                            uint64(2),
-			"pacerQueueDrops":                                uint64(3),
-			"pacerMediaFramesDropped":                        uint64(4),
-			"pacerMediaBytesDropped":                         uint64(5),
-			"pacerRetransmissionPacketsExpired":              uint64(6),
-			"pacerRetransmissionPacketsCoalesced":            uint64(26),
-			"pacerRetransmissionPacketsSuppressed":           uint64(27),
-			"pacerRetransmissionRoundTripTimeMilliseconds":   60.0,
-			"pacerRetransmissionMinimumIntervalMilliseconds": 65.0,
-			"pacerForwardErrorCorrectionPacketsExpired":      uint64(7),
-			"pacerRetransmissionPacketsTrimmed":              uint64(8),
-			"pacerForwardErrorCorrectionPacketsTrimmed":      uint64(9),
-			"pacerSentPrimary":                               uint64(10),
-			"pacerSentPrimaryBytes":                          uint64(1000),
-			"pacerSentRetransmission":                        uint64(11),
-			"pacerSentRetransmissionBytes":                   uint64(1100),
-			"pacerSentForwardErrorCorrection":                uint64(12),
-			"pacerSentForwardErrorCorrectionBytes":           uint64(1200),
-			"pacerPrimarySSRC":                               uint32(101),
-			"pacerRetransmissionSSRC":                        uint32(102),
-			"pacerForwardErrorCorrectionSSRC":                uint32(103),
-			"pacerFirstRetransmissionSequence":               uint32(65530),
-			"pacerLastRetransmissionSequence":                uint32(4),
-			"pacerRetransmissionSequenceSamples":             uint64(11),
-			"staleBitrateCallbacks":                          uint64(13),
-			"twccFeedbackPackets":                            uint64(14),
-			"twccMalformedFeedback":                          uint64(15),
-			"twccPaddingStatuses":                            uint64(16),
-			"twccReportedLost":                               uint64(17),
-			"twccReportedStatuses":                           uint64(18),
+			"averageLoss":                                     0.025,
+			"lossTargetBitrate":                               2_000_000,
+			"delayTargetBitrate":                              3_000_000,
+			"state":                                           "decrease",
+			"usage":                                           "overuse",
+			"delayEstimate":                                   18.0,
+			"pacerTargetBitrateBps":                           4_000_000,
+			"pacerPacingBitrateBps":                           6_000_000,
+			"pacerQueuePackets":                               3,
+			"pacerQueueDelayMilliseconds":                     4.5,
+			"pacerMaximumQueueDelayMilliseconds":              80.0,
+			"pacerMaximumPrimaryResidenceMilliseconds":        70.0,
+			"pacerMaximumRepairResidenceMilliseconds":         60.0,
+			"pacerMaximumRetransmissionResidenceMilliseconds": 50.0,
+			"pacerMaximumForwardErrorCorrectionResidenceMilliseconds": 40.0,
+			"pacerMaximumSustainedDelayMilliseconds":                  30.0,
+			"pacerMaximumAdmittedSustainedDelayMilliseconds":          20.0,
+			"pacerKeyFrameReserveBytes":                               int64(65_536),
+			"lossGuardActive":                                         true,
+			"lossGuardTargetBitrate":                                  1_500_000,
+			"lossGuardLastObservedLoss":                               0.2,
+			"lossGuardReductions":                                     uint64(7),
+			"lossGuardRecoveries":                                     uint64(2),
+			"pacerQueueDrops":                                         uint64(3),
+			"pacerMediaFramesDropped":                                 uint64(4),
+			"pacerMediaBytesDropped":                                  uint64(5),
+			"pacerRetransmissionPacketsExpired":                       uint64(6),
+			"pacerRetransmissionPacketsCoalesced":                     uint64(26),
+			"pacerRetransmissionPacketsSuppressed":                    uint64(27),
+			"pacerRetransmissionRoundTripTimeMilliseconds":            60.0,
+			"pacerRetransmissionMinimumIntervalMilliseconds":          65.0,
+			"pacerForwardErrorCorrectionPacketsExpired":               uint64(7),
+			"pacerRetransmissionPacketsTrimmed":                       uint64(8),
+			"pacerForwardErrorCorrectionPacketsTrimmed":               uint64(9),
+			"pacerSentPrimary":                                        uint64(10),
+			"pacerSentPrimaryBytes":                                   uint64(1000),
+			"pacerSentRetransmission":                                 uint64(11),
+			"pacerSentRetransmissionBytes":                            uint64(1100),
+			"pacerSentForwardErrorCorrection":                         uint64(12),
+			"pacerSentForwardErrorCorrectionBytes":                    uint64(1200),
+			"pacerPrimarySSRC":                                        uint32(101),
+			"pacerRetransmissionSSRC":                                 uint32(102),
+			"pacerForwardErrorCorrectionSSRC":                         uint32(103),
+			"pacerFirstRetransmissionSequence":                        uint32(65530),
+			"pacerLastRetransmissionSequence":                         uint32(4),
+			"pacerRetransmissionSequenceSamples":                      uint64(11),
+			"staleBitrateCallbacks":                                   uint64(13),
+			"twccFeedbackPackets":                                     uint64(14),
+			"twccMalformedFeedback":                                   uint64(15),
+			"twccPaddingStatuses":                                     uint64(16),
+			"twccReportedLost":                                        uint64(17),
+			"twccReportedStatuses":                                    uint64(18),
 		}},
 		stats: SessionStats{
 			EstimatedBitrateBps:      3_000_000,
@@ -117,6 +125,16 @@ func TestProducerMetricsRemainMonotonicAfterSessionRetirement(t *testing.T) {
 	if active.MaximumRetransmissionRTTSeconds != 0.06 || active.MaximumRetransmissionRetryIntervalSeconds != 0.065 {
 		t.Fatalf("unexpected retransmission timing metrics: %+v", active)
 	}
+	if active.MaximumPacerPacketResidenceSeconds != 0.08 ||
+		active.MaximumPacerPrimaryResidenceSeconds != 0.07 ||
+		active.MaximumPacerRepairResidenceSeconds != 0.06 ||
+		active.MaximumPacerRetransmissionResidenceSeconds != 0.05 ||
+		active.MaximumPacerFECResidenceSeconds != 0.04 ||
+		active.MaximumPacerSustainedDelaySeconds != 0.03 ||
+		active.MaximumPacerAdmittedDelaySeconds != 0.02 ||
+		active.MaximumPacerKeyFrameReserveBytes != 65_536 {
+		t.Fatalf("unexpected pacer high-water metrics: %+v", active)
+	}
 	if active.PacerSentPrimaryBytes != 1000 || active.PacerSentRetransmissionBytes != 1100 || active.PacerSentFECBytes != 1200 {
 		t.Fatalf("unexpected wire byte counters: %+v", active)
 	}
@@ -131,6 +149,7 @@ func TestProducerMetricsRemainMonotonicAfterSessionRetirement(t *testing.T) {
 		retired.DelayControllerTargetBitrateBps != 0 || retired.LossGuardTargetBitrateBps != 0 ||
 		retired.DelayControllerDecreaseSessions != 0 || retired.DelayControllerOveruseSessions != 0 ||
 		retired.MaximumPacketLossRatio != 0 || retired.MaximumLossGuardObservedLossRatio != 0 ||
+		retired.MaximumPacerPacketResidenceSeconds != 0 || retired.MaximumPacerKeyFrameReserveBytes != 0 ||
 		retired.MaximumRetransmissionRTTSeconds != 0 ||
 		retired.MaximumRetransmissionRetryIntervalSeconds != 0 {
 		t.Fatalf("retired session leaked into current gauges: %+v", retired)

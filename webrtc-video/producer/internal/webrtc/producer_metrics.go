@@ -3,66 +3,74 @@ package webrtc
 import "github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/config"
 
 type ProducerStats struct {
-	ActiveSessions                            int
-	OpeningSessions                           int
-	TWCCNegotiatedSessions                    int
-	NACKNegotiatedSessions                    int
-	RTXNegotiatedSessions                     int
-	FlexFECNegotiatedSessions                 int
-	EstimatedBitrateBps                       int64
-	LossControllerTargetBitrateBps            int64
-	DelayControllerTargetBitrateBps           int64
-	DelayControllerIncreaseSessions           int
-	DelayControllerDecreaseSessions           int
-	DelayControllerHoldSessions               int
-	DelayControllerNormalSessions             int
-	DelayControllerOveruseSessions            int
-	DelayControllerUnderuseSessions           int
-	EncoderTargetBitrateBps                   int64
-	PacerTargetBitrateBps                     int64
-	PacerPacingBitrateBps                     int64
-	PacerQueuePackets                         int64
-	MaximumPacketLossRatio                    float64
-	MaximumLossGuardObservedLossRatio         float64
-	MaximumDelayEstimateSeconds               float64
-	MaximumPacerQueueDelaySeconds             float64
-	MaximumRetransmissionRTTSeconds           float64
-	MaximumRetransmissionRetryIntervalSeconds float64
-	LossGuardActiveSessions                   int
-	LossGuardTargetBitrateBps                 int64
-	AdaptiveBitrateUpdates                    uint64
-	AdaptiveBitrateFailures                   uint64
-	RecoveryKeyFrameRequests                  uint64
-	RecoveryKeyFrameCoalesced                 uint64
-	RecoveryKeyFrameFailures                  uint64
-	RTCPKeyFrameRequests                      uint64
-	RTCPMalformedFeedback                     uint64
-	LossGuardReductions                       uint64
-	LossGuardRecoveries                       uint64
-	PacerQueueDrops                           uint64
-	PacerMediaFrameDrops                      uint64
-	PacerMediaByteDrops                       uint64
-	PacerRepairPacketsExpired                 uint64
-	PacerRepairPacketsTrimmed                 uint64
-	PacerRetransmissionPacketsExpired         uint64
-	PacerRetransmissionPacketsCoalesced       uint64
-	PacerRetransmissionPacketsSuppressed      uint64
-	PacerFECPacketsExpired                    uint64
-	PacerRetransmissionPacketsTrimmed         uint64
-	PacerFECPacketsTrimmed                    uint64
-	PacerSentPrimary                          uint64
-	PacerSentPrimaryBytes                     uint64
-	PacerSentRepair                           uint64
-	PacerSentRetransmission                   uint64
-	PacerSentRetransmissionBytes              uint64
-	PacerSentFEC                              uint64
-	PacerSentFECBytes                         uint64
-	StaleBitrateCallbacks                     uint64
-	TWCCFeedbackPackets                       uint64
-	TWCCMalformedFeedback                     uint64
-	TWCCPaddingStatuses                       uint64
-	TWCCReportedLost                          uint64
-	TWCCReportedStatuses                      uint64
+	ActiveSessions                             int
+	OpeningSessions                            int
+	TWCCNegotiatedSessions                     int
+	NACKNegotiatedSessions                     int
+	RTXNegotiatedSessions                      int
+	FlexFECNegotiatedSessions                  int
+	EstimatedBitrateBps                        int64
+	LossControllerTargetBitrateBps             int64
+	DelayControllerTargetBitrateBps            int64
+	DelayControllerIncreaseSessions            int
+	DelayControllerDecreaseSessions            int
+	DelayControllerHoldSessions                int
+	DelayControllerNormalSessions              int
+	DelayControllerOveruseSessions             int
+	DelayControllerUnderuseSessions            int
+	EncoderTargetBitrateBps                    int64
+	PacerTargetBitrateBps                      int64
+	PacerPacingBitrateBps                      int64
+	PacerQueuePackets                          int64
+	MaximumPacketLossRatio                     float64
+	MaximumLossGuardObservedLossRatio          float64
+	MaximumDelayEstimateSeconds                float64
+	MaximumPacerQueueDelaySeconds              float64
+	MaximumPacerPacketResidenceSeconds         float64
+	MaximumPacerPrimaryResidenceSeconds        float64
+	MaximumPacerRepairResidenceSeconds         float64
+	MaximumPacerRetransmissionResidenceSeconds float64
+	MaximumPacerFECResidenceSeconds            float64
+	MaximumPacerSustainedDelaySeconds          float64
+	MaximumPacerAdmittedDelaySeconds           float64
+	MaximumPacerKeyFrameReserveBytes           int64
+	MaximumRetransmissionRTTSeconds            float64
+	MaximumRetransmissionRetryIntervalSeconds  float64
+	LossGuardActiveSessions                    int
+	LossGuardTargetBitrateBps                  int64
+	AdaptiveBitrateUpdates                     uint64
+	AdaptiveBitrateFailures                    uint64
+	RecoveryKeyFrameRequests                   uint64
+	RecoveryKeyFrameCoalesced                  uint64
+	RecoveryKeyFrameFailures                   uint64
+	RTCPKeyFrameRequests                       uint64
+	RTCPMalformedFeedback                      uint64
+	LossGuardReductions                        uint64
+	LossGuardRecoveries                        uint64
+	PacerQueueDrops                            uint64
+	PacerMediaFrameDrops                       uint64
+	PacerMediaByteDrops                        uint64
+	PacerRepairPacketsExpired                  uint64
+	PacerRepairPacketsTrimmed                  uint64
+	PacerRetransmissionPacketsExpired          uint64
+	PacerRetransmissionPacketsCoalesced        uint64
+	PacerRetransmissionPacketsSuppressed       uint64
+	PacerFECPacketsExpired                     uint64
+	PacerRetransmissionPacketsTrimmed          uint64
+	PacerFECPacketsTrimmed                     uint64
+	PacerSentPrimary                           uint64
+	PacerSentPrimaryBytes                      uint64
+	PacerSentRepair                            uint64
+	PacerSentRetransmission                    uint64
+	PacerSentRetransmissionBytes               uint64
+	PacerSentFEC                               uint64
+	PacerSentFECBytes                          uint64
+	StaleBitrateCallbacks                      uint64
+	TWCCFeedbackPackets                        uint64
+	TWCCMalformedFeedback                      uint64
+	TWCCPaddingStatuses                        uint64
+	TWCCReportedLost                           uint64
+	TWCCReportedStatuses                       uint64
 }
 
 type producerTotals struct {
@@ -166,6 +174,14 @@ func addActiveSessionStats(producer *ProducerStats, session SessionStats, shared
 	producer.MaximumLossGuardObservedLossRatio = max(producer.MaximumLossGuardObservedLossRatio, bandwidth.LossGuardLastObservedLoss)
 	producer.MaximumDelayEstimateSeconds = max(producer.MaximumDelayEstimateSeconds, bandwidth.DelayEstimateMs/1000)
 	producer.MaximumPacerQueueDelaySeconds = max(producer.MaximumPacerQueueDelaySeconds, bandwidth.PacerQueueDelayMs/1000)
+	producer.MaximumPacerPacketResidenceSeconds = max(producer.MaximumPacerPacketResidenceSeconds, bandwidth.PacerMaximumDelayMs/1000)
+	producer.MaximumPacerPrimaryResidenceSeconds = max(producer.MaximumPacerPrimaryResidenceSeconds, bandwidth.PacerMaximumPrimaryDelayMs/1000)
+	producer.MaximumPacerRepairResidenceSeconds = max(producer.MaximumPacerRepairResidenceSeconds, bandwidth.PacerMaximumRepairDelayMs/1000)
+	producer.MaximumPacerRetransmissionResidenceSeconds = max(producer.MaximumPacerRetransmissionResidenceSeconds, bandwidth.PacerMaximumRetransmissionDelayMs/1000)
+	producer.MaximumPacerFECResidenceSeconds = max(producer.MaximumPacerFECResidenceSeconds, bandwidth.PacerMaximumFECDelayMs/1000)
+	producer.MaximumPacerSustainedDelaySeconds = max(producer.MaximumPacerSustainedDelaySeconds, bandwidth.PacerMaximumSustainedDelayMs/1000)
+	producer.MaximumPacerAdmittedDelaySeconds = max(producer.MaximumPacerAdmittedDelaySeconds, bandwidth.PacerMaximumAdmittedDelayMs/1000)
+	producer.MaximumPacerKeyFrameReserveBytes = max(producer.MaximumPacerKeyFrameReserveBytes, bandwidth.PacerKeyFrameReserveBytes)
 	producer.MaximumRetransmissionRTTSeconds = max(producer.MaximumRetransmissionRTTSeconds, bandwidth.PacerRetransmissionRoundTripTimeMs/1000)
 	producer.MaximumRetransmissionRetryIntervalSeconds = max(producer.MaximumRetransmissionRetryIntervalSeconds, bandwidth.PacerRetransmissionRetryIntervalMs/1000)
 	producer.LossControllerTargetBitrateBps += int64(bandwidth.LossTargetBitrateBps)

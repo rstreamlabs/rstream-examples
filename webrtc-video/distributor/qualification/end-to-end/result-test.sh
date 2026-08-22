@@ -37,6 +37,8 @@ jq -nc '
     framesPerSecond: 30,
     encoderTargetKbps: target,
     encodedKeyFrames: 1,
+    flexFECMediaPackets: 5,
+    flexFECRepairPackets: 1,
     twccTargetKbps: target,
     jitterSeconds: 0.01,
     currentRoundTripTimeSeconds: 0.02,
@@ -56,18 +58,47 @@ jq -nc '
     delayTargetKbps: target,
     lossAverage: 0,
     lossGuardActive: false,
+    lossGuardLastObservedLoss: 0,
     lossGuardRecoveries: 0,
     lossGuardReductions: 0,
     lossGuardTargetKbps: 0,
     lossTargetKbps: target,
     pacerPacingBitrateKbps: target,
+    pacerMaximumAdmittedDelayMilliseconds: 0,
+    pacerMaximumFECDelayMilliseconds: 0,
+    pacerMaximumPrimaryDelayMilliseconds: 0,
+    pacerMaximumQueueDelayMilliseconds: 0,
+    pacerMaximumRepairDelayMilliseconds: 0,
+    pacerMaximumRetransmissionDelayMilliseconds: 0,
+    pacerMaximumSustainedDelayMilliseconds: 0,
+    pacerKeyFrameReserveBytes: 0,
+    pacerMediaBytesDropped: 0,
+    pacerMediaFramesDropped: 0,
+    pacerQueueDrops: 0,
+    pacerQueuePackets: 0,
+    pacerRepairPacketsExpired: 0,
+    pacerRepairPacketsTrimmed: 0,
+    pacerRetransmissionPacketsCoalesced: 0,
+    pacerRetransmissionPacketsExpired: 0,
+    pacerRetransmissionPacketsSuppressed: 0,
+    pacerRetransmissionPacketsTrimmed: 0,
+    pacerFECPacketsExpired: 0,
+    pacerFECPacketsTrimmed: 0,
+    pacerSentPrimary: 1,
+    pacerSentRepair: 1,
     pacerSentRetransmission: 0,
     pacerTargetBitrateKbps: target,
     recoveryKeyFrameCoalesced: 0,
     recoveryKeyFrameFailures: 0,
     recoveryKeyFrameRequests: 1,
     rtcpKeyFrameRequests: 1,
+    rtcpMalformedFeedback: 0,
+    staleBitrateCallbacks: 0,
     twccFeedbackPackets: 1,
+    twccMalformedFeedback: 0,
+    twccPaddingStatuses: 0,
+    twccReportedLost: 0,
+    twccReportedStatuses: 1,
     pacerSentFEC: 1,
     producerMetricsSource: "openmetrics"
   };
@@ -124,6 +155,7 @@ render_result "${fixture_directory}/samples.jsonl" | jq -e '
     .profile.playoutDelayHintSeconds == 0.2 and
     .profile.acceptance.capacityTransitionGraceMilliseconds == 4000 and
     .profile.acceptance.maximumCapacityTransitionFreezeSeconds == 3 and
+    .profile.acceptance.maximumCapacityTransitionDisruptionSeconds == 3 and
     .profile.acceptance.maximumContinuousImpairmentFreezeRatio == 0.02 and
     .profile.acceptance.maximumDroppedFrameRatio == 0.01 and
     .profile.acceptance.minimumFrameRateRatio == 0.8 and
@@ -187,13 +219,15 @@ jq -c '
     .framesDropped = 1
   else . end
 ' "${fixture_directory}/source-network-samples.jsonl" >"${fixture_directory}/excessive-frame-drop-samples.jsonl"
+jq '.lossPercent = 1 | .qdisc.drops = 1' \
+  "${fixture_directory}/source-network-qualified.json" >"${fixture_directory}/source-network-loss.json"
 render_result \
   "${fixture_directory}/excessive-frame-drop-samples.jsonl" \
   mediamtx \
   "${fixture_directory}/distributed-browser.json" \
   "${fixture_directory}/native-source-profile.json" \
   "${fixture_directory}/viewer-network-disabled.json" \
-  "${fixture_directory}/source-network-qualified.json" | jq -e '
+  "${fixture_directory}/source-network-loss.json" | jq -e '
     .sourceNetwork.frameDropRatio > .profile.acceptance.maximumDroppedFrameRatio and
     .gates.sourceNetworkResponse == false and
     .passed == false
@@ -316,10 +350,59 @@ jq -c '
 ' "${fixture_directory}/samples.jsonl" >"${fixture_directory}/bounded-transition-samples.jsonl"
 render_result "${fixture_directory}/bounded-transition-samples.jsonl" | jq -e '
   .viewerNetwork.freezeDurationDeltaSeconds == 0.8 and
+  .viewerNetwork.capacityTransitionDisruptionSeconds == 0.8 and
   .viewerNetwork.steadyStateFreezeDurationDeltaSeconds == 0 and
   .gates.playback == true and
   .gates.viewerNetworkRecovery == true and
   .passed == true
+' >/dev/null
+
+jq -c '
+  if .phase == "viewer-network" and .elapsedMilliseconds == 3000 then
+    .framesDropped = 9 |
+    .freezeCount = 1 |
+    .totalFreezesDurationSeconds = 2
+  else . end
+' "${fixture_directory}/samples.jsonl" >"${fixture_directory}/bounded-presentation-transition-samples.jsonl"
+render_result "${fixture_directory}/bounded-presentation-transition-samples.jsonl" | jq -e '
+  .viewerNetwork.frameDropRatio > .profile.acceptance.maximumDroppedFrameRatio and
+  .viewerNetwork.capacityTransitionFramesDropped == 9 and
+  .viewerNetwork.capacityTransitionDroppedFrameDurationSeconds == 0.3 and
+  .viewerNetwork.capacityTransitionDisruptionSeconds == 2.3 and
+  .viewerNetwork.steadyStateFrameDropRatio == 0 and
+  .gates.viewerNetworkRecovery == true and
+  .passed == true
+' >/dev/null
+
+jq -c '
+  if .phase == "viewer-network" and .elapsedMilliseconds == 3000 then
+    .framesDropped = 31 |
+    .freezeCount = 1 |
+    .totalFreezesDurationSeconds = 2
+  else . end
+' "${fixture_directory}/samples.jsonl" >"${fixture_directory}/excessive-presentation-transition-samples.jsonl"
+render_result "${fixture_directory}/excessive-presentation-transition-samples.jsonl" | jq -e '
+  .viewerNetwork.capacityTransitionDroppedFrameDurationSeconds > 1 and
+  .viewerNetwork.capacityTransitionDisruptionSeconds > .profile.acceptance.maximumCapacityTransitionDisruptionSeconds and
+  .gates.viewerNetworkRecovery == false and
+  .passed == false
+' >/dev/null
+
+jq -cs '
+  map(
+    if .phase == "viewer-network" and .elapsedMilliseconds == 3000 then
+      [.,
+        (. + {elapsedMilliseconds: 7000, framesDecoded: 180, qpSum: 4500, bytesReceived: 6000000}),
+        (. + {elapsedMilliseconds: 8000, framesDecoded: 210, framesDropped: 3, qpSum: 5250, bytesReceived: 7000000})]
+    else [.] end
+  ) | flatten | sort_by(.elapsedMilliseconds)[]
+' "${fixture_directory}/samples.jsonl" >"${fixture_directory}/steady-frame-drops-samples.jsonl"
+render_result "${fixture_directory}/steady-frame-drops-samples.jsonl" | jq -e '
+  .viewerNetwork.capacityTransitionFramesDropped == 0 and
+  .viewerNetwork.steadyStateFramesDroppedDelta == 3 and
+  .viewerNetwork.steadyStateFrameDropRatio > .profile.acceptance.maximumDroppedFrameRatio and
+  .gates.viewerNetworkRecovery == false and
+  .passed == false
 ' >/dev/null
 
 jq -c '

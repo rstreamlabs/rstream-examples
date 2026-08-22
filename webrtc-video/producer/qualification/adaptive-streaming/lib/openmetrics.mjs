@@ -50,8 +50,22 @@ export function producerSample(samples) {
   const labeled = (name, ...labelMatchers) =>
     metricValue(samples, name, labelMatchers);
   const scale = (metric, factor) => (metric === null ? null : metric * factor);
+  const sumPresent = (...metrics) =>
+    metrics.every((metric) => metric === null)
+      ? null
+      : metrics.reduce((total, metric) => total + (metric || 0), 0);
   const lossGuardSessions = value(
     "rstream_video_producer_loss_guard_active_sessions",
+  );
+  const sentRetransmission = labeled(
+    "rstream_video_producer_pacer_sent_packets_total",
+    "kind",
+    "retransmission",
+  );
+  const sentFEC = labeled(
+    "rstream_video_producer_pacer_sent_packets_total",
+    "kind",
+    "fec",
   );
   return {
     adaptiveBitrateFailures: labeled(
@@ -111,6 +125,16 @@ export function producerSample(samples) {
       "frame_type",
       "key",
     ),
+    flexFECMediaPackets: labeled(
+      "rstream_video_producer_flexfec_group_packets",
+      "kind",
+      "media",
+    ),
+    flexFECRepairPackets: labeled(
+      "rstream_video_producer_flexfec_group_packets",
+      "kind",
+      "repair",
+    ),
     lossAverage: value("rstream_video_producer_twcc_maximum_packet_loss_ratio"),
     lossGuardActive: lossGuardSessions === null ? null : lossGuardSessions > 0,
     lossGuardLastObservedLoss: value(
@@ -144,6 +168,58 @@ export function producerSample(samples) {
     pacerMediaFramesDropped: value(
       "rstream_video_producer_pacer_media_dropped_frames_total",
     ),
+    pacerMaximumAdmittedDelayMilliseconds: scale(
+      value(
+        "rstream_video_producer_pacer_maximum_admitted_queue_delay_seconds",
+      ),
+      1_000,
+    ),
+    pacerMaximumFECDelayMilliseconds: scale(
+      labeled(
+        "rstream_video_producer_pacer_maximum_packet_residence_seconds",
+        "kind",
+        "fec",
+      ),
+      1_000,
+    ),
+    pacerMaximumPrimaryDelayMilliseconds: scale(
+      labeled(
+        "rstream_video_producer_pacer_maximum_packet_residence_seconds",
+        "kind",
+        "primary",
+      ),
+      1_000,
+    ),
+    pacerMaximumQueueDelayMilliseconds: scale(
+      labeled(
+        "rstream_video_producer_pacer_maximum_packet_residence_seconds",
+        "kind",
+        "all",
+      ),
+      1_000,
+    ),
+    pacerMaximumRepairDelayMilliseconds: scale(
+      labeled(
+        "rstream_video_producer_pacer_maximum_packet_residence_seconds",
+        "kind",
+        "repair",
+      ),
+      1_000,
+    ),
+    pacerMaximumRetransmissionDelayMilliseconds: scale(
+      labeled(
+        "rstream_video_producer_pacer_maximum_packet_residence_seconds",
+        "kind",
+        "retransmission",
+      ),
+      1_000,
+    ),
+    pacerMaximumSustainedDelayMilliseconds: scale(
+      value(
+        "rstream_video_producer_pacer_maximum_sustained_queue_delay_seconds",
+      ),
+      1_000,
+    ),
     pacerPacingBitrateKbps: scale(
       value("rstream_video_producer_pacer_pacing_bytes_per_second"),
       8 / 1_000,
@@ -156,6 +232,33 @@ export function producerSample(samples) {
       "rstream_video_producer_pacer_queue_dropped_packets_total",
     ),
     pacerQueuePackets: value("rstream_video_producer_pacer_queue_packets"),
+    pacerKeyFrameReserveBytes: value(
+      "rstream_video_producer_pacer_key_frame_reserve_bytes",
+    ),
+    pacerFECPacketsExpired: labeled(
+      "rstream_video_producer_pacer_repair_discarded_packets_total",
+      "reason",
+      "expired",
+      "repair",
+      "fec",
+    ),
+    pacerFECPacketsTrimmed: labeled(
+      "rstream_video_producer_pacer_repair_discarded_packets_total",
+      "reason",
+      "trimmed",
+      "repair",
+      "fec",
+    ),
+    pacerRepairPacketsExpired: labeled(
+      "rstream_video_producer_pacer_repair_discarded_packets_total",
+      "reason",
+      "expired",
+    ),
+    pacerRepairPacketsTrimmed: labeled(
+      "rstream_video_producer_pacer_repair_discarded_packets_total",
+      "reason",
+      "trimmed",
+    ),
     pacerRetransmissionRTTMilliseconds: scale(
       value(
         "rstream_video_producer_pacer_maximum_retransmission_round_trip_time_seconds",
@@ -175,6 +278,13 @@ export function producerSample(samples) {
       "repair",
       "retransmission",
     ),
+    pacerRetransmissionPacketsExpired: labeled(
+      "rstream_video_producer_pacer_repair_discarded_packets_total",
+      "reason",
+      "expired",
+      "repair",
+      "retransmission",
+    ),
     pacerRetransmissionPacketsSuppressed: labeled(
       "rstream_video_producer_pacer_repair_discarded_packets_total",
       "reason",
@@ -182,21 +292,21 @@ export function producerSample(samples) {
       "repair",
       "retransmission",
     ),
-    pacerSentFEC: labeled(
-      "rstream_video_producer_pacer_sent_packets_total",
-      "kind",
-      "fec",
+    pacerRetransmissionPacketsTrimmed: labeled(
+      "rstream_video_producer_pacer_repair_discarded_packets_total",
+      "reason",
+      "trimmed",
+      "repair",
+      "retransmission",
     ),
+    pacerSentFEC: sentFEC,
     pacerSentPrimary: labeled(
       "rstream_video_producer_pacer_sent_packets_total",
       "kind",
       "primary",
     ),
-    pacerSentRetransmission: labeled(
-      "rstream_video_producer_pacer_sent_packets_total",
-      "kind",
-      "retransmission",
-    ),
+    pacerSentRepair: sumPresent(sentRetransmission, sentFEC),
+    pacerSentRetransmission: sentRetransmission,
     pacerTargetBitrateKbps: scale(
       value("rstream_video_producer_pacer_target_bytes_per_second"),
       8 / 1_000,
@@ -218,6 +328,11 @@ export function producerSample(samples) {
       "source",
       "rtcp",
     ),
+    rtcpMalformedFeedback: labeled(
+      "rstream_video_producer_malformed_feedback_total",
+      "protocol",
+      "rtcp",
+    ),
     staleBitrateCallbacks: value(
       "rstream_video_producer_stale_bitrate_callbacks_total",
     ),
@@ -228,6 +343,9 @@ export function producerSample(samples) {
       "rstream_video_producer_malformed_feedback_total",
       "protocol",
       "twcc",
+    ),
+    twccPaddingStatuses: value(
+      "rstream_video_producer_twcc_padding_packet_statuses_total",
     ),
     twccReportedLost: value(
       "rstream_video_producer_twcc_reported_lost_packets_total",

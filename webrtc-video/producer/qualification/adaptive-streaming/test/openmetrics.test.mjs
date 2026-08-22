@@ -8,6 +8,8 @@ test("producer OpenMetrics map bounded transport signals", () => {
     parseOpenMetrics(`# HELP ignored help
 rstream_video_producer_encoder_target_bytes_per_second 1000000
 rstream_video_producer_encoded_frames_total{frame_type="key"} 9
+rstream_video_producer_flexfec_group_packets{kind="media"} 5
+rstream_video_producer_flexfec_group_packets{kind="repair"} 1
 rstream_video_producer_twcc_estimated_available_bytes_per_second 750000
 rstream_video_producer_twcc_controller_target_bytes_per_second{controller="loss"} 700000
 rstream_video_producer_twcc_controller_target_bytes_per_second{controller="delay"} 650000
@@ -23,12 +25,25 @@ rstream_video_producer_loss_guard_target_bytes_per_second 500000
 rstream_video_producer_loss_guard_transitions_total{transition="reduce"} 3
 rstream_video_producer_loss_guard_transitions_total{transition="recover"} 2
 rstream_video_producer_pacer_target_bytes_per_second 1200000
+rstream_video_producer_pacer_maximum_packet_residence_seconds{kind="all"} 0.08
+rstream_video_producer_pacer_maximum_packet_residence_seconds{kind="primary"} 0.07
+rstream_video_producer_pacer_maximum_packet_residence_seconds{kind="repair"} 0.06
+rstream_video_producer_pacer_maximum_packet_residence_seconds{kind="retransmission"} 0.05
+rstream_video_producer_pacer_maximum_packet_residence_seconds{kind="fec"} 0.04
+rstream_video_producer_pacer_maximum_sustained_queue_delay_seconds 0.03
+rstream_video_producer_pacer_maximum_admitted_queue_delay_seconds 0.02
+rstream_video_producer_pacer_key_frame_reserve_bytes 65536
 rstream_video_producer_pacer_maximum_retransmission_round_trip_time_seconds 0.06
 rstream_video_producer_pacer_maximum_retransmission_interval_seconds 0.065
 rstream_video_producer_pacer_repair_discarded_packets_total{reason="coalesced",repair="retransmission"} 11
 rstream_video_producer_pacer_repair_discarded_packets_total{reason="suppressed",repair="retransmission"} 13
+rstream_video_producer_pacer_repair_discarded_packets_total{reason="expired",repair="retransmission"} 2
+rstream_video_producer_pacer_repair_discarded_packets_total{reason="expired",repair="fec"} 3
+rstream_video_producer_pacer_repair_discarded_packets_total{reason="trimmed",repair="retransmission"} 4
+rstream_video_producer_pacer_repair_discarded_packets_total{reason="trimmed",repair="fec"} 5
 rstream_video_producer_pacer_sent_packets_total{kind="primary"} 100
 rstream_video_producer_pacer_sent_packets_total{kind="retransmission"} 7
+rstream_video_producer_pacer_sent_packets_total{kind="fec"} 8
 rstream_video_producer_adaptive_bitrate_updates_total{outcome="applied"} 4
 rstream_video_producer_adaptive_bitrate_updates_total{outcome="failed"} 1
 rstream_video_producer_key_frame_requests_total{source="recovery"} 5
@@ -36,10 +51,14 @@ rstream_video_producer_key_frame_requests_total{source="rtcp"} 6
 rstream_video_producer_key_frame_requests_coalesced_total 7
 rstream_video_producer_key_frame_request_failures_total 0
 rstream_video_producer_malformed_feedback_total{protocol="twcc"} 2
+rstream_video_producer_malformed_feedback_total{protocol="rtcp"} 3
+rstream_video_producer_twcc_padding_packet_statuses_total 4
 `),
   );
   assert.equal(sample.encoderTargetKbps, 8000);
   assert.equal(sample.encodedKeyFrames, 9);
+  assert.equal(sample.flexFECMediaPackets, 5);
+  assert.equal(sample.flexFECRepairPackets, 1);
   assert.equal(sample.twccTargetKbps, 6000);
   assert.equal(sample.lossTargetKbps, 5600);
   assert.equal(sample.delayTargetKbps, 5200);
@@ -51,12 +70,28 @@ rstream_video_producer_malformed_feedback_total{protocol="twcc"} 2
   assert.equal(sample.lossGuardReductions, 3);
   assert.equal(sample.lossGuardRecoveries, 2);
   assert.equal(sample.pacerTargetBitrateKbps, 9600);
+  assert.equal(sample.pacerMaximumQueueDelayMilliseconds, 80);
+  assert.equal(sample.pacerMaximumPrimaryDelayMilliseconds, 70);
+  assert.equal(sample.pacerMaximumRepairDelayMilliseconds, 60);
+  assert.equal(sample.pacerMaximumRetransmissionDelayMilliseconds, 50);
+  assert.equal(sample.pacerMaximumFECDelayMilliseconds, 40);
+  assert.equal(sample.pacerMaximumSustainedDelayMilliseconds, 30);
+  assert.equal(sample.pacerMaximumAdmittedDelayMilliseconds, 20);
+  assert.equal(sample.pacerKeyFrameReserveBytes, 65536);
   assert.equal(sample.pacerRetransmissionRTTMilliseconds, 60);
   assert.equal(sample.pacerRetransmissionIntervalMilliseconds, 65);
   assert.equal(sample.pacerRetransmissionPacketsCoalesced, 11);
   assert.equal(sample.pacerRetransmissionPacketsSuppressed, 13);
+  assert.equal(sample.pacerRetransmissionPacketsExpired, 2);
+  assert.equal(sample.pacerFECPacketsExpired, 3);
+  assert.equal(sample.pacerRepairPacketsExpired, 5);
+  assert.equal(sample.pacerRetransmissionPacketsTrimmed, 4);
+  assert.equal(sample.pacerFECPacketsTrimmed, 5);
+  assert.equal(sample.pacerRepairPacketsTrimmed, 9);
   assert.equal(sample.pacerSentPrimary, 100);
   assert.equal(sample.pacerSentRetransmission, 7);
+  assert.equal(sample.pacerSentFEC, 8);
+  assert.equal(sample.pacerSentRepair, 15);
   assert.equal(sample.adaptiveBitrateUpdates, 4);
   assert.equal(sample.adaptiveBitrateFailures, 1);
   assert.equal(sample.recoveryKeyFrameRequests, 5);
@@ -64,6 +99,8 @@ rstream_video_producer_malformed_feedback_total{protocol="twcc"} 2
   assert.equal(sample.recoveryKeyFrameCoalesced, 7);
   assert.equal(sample.recoveryKeyFrameFailures, 0);
   assert.equal(sample.twccMalformedFeedback, 2);
+  assert.equal(sample.rtcpMalformedFeedback, 3);
+  assert.equal(sample.twccPaddingStatuses, 4);
 });
 
 test("producer OpenMetrics reject ambiguous syntax and non-finite values", () => {

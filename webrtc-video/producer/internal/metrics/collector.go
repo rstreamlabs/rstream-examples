@@ -52,6 +52,11 @@ type Collector struct {
 	lossGuardObservedLossRatio    *prometheus.Desc
 	delayEstimateSeconds          *prometheus.Desc
 	pacerQueueDelaySeconds        *prometheus.Desc
+	pacerMaximumResidenceSeconds  *prometheus.Desc
+	pacerMaximumSustainedSeconds  *prometheus.Desc
+	pacerMaximumAdmittedSeconds   *prometheus.Desc
+	pacerKeyFrameReserveBytes     *prometheus.Desc
+	flexFECGroupPackets           *prometheus.Desc
 	retransmissionRTTSeconds      *prometheus.Desc
 	retransmissionIntervalSeconds *prometheus.Desc
 	lossGuardActiveSessions       *prometheus.Desc
@@ -242,6 +247,40 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 			nil,
 			"seconds",
 		),
+		pacerMaximumResidenceSeconds: newDesc(
+			namespace+"_pacer_maximum_packet_residence_seconds",
+			"Highest packet residence time observed by active session pacers, grouped by packet kind.",
+			[]string{"kind"},
+			nil,
+			"seconds",
+		),
+		pacerMaximumSustainedSeconds: newDesc(
+			namespace+"_pacer_maximum_sustained_queue_delay_seconds",
+			"Highest projected sustained pacer queue delay observed across active sessions.",
+			nil,
+			nil,
+			"seconds",
+		),
+		pacerMaximumAdmittedSeconds: newDesc(
+			namespace+"_pacer_maximum_admitted_queue_delay_seconds",
+			"Highest projected pacer queue delay admitted before packetization across active sessions.",
+			nil,
+			nil,
+			"seconds",
+		),
+		pacerKeyFrameReserveBytes: newDesc(
+			namespace+"_pacer_key_frame_reserve_bytes",
+			"Largest recently admitted key frame used to reserve pacer admission capacity across active sessions.",
+			nil,
+			nil,
+			"bytes",
+		),
+		flexFECGroupPackets: newDesc(
+			namespace+"_flexfec_group_packets",
+			"Configured packet count in each FlexFEC protection group by packet kind.",
+			[]string{"kind"},
+			nil,
+		),
 		retransmissionRTTSeconds: newDesc(
 			namespace+"_pacer_maximum_retransmission_round_trip_time_seconds",
 			"Highest round-trip time used to pace retransmission retries among active sessions.",
@@ -400,6 +439,11 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 		c.lossGuardObservedLossRatio,
 		c.delayEstimateSeconds,
 		c.pacerQueueDelaySeconds,
+		c.pacerMaximumResidenceSeconds,
+		c.pacerMaximumSustainedSeconds,
+		c.pacerMaximumAdmittedSeconds,
+		c.pacerKeyFrameReserveBytes,
+		c.flexFECGroupPackets,
 		c.retransmissionRTTSeconds,
 		c.retransmissionIntervalSeconds,
 		c.lossGuardActiveSessions,
@@ -497,6 +541,29 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(c.lossGuardObservedLossRatio, prometheus.GaugeValue, producer.MaximumLossGuardObservedLossRatio)
 	ch <- prometheus.MustNewConstMetric(c.delayEstimateSeconds, prometheus.GaugeValue, producer.MaximumDelayEstimateSeconds)
 	ch <- prometheus.MustNewConstMetric(c.pacerQueueDelaySeconds, prometheus.GaugeValue, producer.MaximumPacerQueueDelaySeconds)
+	for _, residence := range []struct {
+		kind  string
+		value float64
+	}{
+		{kind: "all", value: producer.MaximumPacerPacketResidenceSeconds},
+		{kind: "primary", value: producer.MaximumPacerPrimaryResidenceSeconds},
+		{kind: "repair", value: producer.MaximumPacerRepairResidenceSeconds},
+		{kind: "retransmission", value: producer.MaximumPacerRetransmissionResidenceSeconds},
+		{kind: "fec", value: producer.MaximumPacerFECResidenceSeconds},
+	} {
+		ch <- prometheus.MustNewConstMetric(c.pacerMaximumResidenceSeconds, prometheus.GaugeValue, residence.value, residence.kind)
+	}
+	ch <- prometheus.MustNewConstMetric(c.pacerMaximumSustainedSeconds, prometheus.GaugeValue, producer.MaximumPacerSustainedDelaySeconds)
+	ch <- prometheus.MustNewConstMetric(c.pacerMaximumAdmittedSeconds, prometheus.GaugeValue, producer.MaximumPacerAdmittedDelaySeconds)
+	ch <- prometheus.MustNewConstMetric(c.pacerKeyFrameReserveBytes, prometheus.GaugeValue, float64(producer.MaximumPacerKeyFrameReserveBytes))
+	flexFECMediaPackets := uint32(0)
+	flexFECRepairPackets := uint32(0)
+	if c.cfg.WebRTC.Interceptors.FlexFEC {
+		flexFECMediaPackets = c.cfg.FlexFECMediaPackets()
+		flexFECRepairPackets = c.cfg.FlexFECRepairPackets()
+	}
+	ch <- prometheus.MustNewConstMetric(c.flexFECGroupPackets, prometheus.GaugeValue, float64(flexFECMediaPackets), "media")
+	ch <- prometheus.MustNewConstMetric(c.flexFECGroupPackets, prometheus.GaugeValue, float64(flexFECRepairPackets), "repair")
 	ch <- prometheus.MustNewConstMetric(c.retransmissionRTTSeconds, prometheus.GaugeValue, producer.MaximumRetransmissionRTTSeconds)
 	ch <- prometheus.MustNewConstMetric(c.retransmissionIntervalSeconds, prometheus.GaugeValue, producer.MaximumRetransmissionRetryIntervalSeconds)
 	ch <- prometheus.MustNewConstMetric(c.lossGuardActiveSessions, prometheus.GaugeValue, float64(producer.LossGuardActiveSessions))

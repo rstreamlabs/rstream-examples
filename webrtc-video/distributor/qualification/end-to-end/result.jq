@@ -1,6 +1,7 @@
 def maximum(name): [.[] | .[name]] | max;
 def maximum_freeze_ratio: 0.02;
 def maximum_capacity_transition_freeze_seconds: 3;
+def maximum_capacity_transition_disruption_seconds: 3;
 def capacity_transition_grace_milliseconds: 4000;
 def maximum_dropped_frame_ratio: 0.01;
 def minimum_frame_rate_ratio: 0.8;
@@ -48,17 +49,51 @@ def producer_metrics_complete:
     .delayTargetKbps,
     .encoderTargetKbps,
     .encodedKeyFrames,
+    .flexFECMediaPackets,
+    .flexFECRepairPackets,
     .lossAverage,
+    .lossGuardLastObservedLoss,
     .lossGuardRecoveries,
     .lossGuardReductions,
     .lossGuardTargetKbps,
     .lossTargetKbps,
     .pacerPacingBitrateKbps,
+    .pacerMaximumAdmittedDelayMilliseconds,
+    .pacerMaximumFECDelayMilliseconds,
+    .pacerMaximumPrimaryDelayMilliseconds,
+    .pacerMaximumQueueDelayMilliseconds,
+    .pacerMaximumRepairDelayMilliseconds,
+    .pacerMaximumRetransmissionDelayMilliseconds,
+    .pacerMaximumSustainedDelayMilliseconds,
+    .pacerKeyFrameReserveBytes,
+    .pacerMediaBytesDropped,
+    .pacerMediaFramesDropped,
+    .pacerQueueDrops,
+    .pacerQueuePackets,
+    .pacerRepairPacketsExpired,
+    .pacerRepairPacketsTrimmed,
+    .pacerRetransmissionPacketsCoalesced,
+    .pacerRetransmissionPacketsExpired,
+    .pacerRetransmissionPacketsSuppressed,
+    .pacerRetransmissionPacketsTrimmed,
+    .pacerFECPacketsExpired,
+    .pacerFECPacketsTrimmed,
+    .pacerSentFEC,
+    .pacerSentPrimary,
+    .pacerSentRepair,
+    .pacerSentRetransmission,
     .pacerTargetBitrateKbps,
     .recoveryKeyFrameCoalesced,
     .recoveryKeyFrameFailures,
     .recoveryKeyFrameRequests,
     .rtcpKeyFrameRequests,
+    .rtcpMalformedFeedback,
+    .staleBitrateCallbacks,
+    .twccFeedbackPackets,
+    .twccMalformedFeedback,
+    .twccPaddingStatuses,
+    .twccReportedLost,
+    .twccReportedStatuses,
     .twccTargetKbps
   ] | all(type == "number")) and
   (.lossGuardActive | type == "boolean");
@@ -128,6 +163,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     acceptance: {
       capacityTransitionGraceMilliseconds: capacity_transition_grace_milliseconds,
       maximumCapacityTransitionFreezeSeconds: maximum_capacity_transition_freeze_seconds,
+      maximumCapacityTransitionDisruptionSeconds: maximum_capacity_transition_disruption_seconds,
       maximumContinuousImpairmentFreezeRatio: maximum_freeze_ratio,
       maximumDroppedFrameRatio: maximum_dropped_frame_ratio,
       minimumFrameRateRatio: minimum_frame_rate_ratio
@@ -199,6 +235,8 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     recoveryFramesDecodedDelta: phase_delta("recovery"; "framesDecoded"),
     recoveryFreezeCountDelta: phase_counter_delta("recovery"; "freezeCount"),
     recoveryFreezeDurationDeltaSeconds: phase_counter_delta("recovery"; "totalFreezesDurationSeconds"),
+    steadyStateFramesDecodedDelta: phase_delta_after("viewer-network"; capacity_transition_grace_milliseconds; "framesDecoded"),
+    steadyStateFramesDroppedDelta: phase_delta_after("viewer-network"; capacity_transition_grace_milliseconds; "framesDropped"),
     steadyStateFreezeCountDelta: phase_delta_after("viewer-network"; capacity_transition_grace_milliseconds; "freezeCount"),
     steadyStateFreezeDurationDeltaSeconds: phase_delta_after("viewer-network"; capacity_transition_grace_milliseconds; "totalFreezesDurationSeconds"),
     steadyRecoveryFreezeCountDelta: phase_delta_after("recovery"; capacity_transition_grace_milliseconds; "freezeCount"),
@@ -218,6 +256,8 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     recoveryFramesDecodedDelta: phase_delta("recovery"; "framesDecoded"),
     recoveryFreezeCountDelta: phase_counter_delta("recovery"; "freezeCount"),
     recoveryFreezeDurationDeltaSeconds: phase_counter_delta("recovery"; "totalFreezesDurationSeconds"),
+    steadyStateFramesDecodedDelta: phase_delta_after("source-network"; capacity_transition_grace_milliseconds; "framesDecoded"),
+    steadyStateFramesDroppedDelta: phase_delta_after("source-network"; capacity_transition_grace_milliseconds; "framesDropped"),
     steadyStateFreezeCountDelta: phase_delta_after("source-network"; capacity_transition_grace_milliseconds; "freezeCount"),
     steadyStateFreezeDurationDeltaSeconds: phase_delta_after("source-network"; capacity_transition_grace_milliseconds; "totalFreezesDurationSeconds"),
     steadyRecoveryFreezeCountDelta: phase_delta_after("recovery"; capacity_transition_grace_milliseconds; "freezeCount"),
@@ -283,6 +323,17 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     else 0 end
   )
 | .viewerNetwork.frameDropRatio = frame_drop_ratio(.viewerNetwork.framesDecodedDelta; .viewerNetwork.framesDroppedDelta)
+| .viewerNetwork.steadyStateFrameDropRatio = frame_drop_ratio(.viewerNetwork.steadyStateFramesDecodedDelta; .viewerNetwork.steadyStateFramesDroppedDelta)
+| .viewerNetwork.capacityTransitionFramesDropped = ([0, ((.viewerNetwork.framesDroppedDelta // 0) - (.viewerNetwork.steadyStateFramesDroppedDelta // 0))] | max)
+| .viewerNetwork.capacityTransitionDroppedFrameDurationSeconds = (
+    if .phases.baseline.decodedFramesPerSecond > 0 then
+      .viewerNetwork.capacityTransitionFramesDropped / .phases.baseline.decodedFramesPerSecond
+    else 0 end
+  )
+| .viewerNetwork.capacityTransitionDisruptionSeconds = (
+    (.viewerNetwork.freezeDurationDeltaSeconds // 0) +
+    .viewerNetwork.capacityTransitionDroppedFrameDurationSeconds
+  )
 | .viewerNetwork.recoveryFreezeRatio = (
     if .viewerNetwork.enabled then
       .viewerNetwork.recoveryFreezeDurationDeltaSeconds / $recovery_seconds
@@ -294,6 +345,17 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     else 0 end
   )
 | .sourceNetwork.frameDropRatio = frame_drop_ratio(.sourceNetwork.framesDecodedDelta; .sourceNetwork.framesDroppedDelta)
+| .sourceNetwork.steadyStateFrameDropRatio = frame_drop_ratio(.sourceNetwork.steadyStateFramesDecodedDelta; .sourceNetwork.steadyStateFramesDroppedDelta)
+| .sourceNetwork.capacityTransitionFramesDropped = ([0, ((.sourceNetwork.framesDroppedDelta // 0) - (.sourceNetwork.steadyStateFramesDroppedDelta // 0))] | max)
+| .sourceNetwork.capacityTransitionDroppedFrameDurationSeconds = (
+    if .phases.baseline.decodedFramesPerSecond > 0 then
+      .sourceNetwork.capacityTransitionFramesDropped / .phases.baseline.decodedFramesPerSecond
+    else 0 end
+  )
+| .sourceNetwork.capacityTransitionDisruptionSeconds = (
+    (.sourceNetwork.freezeDurationDeltaSeconds // 0) +
+    .sourceNetwork.capacityTransitionDroppedFrameDurationSeconds
+  )
 | .sourceNetwork.recoveryFreezeRatio = (
     if .sourceNetwork.enabled then
       .sourceNetwork.recoveryFreezeDurationDeltaSeconds / $recovery_seconds
@@ -347,7 +409,15 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     if .sourceNetwork.enabled then
       .phases.sourceNetwork.decodedFramesPerSecond >=
         (.phases.baseline.decodedFramesPerSecond * minimum_frame_rate_ratio) and
-      .sourceNetwork.frameDropRatio <= maximum_dropped_frame_ratio and
+      (if .sourceNetwork.capacityKbps > 0 and
+          .sourceNetwork.delayMilliseconds == 0 and
+          .sourceNetwork.jitterMilliseconds == 0 and
+          .sourceNetwork.lossPercent == 0 then
+        .sourceNetwork.capacityTransitionDisruptionSeconds <= maximum_capacity_transition_disruption_seconds and
+        .sourceNetwork.steadyStateFrameDropRatio <= maximum_dropped_frame_ratio
+      else
+        .sourceNetwork.frameDropRatio <= maximum_dropped_frame_ratio
+      end) and
       (if .sourceNetwork.capacityKbps > 0 then
         .sourceNetwork.adaptiveBitrateUpdatesDelta > 0 and
         .phases.sourceNetwork.encoderTargetKbps.medianLast10Seconds <=
@@ -364,15 +434,16 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
       (if .viewerNetwork.lossPercent > 0 then .viewerNetwork.qdisc.drops > 0 else true end) and
       .phases.viewerNetwork.decodedFramesPerSecond >=
         (.phases.baseline.decodedFramesPerSecond * minimum_frame_rate_ratio) and
-      .viewerNetwork.frameDropRatio <= maximum_dropped_frame_ratio and
       (if .viewerNetwork.capacityKbps > 0 and
           .viewerNetwork.delayMilliseconds == 0 and
           .viewerNetwork.jitterMilliseconds == 0 and
           .viewerNetwork.lossPercent == 0 then
-        .viewerNetwork.freezeDurationDeltaSeconds <= maximum_capacity_transition_freeze_seconds and
+        .viewerNetwork.capacityTransitionDisruptionSeconds <= maximum_capacity_transition_disruption_seconds and
+        .viewerNetwork.steadyStateFrameDropRatio <= maximum_dropped_frame_ratio and
         .viewerNetwork.steadyStateFreezeCountDelta == 0 and
         .viewerNetwork.steadyStateFreezeDurationDeltaSeconds == 0
       else
+        .viewerNetwork.frameDropRatio <= maximum_dropped_frame_ratio and
         .viewerNetwork.freezeRatio <= maximum_freeze_ratio
       end) and
       .phases.recovery.decodedFramesPerSecond >=

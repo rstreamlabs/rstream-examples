@@ -40,6 +40,7 @@ func (p staticWHEPProvider) WHEPInitialRequests() map[string]uint64 {
 func TestCollectorExportsStableUnitsAndBoundedDimensions(t *testing.T) {
 	cfg := config.Default()
 	cfg.WebRTC.Adaptive.Enabled = true
+	cfg.WebRTC.Interceptors.FlexFEC = true
 	cfg.Media.Mode = config.MediaModePerViewer
 	source := staticSourceProvider{stats: media.SourceStats{
 		Sources:               1,
@@ -49,27 +50,35 @@ func TestCollectorExportsStableUnitsAndBoundedDimensions(t *testing.T) {
 		DeliveryDroppedFrames: 2,
 	}}
 	producer := staticProducerProvider{stats: rtc.ProducerStats{
-		ActiveSessions:                            1,
-		TWCCNegotiatedSessions:                    1,
-		NACKNegotiatedSessions:                    1,
-		EstimatedBitrateBps:                       8_000_000,
-		LossControllerTargetBitrateBps:            7_000_000,
-		DelayControllerTargetBitrateBps:           6_000_000,
-		DelayControllerDecreaseSessions:           1,
-		DelayControllerOveruseSessions:            1,
-		LossGuardActiveSessions:                   1,
-		LossGuardTargetBitrateBps:                 5_000_000,
-		MaximumPacketLossRatio:                    0.025,
-		MaximumLossGuardObservedLossRatio:         0.2,
-		MaximumDelayEstimateSeconds:               0.018,
-		PacerSentPrimaryBytes:                     9000,
-		PacerRetransmissionPacketsCoalesced:       7,
-		PacerRetransmissionPacketsSuppressed:      8,
-		MaximumRetransmissionRTTSeconds:           0.06,
-		MaximumRetransmissionRetryIntervalSeconds: 0.065,
-		TWCCFeedbackPackets:                       10,
-		TWCCReportedStatuses:                      100,
-		TWCCReportedLost:                          3,
+		ActiveSessions:                             1,
+		TWCCNegotiatedSessions:                     1,
+		NACKNegotiatedSessions:                     1,
+		EstimatedBitrateBps:                        8_000_000,
+		LossControllerTargetBitrateBps:             7_000_000,
+		DelayControllerTargetBitrateBps:            6_000_000,
+		DelayControllerDecreaseSessions:            1,
+		DelayControllerOveruseSessions:             1,
+		LossGuardActiveSessions:                    1,
+		LossGuardTargetBitrateBps:                  5_000_000,
+		MaximumPacketLossRatio:                     0.025,
+		MaximumLossGuardObservedLossRatio:          0.2,
+		MaximumDelayEstimateSeconds:                0.018,
+		MaximumPacerPacketResidenceSeconds:         0.08,
+		MaximumPacerPrimaryResidenceSeconds:        0.07,
+		MaximumPacerRepairResidenceSeconds:         0.06,
+		MaximumPacerRetransmissionResidenceSeconds: 0.05,
+		MaximumPacerFECResidenceSeconds:            0.04,
+		MaximumPacerSustainedDelaySeconds:          0.03,
+		MaximumPacerAdmittedDelaySeconds:           0.02,
+		MaximumPacerKeyFrameReserveBytes:           65_536,
+		PacerSentPrimaryBytes:                      9000,
+		PacerRetransmissionPacketsCoalesced:        7,
+		PacerRetransmissionPacketsSuppressed:       8,
+		MaximumRetransmissionRTTSeconds:            0.06,
+		MaximumRetransmissionRetryIntervalSeconds:  0.065,
+		TWCCFeedbackPackets:                        10,
+		TWCCReportedStatuses:                       100,
+		TWCCReportedLost:                           3,
 	}}
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(NewCollector(cfg, source, producer, staticWHEPProvider{
@@ -117,8 +126,11 @@ func TestCollectorExportsStableUnitsAndBoundedDimensions(t *testing.T) {
 	if value := metricValue(t, families, namespace+"_transport_negotiated_sessions", map[string]string{"feature": "twcc"}); value != 1 {
 		t.Fatalf("TWCC negotiated sessions = %f, want 1", value)
 	}
-	if value := metricValue(t, families, namespace+"_transport_negotiated_sessions", map[string]string{"feature": "flexfec"}); value != 0 {
-		t.Fatalf("FlexFEC negotiated sessions = %f, want 0", value)
+	if value := metricValue(t, families, namespace+"_flexfec_group_packets", map[string]string{"kind": "media"}); value != 5 {
+		t.Fatalf("FlexFEC media packets = %f, want 5", value)
+	}
+	if value := metricValue(t, families, namespace+"_flexfec_group_packets", map[string]string{"kind": "repair"}); value != 1 {
+		t.Fatalf("FlexFEC repair packets = %f, want 1", value)
 	}
 	if value := metricValue(t, families, namespace+"_pacer_sent_bytes_total", map[string]string{"kind": "primary"}); value != 9000 {
 		t.Fatalf("primary wire bytes = %f, want 9000", value)
@@ -134,6 +146,21 @@ func TestCollectorExportsStableUnitsAndBoundedDimensions(t *testing.T) {
 	}
 	if value := metricValue(t, families, namespace+"_pacer_maximum_retransmission_interval_seconds", nil); value != 0.065 {
 		t.Fatalf("retransmission interval = %f, want 0.065", value)
+	}
+	if value := metricValue(t, families, namespace+"_pacer_maximum_packet_residence_seconds", map[string]string{"kind": "all"}); value != 0.08 {
+		t.Fatalf("maximum packet residence = %f, want 0.08", value)
+	}
+	if value := metricValue(t, families, namespace+"_pacer_maximum_packet_residence_seconds", map[string]string{"kind": "retransmission"}); value != 0.05 {
+		t.Fatalf("maximum retransmission residence = %f, want 0.05", value)
+	}
+	if value := metricValue(t, families, namespace+"_pacer_maximum_sustained_queue_delay_seconds", nil); value != 0.03 {
+		t.Fatalf("maximum sustained queue delay = %f, want 0.03", value)
+	}
+	if value := metricValue(t, families, namespace+"_pacer_maximum_admitted_queue_delay_seconds", nil); value != 0.02 {
+		t.Fatalf("maximum admitted queue delay = %f, want 0.02", value)
+	}
+	if value := metricValue(t, families, namespace+"_pacer_key_frame_reserve_bytes", nil); value != 65_536 {
+		t.Fatalf("key-frame reserve = %f bytes, want 65536", value)
 	}
 	if value := metricValue(t, families, namespace+"_whep_initial_requests_total", map[string]string{"outcome": "created"}); value != 7 {
 		t.Fatalf("created WHEP requests = %f, want 7", value)
