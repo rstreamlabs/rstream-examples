@@ -308,6 +308,8 @@ test("a live MediaMTX WHEP resource is deleted before direct fallback starts", a
 test("playback failure excludes MediaMTX for the remaining viewer session", async () => {
   const clients = []
   const exclusions = []
+  const reportedFailures = []
+  const playbackFailure = new Error("playback stalled")
   const controller = new ViewerSessionController({
     backend: (resolution) => resolution.backend,
     createClient: (resolution, callbacks) => {
@@ -320,6 +322,10 @@ test("playback failure excludes MediaMTX for the remaining viewer session", asyn
       return client
     },
     delayForAttempt: () => 0,
+    excludeBackendAfterFailure: (backend, cause) => {
+      reportedFailures.push({ backend, cause })
+      return backend === "mediamtx"
+    },
     onFailure: assert.fail,
     onPhase: () => {},
     onTrack: () => {},
@@ -330,16 +336,16 @@ test("playback failure excludes MediaMTX for the remaining viewer session", asyn
     stableSessionMs: 60000,
   })
   await controller.start()
-  assert.equal(
-    controller.excludeCurrentBackend(new Error("playback stalled")),
-    true,
-  )
+  assert.equal(controller.excludeCurrentBackend(playbackFailure), true)
   assert.equal(
     controller.excludeCurrentBackend(new Error("duplicate stall")),
     false,
   )
   await eventually(() => clients.length === 2)
   assert.deepEqual(exclusions, [null, "mediamtx"])
+  assert.deepEqual(reportedFailures, [
+    { backend: "mediamtx", cause: playbackFailure },
+  ])
   assert.equal(clients[0].backend, "mediamtx")
   assert.equal(clients[0].closed, true)
   assert.equal(clients[1].backend, "direct")

@@ -2,5 +2,6 @@
 .env*.local
 .next
 .prisma
+.artifacts
 node_modules
 tsconfig.tsbuildinfo

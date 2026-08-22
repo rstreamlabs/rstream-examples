@@ -31,17 +31,36 @@ export function localTunnelNames(suffix) {
 }
 
 export function localStackOptions(args) {
-  if (args.length === 0) {
-    return { exposure: "public" }
+  const values = new Map()
+  for (let index = 0; index < args.length; index += 2) {
+    const name = args[index]
+    const value = args[index + 1]
+    if (
+      !value ||
+      !new Set(["--exposure", "--next-mode", "--state-file"]).has(name)
+    ) {
+      throw new Error(
+        "usage: run-local-mediamtx.mjs [--exposure public|rstream] [--next-mode development|production] [--state-file PATH]",
+      )
+    }
+    if (values.has(name)) {
+      throw new Error(`${name} must be specified at most once`)
+    }
+    values.set(name, value)
   }
-  if (
-    args.length === 2 &&
-    args[0] === "--exposure" &&
-    new Set(["public", "rstream"]).has(args[1])
-  ) {
-    return { exposure: args[1] }
+  const exposure = values.get("--exposure") ?? "public"
+  if (!new Set(["public", "rstream"]).has(exposure)) {
+    throw new Error(
+      "usage: run-local-mediamtx.mjs [--exposure public|rstream] [--next-mode development|production] [--state-file PATH]",
+    )
   }
-  throw new Error("usage: run-local-mediamtx.mjs [--exposure public|rstream]")
+  const nextMode = values.get("--next-mode") ?? "development"
+  if (!new Set(["development", "production"]).has(nextMode)) {
+    throw new Error(
+      "usage: run-local-mediamtx.mjs [--exposure public|rstream] [--next-mode development|production] [--state-file PATH]",
+    )
+  }
+  return { exposure, nextMode, stateFile: values.get("--state-file") }
 }
 
 export function tunnelResources(names, exposure) {
@@ -101,6 +120,14 @@ export function tunnelConfiguration(names, exposure) {
   }
   lines.push("")
   return lines.join("\n")
+}
+
+export async function writeStackState(path, state) {
+  await writeFile(path, `${JSON.stringify(state, null, 2)}\n`, {
+    flag: "wx",
+    mode: 0o600,
+  })
+  return () => rm(path, { force: true })
 }
 
 export function mediaMTXEnvironment(platformHost, keys) {
@@ -447,6 +474,7 @@ async function runLocalMediaMTX() {
   const client = rstreamClient()
   let distributorStarted = false
   let nextProcess
+  let removeStateFile = async () => {}
   let runnerProcess
   const stop = installStopSignalHandlers()
   try {
@@ -463,9 +491,6 @@ async function runLocalMediaMTX() {
     )
     await requireAvailableUDPPort(8189)
     await runCommand("npm", ["run", "clean"], { cwd: platformDirectory })
-    await runCommand("npm", ["run", "prisma:generate"], {
-      cwd: platformDirectory,
-    })
     const platformEnvironment = {
       ...process.env,
       MEDIAMTX_JWT_ADDITIONAL_JWKS: '{"keys":[]}',
@@ -482,9 +507,14 @@ async function runLocalMediaMTX() {
         options.exposure === "rstream" ? names.distributor : "",
       VIDEO_DISTRIBUTOR: "mediamtx",
     }
+    await runCommand(
+      "npm",
+      ["run", options.nextMode === "production" ? "build" : "prisma:generate"],
+      { cwd: platformDirectory, env: platformEnvironment },
+    )
     nextProcess = startProcess(
       join(platformDirectory, "node_modules", ".bin", "next"),
-      ["dev", "--port", "3000"],
+      [options.nextMode === "production" ? "start" : "dev", "--port", "3000"],
       {
         cwd: platformDirectory,
         env: platformEnvironment,
@@ -569,6 +599,20 @@ async function runLocalMediaMTX() {
           : "the temporary callback tunnel"
       }.\n`,
     )
+    if (options.stateFile) {
+      removeStateFile = await writeStackState(options.stateFile, {
+        containerName,
+        distributor: distributorHost
+          ? `https://${distributorHost}`
+          : "http://localhost:8889",
+        exposure: options.exposure,
+        nextMode: options.nextMode,
+        platform: "http://localhost:3000",
+        platformCallback: `https://${platformHost}`,
+        ready: true,
+        version: 1,
+      })
+    }
     await Promise.race([stop.promise, nextFailure, runnerFailure])
   } finally {
     if (distributorStarted) {
@@ -583,6 +627,7 @@ async function runLocalMediaMTX() {
     await terminateProcess(runnerProcess)
     await terminateProcess(nextProcess)
     await rm(runtimeDirectory, { force: true, recursive: true })
+    await removeStateFile()
     stop.remove()
   }
 }

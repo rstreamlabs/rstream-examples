@@ -63,6 +63,11 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
         const excluded = backend === "mediamtx"
         if (excluded && isCurrent()) {
           setMediaMTXFallback(true)
+          window.dispatchEvent(
+            new CustomEvent("rstream:video-distributor-fallback", {
+              detail: { from: "mediamtx", to: "direct" },
+            }),
+          )
         }
         return excluded
       },
@@ -90,16 +95,7 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
               const cause = new Error(
                 "MediaMTX playback stayed below the usable frame rate",
               )
-              if (controller.excludeCurrentBackend(cause)) {
-                if (isCurrent()) {
-                  setMediaMTXFallback(true)
-                }
-                window.dispatchEvent(
-                  new CustomEvent("rstream:video-distributor-fallback", {
-                    detail: { from: "mediamtx", to: "direct" },
-                  }),
-                )
-              }
+              controller.excludeCurrentBackend(cause)
             },
           )
         }

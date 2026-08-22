@@ -72,6 +72,8 @@ jobs:
             webrtc-video/distributor/qualification/source-network/fixtures/end-to-end-run.sh
             webrtc-video/distributor/qualification/source-network/run-test.sh
             webrtc-video/distributor/qualification/source-network/run.sh
+            webrtc-video/platform/qualification/end-to-end/run-matrix.sh
+            webrtc-video/platform/qualification/end-to-end/run.sh
           )
           shellcheck "${bash_scripts[@]}"
           for script in "${bash_scripts[@]}"; do
@@ -114,6 +116,9 @@ jobs:
             webrtc-video/platform/scripts/smoke-dev.mjs
             webrtc-video/producer/qualification/adaptive-streaming/collect.mjs
             webrtc-video/producer/qualification/adaptive-streaming/lib/analysis.mjs
+            webrtc-video/platform/qualification/end-to-end/browser.mjs
+            webrtc-video/platform/qualification/end-to-end/diagnostics.mjs
+            webrtc-video/platform/qualification/end-to-end/evidence.mjs
           )
           for script in "${scripts[@]}"; do
             node --check "$script"

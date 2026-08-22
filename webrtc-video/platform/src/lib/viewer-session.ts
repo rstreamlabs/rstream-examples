@@ -189,7 +189,9 @@ export class ViewerSessionController<Resolution, Track = unknown> {
     if (this.stopped || this.reconnecting || !this.currentBackend) {
       return false
     }
-    this.excludedBackend = this.currentBackend
+    const backend = this.currentBackend
+    this.excludeBackendAfterFailure(backend, cause)
+    this.excludedBackend = backend
     return this.scheduleSessionReconnect(cause)
   }
 

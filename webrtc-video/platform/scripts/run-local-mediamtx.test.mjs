@@ -1,7 +1,10 @@
 import assert from "node:assert/strict"
 import { createSocket } from "node:dgram"
 import { EventEmitter } from "node:events"
+import { mkdtemp, readFile, rm } from "node:fs/promises"
 import { createServer } from "node:net"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import test from "node:test"
 
 import { generateMediaMTXKeys } from "./generate-mediamtx-key.mjs"
@@ -14,6 +17,7 @@ import {
   requireAvailableUDPPort,
   tunnelConfiguration,
   tunnelResources,
+  writeStackState,
 } from "./run-local-mediamtx.mjs"
 
 test("local MediaMTX stack owns and releases all stop signal handlers", async () => {
@@ -32,11 +36,59 @@ test("local MediaMTX stack owns and releases all stop signal handlers", async ()
 })
 
 test("local MediaMTX stack defaults to direct public exposure", () => {
-  assert.deepEqual(localStackOptions([]), { exposure: "public" })
+  assert.deepEqual(localStackOptions([]), {
+    exposure: "public",
+    nextMode: "development",
+    stateFile: undefined,
+  })
   assert.deepEqual(localStackOptions(["--exposure", "rstream"]), {
     exposure: "rstream",
+    nextMode: "development",
+    stateFile: undefined,
   })
+  assert.deepEqual(
+    localStackOptions([
+      "--state-file",
+      "/tmp/rstream-stack.json",
+      "--exposure",
+      "public",
+    ]),
+    {
+      exposure: "public",
+      nextMode: "development",
+      stateFile: "/tmp/rstream-stack.json",
+    },
+  )
+  assert.deepEqual(localStackOptions(["--next-mode", "production"]), {
+    exposure: "public",
+    nextMode: "production",
+    stateFile: undefined,
+  })
+  assert.throws(
+    () => localStackOptions(["--state-file", "one", "--state-file", "two"]),
+    /at most once/,
+  )
   assert.throws(() => localStackOptions(["--exposure", "invalid"]), /usage:/)
+  assert.throws(() => localStackOptions(["--next-mode", "invalid"]), /usage:/)
+  assert.throws(() => localStackOptions(["--state-file"]), /usage:/)
+})
+
+test("local MediaMTX stack removes only the state file it created", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "rstream-stack-state."))
+  const existing = join(directory, "existing.json")
+  const owned = join(directory, "owned.json")
+  await writeStackState(existing, { owner: "existing" })
+  await assert.rejects(writeStackState(existing, { owner: "replacement" }), {
+    code: "EEXIST",
+  })
+  assert.deepEqual(JSON.parse(await readFile(existing, "utf8")), {
+    owner: "existing",
+  })
+  const removeOwned = await writeStackState(owned, { ready: true })
+  assert.deepEqual(JSON.parse(await readFile(owned, "utf8")), { ready: true })
+  await removeOwned()
+  await assert.rejects(readFile(owned, "utf8"), { code: "ENOENT" })
+  await rm(directory, { force: true, recursive: true })
 })
 
 test("local MediaMTX stack keeps its rstream tunnels distinct", () => {
