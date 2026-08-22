@@ -46,7 +46,7 @@ type recoveryKeyFrameBackend interface {
 	ConsumeRecoveryKeyFrame() bool
 }
 
-const guardedRecoveryKeyFrameQuietPeriod = 500 * time.Millisecond
+const guardedRecoveryKeyFrameQuietPeriod = 250 * time.Millisecond
 
 type Controller struct {
 	logger                  *logs.Logger
