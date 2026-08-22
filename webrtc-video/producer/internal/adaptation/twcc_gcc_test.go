@@ -170,7 +170,7 @@ func TestTWCCGCCBackendDoesNotRequestKeyFrameForHealthyRamp(t *testing.T) {
 	}
 }
 
-func TestTWCCGCCBackendRequestsOneKeyFramePerLossEpisode(t *testing.T) {
+func TestTWCCGCCBackendRequestsKeyFramesForLossDrivenDecreases(t *testing.T) {
 	backend := newTestTWCCGCCBackend(t, config.Default())
 	now := time.Unix(100, 0)
 	backend.now = func() time.Time { return now }
@@ -194,8 +194,8 @@ func TestTWCCGCCBackendRequestsOneKeyFramePerLossEpisode(t *testing.T) {
 	if !ok || decision.TargetBitrateKbps != 3000 {
 		t.Fatalf("continued loss decision = %+v, %v, want 3000 kbit/s", decision, ok)
 	}
-	if backend.ConsumeRecoveryKeyFrame() {
-		t.Fatal("continued loss requested a second recovery key frame")
+	if !backend.ConsumeRecoveryKeyFrame() {
+		t.Fatal("continued loss did not request another recovery key frame")
 	}
 	now = now.Add(6 * time.Second)
 	_, _ = backend.Decide(Observation{

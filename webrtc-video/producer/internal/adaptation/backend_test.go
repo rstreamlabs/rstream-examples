@@ -245,7 +245,7 @@ func TestControllerBlocksPeriodicIncreaseUntilMeasuredLossRecovers(t *testing.T)
 	}
 }
 
-func TestControllerRequestsOneKeyFrameForLossDrivenDecreases(t *testing.T) {
+func TestControllerRequestsKeyFramesForLossDrivenDecreases(t *testing.T) {
 	const interval = 20 * time.Millisecond
 	var estimate atomic.Int64
 	estimate.Store(4_000_000)
@@ -290,8 +290,8 @@ func TestControllerRequestsOneKeyFrameForLossDrivenDecreases(t *testing.T) {
 	}
 	select {
 	case <-recoveryKeyFrames:
-		t.Fatal("one loss episode requested more than one recovery key frame")
-	case <-time.After(2 * interval):
+	case <-time.After(time.Second):
+		t.Fatal("second loss-driven decrease did not request a recovery key frame")
 	}
 }
 

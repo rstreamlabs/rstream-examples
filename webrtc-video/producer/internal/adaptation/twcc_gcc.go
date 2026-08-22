@@ -18,7 +18,6 @@ type TWCCGCCBackend struct {
 	now                     func() time.Time
 	mu                      sync.Mutex
 	increaseBlockedUntil    time.Time
-	lossEpisodeActive       bool
 	recoveryKeyFramePending bool
 }
 
@@ -84,10 +83,7 @@ func (b *TWCCGCCBackend) updateIncreaseState(averageLoss float64) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if lossIsHigh {
-		if !b.lossEpisodeActive {
-			b.lossEpisodeActive = true
-			b.recoveryKeyFramePending = true
-		}
+		b.recoveryKeyFramePending = true
 		blockedUntil := now.Add(b.increaseHoldAfterLoss)
 		if blockedUntil.After(b.increaseBlockedUntil) {
 			b.increaseBlockedUntil = blockedUntil
@@ -97,7 +93,6 @@ func (b *TWCCGCCBackend) updateIncreaseState(averageLoss float64) bool {
 	if now.Before(b.increaseBlockedUntil) {
 		return false
 	}
-	b.lossEpisodeActive = false
 	return true
 }
 
