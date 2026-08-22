@@ -183,6 +183,7 @@ type Session struct {
 	keyFrameRequestTimer      *time.Timer
 	keyFrameRequestDue        time.Time
 	keyFrameRequestGeneration uint64
+	keyFrameRequestAdmission  bool
 	recoveryMu                sync.Mutex
 	recovery                  *time.Timer
 	whep                      atomic.Bool
@@ -1246,22 +1247,25 @@ func (s *Session) writeSamples(samples <-chan media.AccessUnit) {
 }
 
 func (s *Session) requestKeyFrame() {
-	s.scheduleKeyFrameRequest(0, false)
+	s.scheduleKeyFrameRequest(0, false, false)
 }
 
 func (s *Session) requestRecoveryKeyFrame(delay time.Duration) {
-	s.scheduleKeyFrameRequest(delay, true)
+	s.scheduleKeyFrameRequest(delay, true, true)
 }
 
 func (s *Session) requestCongestionRecoveryKeyFrame() {
-	delay := time.Duration(0)
-	if delayer, ok := s.estimator.(interface{ recoveryKeyFrameDelay() time.Duration }); ok {
-		delay = delayer.recoveryKeyFrameDelay()
-	}
-	s.requestRecoveryKeyFrame(delay)
+	s.requestRecoveryKeyFrame(s.recoveryKeyFrameDelay())
 }
 
-func (s *Session) scheduleKeyFrameRequest(delay time.Duration, deferIfLimited bool) {
+func (s *Session) recoveryKeyFrameDelay() time.Duration {
+	if delayer, ok := s.estimator.(interface{ recoveryKeyFrameDelay() time.Duration }); ok {
+		return delayer.recoveryKeyFrameDelay()
+	}
+	return 0
+}
+
+func (s *Session) scheduleKeyFrameRequest(delay time.Duration, deferIfLimited, waitForAdmission bool) {
 	if s.isClosed() {
 		return
 	}
@@ -1279,6 +1283,7 @@ func (s *Session) scheduleKeyFrameRequest(delay time.Duration, deferIfLimited bo
 	}
 	if due.After(now) {
 		if s.keyFrameRequestTimer != nil && !due.Before(s.keyFrameRequestDue) {
+			s.keyFrameRequestAdmission = s.keyFrameRequestAdmission || waitForAdmission
 			s.keyFrameMu.Unlock()
 			s.recoveryKeyFrameCoalesced.Add(1)
 			return
@@ -1289,6 +1294,7 @@ func (s *Session) scheduleKeyFrameRequest(delay time.Duration, deferIfLimited bo
 		s.keyFrameRequestGeneration++
 		generation := s.keyFrameRequestGeneration
 		s.keyFrameRequestDue = due
+		s.keyFrameRequestAdmission = waitForAdmission
 		s.keyFrameRequestTimer = time.AfterFunc(time.Until(due), func() {
 			s.fireScheduledKeyFrameRequest(generation)
 		})
@@ -1302,13 +1308,24 @@ func (s *Session) scheduleKeyFrameRequest(delay time.Duration, deferIfLimited bo
 }
 
 func (s *Session) fireScheduledKeyFrameRequest(generation uint64) {
+	admissionDelay := s.recoveryKeyFrameDelay()
 	s.keyFrameMu.Lock()
 	if generation != s.keyFrameRequestGeneration || s.keyFrameRequestTimer == nil {
 		s.keyFrameMu.Unlock()
 		return
 	}
+	if s.keyFrameRequestAdmission && admissionDelay > 0 {
+		due := time.Now().Add(admissionDelay)
+		s.keyFrameRequestDue = due
+		s.keyFrameRequestTimer = time.AfterFunc(admissionDelay, func() {
+			s.fireScheduledKeyFrameRequest(generation)
+		})
+		s.keyFrameMu.Unlock()
+		return
+	}
 	s.keyFrameRequestTimer = nil
 	s.keyFrameRequestDue = time.Time{}
+	s.keyFrameRequestAdmission = false
 	s.lastKeyFrameRequest = time.Now()
 	s.keyFrameMu.Unlock()
 	if s.isClosed() {
@@ -1330,6 +1347,7 @@ func (s *Session) cancelScheduledKeyFrameRequestLocked() {
 	s.keyFrameRequestTimer.Stop()
 	s.keyFrameRequestTimer = nil
 	s.keyFrameRequestDue = time.Time{}
+	s.keyFrameRequestAdmission = false
 	s.keyFrameRequestGeneration++
 }
 

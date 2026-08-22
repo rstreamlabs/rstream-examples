@@ -21,8 +21,9 @@ import (
 type fakeSourceFactory struct{}
 
 type fakeBandwidthEstimator struct {
-	stats         map[string]any
-	recoveryDelay time.Duration
+	stats               map[string]any
+	recoveryDelay       time.Duration
+	recoveryDelaySource func() time.Duration
 }
 
 type rejectingBandwidthEstimator struct {
@@ -51,6 +52,9 @@ func (f fakeBandwidthEstimator) GetStats() map[string]any {
 }
 
 func (f fakeBandwidthEstimator) recoveryKeyFrameDelay() time.Duration {
+	if f.recoveryDelaySource != nil {
+		return f.recoveryDelaySource()
+	}
 	return f.recoveryDelay
 }
 
@@ -1081,13 +1085,17 @@ func TestSessionSchedulesAndCancelsRecoveryKeyFrameRetries(t *testing.T) {
 
 func TestSessionDefersCongestionRecoveryKeyFrameUntilPacerCanAdmitIt(t *testing.T) {
 	const delay = 50 * time.Millisecond
+	var recoveryDelay atomic.Int64
+	recoveryDelay.Store(delay.Nanoseconds())
 	encoder := &recordingKeyFrameRequester{requested: make(chan struct{}, 1)}
 	session := &Session{
-		id:        "viewer",
-		encoder:   encoder,
-		estimator: fakeBandwidthEstimator{recoveryDelay: delay},
-		logger:    logs.NewLogger(logs.NewHub(8), false),
-		closed:    make(chan struct{}),
+		id:      "viewer",
+		encoder: encoder,
+		estimator: fakeBandwidthEstimator{recoveryDelaySource: func() time.Duration {
+			return time.Duration(recoveryDelay.Load())
+		}},
+		logger: logs.NewLogger(logs.NewHub(8), false),
+		closed: make(chan struct{}),
 	}
 	defer session.Close("test complete")
 	session.requestCongestionRecoveryKeyFrame()
@@ -1096,10 +1104,53 @@ func TestSessionDefersCongestionRecoveryKeyFrameUntilPacerCanAdmitIt(t *testing.
 		t.Fatal("congestion recovery key frame ignored the pacer delay")
 	case <-time.After(delay / 2):
 	}
+	recoveryDelay.Store(0)
 	select {
 	case <-encoder.requested:
 	case <-time.After(2 * delay):
 		t.Fatal("congestion recovery key frame did not fire after the pacer delay")
+	}
+}
+
+func TestSessionRechecksPacerBacklogBeforeCongestionRecoveryKeyFrame(t *testing.T) {
+	const delay = 20 * time.Millisecond
+	var recoveryDelay atomic.Int64
+	recoveryDelay.Store(delay.Nanoseconds())
+	checked := make(chan struct{}, 4)
+	estimator := fakeBandwidthEstimator{recoveryDelaySource: func() time.Duration {
+		select {
+		case checked <- struct{}{}:
+		default:
+		}
+		return time.Duration(recoveryDelay.Load())
+	}}
+	encoder := &recordingKeyFrameRequester{requested: make(chan struct{}, 1)}
+	session := &Session{
+		id:        "viewer",
+		encoder:   encoder,
+		estimator: estimator,
+		logger:    logs.NewLogger(logs.NewHub(8), false),
+		closed:    make(chan struct{}),
+	}
+	defer session.Close("test complete")
+	session.requestCongestionRecoveryKeyFrame()
+	for range 2 {
+		select {
+		case <-checked:
+		case <-time.After(4 * delay):
+			t.Fatal("congestion recovery did not recheck the pacer backlog")
+		}
+	}
+	select {
+	case <-encoder.requested:
+		t.Fatal("congestion recovery key frame fired while the pacer remained blocked")
+	default:
+	}
+	recoveryDelay.Store(0)
+	select {
+	case <-encoder.requested:
+	case <-time.After(4 * delay):
+		t.Fatal("congestion recovery key frame did not fire after the pacer drained")
 	}
 }
 
