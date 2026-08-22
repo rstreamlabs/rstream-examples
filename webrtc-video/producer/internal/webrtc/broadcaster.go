@@ -174,6 +174,7 @@ type Session struct {
 	recoveryKeyFrameRequests  atomic.Uint64
 	recoveryKeyFrameCoalesced atomic.Uint64
 	recoveryKeyFrameFailures  atomic.Uint64
+	lastKeyFrameObserved      atomic.Int64
 	rtcpKeyFrameRequests      atomic.Uint64
 	rtcpMalformedFeedback     atomic.Uint64
 	mediaSSRC                 atomic.Uint32
@@ -205,9 +206,10 @@ type candidateCounts struct {
 }
 
 const (
-	networkRecoveryTimeout  = 30 * time.Second
-	keyFrameRequestInterval = 250 * time.Millisecond
-	nativeReceiverTimeout   = 8 * time.Second
+	networkRecoveryTimeout         = 30 * time.Second
+	keyFrameRequestInterval        = 250 * time.Millisecond
+	recoveryKeyFrameMinimumSpacing = 500 * time.Millisecond
+	nativeReceiverTimeout          = 8 * time.Second
 )
 
 // ErrSessionCapacity identifies a temporary viewer-admission refusal.
@@ -1232,6 +1234,9 @@ func (s *Session) writeSamples(samples <-chan media.AccessUnit) {
 					continue
 				}
 			}
+			if unit.KeyFrame {
+				s.lastKeyFrameObserved.Store(time.Now().UnixNano())
+			}
 			err := s.track.WriteSample(rtcmedia.Sample{
 				Data:     unit.Data,
 				Duration: unit.Duration,
@@ -1259,10 +1264,16 @@ func (s *Session) requestCongestionRecoveryKeyFrame() {
 }
 
 func (s *Session) recoveryKeyFrameDelay() time.Duration {
+	delay := time.Duration(0)
 	if delayer, ok := s.estimator.(interface{ recoveryKeyFrameDelay() time.Duration }); ok {
-		return delayer.recoveryKeyFrameDelay()
+		delay = delayer.recoveryKeyFrameDelay()
 	}
-	return 0
+	observed := s.lastKeyFrameObserved.Load()
+	if observed <= 0 {
+		return delay
+	}
+	spacingDelay := time.Until(time.Unix(0, observed).Add(recoveryKeyFrameMinimumSpacing))
+	return max(delay, spacingDelay, 0)
 }
 
 func (s *Session) scheduleKeyFrameRequest(delay time.Duration, deferIfLimited, waitForAdmission bool) {

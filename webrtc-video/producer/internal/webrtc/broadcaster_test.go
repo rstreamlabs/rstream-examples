@@ -917,6 +917,39 @@ func TestSessionDropsRejectedAccessUnitBeforePacketization(t *testing.T) {
 	}
 }
 
+func TestSessionObservesAdmittedKeyFrame(t *testing.T) {
+	track, err := webrtc.NewTrackLocalStaticSample(
+		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264},
+		"video",
+		"rstream",
+	)
+	if err != nil {
+		t.Fatalf("create local track: %v", err)
+	}
+	session := &Session{track: track, closed: make(chan struct{})}
+	samples := make(chan media.AccessUnit, 1)
+	done := make(chan struct{})
+	go func() {
+		session.writeSamples(samples)
+		close(done)
+	}()
+	samples <- media.AccessUnit{Data: []byte{1}, Duration: time.Millisecond, KeyFrame: true}
+	deadline := time.After(time.Second)
+	for session.lastKeyFrameObserved.Load() == 0 {
+		select {
+		case <-deadline:
+			t.Fatal("admitted key frame was not observed")
+		case <-time.After(time.Millisecond):
+		}
+	}
+	session.Close("test complete")
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("session writer did not stop")
+	}
+}
+
 func TestSessionWaitsForConnectionAndKeyFrameBeforePacketization(t *testing.T) {
 	estimator := &rejectingBandwidthEstimator{admitted: make(chan media.AccessUnit, 1)}
 	encoder := &recordingKeyFrameRequester{requested: make(chan struct{}, 1)}
@@ -1151,6 +1184,40 @@ func TestSessionRechecksPacerBacklogBeforeCongestionRecoveryKeyFrame(t *testing.
 	case <-encoder.requested:
 	case <-time.After(4 * delay):
 		t.Fatal("congestion recovery key frame did not fire after the pacer drained")
+	}
+}
+
+func TestSessionRechecksRecentKeyFrameBeforeCongestionRecoveryRequest(t *testing.T) {
+	const initialDelay = 30 * time.Millisecond
+	var checks atomic.Int64
+	estimator := fakeBandwidthEstimator{recoveryDelaySource: func() time.Duration {
+		if checks.Add(1) == 1 {
+			return initialDelay
+		}
+		return 0
+	}}
+	encoder := &recordingKeyFrameRequester{requested: make(chan struct{}, 1)}
+	session := &Session{
+		id:        "viewer",
+		encoder:   encoder,
+		estimator: estimator,
+		logger:    logs.NewLogger(logs.NewHub(8), false),
+		closed:    make(chan struct{}),
+	}
+	defer session.Close("test complete")
+	session.requestCongestionRecoveryKeyFrame()
+	session.lastKeyFrameObserved.Store(
+		time.Now().Add(-recoveryKeyFrameMinimumSpacing + 80*time.Millisecond).UnixNano(),
+	)
+	select {
+	case <-encoder.requested:
+		t.Fatal("congestion recovery duplicated a recently observed key frame")
+	case <-time.After(initialDelay + 15*time.Millisecond):
+	}
+	select {
+	case <-encoder.requested:
+	case <-time.After(2 * recoveryKeyFrameMinimumSpacing):
+		t.Fatal("congestion recovery did not resume after the key-frame spacing elapsed")
 	}
 }
 
