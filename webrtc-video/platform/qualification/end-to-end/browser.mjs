@@ -66,6 +66,7 @@ try {
         : ""
       diagnostics.push({
         message: `${source}${sanitize(message.text())}`,
+        observedAt: elapsed(startedAt),
         phase: currentPhase(events),
         type: `console-${message.type()}`,
       })
@@ -74,6 +75,7 @@ try {
   page.on("pageerror", (error) => {
     diagnostics.push({
       message: sanitize(error.message),
+      observedAt: elapsed(startedAt),
       phase: currentPhase(events),
       type: "page-error",
     })
@@ -84,6 +86,7 @@ try {
         message: sanitize(
           `${response.request().method()} ${response.url()} ${response.status()}`,
         ),
+        observedAt: elapsed(startedAt),
         phase: currentPhase(events),
         type: "http-error",
       })
@@ -94,6 +97,7 @@ try {
       message: sanitize(
         `${request.method()} ${request.url()} ${request.failure()?.errorText ?? "failed"}`,
       ),
+      observedAt: elapsed(startedAt),
       phase: currentPhase(events),
       type: "request-failed",
     })
