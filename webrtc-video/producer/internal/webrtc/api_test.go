@@ -162,6 +162,15 @@ func TestFlexFECRepairPacketsTraverseTWCCAndGCC(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create producer peer connection: %v", err)
 	}
+	connected := make(chan struct{}, 1)
+	producer.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+		if state == webrtc.PeerConnectionStateConnected {
+			select {
+			case connected <- struct{}{}:
+			default:
+			}
+		}
+	})
 	if estimator.GetTargetBitrate() != 5_000_000 {
 		t.Fatalf("media target = %d, want 5000000", estimator.GetTargetBitrate())
 	}
@@ -256,22 +265,19 @@ func TestFlexFECRepairPacketsTraverseTWCCAndGCC(t *testing.T) {
 	if !strings.Contains(producer.LocalDescription().SDP, "flexfec-03") {
 		t.Fatal("producer answer did not negotiate FlexFEC-03")
 	}
-	connected := make(chan struct{}, 1)
-	producer.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
-		if state == webrtc.PeerConnectionStateConnected {
-			select {
-			case connected <- struct{}{}:
-			default:
-			}
-		}
-	})
 	if err := viewer.SetRemoteDescription(*producer.LocalDescription()); err != nil {
 		t.Fatalf("set viewer remote description: %v", err)
 	}
 	select {
 	case <-connected:
 	case <-time.After(5 * time.Second):
-		t.Fatal("peer connection timed out")
+		t.Fatalf(
+			"peer connection timed out: producer=%s producer_ice=%s viewer=%s viewer_ice=%s",
+			producer.ConnectionState(),
+			producer.ICEConnectionState(),
+			viewer.ConnectionState(),
+			viewer.ICEConnectionState(),
+		)
 	}
 	sample := media.Sample{
 		Data:     []byte{0, 0, 0, 1, 0x65, 0x88, 0x84, 0x21},
