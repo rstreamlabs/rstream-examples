@@ -1,42 +1,42 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="400" viewBox="0 0 960 400" role="img" aria-labelledby="title description">
 <title id="title">Worker routing through loss and recovery</title>
 <desc id="description">Measured workload phases show both workers serving traffic, worker B serving alone after worker A stops, and both workers serving again after worker A returns.</desc>
-<rect width="100%" height="100%" fill="#111827"/>
-<text x="28" y="42" fill="#f9fafb" font-family="sans-serif" font-size="26" font-weight="700">Worker routing through loss and recovery</text>
-<text x="28" y="70" fill="#9ca3af" font-family="sans-serif" font-size="17">Measured phase time · 100 successful turns · zero failed streams</text>
-<line x1="150" y1="180" x2="932" y2="180" stroke="#374151"/>
-<line x1="150" y1="280" x2="932" y2="280" stroke="#374151"/>
-<text x="132" y="186" text-anchor="end" fill="#d1d5db" font-family="sans-serif" font-size="18">worker A</text>
-<text x="132" y="286" text-anchor="end" fill="#d1d5db" font-family="sans-serif" font-size="18">worker B</text>
-<rect x="150.0" y="94" width="261.6" height="236" fill="#182235" opacity="0.75"/>
-<text x="158.0" y="118" fill="#e5e7eb" font-family="sans-serif" font-size="16" font-weight="600">A + B</text>
-<rect x="150.0" y="168" width="261.6" height="24" rx="8" fill="#38bdf8"/>
-<text x="280.8" y="185" text-anchor="middle" fill="#07111f" font-family="sans-serif" font-size="14" font-weight="700">30 turns</text>
-<rect x="150.0" y="268" width="261.6" height="24" rx="8" fill="#22c55e"/>
-<text x="280.8" y="285" text-anchor="middle" fill="#07111f" font-family="sans-serif" font-size="14" font-weight="700">30 turns</text>
-<rect x="654.6" y="94" width="77.9" height="236" fill="#211d2d" opacity="0.75"/>
-<text x="662.6" y="118" fill="#e5e7eb" font-family="sans-serif" font-size="16" font-weight="600">B only</text>
-<line x1="654.6" y1="94" x2="654.6" y2="330" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5 5"/>
-<text x="648.6" y="84" text-anchor="end" fill="#fbbf24" font-family="sans-serif" font-size="14" font-weight="600">A stopped</text>
-<rect x="654.6" y="268" width="77.9" height="24" rx="8" fill="#22c55e"/>
-<text x="693.6" y="285" text-anchor="middle" fill="#07111f" font-family="sans-serif" font-size="14" font-weight="700">20 turns</text>
-<rect x="852.6" y="94" width="79.4" height="236" fill="#182235" opacity="0.75"/>
-<text x="860.6" y="118" fill="#e5e7eb" font-family="sans-serif" font-size="16" font-weight="600">A + B</text>
-<line x1="852.6" y1="94" x2="852.6" y2="330" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5 5"/>
-<text x="846.6" y="84" text-anchor="end" fill="#fbbf24" font-family="sans-serif" font-size="14" font-weight="600">A returned</text>
-<rect x="852.6" y="268" width="79.4" height="24" rx="8" fill="#22c55e"/>
-<text x="892.3" y="285" text-anchor="middle" fill="#07111f" font-family="sans-serif" font-size="14" font-weight="700">10 turns</text>
-<rect x="852.6" y="168" width="79.4" height="24" rx="8" fill="#38bdf8"/>
-<text x="892.3" y="185" text-anchor="middle" fill="#07111f" font-family="sans-serif" font-size="14" font-weight="700">10 turns</text>
-<line x1="150" y1="330" x2="932" y2="330" stroke="#6b7280"/>
-<text x="541.0" y="374" text-anchor="middle" fill="#9ca3af" font-family="sans-serif" font-size="16">Elapsed time across the controlled worker lifecycle</text>
-<text x="150.0" y="354" text-anchor="middle" fill="#9ca3af" font-family="sans-serif" font-size="13">0s</text>
-<text x="243.9" y="354" text-anchor="middle" fill="#9ca3af" font-family="sans-serif" font-size="13">20s</text>
-<text x="337.8" y="354" text-anchor="middle" fill="#9ca3af" font-family="sans-serif" font-size="13">40s</text>
-<text x="431.7" y="354" text-anchor="middle" fill="#9ca3af" font-family="sans-serif" font-size="13">60s</text>
-<text x="525.6" y="354" text-anchor="middle" fill="#9ca3af" font-family="sans-serif" font-size="13">80s</text>
-<text x="619.5" y="354" text-anchor="middle" fill="#9ca3af" font-family="sans-serif" font-size="13">100s</text>
-<text x="713.3" y="354" text-anchor="middle" fill="#9ca3af" font-family="sans-serif" font-size="13">120s</text>
-<text x="807.2" y="354" text-anchor="middle" fill="#9ca3af" font-family="sans-serif" font-size="13">140s</text>
-<text x="901.1" y="354" text-anchor="middle" fill="#9ca3af" font-family="sans-serif" font-size="13">160s</text>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="28" y="42" fill="#111827" font-family="sans-serif" font-size="26" font-weight="700">Worker routing through loss and recovery</text>
+<text x="28" y="70" fill="#475569" font-family="sans-serif" font-size="17">Measured phase time · 100 successful turns · zero failed streams</text>
+<line x1="150" y1="180" x2="932" y2="180" stroke="#cbd5e1"/>
+<line x1="150" y1="280" x2="932" y2="280" stroke="#cbd5e1"/>
+<text x="132" y="186" text-anchor="end" fill="#111827" font-family="sans-serif" font-size="18">worker A</text>
+<text x="132" y="286" text-anchor="end" fill="#111827" font-family="sans-serif" font-size="18">worker B</text>
+<rect x="150.0" y="94" width="261.6" height="236" fill="#f8fafc"/>
+<text x="158.0" y="118" fill="#111827" font-family="sans-serif" font-size="16" font-weight="600">A + B</text>
+<rect x="150.0" y="168" width="261.6" height="24" rx="8" fill="#2563eb"/>
+<text x="280.8" y="185" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="14" font-weight="700">30 turns</text>
+<rect x="150.0" y="268" width="261.6" height="24" rx="8" fill="#059669"/>
+<text x="280.8" y="285" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="14" font-weight="700">30 turns</text>
+<rect x="654.6" y="94" width="77.9" height="236" fill="#eef2ff"/>
+<text x="662.6" y="118" fill="#111827" font-family="sans-serif" font-size="16" font-weight="600">B only</text>
+<line x1="654.6" y1="94" x2="654.6" y2="330" stroke="#d97706" stroke-width="2" stroke-dasharray="5 5"/>
+<text x="648.6" y="84" text-anchor="end" fill="#b45309" font-family="sans-serif" font-size="14" font-weight="600">A stopped</text>
+<rect x="654.6" y="268" width="77.9" height="24" rx="8" fill="#059669"/>
+<text x="693.6" y="285" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="14" font-weight="700">20 turns</text>
+<rect x="852.6" y="94" width="79.4" height="236" fill="#f8fafc"/>
+<text x="860.6" y="118" fill="#111827" font-family="sans-serif" font-size="16" font-weight="600">A + B</text>
+<line x1="852.6" y1="94" x2="852.6" y2="330" stroke="#d97706" stroke-width="2" stroke-dasharray="5 5"/>
+<text x="846.6" y="84" text-anchor="end" fill="#b45309" font-family="sans-serif" font-size="14" font-weight="600">A returned</text>
+<rect x="852.6" y="268" width="79.4" height="24" rx="8" fill="#059669"/>
+<text x="892.3" y="285" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="14" font-weight="700">10 turns</text>
+<rect x="852.6" y="168" width="79.4" height="24" rx="8" fill="#2563eb"/>
+<text x="892.3" y="185" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="14" font-weight="700">10 turns</text>
+<line x1="150" y1="330" x2="932" y2="330" stroke="#94a3b8"/>
+<text x="541.0" y="374" text-anchor="middle" fill="#475569" font-family="sans-serif" font-size="16">Elapsed time across the controlled worker lifecycle</text>
+<text x="150.0" y="354" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="13">0s</text>
+<text x="243.9" y="354" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="13">20s</text>
+<text x="337.8" y="354" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="13">40s</text>
+<text x="431.7" y="354" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="13">60s</text>
+<text x="525.6" y="354" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="13">80s</text>
+<text x="619.5" y="354" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="13">100s</text>
+<text x="713.3" y="354" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="13">120s</text>
+<text x="807.2" y="354" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="13">140s</text>
+<text x="901.1" y="354" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="13">160s</text>
 </svg>

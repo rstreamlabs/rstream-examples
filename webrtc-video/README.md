@@ -19,10 +19,9 @@ it.
 - The [Next.js guide](https://rstream.io/guides/integrate-webrtc-video-streaming-into-a-nextjs-platform-with-rstream)
   runs the same producer in provisioning mode and adds product identity,
   authorization, and fleet state around that session.
-- The [MediaMTX guide](https://rstream.io/guides/distribute-webrtc-video-with-mediamtx-and-rstream)
-  adds an on-demand distribution backend. One adaptive upstream feeds
-  multi-viewer fan-out while direct WebRTC remains available for one-to-one
-  delivery and transport diagnosis.
+- The third guide, currently in preparation, adds an on-demand MediaMTX
+  backend. One adaptive upstream feeds multi-viewer fan-out while direct
+  WebRTC remains available for one-to-one delivery and transport diagnosis.
 
 In fan-out mode, the producer controls and measures the device-to-MediaMTX
 upstream. MediaMTX and browser telemetry describe each downstream. Keeping

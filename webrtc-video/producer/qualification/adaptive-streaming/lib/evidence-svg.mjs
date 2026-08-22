@@ -69,7 +69,7 @@ function networkConditionSummary(c) {
   const impairmentText = impaired
     ? `${format(impaired.delayMs, 0)} ms one-way delay · ${format(impaired.jitterMs, 0)} ms jitter · ${format(impaired.lossPercent, 1)}% random loss`
     : "No impaired interval recorded";
-  return `<text x="${c.left}" y="70" font-size="15" font-weight="600" fill="#111827">Applied capacity · ${xml(capacityText)} Mb/s</text><text x="${c.left}" y="94" font-size="14" fill="#475569">Impaired interval · ${xml(impairmentText)}</text>`;
+  return `<text x="${c.left}" y="70" font-size="18" font-weight="600" fill="#111827">Applied capacity · ${xml(capacityText)} Mb/s</text><text x="${c.left}" y="96" font-size="17" fill="#475569">Impaired interval · ${xml(impairmentText)}</text>`;
 }
 
 export function renderPlaybackQualitySVG(analysis, manifest) {
@@ -103,7 +103,7 @@ export function renderPlaybackQualitySVG(analysis, manifest) {
   body += panelFrame(c, freezeTop, freezeHeight, "Freeze duration", "s");
   body += panelScale(c, freezeTop, freezeHeight, freezeMaximum, "s");
   body += bars(c, freezes, freezeY, freezeTop, freezeHeight, "#dc2626", 6);
-  body += `<text x="${c.left + 10}" y="${freezeTop + 25}" font-size="14" font-weight="600" fill="${freezeTotal === 0 ? "#047857" : "#b91c1c"}">${freezeTotal === 0 ? "No frozen playback interval observed" : `Total frozen playback ${format(freezeTotal, 2)} s`}</text>`;
+  body += `<text x="${c.left + 10}" y="${freezeTop + 25}" font-size="18" font-weight="600" fill="${freezeTotal === 0 ? "#047857" : "#b91c1c"}">${freezeTotal === 0 ? "No frozen playback interval observed" : `Total frozen playback ${format(freezeTotal, 2)} s`}</text>`;
   const qp = c.samples.map((sample) =>
     numberOrNull(analysis.phases[sample.phase]?.averageQP),
   );
@@ -329,7 +329,7 @@ function phaseBackgrounds(c, top, height) {
       const start = c.x(samples[0].elapsedMilliseconds);
       const end = c.x(samples.at(-1).elapsedMilliseconds);
       const label = phase.name === "conditioning" ? "settling" : phase.name;
-      return `<rect x="${round(start)}" y="${top}" width="${round(Math.max(1, end - start))}" height="${height}" fill="${index % 2 === 0 ? "#f8fafc" : "#eef2f7"}"/><text x="${round(start + 6)}" y="${top - 18}" font-size="14" font-weight="600" fill="#111827">${xml(label)}</text>`;
+      return `<rect x="${round(start)}" y="${top}" width="${round(Math.max(1, end - start))}" height="${height}" fill="${index % 2 === 0 ? "#f8fafc" : "#eef2f7"}"/><text x="${round(start + 6)}" y="${top - 18}" font-size="18" font-weight="600" fill="#111827">${xml(label)}</text>`;
     })
     .join("");
 }
@@ -343,13 +343,13 @@ function panelScale(c, top, height, maximum, unit) {
     .map((ratio) => {
       const y = round(top + height * (1 - ratio));
       const value = maximum * ratio;
-      return `<line x1="${c.left}" y1="${y}" x2="${c.width - c.right}" y2="${y}" stroke="#e2e8f0" stroke-width="1"/><text x="${c.width - c.right - 5}" y="${y - 4}" text-anchor="end" font-size="12" fill="#64748b">${format(value, value < 10 && value !== 0 ? 1 : 0)} ${xml(unit)}</text>`;
+      return `<line x1="${c.left}" y1="${y}" x2="${c.width - c.right}" y2="${y}" stroke="#e2e8f0" stroke-width="1"/><text x="${c.width - c.right - 5}" y="${y - 4}" text-anchor="end" font-size="16" fill="#64748b">${format(value, value < 10 && value !== 0 ? 1 : 0)} ${xml(unit)}</text>`;
     })
     .join("");
 }
 
 function rangeLabel(c, top, maximum, unit) {
-  return `<text x="${c.left - 12}" y="${top + 58}" text-anchor="end" font-size="12" fill="#64748b">0–${format(maximum, maximum < 10 ? 1 : 0)} ${xml(unit)}</text>`;
+  return `<text x="${c.left - 12}" y="${top + 58}" text-anchor="end" font-size="13" fill="#64748b">0–${format(maximum, maximum < 10 ? 1 : 0)} ${xml(unit)}</text>`;
 }
 
 function yScale(top, height, maximum) {
@@ -426,7 +426,7 @@ function changeLabels(c, values, y, unit) {
     .map((value, index) => {
       if (!Number.isFinite(value) || value === previous) return "";
       previous = value;
-      return `<text x="${round(c.x(c.samples[index].elapsedMilliseconds) + 5)}" y="${round(y(value) - 6)}" font-size="13" font-weight="600" fill="#111827">${format(value, value < 10 ? 1 : 0)} ${xml(unit)}</text>`;
+      return `<text x="${round(c.x(c.samples[index].elapsedMilliseconds) + 5)}" y="${round(y(value) - 6)}" font-size="16" font-weight="600" fill="#111827">${format(value, value < 10 ? 1 : 0)} ${xml(unit)}</text>`;
     })
     .join("");
 }
@@ -440,7 +440,7 @@ function consecutiveUnique(values) {
 function threshold(c, y, label, color, labelSide = "right") {
   const left = labelSide === "left";
   const x = left ? c.left + 7 : c.width - c.right - 5;
-  return `<line x1="${c.left}" y1="${round(y)}" x2="${c.width - c.right}" y2="${round(y)}" stroke="${color}" stroke-width="1.5" stroke-dasharray="7 6"/><text x="${x}" y="${round(y - 5)}" text-anchor="${left ? "start" : "end"}" font-size="12" fill="${color}">${xml(label)}</text>`;
+  return `<line x1="${c.left}" y1="${round(y)}" x2="${c.width - c.right}" y2="${round(y)}" stroke="${color}" stroke-width="1.5" stroke-dasharray="7 6"/><text x="${x}" y="${round(y - 5)}" text-anchor="${left ? "start" : "end"}" font-size="16" fill="${color}">${xml(label)}</text>`;
 }
 
 function bars(c, values, y, top, height, color, width = 6, offset = 0) {
@@ -457,7 +457,7 @@ function legend(x, y, entries) {
   return entries
     .map(([label, color], index) => {
       const start = x + index * 190;
-      return `<line x1="${start}" y1="${y}" x2="${start + 24}" y2="${y}" stroke="${color}" stroke-width="3"/><text x="${start + 31}" y="${y + 5}" font-size="13" fill="#111827">${xml(label)}</text>`;
+      return `<line x1="${start}" y1="${y}" x2="${start + 24}" y2="${y}" stroke="${color}" stroke-width="3"/><text x="${start + 31}" y="${y + 6}" font-size="16" fill="#111827">${xml(label)}</text>`;
     })
     .join("");
 }
@@ -545,12 +545,12 @@ function documentSVG(c, title, description, body, footer) {
 <svg xmlns="http://www.w3.org/2000/svg" width="${c.width}" height="${c.height}" viewBox="0 0 ${c.width} ${c.height}" role="img" aria-labelledby="title description" style="font-family:system-ui,sans-serif">
 <title id="title">${xml(title)}</title><desc id="description">${xml(description)}</desc>
 <rect width="100%" height="100%" fill="#ffffff"/>
-  <text x="28" y="36" font-size="24" font-weight="650" fill="#111827">${xml(title)}</text>
-<text x="${c.width - c.right}" y="34" text-anchor="end" font-size="16" font-weight="700" fill="${passed ? "#047857" : "#b91c1c"}">${passed ? "PASS" : "FAIL"}</text>
+  <text x="28" y="40" font-size="32" font-weight="650" fill="#111827">${xml(title)}</text>
+<text x="${c.width - c.right}" y="38" text-anchor="end" font-size="20" font-weight="700" fill="${passed ? "#047857" : "#b91c1c"}">${passed ? "PASS" : "FAIL"}</text>
 ${body}
 <line x1="${c.left}" y1="${c.height - 55}" x2="${c.width - c.right}" y2="${c.height - 55}" stroke="#111827"/>
 ${timeAxis(c, c.height - 55)}
-<text x="${c.width / 2}" y="${c.height - 8}" text-anchor="middle" font-size="12" fill="#64748b">${xml(footer)}</text>
+<text x="${c.width / 2}" y="${c.height - 8}" text-anchor="middle" font-size="16" fill="#64748b">${xml(footer)}</text>
 </svg>
 `;
 }
@@ -559,6 +559,6 @@ function timeAxis(c, ordinate) {
   return Array.from({ length: 6 }, (_, index) => {
     const elapsed = (c.maximumTime * index) / 5;
     const x = round(c.x(elapsed));
-    return `<line x1="${x}" y1="${ordinate}" x2="${x}" y2="${ordinate + 6}" stroke="#111827"/><text x="${x}" y="${ordinate + 22}" text-anchor="middle" font-size="12" fill="#4b5563">${Math.round(elapsed / 1000)} s</text>`;
+    return `<line x1="${x}" y1="${ordinate}" x2="${x}" y2="${ordinate + 6}" stroke="#111827"/><text x="${x}" y="${ordinate + 24}" text-anchor="middle" font-size="16" fill="#4b5563">${Math.round(elapsed / 1000)} s</text>`;
   }).join("");
 }

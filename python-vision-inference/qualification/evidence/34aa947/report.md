@@ -7,17 +7,17 @@ Revision: `34aa947b7139fe58e6b9a4ea32dfb5100b61318e` (clean worktree).
 Model: `yolov8n.pt` · SHA-256 `f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36`.
 Media: `highway-traffic-pexels-2103099.mp4` · SHA-256 `9e18115c6dd7ec9fb41734d497c71effaa4f6184e7df5acaca4185a4f72f6794`.
 
-Performance gates: model p95 <= 40.0 ms; model throughput >= 25.0 fps; live RTT p95 <= 750.0 ms; failover <= 2500.0 ms; transport overhead p95 <= 750.0 ms.
+Performance gates: model p95 <= 40.0 ms; model throughput >= 25.0 fps; live RTT p95 <= 750.0 ms; failover <= 2500.0 ms; reference-payload transport overhead p95 <= 750.0 ms.
 
 ## Method
 
-The local profile pins the YOLO model and reference media, exercises framing and malformed results, runs cancellation and lifecycle stress, then benchmarks the exact model input. The live profile starts two managed workers, fills and releases their bounded session capacity, kills the worker that owns an open stream, waits for the transport failure signal, reconnects to the surviving worker, and requires an identical inference signature. Regional and payload-size probes run as separate gates so routing decisions and transport scaling cannot be hidden inside an aggregate latency.
+The local profile pins the YOLO model and reference media, exercises framing and malformed results, runs cancellation and lifecycle stress, then benchmarks the exact model input. The live profile starts two managed workers, fills and releases their bounded session capacity, kills the worker that owns an open stream, waits for the transport failure signal, reconnects to the surviving worker, and requires an identical canonical signature covering labels, confidence scores, and bounding boxes. Regional and payload-size probes run as separate gates so routing decisions and transport scaling cannot be hidden inside an aggregate latency.
 
 ## Acceptance gates
 
 - The complete code, protocol, cancellation, and lifecycle suite must pass.
 - Capacity exhaustion must reject the excess session explicitly and accept a new session after release.
-- Worker loss must be observed on the existing stream, and failover must return an identical inference signature from the surviving worker.
+- Worker loss must be observed on the existing stream, and failover must return identical detections from the surviving worker.
 - Framed transport must preserve every byte at every tested payload size.
 - Equal-capacity regional selection must choose the lower measured session-establishment latency.
 - Every configured model, live-path, failover, and transport performance budget must pass.
@@ -70,7 +70,7 @@ The failover clock starts immediately before the harness kills worker A. The fir
 
 ## Transport scaling
 
-The framed echo verifies byte equality and shows how payload size changes round-trip latency on the same path.
+The framed echo verifies byte equality and shows how payload size changes round-trip latency on the same path. Byte integrity is a verdict gate at every size; these scaling latencies are observational. The configured transport budget applies to the reference inference payload reported above.
 
 | Payload | Loopback p95 | rstream p50 | rstream p95 |
 | ---: | ---: | ---: | ---: |

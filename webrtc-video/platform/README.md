@@ -11,8 +11,9 @@ application supplies short-lived rstream material and owns the viewer
 entrypoint.
 
 The [Next.js platform guide](https://rstream.io/guides/integrate-webrtc-video-streaming-into-a-nextjs-platform-with-rstream)
-walks through this control plane. It follows the [adaptive producer](https://rstream.io/guides/build-device-to-browser-webrtc-streaming-with-rstream)
-and precedes the optional [MediaMTX distribution backend](https://rstream.io/guides/distribute-webrtc-video-with-mediamtx-and-rstream).
+walks through this control plane. It follows the [adaptive producer](https://rstream.io/guides/build-device-to-browser-webrtc-streaming-with-rstream);
+the third guide, currently in preparation, adds the optional MediaMTX
+distribution backend.
 
 ## One media core across the video series
 
@@ -224,7 +225,7 @@ rstream in both cases. The temporary platform callback lets the container
 reach local JWKS and source-resolution routes; a deployed platform uses its
 normal HTTPS origin instead.
 
-### Qualify the edge authentication contract
+### Edge authentication qualification
 
 Set `RSTREAM_EDGE_AUTH_EXPECTED_ENGINE` to the exact engine selected by the
 sample credentials, then run:
@@ -254,7 +255,7 @@ malformed-token rejection. It validates the context, project, and exact engine
 before creating its temporary tunnel. The check above additionally qualifies
 real expiry and renewal.
 
-### rstream Project Setup
+### rstream project setup
 
 Use a dedicated rstream project for this sample. Create an application token scoped to that project and store its client id and secret in the Next.js environment.
 
@@ -288,7 +289,7 @@ CLI prints an ephemeral `whsec_...` value that can be used for a single receiver
 session. This mirrors the webhook request body and signed headers, but it does
 not create delivery history or retry after the CLI exits.
 
-### rstream Resource Requirements
+### rstream resource requirements
 
 The sample always mints short-lived tokens with tunnel resources. Producer tokens can only create the expected tunnel for one device, direct viewer tokens can only connect to that device's `/whep` resource, distributor tokens are bound to one MediaMTX device path, and dashboard watch tokens can only list the sample tunnels for the signed-in user.
 

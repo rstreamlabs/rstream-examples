@@ -9,8 +9,9 @@ process. Later viewers share that publisher; the final viewer leaving stops it.
 
 Direct WebRTC remains the default for one-to-one delivery. Distribution is a
 backend selected by the platform, not a fork of the capture or player code.
-The [distribution guide](https://rstream.io/guides/distribute-webrtc-video-with-mediamtx-and-rstream)
-places this backend in the complete producer and Next.js series.
+This component is the reference implementation for the third guide in the
+producer and Next.js video series; that guide remains unpublished until its
+complete qualification record is ready.
 
 ## Delivery profiles
 
@@ -255,7 +256,7 @@ reorder window closes, and RTX/FlexFEC packets that arrived too late. The
 current on-demand process deliberately does not open a second metrics listener
 per device.
 
-## Qualification
+## Technical qualification
 
 ```bash
 go test ./...

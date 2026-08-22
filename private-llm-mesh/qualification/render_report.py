@@ -37,37 +37,37 @@ def svg_worker_lifecycle(
     timeline_duration = max(1.0, timeline_end - timeline_start)
     successful_turns = sum(int(phase.get("summary", {}).get("successful", 0)) for _, phase in phases)
     lane_y = {"qualification-worker-a": 180, "qualification-worker-b": 280}
-    colors = {"qualification-worker-a": "#38bdf8", "qualification-worker-b": "#22c55e"}
+    colors = {"qualification-worker-a": "#2563eb", "qualification-worker-b": "#059669"}
     lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-labelledby="title description">',
         '<title id="title">Worker routing through loss and recovery</title>',
         '<desc id="description">Measured workload phases show both workers serving traffic, worker B serving alone after worker A stops, and both workers serving again after worker A returns.</desc>',
-        '<rect width="100%" height="100%" fill="#111827"/>',
-        '<text x="28" y="42" fill="#f9fafb" font-family="sans-serif" font-size="26" font-weight="700">Worker routing through loss and recovery</text>',
-        f'<text x="28" y="70" fill="#9ca3af" font-family="sans-serif" font-size="17">Measured phase time · {successful_turns} successful turns · zero failed streams</text>',
-        f'<line x1="{left}" y1="{lane_y["qualification-worker-a"]}" x2="{width - right}" y2="{lane_y["qualification-worker-a"]}" stroke="#374151"/>',
-        f'<line x1="{left}" y1="{lane_y["qualification-worker-b"]}" x2="{width - right}" y2="{lane_y["qualification-worker-b"]}" stroke="#374151"/>',
-        f'<text x="{left - 18}" y="{lane_y["qualification-worker-a"] + 6}" text-anchor="end" fill="#d1d5db" font-family="sans-serif" font-size="18">worker A</text>',
-        f'<text x="{left - 18}" y="{lane_y["qualification-worker-b"] + 6}" text-anchor="end" fill="#d1d5db" font-family="sans-serif" font-size="18">worker B</text>',
+        '<rect width="100%" height="100%" fill="#ffffff"/>',
+        '<text x="28" y="42" fill="#111827" font-family="sans-serif" font-size="26" font-weight="700">Worker routing through loss and recovery</text>',
+        f'<text x="28" y="70" fill="#475569" font-family="sans-serif" font-size="17">Measured phase time · {successful_turns} successful turns · zero failed streams</text>',
+        f'<line x1="{left}" y1="{lane_y["qualification-worker-a"]}" x2="{width - right}" y2="{lane_y["qualification-worker-a"]}" stroke="#cbd5e1"/>',
+        f'<line x1="{left}" y1="{lane_y["qualification-worker-b"]}" x2="{width - right}" y2="{lane_y["qualification-worker-b"]}" stroke="#cbd5e1"/>',
+        f'<text x="{left - 18}" y="{lane_y["qualification-worker-a"] + 6}" text-anchor="end" fill="#111827" font-family="sans-serif" font-size="18">worker A</text>',
+        f'<text x="{left - 18}" y="{lane_y["qualification-worker-b"] + 6}" text-anchor="end" fill="#111827" font-family="sans-serif" font-size="18">worker B</text>',
     ]
     for phase_index, (label, phase) in enumerate(phases):
         phase_start, phase_end = phase_times[phase_index]
         start_x = left + ((phase_start - timeline_start) / timeline_duration) * plot_width
         end_x = left + ((phase_end - timeline_start) / timeline_duration) * plot_width
-        fill = "#182235" if phase_index % 2 == 0 else "#211d2d"
+        fill = "#f8fafc" if phase_index % 2 == 0 else "#eef2ff"
         lines.append(
-            f'<rect x="{start_x:.1f}" y="{top}" width="{max(1, end_x - start_x):.1f}" height="{height - top - bottom}" fill="{fill}" opacity="0.75"/>'
+            f'<rect x="{start_x:.1f}" y="{top}" width="{max(1, end_x - start_x):.1f}" height="{height - top - bottom}" fill="{fill}"/>'
         )
         lines.append(
-            f'<text x="{start_x + 8:.1f}" y="{top + 24}" fill="#e5e7eb" font-family="sans-serif" font-size="16" font-weight="600">{label}</text>'
+            f'<text x="{start_x + 8:.1f}" y="{top + 24}" fill="#111827" font-family="sans-serif" font-size="16" font-weight="600">{label}</text>'
         )
         if phase_index > 0:
             lines.append(
-                f'<line x1="{start_x:.1f}" y1="{top}" x2="{start_x:.1f}" y2="{height - bottom}" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5 5"/>'
+                f'<line x1="{start_x:.1f}" y1="{top}" x2="{start_x:.1f}" y2="{height - bottom}" stroke="#d97706" stroke-width="2" stroke-dasharray="5 5"/>'
             )
             event = "A stopped" if phase_index == 1 else "A returned"
             lines.append(
-                f'<text x="{start_x - 6:.1f}" y="{top - 10}" text-anchor="end" fill="#fbbf24" font-family="sans-serif" font-size="14" font-weight="600">{event}</text>'
+                f'<text x="{start_x - 6:.1f}" y="{top - 10}" text-anchor="end" fill="#b45309" font-family="sans-serif" font-size="14" font-weight="600">{event}</text>'
             )
         workers = phase.get("summary", {}).get("workers", {})
         for worker, count in workers.items():
@@ -78,18 +78,18 @@ def svg_worker_lifecycle(
                 f'<rect x="{start_x:.1f}" y="{bar_y}" width="{max(2, end_x - start_x):.1f}" height="24" rx="8" fill="{colors[worker]}"/>'
             )
             lines.append(
-                f'<text x="{(start_x + end_x) / 2:.1f}" y="{bar_y + 17}" text-anchor="middle" fill="#07111f" font-family="sans-serif" font-size="14" font-weight="700">{count} {"turn" if count == 1 else "turns"}</text>'
+                f'<text x="{(start_x + end_x) / 2:.1f}" y="{bar_y + 17}" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="14" font-weight="700">{count} {"turn" if count == 1 else "turns"}</text>'
             )
     lines.extend(
         [
-            f'<line x1="{left}" y1="{height - bottom}" x2="{width - right}" y2="{height - bottom}" stroke="#6b7280"/>',
-            f'<text x="{(left + width - right) / 2:.1f}" y="{height - 26}" text-anchor="middle" fill="#9ca3af" font-family="sans-serif" font-size="16">Elapsed time across the controlled worker lifecycle</text>',
+            f'<line x1="{left}" y1="{height - bottom}" x2="{width - right}" y2="{height - bottom}" stroke="#94a3b8"/>',
+            f'<text x="{(left + width - right) / 2:.1f}" y="{height - 26}" text-anchor="middle" fill="#475569" font-family="sans-serif" font-size="16">Elapsed time across the controlled worker lifecycle</text>',
         ]
     )
     for tick in range(0, int(timeline_duration) + 1, 20):
         x = left + (tick / timeline_duration) * plot_width
         lines.append(
-            f'<text x="{x:.1f}" y="{height - bottom + 24}" text-anchor="middle" fill="#9ca3af" font-family="sans-serif" font-size="13">{tick}s</text>'
+            f'<text x="{x:.1f}" y="{height - bottom + 24}" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="13">{tick}s</text>'
         )
     lines.append("</svg>")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

@@ -1119,13 +1119,13 @@ export function renderSVG(analysis, manifest) {
       const fill = index % 2 === 0 ? "#f3f4f6" : "#e5e7eb";
       const path = phase.shaping ? "controlled link" : "unshaped";
       const label = phase.name === "conditioning" ? "settling" : phase.name;
-      return `<rect x="${round(x(start))}" y="${margin.top}" width="${round(Math.max(1, x(end) - x(start)))}" height="${plotHeight}" fill="${fill}"/><text x="${round(x(start) + 7)}" y="${margin.top - 20}" font-size="15" font-weight="600" fill="#374151">${escapeXML(label)}</text><text x="${round(x(start) + 7)}" y="${margin.top - 3}" font-size="13" fill="#6b7280">${path}</text>`;
+      return `<rect x="${round(x(start))}" y="${margin.top}" width="${round(Math.max(1, x(end) - x(start)))}" height="${plotHeight}" fill="${fill}"/><text x="${round(x(start) + 7)}" y="${margin.top - 22}" font-size="18" font-weight="600" fill="#374151">${escapeXML(label)}</text><text x="${round(x(start) + 7)}" y="${margin.top - 3}" font-size="15" fill="#6b7280">${path}</text>`;
     })
     .join("");
   const grid = Array.from({ length: 5 }, (_, index) => {
     const value = (maximumBitrate * index) / 4;
     const ordinate = y(value);
-    return `<line x1="${margin.left}" y1="${round(ordinate)}" x2="${width - margin.right}" y2="${round(ordinate)}" stroke="#d1d5db"/><text x="${margin.left - 12}" y="${round(ordinate + 5)}" text-anchor="end" font-size="14" fill="#6b7280">${Math.round(value / 100) / 10} Mb/s</text>`;
+    return `<line x1="${margin.left}" y1="${round(ordinate)}" x2="${width - margin.right}" y2="${round(ordinate)}" stroke="#d1d5db"/><text x="${margin.left - 12}" y="${round(ordinate + 5)}" text-anchor="end" font-size="16" fill="#6b7280">${Math.round(value / 100) / 10} Mb/s</text>`;
   }).join("");
   const series = [
     ["Encoder media", "#2563eb", "encoderTargetKbps", ""],
@@ -1143,7 +1143,7 @@ export function renderSVG(analysis, manifest) {
         )
         .join(" ");
       const legendX = margin.left + index * 170;
-      return `<polyline fill="none" stroke="${color}" stroke-width="2.5" stroke-dasharray="${dash}" points="${points}"/><line x1="${legendX}" y1="${height - 36}" x2="${legendX + 24}" y2="${height - 36}" stroke="${color}" stroke-width="3"/><text x="${legendX + 31}" y="${height - 30}" font-size="14" fill="#111827">${label}</text>`;
+      return `<polyline fill="none" stroke="${color}" stroke-width="2.5" stroke-dasharray="${dash}" points="${points}"/><line x1="${legendX}" y1="${height - 36}" x2="${legendX + 24}" y2="${height - 36}" stroke="${color}" stroke-width="3"/><text x="${legendX + 31}" y="${height - 30}" font-size="16" fill="#111827">${label}</text>`;
     })
     .join("");
   const capacityPointList = [];
@@ -1173,7 +1173,7 @@ export function renderSVG(analysis, manifest) {
   }
   const capacityPoints = capacityPointList.join(" ");
   const capacityLegendX = margin.left + 4 * 170;
-  const capacityLine = `<polyline fill="none" stroke="#be185d" stroke-width="3" stroke-dasharray="8 6" points="${capacityPoints}"/><line x1="${capacityLegendX}" y1="${height - 36}" x2="${capacityLegendX + 24}" y2="${height - 36}" stroke="#be185d" stroke-width="3" stroke-dasharray="8 6"/><text x="${capacityLegendX + 31}" y="${height - 30}" font-size="14" fill="#111827">Link capacity</text>`;
+  const capacityLine = `<polyline fill="none" stroke="#be185d" stroke-width="3" stroke-dasharray="8 6" points="${capacityPoints}"/><line x1="${capacityLegendX}" y1="${height - 36}" x2="${capacityLegendX + 24}" y2="${height - 36}" stroke="#be185d" stroke-width="3" stroke-dasharray="8 6"/><text x="${capacityLegendX + 31}" y="${height - 30}" font-size="16" fill="#111827">Link capacity</text>`;
   const constrainedSchedule =
     manifest.phases.find((phase) => phase.name === "constrained")?.shaping
       ?.schedule || [];
@@ -1196,23 +1196,23 @@ export function renderSVG(analysis, manifest) {
   const timeTicks = Array.from({ length: 6 }, (_, index) => {
     const elapsed = (maximumTime * index) / 5;
     const abscissa = round(x(elapsed));
-    return `<line x1="${abscissa}" y1="${margin.top + plotHeight}" x2="${abscissa}" y2="${margin.top + plotHeight + 7}" stroke="#111827"/><text x="${abscissa}" y="${margin.top + plotHeight + 25}" text-anchor="middle" font-size="13" fill="#4b5563">${Math.round(elapsed / 1000)} s</text>`;
+    return `<line x1="${abscissa}" y1="${margin.top + plotHeight}" x2="${abscissa}" y2="${margin.top + plotHeight + 7}" stroke="#111827"/><text x="${abscissa}" y="${margin.top + plotHeight + 27}" text-anchor="middle" font-size="16" fill="#4b5563">${Math.round(elapsed / 1000)} s</text>`;
   }).join("");
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title description" style="font-family:system-ui,sans-serif">
   <title id="title">Adaptive sender response to controlled link changes</title>
   <desc id="description">Measured encoder, TWCC, receive, and pacer rates are plotted against the independently configured traffic-control schedule, separating media and wire budgets.</desc>
   <rect width="100%" height="100%" fill="#ffffff"/>
-  <text x="${margin.left}" y="34" font-size="24" font-weight="600" fill="#111827">Adaptive sender response to controlled link changes</text>
-  <text x="${margin.left}" y="62" font-size="14" fill="#4b5563">${escapeXML(subtitle)}</text>
-  <text x="${width - margin.right}" y="28" text-anchor="end" font-size="16" font-weight="700" fill="${resultColor}">${resultLabel}</text>
+  <text x="${margin.left}" y="38" font-size="30" font-weight="600" fill="#111827">Adaptive sender response to controlled link changes</text>
+  <text x="${margin.left}" y="68" font-size="18" fill="#4b5563">${escapeXML(subtitle)}</text>
+  <text x="${width - margin.right}" y="34" text-anchor="end" font-size="20" font-weight="700" fill="${resultColor}">${resultLabel}</text>
   ${phaseBlocks}
   ${grid}
   ${lines}
   ${capacityLine}
   <line x1="${margin.left}" y1="${margin.top + plotHeight}" x2="${width - margin.right}" y2="${margin.top + plotHeight}" stroke="#111827"/>
   ${timeTicks}
-  <text x="${width / 2}" y="${height - 82}" text-anchor="middle" font-size="14" fill="#6b7280">Media rates · encoder, TWCC, received · wire rates · pacer, configured capacity</text>
+  <text x="${width / 2}" y="${height - 82}" text-anchor="middle" font-size="17" fill="#6b7280">Media rates · encoder, TWCC, received · wire rates · pacer, configured capacity</text>
 </svg>
 `;
 }
