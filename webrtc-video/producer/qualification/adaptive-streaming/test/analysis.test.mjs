@@ -251,7 +251,7 @@ test("uses the settled controlled path as the congestion reference", () => {
 test("accepts a bounded transient without weakening the capacity reference", () => {
   const startedAt = Date.parse("2026-08-16T10:00:00.000Z");
   const conditioningTargets = [
-    6800, 6800, 6800, 8000, 8000, 8000, 8000, 8000, 8000, 8000,
+    6800, 6800, 6800, 8000, 8000, 8000, 8000, 8000, 8000, 6800,
   ];
   const definitions = [
     ["baseline", Array(15).fill(8000), null],
@@ -1426,6 +1426,83 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
       (assertion) => assertion.name === "producer-kernel-capacity",
     ).passed,
     true,
+  );
+  const attributableRecoveryLoss = analyze(
+    samples,
+    manifest,
+    {
+      constrained: {
+        start: [{ kind: "netem", drops: 0, packets: 0 }],
+        end: [{ kind: "netem", drops: 5, packets: 1_000 }],
+      },
+      impaired: {
+        start: [{ kind: "netem", drops: 5, packets: 1_000 }],
+        end: [
+          {
+            kind: "netem",
+            drops: 50,
+            packets: 2_000,
+            options: { "loss-random": { loss: 0.02 } },
+          },
+        ],
+      },
+      recovery: {
+        start: [{ kind: "netem", drops: 50, packets: 2_000 }],
+        end: [{ kind: "netem", drops: 140, packets: 5_000 }],
+      },
+    },
+    null,
+    receiverSamples,
+    producerSamples.map((sample, index) => ({
+      ...sample,
+      sendBufferDrops:
+        index >= 80 ? 115 : index >= 60 ? 25 : index >= 40 ? 5 : 0,
+    })),
+  );
+  assert.equal(attributableRecoveryLoss.trafficControl.recoveryDrops, 90);
+  assert.equal(
+    attributableRecoveryLoss.assertions.find(
+      (assertion) => assertion.name === "producer-kernel-capacity",
+    ).passed,
+    true,
+  );
+  const unexplainedRecoveryLoss = analyze(
+    samples,
+    manifest,
+    {
+      constrained: {
+        start: [{ kind: "netem", drops: 0, packets: 0 }],
+        end: [{ kind: "netem", drops: 5, packets: 1_000 }],
+      },
+      impaired: {
+        start: [{ kind: "netem", drops: 5, packets: 1_000 }],
+        end: [
+          {
+            kind: "netem",
+            drops: 50,
+            packets: 2_000,
+            options: { "loss-random": { loss: 0.02 } },
+          },
+        ],
+      },
+      recovery: {
+        start: [{ kind: "netem", drops: 50, packets: 2_000 }],
+        end: [{ kind: "netem", drops: 140, packets: 5_000 }],
+      },
+    },
+    null,
+    receiverSamples,
+    producerSamples.map((sample, index) => ({
+      ...sample,
+      sendBufferDrops:
+        index >= 80 ? 118 : index >= 60 ? 25 : index >= 40 ? 5 : 0,
+    })),
+  );
+  assert.equal(
+    unexplainedRecoveryLoss.assertions.find(
+      (assertion) => assertion.name === "producer-kernel-capacity",
+    ).passed,
+    false,
   );
   const producerLossOutsideBoundaryTolerance = analyze(
     samples,

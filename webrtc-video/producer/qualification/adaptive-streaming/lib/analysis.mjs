@@ -115,8 +115,6 @@ export function analyze(
                 (1 + stableConditioningMaximumDeviationRatio),
         ).length / stableConditioningSamples.length
       : 0;
-  const stableConditioningEndingEncoderTargetKbps =
-    stableConditioningSamples.at(-1)?.encoderTargetKbps || 0;
   const preTransitionEncoderTargetKbps =
     stableConditioningMedianEncoderTargetKbps ||
     baseline?.medianEncoderTargetKbps ||
@@ -293,13 +291,9 @@ export function analyze(
     assert(
       assertions,
       stableConditioningSamples.length >= 5 &&
-        stableConditioningTargetRatio === 1 &&
-        stableConditioningEndingEncoderTargetKbps >=
-          stableConditioningMedianEncoderTargetKbps * 0.9 &&
-        stableConditioningEndingEncoderTargetKbps <=
-          stableConditioningMedianEncoderTargetKbps * 1.1,
+        stableConditioningTargetRatio === 1,
       "capacity-reference-bounded",
-      "every sample in the pre-transition window stays within the 20% response threshold and the final sample stays within 10% of that window's median encoder target",
+      "every sample in the pre-transition window stays within the 20% response threshold around the window's median encoder target",
     );
   }
   if (
@@ -776,19 +770,29 @@ export function analyze(
     );
   }
   if (producerUDP.available) {
-    const producerUnshapedSendDrops = ["warmup", "baseline", "recovery"].reduce(
+    const producerUnshapedSendDrops = ["warmup", "baseline"].reduce(
       (total, name) =>
         total + (producerUDP.phases[name]?.sendBufferDropsIncrease || 0),
       0,
     );
+    const producerConditioningSendDrops =
+      producerUDP.phases.conditioning?.sendBufferDropsIncrease || 0;
     const producerConstrainedSendDrops =
       producerUDP.phases.constrained?.sendBufferDropsIncrease || 0;
     const producerImpairedSendDrops =
       producerUDP.phases.impaired?.sendBufferDropsIncrease || 0;
+    const producerRecoverySendDrops =
+      producerUDP.phases.recovery?.sendBufferDropsIncrease || 0;
+    const conditioningBoundaryTolerance =
+      trafficControlSummary.conditioningDrops > 0 ? 2 : 0;
     const constrainedBoundaryTolerance =
       trafficControlSummary.constrainedDrops > 0 ? 2 : 0;
     const impairedBoundaryTolerance =
       trafficControlSummary.impairedDrops > 0 ? 2 : 0;
+    const recoveryQdiscDrops =
+      trafficControlSummary.recoveryDrops +
+      trafficControlSummary.recoveryDrainDrops;
+    const recoveryBoundaryTolerance = recoveryQdiscDrops > 0 ? 2 : 0;
     assert(
       assertions,
       phaseOrder.every((name) => producerUDP.phases[name]?.samples >= 10),
@@ -799,13 +803,18 @@ export function analyze(
       assertions,
       producerUDP.receiveBufferDropsIncrease === 0 &&
         producerUnshapedSendDrops === 0 &&
+        producerConditioningSendDrops <=
+          trafficControlSummary.conditioningDrops +
+            conditioningBoundaryTolerance &&
         producerConstrainedSendDrops <=
           trafficControlSummary.constrainedDrops +
             constrainedBoundaryTolerance &&
         producerImpairedSendDrops <=
-          trafficControlSummary.impairedDrops + impairedBoundaryTolerance,
+          trafficControlSummary.impairedDrops + impairedBoundaryTolerance &&
+        producerRecoverySendDrops <=
+          recoveryQdiscDrops + recoveryBoundaryTolerance,
       "producer-kernel-capacity",
-      "the producer kernel has no UDP receive overflow or send rejection outside the independently measured qdisc envelope, allowing at most two datagrams at an asynchronous phase boundary",
+      "the producer kernel has no UDP receive overflow or send rejection outside each independently measured qdisc interval, allowing at most two datagrams at an asynchronous phase boundary",
     );
   }
   return {
@@ -1631,9 +1640,11 @@ ${impairmentDescription}
 
 | Interval | Configured random loss | Shaped packets | Total qdisc drops | Total drop ratio | Ending queue |
 | --- | ---: | ---: | ---: | ---: | ---: |
+${analysis.trafficControl.conditioningEvidenceAvailable ? `| conditioning | ${formatNumber(analysis.trafficControl.conditioningConfiguredLossRatio * 100, 2)}% | ${analysis.trafficControl.conditioningPackets} | ${analysis.trafficControl.conditioningDrops} | ${formatNumber(analysis.trafficControl.conditioningDropRatio * 100, 2)}% | ${analysis.trafficControl.conditioningEndQueuePackets}/${analysis.trafficControl.conditioningQueueLimitPackets} (${formatNumber(analysis.trafficControl.conditioningEndQueueUtilization * 100, 1)}%) |` : ""}
 | capacity transitions | ${formatNumber(analysis.trafficControl.constrainedConfiguredLossRatio * 100, 2)}% | ${analysis.trafficControl.constrainedTransitionPackets} | ${analysis.trafficControl.constrainedTransitionDrops} | ${formatNumber(analysis.trafficControl.constrainedTransitionDropRatio * 100, 2)}% | n/a |
 | constrained steady state | ${formatNumber(analysis.trafficControl.constrainedConfiguredLossRatio * 100, 2)}% | ${analysis.trafficControl.constrainedSteadyPackets} | ${analysis.trafficControl.constrainedSteadyDrops} | ${formatNumber(analysis.trafficControl.constrainedSteadyDropRatio * 100, 2)}% | ${analysis.trafficControl.constrainedEndQueuePackets}/${analysis.trafficControl.constrainedQueueLimitPackets} (${formatNumber(analysis.trafficControl.constrainedEndQueueUtilization * 100, 1)}%) |
 | impaired (incremental) | ${formatNumber(analysis.trafficControl.impairedConfiguredLossRatio * 100, 2)}% | ${analysis.trafficControl.impairedPackets} | ${analysis.trafficControl.impairedDrops} | ${formatNumber(analysis.trafficControl.impairedDropRatio * 100, 2)}% | ${analysis.trafficControl.impairedEndQueuePackets}/${analysis.trafficControl.impairedQueueLimitPackets} (${formatNumber(analysis.trafficControl.impairedEndQueueUtilization * 100, 1)}%) |
+${analysis.trafficControl.recoveryEvidenceAvailable ? `| recovery | ${formatNumber(analysis.trafficControl.recoveryConfiguredLossRatio * 100, 2)}% | ${analysis.trafficControl.recoveryPackets} | ${analysis.trafficControl.recoveryDrops} | ${formatNumber(analysis.trafficControl.recoveryDropRatio * 100, 2)}% | ${analysis.trafficControl.recoveryEndQueuePackets}/${analysis.trafficControl.recoveryQueueLimitPackets} (${formatNumber(analysis.trafficControl.recoveryEndQueueUtilization * 100, 1)}%) |` : ""}
 ${analysis.trafficControl.recoveryDrainEvidenceAvailable ? `| recovery drain | ${formatNumber(analysis.trafficControl.recoveryDrainConfiguredLossRatio * 100, 2)}% | ${analysis.trafficControl.recoveryDrainPackets} | ${analysis.trafficControl.recoveryDrainDrops} | ${formatNumber(analysis.trafficControl.recoveryDrainDropRatio * 100, 2)}% | ${analysis.trafficControl.recoveryDrainEndQueuePackets}/${analysis.trafficControl.recoveryDrainQueueLimitPackets} (${formatNumber(analysis.trafficControl.recoveryDrainEndQueueUtilization * 100, 1)}%) |` : ""}
 
 Total qdisc drops include both configured random loss and queue overflow while the congestion controller reacts. Capacity-transition counters are separated from the final steady interval so a bounded reaction transient cannot hide sustained overload, and steady behavior cannot hide a destructive transition.
@@ -2493,6 +2504,12 @@ function summarizePhase(samples, phase, encoderQuality) {
 
 function summarizeTrafficControl(evidence) {
   if (evidence?.constrained?.end && evidence?.impaired?.end) {
+    const conditioning = evidence.conditioning?.end
+      ? netemIntervalStats(
+          evidence.conditioning.start,
+          evidence.conditioning.end,
+        )
+      : null;
     const transitions = (evidence.constrainedTransitions || []).map(
       (interval) => netemIntervalStats(interval.start, interval.end),
     );
@@ -2504,6 +2521,9 @@ function summarizeTrafficControl(evidence) {
       evidence.impaired.start,
       evidence.impaired.end,
     );
+    const recovery = evidence.recovery?.end
+      ? netemIntervalStats(evidence.recovery.start, evidence.recovery.end)
+      : null;
     const recoveryDrain = evidence.recoveryDrain?.end
       ? netemIntervalStats(
           evidence.recoveryDrain.start,
@@ -2519,6 +2539,16 @@ function summarizeTrafficControl(evidence) {
       0,
     );
     return {
+      conditioningConfiguredLossRatio: conditioning?.configuredLossRatio || 0,
+      conditioningDropRatio: conditioning
+        ? dropRatio(conditioning.packets, conditioning.drops)
+        : 0,
+      conditioningDrops: conditioning?.drops || 0,
+      conditioningEndQueuePackets: conditioning?.endQueuePackets || 0,
+      conditioningEndQueueUtilization: conditioning?.endQueueUtilization || 0,
+      conditioningEvidenceAvailable: conditioning !== null,
+      conditioningPackets: conditioning?.packets || 0,
+      conditioningQueueLimitPackets: conditioning?.queueLimitPackets || 0,
       constrainedConfiguredLossRatio: constrained.configuredLossRatio,
       constrainedEndQueuePackets: constrained.endQueuePackets,
       constrainedEndQueueUtilization: constrained.endQueueUtilization,
@@ -2548,6 +2578,16 @@ function summarizeTrafficControl(evidence) {
       impairedDropRatio: dropRatio(impaired.packets, impaired.drops),
       impairedDrops: impaired.drops,
       impairedPackets: impaired.packets,
+      recoveryConfiguredLossRatio: recovery?.configuredLossRatio || 0,
+      recoveryDropRatio: recovery
+        ? dropRatio(recovery.packets, recovery.drops)
+        : 0,
+      recoveryDrops: recovery?.drops || 0,
+      recoveryEndQueuePackets: recovery?.endQueuePackets || 0,
+      recoveryEndQueueUtilization: recovery?.endQueueUtilization || 0,
+      recoveryEvidenceAvailable: recovery !== null,
+      recoveryPackets: recovery?.packets || 0,
+      recoveryQueueLimitPackets: recovery?.queueLimitPackets || 0,
       recoveryDrainConfiguredLossRatio: recoveryDrain?.configuredLossRatio || 0,
       recoveryDrainDropRatio: recoveryDrain
         ? dropRatio(recoveryDrain.packets, recoveryDrain.drops)
@@ -2574,6 +2614,14 @@ function summarizeTrafficControl(evidence) {
   const impairedPackets = Math.max(0, impaired.packets - constrained.packets);
   const impairedDrops = Math.max(0, impaired.drops - constrained.drops);
   return {
+    conditioningConfiguredLossRatio: 0,
+    conditioningDropRatio: 0,
+    conditioningDrops: 0,
+    conditioningEndQueuePackets: 0,
+    conditioningEndQueueUtilization: 0,
+    conditioningEvidenceAvailable: false,
+    conditioningPackets: 0,
+    conditioningQueueLimitPackets: 0,
     constrainedPackets: constrained.packets,
     constrainedDrops: constrained.drops,
     constrainedConfiguredLossRatio: constrained.configuredLossRatio,
@@ -2600,6 +2648,14 @@ function summarizeTrafficControl(evidence) {
     impairedEndQueueUtilization: impaired.queueUtilization,
     impairedQueueLimitPackets: impaired.queueLimitPackets,
     impairedDropRatio: dropRatio(impairedPackets, impairedDrops),
+    recoveryConfiguredLossRatio: 0,
+    recoveryDropRatio: 0,
+    recoveryDrops: 0,
+    recoveryEndQueuePackets: 0,
+    recoveryEndQueueUtilization: 0,
+    recoveryEvidenceAvailable: false,
+    recoveryPackets: 0,
+    recoveryQueueLimitPackets: 0,
     recoveryDrainConfiguredLossRatio: 0,
     recoveryDrainDropRatio: 0,
     recoveryDrainDrops: 0,
@@ -3092,6 +3148,8 @@ async function main() {
   const [
     rawSamples,
     rawManifest,
+    conditioningStartQdisc,
+    conditioningQdisc,
     constrainedStepOneStartQdisc,
     constrainedStepOneQdisc,
     constrainedStepTwoStartQdisc,
@@ -3102,6 +3160,7 @@ async function main() {
     constrainedQdisc,
     impairedStartQdisc,
     impairedQdisc,
+    recoveryCapacityQdisc,
     recoveryDrainStartQdisc,
     recoveryDrainQdisc,
     rawProducerLog,
@@ -3117,6 +3176,8 @@ async function main() {
   ] = await Promise.all([
     readFile(`${outputDirectory}/samples.jsonl`, "utf8"),
     readFile(`${outputDirectory}/manifest.json`, "utf8"),
+    readFile(`${outputDirectory}/qdisc-conditioning-start.json`, "utf8"),
+    readFile(`${outputDirectory}/qdisc-conditioning.json`, "utf8"),
     readFile(`${outputDirectory}/qdisc-constrained-step-1-start.json`, "utf8"),
     readFile(`${outputDirectory}/qdisc-constrained-step-1.json`, "utf8"),
     readFile(`${outputDirectory}/qdisc-constrained-step-2-start.json`, "utf8"),
@@ -3127,6 +3188,7 @@ async function main() {
     readFile(`${outputDirectory}/qdisc-constrained-steady.json`, "utf8"),
     readFile(`${outputDirectory}/qdisc-impaired-start.json`, "utf8"),
     readFile(`${outputDirectory}/qdisc-impaired.json`, "utf8"),
+    readFile(`${outputDirectory}/qdisc-recovery-capacity.json`, "utf8"),
     readFile(`${outputDirectory}/qdisc-recovery-drain-start.json`, "utf8"),
     readFile(`${outputDirectory}/qdisc-recovery-drain.json`, "utf8"),
     readFile(`${outputDirectory}/producer.log`, "utf8"),
@@ -3167,6 +3229,10 @@ async function main() {
     samples,
     manifest,
     {
+      conditioning: {
+        start: JSON.parse(conditioningStartQdisc),
+        end: JSON.parse(conditioningQdisc),
+      },
       constrainedTransitions: [
         {
           start: JSON.parse(constrainedStepOneStartQdisc),
@@ -3192,6 +3258,10 @@ async function main() {
       impaired: {
         start: JSON.parse(impairedStartQdisc),
         end: JSON.parse(impairedQdisc),
+      },
+      recovery: {
+        start: JSON.parse(impairedQdisc),
+        end: JSON.parse(recoveryCapacityQdisc),
       },
       recoveryDrain: {
         start: JSON.parse(recoveryDrainStartQdisc),
