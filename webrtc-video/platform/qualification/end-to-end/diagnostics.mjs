@@ -1,4 +1,7 @@
-export function expectedBrowserDiagnostic(diagnostic) {
+export function expectedBrowserDiagnostic(diagnostic, signalingResponses = []) {
+  if (successfulNoContentAbort(diagnostic, signalingResponses)) {
+    return true
+  }
   if (
     new Set([
       "navigation-started",
@@ -24,6 +27,32 @@ export function expectedBrowserDiagnostic(diagnostic) {
     )
   }
   return false
+}
+
+function successfulNoContentAbort(diagnostic, signalingResponses) {
+  if (
+    diagnostic.type !== "request-failed" ||
+    !diagnostic.message.endsWith(" net::ERR_ABORTED") ||
+    !isWHEPRequest(diagnostic.message) ||
+    !Number.isFinite(diagnostic.observedAt)
+  ) {
+    return false
+  }
+  const match = /^(POST|PATCH|DELETE) (\S+) net::ERR_ABORTED$/.exec(
+    diagnostic.message,
+  )
+  if (!match) {
+    return false
+  }
+  const [, method, url] = match
+  return signalingResponses.some(
+    (response) =>
+      response.method === method &&
+      response.url === url &&
+      response.status === 204 &&
+      Number.isFinite(response.observedAt) &&
+      Math.abs(response.observedAt - diagnostic.observedAt) <= 1_000,
+  )
 }
 
 function expectedStoppedMediaMTXDiagnostic(diagnostic) {

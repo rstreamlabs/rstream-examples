@@ -147,6 +147,34 @@ test("platform qualification preserves the diagnostic that caused an early failu
   ])
 })
 
+test("platform qualification accepts a WHEP abort only after the same request returned 204", () => {
+  const completed = {
+    message:
+      "PATCH https://media.example/whep/session?rstream.token=[redacted] net::ERR_ABORTED",
+    observedAt: 2_010,
+    phase: "mediamtx-stopped",
+    type: "request-failed",
+  }
+  const response = {
+    method: "PATCH",
+    observedAt: 2_000,
+    status: 204,
+    url: "https://media.example/whep/session?rstream.token=[redacted]",
+  }
+  assert.deepEqual(unexpectedBrowserDiagnostics([completed], [response]), [])
+  for (const mismatched of [
+    [],
+    [{ ...response, method: "DELETE" }],
+    [{ ...response, status: 500 }],
+    [{ ...response, url: "https://media.example/whep/another" }],
+    [{ ...response, observedAt: 500 }],
+  ]) {
+    assert.deepEqual(unexpectedBrowserDiagnostics([completed], mismatched), [
+      completed,
+    ])
+  }
+})
+
 test("platform qualification tolerates an unavailable page while writing failure evidence", async () => {
   const events = []
   await drainBrowserEvents(undefined, events)

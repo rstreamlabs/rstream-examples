@@ -16,8 +16,11 @@ export async function drainBrowserEvents(page, destination) {
   destination.push(...observed)
 }
 
-export function unexpectedBrowserDiagnostics(diagnostics) {
+export function unexpectedBrowserDiagnostics(
+  diagnostics,
+  signalingResponses = [],
+) {
   return diagnostics.filter(
-    (diagnostic) => !expectedBrowserDiagnostic(diagnostic),
+    (diagnostic) => !expectedBrowserDiagnostic(diagnostic, signalingResponses),
   )
 }

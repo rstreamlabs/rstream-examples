@@ -16,6 +16,7 @@ const options = parseArguments(process.argv.slice(2))
 const startedAt = Date.now()
 const events = []
 const diagnostics = []
+const signalingResponses = []
 const browserEvents = []
 let unexpectedDiagnostics = []
 let browser
@@ -81,10 +82,19 @@ try {
     })
   })
   page.on("response", (response) => {
+    const request = response.request()
+    if (isWHEPSignalingRequest(request)) {
+      signalingResponses.push({
+        method: request.method(),
+        observedAt: elapsed(startedAt),
+        status: response.status(),
+        url: sanitize(response.url()),
+      })
+    }
     if (response.status() >= 400) {
       diagnostics.push({
         message: sanitize(
-          `${response.request().method()} ${response.url()} ${response.status()}`,
+          `${request.method()} ${response.url()} ${response.status()}`,
         ),
         observedAt: elapsed(startedAt),
         phase: currentPhase(events),
@@ -192,7 +202,10 @@ try {
     observedAt: elapsed(startedAt),
   })
   await page.close()
-  unexpectedDiagnostics = unexpectedBrowserDiagnostics(diagnostics)
+  unexpectedDiagnostics = unexpectedBrowserDiagnostics(
+    diagnostics,
+    signalingResponses,
+  )
   if (unexpectedDiagnostics.length > 0) {
     throw new Error(
       `the browser reported unexpected diagnostics: ${JSON.stringify(unexpectedDiagnostics)}`,
@@ -204,12 +217,16 @@ try {
     events,
     passed: true,
     platform: safeOrigin(options.platform),
+    signalingResponses,
     unexpectedDiagnostics,
     version: 1,
   })
 } catch (error) {
   await drainBrowserEvents(page, browserEvents)
-  unexpectedDiagnostics = unexpectedBrowserDiagnostics(diagnostics)
+  unexpectedDiagnostics = unexpectedBrowserDiagnostics(
+    diagnostics,
+    signalingResponses,
+  )
   await writeResult(options.output, {
     browserEvents,
     diagnostics,
@@ -220,6 +237,7 @@ try {
     events,
     passed: false,
     platform: safeOrigin(options.platform),
+    signalingResponses,
     unexpectedDiagnostics,
     version: 1,
   })
@@ -265,6 +283,13 @@ function requiredEnvironment(name) {
     throw new Error(`${name} is required`)
   }
   return value
+}
+
+function isWHEPSignalingRequest(request) {
+  return (
+    new Set(["POST", "PATCH", "DELETE"]).has(request.method()) &&
+    /\/whep(?:[/?]|$)/.test(new URL(request.url()).pathname)
+  )
 }
 
 async function waitForText(page, text, timeout) {
