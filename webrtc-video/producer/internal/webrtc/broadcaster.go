@@ -149,6 +149,8 @@ type Session struct {
 	adaptive                  *adaptation.Controller
 	close                     sync.Once
 	closed                    chan struct{}
+	mediaReady                chan struct{}
+	mediaReadyOnce            sync.Once
 	onClose                   func(string)
 	statsMu                   sync.RWMutex
 	stats                     SessionStats
@@ -300,6 +302,7 @@ func (b *Broadcaster) OpenSession(ctx context.Context) (*Session, error) {
 		estimator:                estimator,
 		encoder:                  encoderController,
 		closed:                   make(chan struct{}),
+		mediaReady:               make(chan struct{}),
 		requiredTransport:        requiredWHEPTransport(b.cfg),
 		allowMediaMTXNativeOffer: b.cfg.Web.WHEP.AllowMediaMTXNativeOffer,
 		nativeMediaBitrateBps:    initialBitrateBps,
@@ -559,9 +562,12 @@ func (s *Session) missingConfiguredTransportFeatures() []string {
 
 func (s *Session) handleConnected() {
 	s.clearNetworkRecovery()
-	if s.whep.Load() {
-		s.requestRecoveryKeyFrame(0)
-	}
+	s.mediaReadyOnce.Do(func() {
+		if s.mediaReady != nil {
+			close(s.mediaReady)
+		}
+	})
+	s.requestRecoveryKeyFrame(0)
 }
 
 func (s *Session) createAnswer(ctx context.Context, offer string, gatherComplete bool) (string, error) {
@@ -1086,6 +1092,8 @@ func compactNTPTime(value time.Time) uint32 {
 }
 
 func (s *Session) writeSamples(samples <-chan media.AccessUnit) {
+	ready := s.mediaReady == nil
+	started := ready
 	for {
 		select {
 		case <-s.closed:
@@ -1095,6 +1103,20 @@ func (s *Session) writeSamples(samples <-chan media.AccessUnit) {
 				s.logger.Warn("Viewer %s media source stopped", s.id)
 				s.Close("media source stopped")
 				return
+			}
+			if !ready {
+				select {
+				case <-s.mediaReady:
+					ready = true
+				default:
+					continue
+				}
+			}
+			if !started {
+				if !unit.KeyFrame {
+					continue
+				}
+				started = true
 			}
 			decision := mediaFrameAdmission{admitted: true}
 			if admission, ok := s.estimator.(interface {

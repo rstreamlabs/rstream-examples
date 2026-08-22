@@ -906,6 +906,73 @@ func TestSessionDropsRejectedAccessUnitBeforePacketization(t *testing.T) {
 	}
 }
 
+func TestSessionWaitsForConnectionAndKeyFrameBeforePacketization(t *testing.T) {
+	estimator := &rejectingBandwidthEstimator{admitted: make(chan media.AccessUnit, 1)}
+	encoder := &recordingKeyFrameRequester{requested: make(chan struct{}, 1)}
+	session := &Session{
+		id:         "viewer",
+		logger:     logs.NewLogger(logs.NewHub(8), false),
+		estimator:  estimator,
+		encoder:    encoder,
+		closed:     make(chan struct{}),
+		mediaReady: make(chan struct{}),
+	}
+	samples := make(chan media.AccessUnit, 3)
+	done := make(chan struct{})
+	go func() {
+		session.writeSamples(samples)
+		close(done)
+	}()
+	samples <- media.AccessUnit{Data: []byte{1}, KeyFrame: true}
+	select {
+	case <-estimator.admitted:
+		t.Fatal("session packetized media before the peer connection was ready")
+	case <-time.After(25 * time.Millisecond):
+	}
+	session.handleConnected()
+	select {
+	case <-encoder.requested:
+	case <-time.After(time.Second):
+		t.Fatal("connected session did not request its initial key frame")
+	}
+	samples <- media.AccessUnit{Data: []byte{2, 2}, KeyFrame: false}
+	samples <- media.AccessUnit{Data: []byte{3, 3, 3}, KeyFrame: true}
+	select {
+	case admitted := <-estimator.admitted:
+		if len(admitted.Data) != 3 || !admitted.KeyFrame {
+			t.Fatalf("first admitted access unit = %+v, want the post-connect key frame", admitted)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("session did not admit the first post-connect key frame")
+	}
+	session.Close("test complete")
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("session writer did not stop")
+	}
+}
+
+func TestSessionWriterStopsWhileWaitingForConnection(t *testing.T) {
+	session := &Session{
+		id:         "viewer",
+		logger:     logs.NewLogger(logs.NewHub(8), false),
+		closed:     make(chan struct{}),
+		mediaReady: make(chan struct{}),
+	}
+	done := make(chan struct{})
+	go func() {
+		session.writeSamples(make(chan media.AccessUnit))
+		close(done)
+	}()
+	session.Close("test complete")
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("session writer did not stop before connection")
+	}
+}
+
 func TestSessionReportsRecoveryKeyFrameFailures(t *testing.T) {
 	logger := logs.NewLogger(logs.NewHub(8), false)
 	requestError := errors.New("request rejected")
@@ -1066,19 +1133,57 @@ func TestWHEPSessionRequestsKeyFrameImmediatelyAfterConnection(t *testing.T) {
 	}
 }
 
-func TestDirectSessionDoesNotScheduleStartupKeyFrame(t *testing.T) {
+func TestDirectSessionRequestsKeyFrameImmediatelyAfterConnection(t *testing.T) {
+	encoder := &recordingKeyFrameRequester{requested: make(chan struct{}, 1)}
 	session := &Session{
-		id:     "viewer",
-		logger: logs.NewLogger(logs.NewHub(8), false),
-		closed: make(chan struct{}),
+		id:         "viewer",
+		encoder:    encoder,
+		logger:     logs.NewLogger(logs.NewHub(8), false),
+		closed:     make(chan struct{}),
+		mediaReady: make(chan struct{}),
 	}
 	defer session.Close("test complete")
 	session.handleConnected()
-	session.keyFrameMu.Lock()
-	timer := session.keyFrameRequestTimer
-	session.keyFrameMu.Unlock()
-	if timer != nil {
-		t.Fatal("direct connection scheduled a WHEP startup key frame")
+	select {
+	case <-session.mediaReady:
+	default:
+		t.Fatal("direct connection did not release the media writer")
+	}
+	if got := len(encoder.requested); got != 1 {
+		t.Fatalf("direct startup key-frame requests = %d, want 1", got)
+	}
+}
+
+func TestSessionHandlesConcurrentConnectedCallbacks(t *testing.T) {
+	const callers = 100
+	encoder := &recordingKeyFrameRequester{requested: make(chan struct{}, callers)}
+	session := &Session{
+		id:         "viewer",
+		encoder:    encoder,
+		logger:     logs.NewLogger(logs.NewHub(8), false),
+		closed:     make(chan struct{}),
+		mediaReady: make(chan struct{}),
+	}
+	defer session.Close("test complete")
+	start := make(chan struct{})
+	var workers sync.WaitGroup
+	workers.Add(callers)
+	for range callers {
+		go func() {
+			defer workers.Done()
+			<-start
+			session.handleConnected()
+		}()
+	}
+	close(start)
+	workers.Wait()
+	select {
+	case <-session.mediaReady:
+	default:
+		t.Fatal("concurrent connected callbacks did not release the media writer")
+	}
+	if got := len(encoder.requested); got != 1 {
+		t.Fatalf("concurrent startup key-frame requests = %d, want 1 coalesced request", got)
 	}
 }
 
