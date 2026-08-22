@@ -50,6 +50,7 @@ state_file="${runtime_directory}/stack.json"
 stack_log="${runtime_directory}/stack.log"
 producer_log="${runtime_directory}/producer.log"
 mediamtx_log="${runtime_directory}/mediamtx.log"
+postgres_log="${runtime_directory}/postgres.log"
 stack_pid=""
 mediamtx_container=""
 postgres_started=0
@@ -57,6 +58,9 @@ producer_started=0
 
 cleanup() {
   local status=$?
+  if ((postgres_started)); then
+    docker logs "${postgres_name}" >"${postgres_log}" 2>&1 || true
+  fi
   if ((producer_started)); then
     docker logs "${producer_name}" >"${producer_log}" 2>&1 || true
     docker rm -f "${producer_name}" >/dev/null 2>&1 || true
@@ -82,6 +86,10 @@ cleanup() {
   if [[ -s "${mediamtx_log}" ]]; then
     node "${video_directory}/distributor/qualification/end-to-end/sanitize-stream.mjs" \
       <"${mediamtx_log}" >"${output_directory}/mediamtx.log" || status=1
+  fi
+  if [[ -s "${postgres_log}" ]]; then
+    node "${video_directory}/distributor/qualification/end-to-end/sanitize-stream.mjs" \
+      <"${postgres_log}" >"${output_directory}/postgres.log" || status=1
   fi
   rm -rf "${runtime_directory}"
   exit "${status}"
@@ -132,6 +140,9 @@ for _ in $(seq 1 60); do
 done
 if ! docker exec "${postgres_name}" pg_isready -U qualification -d webrtc_video_platform >/dev/null 2>&1; then
   printf 'PostgreSQL did not become ready\n' >&2
+  docker inspect --format 'state={{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}} oom={{.State.OOMKilled}}' \
+    "${postgres_name}" >&2 || true
+  docker logs "${postgres_name}" >&2 || true
   exit 1
 fi
 postgres_port="$(docker port "${postgres_name}" 5432/tcp | awk -F: 'NR == 1 {print $NF}')"
