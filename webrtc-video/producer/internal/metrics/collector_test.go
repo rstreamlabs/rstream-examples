@@ -60,6 +60,7 @@ func TestCollectorExportsStableUnitsAndBoundedDimensions(t *testing.T) {
 		LossGuardActiveSessions:                   1,
 		LossGuardTargetBitrateBps:                 5_000_000,
 		MaximumPacketLossRatio:                    0.025,
+		MaximumLossGuardObservedLossRatio:         0.2,
 		MaximumDelayEstimateSeconds:               0.018,
 		PacerSentPrimaryBytes:                     9000,
 		PacerRetransmissionPacketsCoalesced:       7,
@@ -103,6 +104,9 @@ func TestCollectorExportsStableUnitsAndBoundedDimensions(t *testing.T) {
 	}
 	if value := metricValue(t, families, namespace+"_twcc_maximum_packet_loss_ratio", nil); value != 0.025 {
 		t.Fatalf("packet loss ratio = %f, want 0.025", value)
+	}
+	if value := metricValue(t, families, namespace+"_loss_guard_maximum_observed_loss_ratio", nil); value != 0.2 {
+		t.Fatalf("loss guard observed ratio = %f, want 0.2", value)
 	}
 	if value := metricValue(t, families, namespace+"_encoded_frames_total", map[string]string{"frame_type": "delta"}); value != 29 {
 		t.Fatalf("encoded delta frames = %f, want 29", value)

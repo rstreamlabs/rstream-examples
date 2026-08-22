@@ -23,6 +23,7 @@ type ProducerStats struct {
 	PacerPacingBitrateBps                     int64
 	PacerQueuePackets                         int64
 	MaximumPacketLossRatio                    float64
+	MaximumLossGuardObservedLossRatio         float64
 	MaximumDelayEstimateSeconds               float64
 	MaximumPacerQueueDelaySeconds             float64
 	MaximumRetransmissionRTTSeconds           float64
@@ -162,6 +163,7 @@ func addActiveSessionStats(producer *ProducerStats, session SessionStats, shared
 	producer.PacerPacingBitrateBps += int64(bandwidth.PacerPacingBitrateBps)
 	producer.PacerQueuePackets += int64(bandwidth.PacerQueuePackets)
 	producer.MaximumPacketLossRatio = max(producer.MaximumPacketLossRatio, bandwidth.AverageLoss)
+	producer.MaximumLossGuardObservedLossRatio = max(producer.MaximumLossGuardObservedLossRatio, bandwidth.LossGuardLastObservedLoss)
 	producer.MaximumDelayEstimateSeconds = max(producer.MaximumDelayEstimateSeconds, bandwidth.DelayEstimateMs/1000)
 	producer.MaximumPacerQueueDelaySeconds = max(producer.MaximumPacerQueueDelaySeconds, bandwidth.PacerQueueDelayMs/1000)
 	producer.MaximumRetransmissionRTTSeconds = max(producer.MaximumRetransmissionRTTSeconds, bandwidth.PacerRetransmissionRoundTripTimeMs/1000)

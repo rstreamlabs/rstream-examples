@@ -49,6 +49,7 @@ type Collector struct {
 	pacerPacingBytesSecond        *prometheus.Desc
 	pacerQueuePackets             *prometheus.Desc
 	packetLossRatio               *prometheus.Desc
+	lossGuardObservedLossRatio    *prometheus.Desc
 	delayEstimateSeconds          *prometheus.Desc
 	pacerQueueDelaySeconds        *prometheus.Desc
 	retransmissionRTTSeconds      *prometheus.Desc
@@ -221,6 +222,12 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 			nil,
 			nil,
 		),
+		lossGuardObservedLossRatio: newDesc(
+			namespace+"_loss_guard_maximum_observed_loss_ratio",
+			"Highest packet loss ratio most recently observed by a loss guard among active sessions.",
+			nil,
+			nil,
+		),
 		delayEstimateSeconds: newDesc(
 			namespace+"_twcc_maximum_delay_estimate_seconds",
 			"Highest current TWCC delay estimate among active sessions.",
@@ -390,6 +397,7 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 		c.pacerPacingBytesSecond,
 		c.pacerQueuePackets,
 		c.packetLossRatio,
+		c.lossGuardObservedLossRatio,
 		c.delayEstimateSeconds,
 		c.pacerQueueDelaySeconds,
 		c.retransmissionRTTSeconds,
@@ -486,6 +494,7 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(c.pacerPacingBytesSecond, prometheus.GaugeValue, bitsToBytes(producer.PacerPacingBitrateBps))
 	ch <- prometheus.MustNewConstMetric(c.pacerQueuePackets, prometheus.GaugeValue, float64(producer.PacerQueuePackets))
 	ch <- prometheus.MustNewConstMetric(c.packetLossRatio, prometheus.GaugeValue, producer.MaximumPacketLossRatio)
+	ch <- prometheus.MustNewConstMetric(c.lossGuardObservedLossRatio, prometheus.GaugeValue, producer.MaximumLossGuardObservedLossRatio)
 	ch <- prometheus.MustNewConstMetric(c.delayEstimateSeconds, prometheus.GaugeValue, producer.MaximumDelayEstimateSeconds)
 	ch <- prometheus.MustNewConstMetric(c.pacerQueueDelaySeconds, prometheus.GaugeValue, producer.MaximumPacerQueueDelaySeconds)
 	ch <- prometheus.MustNewConstMetric(c.retransmissionRTTSeconds, prometheus.GaugeValue, producer.MaximumRetransmissionRTTSeconds)

@@ -113,6 +113,9 @@ export function producerSample(samples) {
     ),
     lossAverage: value("rstream_video_producer_twcc_maximum_packet_loss_ratio"),
     lossGuardActive: lossGuardSessions === null ? null : lossGuardSessions > 0,
+    lossGuardLastObservedLoss: value(
+      "rstream_video_producer_loss_guard_maximum_observed_loss_ratio",
+    ),
     lossGuardRecoveries: labeled(
       "rstream_video_producer_loss_guard_transitions_total",
       "transition",

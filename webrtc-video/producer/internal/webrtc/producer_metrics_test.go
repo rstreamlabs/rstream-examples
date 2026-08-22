@@ -23,6 +23,7 @@ func TestProducerMetricsRemainMonotonicAfterSessionRetirement(t *testing.T) {
 			"pacerQueueDelayMilliseconds":                    4.5,
 			"lossGuardActive":                                true,
 			"lossGuardTargetBitrate":                         1_500_000,
+			"lossGuardLastObservedLoss":                      0.2,
 			"lossGuardReductions":                            uint64(7),
 			"lossGuardRecoveries":                            uint64(2),
 			"pacerQueueDrops":                                uint64(3),
@@ -93,6 +94,9 @@ func TestProducerMetricsRemainMonotonicAfterSessionRetirement(t *testing.T) {
 	if active.MaximumPacketLossRatio != 0.025 {
 		t.Fatalf("maximum packet loss ratio = %f, want 0.025", active.MaximumPacketLossRatio)
 	}
+	if active.MaximumLossGuardObservedLossRatio != 0.2 {
+		t.Fatalf("maximum loss guard ratio = %f, want 0.2", active.MaximumLossGuardObservedLossRatio)
+	}
 	if active.EstimatedBitrateBps != 3_000_000 || active.EncoderTargetBitrateBps != 2_500_000 {
 		t.Fatalf("unexpected bitrate metrics: %+v", active)
 	}
@@ -126,7 +130,8 @@ func TestProducerMetricsRemainMonotonicAfterSessionRetirement(t *testing.T) {
 	if retired.EstimatedBitrateBps != 0 || retired.LossControllerTargetBitrateBps != 0 ||
 		retired.DelayControllerTargetBitrateBps != 0 || retired.LossGuardTargetBitrateBps != 0 ||
 		retired.DelayControllerDecreaseSessions != 0 || retired.DelayControllerOveruseSessions != 0 ||
-		retired.MaximumPacketLossRatio != 0 || retired.MaximumRetransmissionRTTSeconds != 0 ||
+		retired.MaximumPacketLossRatio != 0 || retired.MaximumLossGuardObservedLossRatio != 0 ||
+		retired.MaximumRetransmissionRTTSeconds != 0 ||
 		retired.MaximumRetransmissionRetryIntervalSeconds != 0 {
 		t.Fatalf("retired session leaked into current gauges: %+v", retired)
 	}

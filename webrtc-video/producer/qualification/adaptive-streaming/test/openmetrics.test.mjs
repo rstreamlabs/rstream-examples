@@ -18,6 +18,7 @@ rstream_video_producer_twcc_delay_controller_usage_sessions{usage="normal"} 0
 rstream_video_producer_twcc_delay_controller_usage_sessions{usage="overuse"} 1
 rstream_video_producer_twcc_delay_controller_usage_sessions{usage="underuse"} 0
 rstream_video_producer_loss_guard_active_sessions 1
+rstream_video_producer_loss_guard_maximum_observed_loss_ratio 0.2
 rstream_video_producer_loss_guard_target_bytes_per_second 500000
 rstream_video_producer_loss_guard_transitions_total{transition="reduce"} 3
 rstream_video_producer_loss_guard_transitions_total{transition="recover"} 2
@@ -45,6 +46,7 @@ rstream_video_producer_malformed_feedback_total{protocol="twcc"} 2
   assert.equal(sample.delayControllerDecreaseSessions, 1);
   assert.equal(sample.delayControllerOveruseSessions, 1);
   assert.equal(sample.lossGuardActive, true);
+  assert.equal(sample.lossGuardLastObservedLoss, 0.2);
   assert.equal(sample.lossGuardTargetKbps, 4000);
   assert.equal(sample.lossGuardReductions, 3);
   assert.equal(sample.lossGuardRecoveries, 2);
@@ -80,15 +82,18 @@ test("producer OpenMetrics preserve absent and explicit zero values", () => {
   const absent = producerSample(parseOpenMetrics("unrelated_metric 1\n"));
   assert.equal(absent.lossTargetKbps, null);
   assert.equal(absent.lossGuardActive, null);
+  assert.equal(absent.lossGuardLastObservedLoss, null);
   assert.equal(absent.adaptiveBitrateUpdates, null);
   const zero = producerSample(
     parseOpenMetrics(`
 rstream_video_producer_twcc_controller_target_bytes_per_second{controller="loss"} 0
 rstream_video_producer_loss_guard_active_sessions 0
+rstream_video_producer_loss_guard_maximum_observed_loss_ratio 0
 rstream_video_producer_adaptive_bitrate_updates_total{outcome="applied"} 0
 `),
   );
   assert.equal(zero.lossTargetKbps, 0);
   assert.equal(zero.lossGuardActive, false);
+  assert.equal(zero.lossGuardLastObservedLoss, 0);
   assert.equal(zero.adaptiveBitrateUpdates, 0);
 });
