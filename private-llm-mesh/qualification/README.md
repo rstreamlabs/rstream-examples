@@ -64,9 +64,7 @@ explicitly limited to routing behavior within those phases.
 
 ## Reading the evidence
 
-`report.md` states the scope, method, thresholds, and result. In a lifecycle
-record, `worker-lifecycle.svg` plots every successful turn against the worker
-that served it across the baseline, degraded, and recovery phases. `live.json`,
+`report.md` states the scope, method, thresholds, and result. `live.json`,
 `degraded.json`, and `recovery.json` retain the worker attribution and timing for
 each turn. The manifest pins the repository revision, model hash, runtime
 versions, parameters, and thresholds.

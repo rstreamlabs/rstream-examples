@@ -350,17 +350,10 @@ it and the matrix rejects runs that do not use one identical profile.
 ## Read one result
 
 Start with the qualification-decision table in `summary.md`. It places the
-observed value beside each release threshold. The four synchronized figures
-then establish how that verdict was reached:
-
-- `network-conditions.svg` records the independently applied capacity, delay,
-  jitter, and random-loss schedule;
-- `adaptive-bitrate.svg` aligns that schedule with TWCC, the encoder target,
-  and received media;
-- `playback-quality.svg` exposes decoded frame rate, browser-reported freezes,
-  and encoder quantization;
-- `transport-evidence.svg` follows RTT, sender-queue residence, playout
-  buffering, NACK/RTX, FlexFEC, and TWCC loss.
+observed value beside each release threshold. Three focused figures show the
+rate response, decoded frame rate, and NACK/RTX activity. The comparison matrix
+adds one frozen-time view for the relay protection profiles. Detailed counters
+remain in `metrics.csv` and `summary.json`.
 
 The capacity experiment keeps delay, jitter, and random loss at zero, so its
 rate response has one controlled cause. The following impairment phase holds

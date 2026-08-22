@@ -9,14 +9,13 @@ multi-megabyte diagnostic logs generated during execution:
 - `metrics.csv` contains the one-second time series used by the analyzer;
 - `summary.json` exposes every machine-readable assertion;
 - `summary.md` provides the complete human-readable report;
-- `adaptive-bitrate.svg` aligns applied link capacity with the TWCC estimate,
-  encoder target, and received bitrate;
-- `network-conditions.svg` records the applied capacity, delay, jitter, and
-  random-loss transitions on the metrics collector clock;
-- `playback-quality.svg` shows decoded frame rate, frozen intervals, and H.264
-  quantization against their acceptance limits;
-- `transport-evidence.svg` aligns RTT, buffering, sender queues, NACK/RTX,
-  FlexFEC, and observed loss with the same phase timeline.
+- `adaptive-bitrate.svg` aligns available link capacity with the encoder target
+  and received bitrate;
+- `frame-rate.svg` shows browser-decoded frame rate;
+- `packet-repair.svg` compares NACK requests with received retransmissions.
+
+The matrix adds `comparison-frozen-time.svg`, which compares frozen playback on
+the relay path with and without bounded FlexFEC.
 
 The link transitions are timestamped when the qualification controller observes
 each traffic-control event. Charts therefore use measured transition instants

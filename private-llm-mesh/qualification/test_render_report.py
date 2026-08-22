@@ -105,11 +105,6 @@ class RenderReportTest(unittest.TestCase):
             self.assertTrue(render(path))
             report = (root / "report.md").read_text(encoding="utf-8")
             self.assertIn("Routing through worker loss and recovery", report)
-            chart = (root / "worker-lifecycle.svg").read_text(encoding="utf-8")
-            self.assertIn("A stopped", chart)
-            self.assertIn("A returned", chart)
-            self.assertIn("Elapsed time", chart)
-            self.assertIn("controlled worker loss and recovery", chart)
 
     def test_live_violation_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

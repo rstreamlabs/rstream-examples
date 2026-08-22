@@ -69,10 +69,6 @@ states the release envelope rather than replacing it.
 
 ## Repeated matrix result
 
-![Decoded output](./matrix/comparison-decoded-output.svg)
-
-![H.264 quantization](./matrix/comparison-quantization.svg)
-
 ![Frozen time](./matrix/comparison-frozen-time.svg)
 
 Bars show the median of three selected runs. Whiskers show the complete
@@ -120,23 +116,15 @@ The complete matrix verdict and per-run assertions are available in
 The representative direct run makes the controller sequence visible against
 the independent network input.
 
-![Applied network conditions](./direct-reference/network-conditions.svg)
-
 ![Adaptive sender response](./direct-reference/adaptive-bitrate.svg)
 
-![Playback continuity and compression quality](./direct-reference/playback-quality.svg)
+![Packet repair](./direct-reference/packet-repair.svg)
 
-![Latency, queues, loss, and packet repair](./direct-reference/transport-evidence.svg)
+![Decoded frame rate](./direct-reference/frame-rate.svg)
 
-The corresponding relay time series use the same axes and gates:
-
-- [network conditions](./relay-reference/network-conditions.svg);
-- [adaptive sender response](./relay-reference/adaptive-bitrate.svg);
-- [playback continuity and compression quality](./relay-reference/playback-quality.svg);
-- [latency, queues, loss, and packet repair](./relay-reference/transport-evidence.svg).
-
-The direct and relay directories also contain their complete one-second
-`metrics.csv`, manifest, JSON verdict, and human report.
+The corresponding [relay response](./relay-reference/adaptive-bitrate.svg) uses
+the same axes. Both directories retain their one-second metrics, manifest, JSON
+verdict, and human-readable report.
 
 ## Network mobility
 

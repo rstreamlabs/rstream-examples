@@ -5,93 +5,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime
 from pathlib import Path
-
-
-def svg_worker_lifecycle(
-    path: Path,
-    baseline: dict[str, object],
-    degraded: dict[str, object],
-    recovery: dict[str, object],
-) -> None:
-    phases = [
-        ("A + B", baseline),
-        ("B only", degraded),
-        ("A + B", recovery),
-    ]
-    width = 960
-    height = 400
-    left = 150
-    right = 28
-    top = 94
-    bottom = 70
-    plot_width = width - left - right
-    phase_times: list[tuple[float, float]] = []
-    for _, phase in phases:
-        ended_at = datetime.fromisoformat(str(phase["generatedAt"]).replace("Z", "+00:00")).timestamp()
-        started_at = ended_at - float(phase["wallSeconds"])
-        phase_times.append((started_at, ended_at))
-    timeline_start = min(start for start, _ in phase_times)
-    timeline_end = max(end for _, end in phase_times)
-    timeline_duration = max(1.0, timeline_end - timeline_start)
-    lane_y = {"qualification-worker-a": 180, "qualification-worker-b": 280}
-    colors = {"qualification-worker-a": "#2563eb", "qualification-worker-b": "#059669"}
-    lines = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-labelledby="title description" style="font-family:system-ui,sans-serif">',
-        '<title id="title">Worker routing through loss and recovery</title>',
-        '<desc id="description">Measured workload phases show both workers serving traffic, worker B serving alone after worker A stops, and both workers serving again after worker A returns.</desc>',
-        '<rect width="100%" height="100%" fill="#ffffff"/>',
-        '<text x="28" y="42" fill="#111827" font-size="32" font-weight="750">Worker routing through loss and recovery</text>',
-        '<text x="28" y="76" fill="#475569" font-size="18">Traffic movement during controlled worker loss and recovery</text>',
-        f'<line x1="{left}" y1="{lane_y["qualification-worker-a"]}" x2="{width - right}" y2="{lane_y["qualification-worker-a"]}" stroke="#cbd5e1"/>',
-        f'<line x1="{left}" y1="{lane_y["qualification-worker-b"]}" x2="{width - right}" y2="{lane_y["qualification-worker-b"]}" stroke="#cbd5e1"/>',
-        f'<text x="{left - 18}" y="{lane_y["qualification-worker-a"] + 6}" text-anchor="end" fill="#111827" font-family="sans-serif" font-size="18">worker A</text>',
-        f'<text x="{left - 18}" y="{lane_y["qualification-worker-b"] + 6}" text-anchor="end" fill="#111827" font-family="sans-serif" font-size="18">worker B</text>',
-    ]
-    for phase_index, (label, phase) in enumerate(phases):
-        phase_start, phase_end = phase_times[phase_index]
-        start_x = left + ((phase_start - timeline_start) / timeline_duration) * plot_width
-        end_x = left + ((phase_end - timeline_start) / timeline_duration) * plot_width
-        fill = "#f8fafc" if phase_index % 2 == 0 else "#eef2ff"
-        lines.append(
-            f'<rect x="{start_x:.1f}" y="{top}" width="{max(1, end_x - start_x):.1f}" height="{height - top - bottom}" fill="{fill}"/>'
-        )
-        lines.append(
-            f'<text x="{start_x + 8:.1f}" y="{top + 24}" fill="#111827" font-family="sans-serif" font-size="16" font-weight="600">{label}</text>'
-        )
-        if phase_index > 0:
-            lines.append(
-                f'<line x1="{start_x:.1f}" y1="{top}" x2="{start_x:.1f}" y2="{height - bottom}" stroke="#d97706" stroke-width="2" stroke-dasharray="5 5"/>'
-            )
-            event = "A stopped" if phase_index == 1 else "A returned"
-            lines.append(
-                f'<text x="{start_x - 6:.1f}" y="{top - 10}" text-anchor="end" fill="#b45309" font-family="sans-serif" font-size="14" font-weight="600">{event}</text>'
-            )
-        workers = phase.get("summary", {}).get("workers", {})
-        for worker, count in workers.items():
-            if not count or worker not in lane_y:
-                continue
-            bar_y = lane_y[worker] - 12
-            lines.append(
-                f'<rect x="{start_x:.1f}" y="{bar_y}" width="{max(2, end_x - start_x):.1f}" height="24" rx="8" fill="{colors[worker]}"/>'
-            )
-            lines.append(
-                f'<text x="{(start_x + end_x) / 2:.1f}" y="{bar_y + 17}" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="14" font-weight="700">{count} {"turn" if count == 1 else "turns"}</text>'
-            )
-    lines.extend(
-        [
-            f'<line x1="{left}" y1="{height - bottom}" x2="{width - right}" y2="{height - bottom}" stroke="#94a3b8"/>',
-            f'<text x="{(left + width - right) / 2:.1f}" y="{height - 26}" text-anchor="middle" fill="#475569" font-family="sans-serif" font-size="16">Elapsed time across the controlled worker lifecycle</text>',
-        ]
-    )
-    for tick in range(0, int(timeline_duration) + 1, 20):
-        x = left + (tick / timeline_duration) * plot_width
-        lines.append(
-            f'<text x="{x:.1f}" y="{height - bottom + 24}" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="13">{tick}s</text>'
-        )
-    lines.append("</svg>")
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def display_metric(value: object) -> str:
@@ -154,7 +68,7 @@ def render(session_path: Path) -> bool:
                 "The live baseline sends "
                 f"{live_profile}. Worker A is then stopped before a "
                 f"{degraded_profile} and "
-                "restarted before the recovery phase. The chart preserves "
+                "restarted before the recovery phase. The record preserves "
                 "the measured start and end time of all three workloads.",
                 "",
             ]
@@ -194,7 +108,6 @@ def render(session_path: Path) -> bool:
             ]
         )
         if degraded and recovery:
-            svg_worker_lifecycle(output / "worker-lifecycle.svg", live, degraded, recovery)
             degraded_summary = degraded["summary"]
             recovery_summary = recovery["summary"]
             lines.extend(
@@ -202,8 +115,6 @@ def render(session_path: Path) -> bool:
                     "## Routing through worker loss and recovery",
                     "",
                     "The lifecycle sequence starts with both workers registered, stops worker A before the degraded phase, then starts it again before the recovery phase. New turns must continue without a failed stream while one worker is absent, and both workers must serve traffic again after recovery.",
-                    "",
-                    "![Worker routing through loss and recovery](worker-lifecycle.svg)",
                     "",
                     "| Gate | Required | Observed |",
                     "| --- | --- | --- |",

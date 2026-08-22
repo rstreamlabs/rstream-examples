@@ -19,24 +19,14 @@ test("accepts a full profile that closes the direct/relay quality gap", () => {
   assert.match(markdown, /full protection profile/);
   assert.match(markdown, /2 FlexFEC repair packets per 4 media packets/);
   const figures = renderComparisonSVGs(result);
-  assert.deepEqual(Object.keys(figures), [
-    "comparison-decoded-output.svg",
-    "comparison-quantization.svg",
-    "comparison-frozen-time.svg",
-  ]);
-  assert.match(figures["comparison-decoded-output.svg"], /Decoded output/);
-  assert.match(figures["comparison-decoded-output.svg"], /20 fps gate/);
-  assert.match(figures["comparison-decoded-output.svg"], /median and min–max/);
+  assert.deepEqual(Object.keys(figures), ["comparison-frozen-time.svg"]);
   assert.match(
-    figures["comparison-decoded-output.svg"],
-    /width="960" height="440"/,
+    figures["comparison-frozen-time.svg"],
+    /Packet protection reduces frozen playback/,
   );
-  assert.match(
-    figures["comparison-decoded-output.svg"],
-    /font-family:system-ui,sans-serif/,
-  );
-  assert.match(figures["comparison-quantization.svg"], /QP 42 gate/);
-  assert.match(figures["comparison-frozen-time.svg"], /10% gate/);
+  assert.match(figures["comparison-frozen-time.svg"], /10% release ceiling/);
+  assert.match(figures["comparison-frozen-time.svg"], /NACK \+ RTX/);
+  assert.match(figures["comparison-frozen-time.svg"], /bounded FlexFEC/);
   for (const svg of Object.values(figures)) {
     assert.doesNotMatch(svg, />PASS</);
   }

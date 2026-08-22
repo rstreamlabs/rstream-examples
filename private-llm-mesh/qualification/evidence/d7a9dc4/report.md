@@ -10,7 +10,7 @@ Model: `Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf` · 2497280736 bytes · SHA-256 
 
 The local profile exercises scheduler invariants, bounded admission, cancellation, concurrent shutdown, and real-model behavior with Go's race detector enabled. The live profile drives the complete UI stream through Next.js, scoped-token minting, rstream transit, and the selected llama.cpp worker. A turn passes only when the stream identifies its worker, contains text or tool output, terminates correctly, and contains no error part.
 
-The live baseline sends 60 turns at concurrency 8. Worker A is then stopped before a 20-turn degraded phase at concurrency 4 and restarted before the recovery phase. The chart preserves the measured start and end time of all three workloads.
+The live baseline sends 60 turns at concurrency 8. Worker A is then stopped before a 20-turn degraded phase at concurrency 4 and restarted before the recovery phase. The record preserves the measured start and end time of all three workloads.
 
 ## Acceptance gates
 
@@ -42,8 +42,6 @@ The live baseline sends 60 turns at concurrency 8. Worker A is then stopped befo
 ## Routing through worker loss and recovery
 
 The lifecycle sequence starts with both workers registered, stops worker A before the degraded phase, then starts it again before the recovery phase. New turns must continue without a failed stream while one worker is absent, and both workers must serve traffic again after recovery.
-
-![Worker routing through loss and recovery](worker-lifecycle.svg)
 
 | Gate | Required | Observed |
 | --- | --- | --- |

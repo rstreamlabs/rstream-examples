@@ -14,10 +14,9 @@ import {
   summarizeSetup,
 } from "../lib/analysis.mjs";
 import {
-  renderNetworkConditionsSVG,
-  renderPlaybackQualitySVG,
-  renderTransportEvidenceSVG,
-} from "../lib/evidence-svg.mjs";
+  renderFrameRateSVG,
+  renderPacketRepairSVG,
+} from "../lib/media-charts.mjs";
 
 test("aligns link changes to observed collector timestamps", () => {
   const startedAt = Date.parse("2026-08-16T10:00:00.000Z");
@@ -96,19 +95,6 @@ test("aligns link changes to observed collector timestamps", () => {
   );
   assert.equal(timeline.changes[4].capacityKbps, 4000);
   assert.equal(timeline.changes[5].lossPercent, 2);
-  const chart = renderNetworkConditionsSVG(
-    { networkConditions: timeline, passed: true, samples },
-    manifest,
-  );
-  assert.match(
-    chart,
-    /Applied capacity · 32 → 16 → 12 → 8\.0 → 4\.0 → 32 Mb\/s/,
-  );
-  assert.match(
-    chart,
-    /Impaired interval · 120 ms one-way delay · 30 ms jitter · 2\.0% random loss/,
-  );
-  assert.match(chart, />0 s<\/text>/);
   assert.equal(
     alignNetworkConditions(events.slice(0, -1), samples, manifest).available,
     false,
@@ -966,36 +952,20 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
   });
   assert.equal(result.passed, true, JSON.stringify(result.assertions, null, 2));
   const chart = renderSVG(result, manifest);
-  assert.match(chart, /Adaptive sender response to controlled link changes/);
-  assert.match(chart, /Encoder media/);
-  assert.match(chart, /TWCC media/);
+  assert.match(chart, /Media bitrate follows available capacity/);
+  assert.match(chart, /Encoder target/);
   assert.match(chart, /Received media/);
-  assert.match(chart, /Pacer wire/);
-  assert.match(chart, /Link capacity/);
-  assert.match(chart, /y="548"[^>]*>Media rates/);
+  assert.match(chart, /Available capacity/);
+  assert.doesNotMatch(chart, /TWCC media/);
+  assert.doesNotMatch(chart, /Pacer wire/);
   assert.match(chart, /stroke="#be185d"[^>]+points="[^"]+"/);
-  assert.match(chart, /stroke="#7c3aed"[^>]+points="[^"]+"/);
-  const networkConditions = renderNetworkConditionsSVG(result, manifest);
-  assert.match(networkConditions, /Controlled network conditions/);
-  assert.match(networkConditions, /Injected random loss/);
-  const playbackQuality = renderPlaybackQualitySVG(result, manifest);
-  assert.match(playbackQuality, /Decoded frame rate/);
-  assert.match(playbackQuality, /Freeze duration/);
-  assert.match(playbackQuality, /H\.264 QP/);
-  assert.match(playbackQuality, />35 fps</);
-  assert.match(playbackQuality, />0\.1 s</);
-  assert.match(playbackQuality, />51 QP</);
-  const transportEvidence = renderTransportEvidenceSVG(result, manifest);
-  assert.match(transportEvidence, /NACK \/ RTX/);
-  assert.match(transportEvidence, /FlexFEC received/);
-  assert.match(transportEvidence, /Injected \/ TWCC loss/);
-  assert.match(transportEvidence, /300 ms phase-average buffer limit/);
-  assert.match(transportEvidence, />[0-9]+ packets</);
-  assert.match(transportEvidence, />5\.0 %</);
-  assert.ok(
-    (transportEvidence.match(/stroke="#059669"/g) || []).length > 6,
-    "phase-boundary counter gaps must render as separate line segments",
-  );
+  const frameRate = renderFrameRateSVG(result);
+  assert.match(frameRate, /Decoded frame rate/);
+  assert.match(frameRate, /20 fps release floor/);
+  const packetRepair = renderPacketRepairSVG(result);
+  assert.match(packetRepair, /Packet loss triggers repair/);
+  assert.match(packetRepair, /NACK requests/);
+  assert.match(packetRepair, /RTX received/);
   const report = renderMarkdown(result, {
     ...manifest,
     networkImpairment: { scope: "producer-turn-transport" },

@@ -1,11 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import process from "node:process";
-import {
-  renderNetworkConditionsSVG,
-  renderPlaybackQualitySVG,
-  renderTransportEvidenceSVG,
-} from "./evidence-svg.mjs";
+import { renderFrameRateSVG, renderPacketRepairSVG } from "./media-charts.mjs";
 
 const maximumQualificationSampleGapMilliseconds = 2500;
 const minimumTWCCLossGuardStatuses = 20;
@@ -1045,8 +1041,8 @@ function networkConditionDefinitions(manifest) {
 export function renderSVG(analysis, manifest) {
   const samples = analysis.samples;
   const width = 960;
-  const height = 630;
-  const margin = { top: 110, right: 28, bottom: 150, left: 78 };
+  const height = 520;
+  const margin = { top: 92, right: 28, bottom: 76, left: 78 };
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;
   const maximumTime = Math.max(
@@ -1085,56 +1081,45 @@ export function renderSVG(analysis, manifest) {
     return schedule.at(-1).capacityKbps;
   };
   const capacities = samples.map(capacityFor);
-  const maximumBitrate = Math.max(
+  const maximumMediaBitrate = Math.max(
     1000,
     ...samples
       .flatMap((sample) => [
         sample.encoderTargetKbps,
-        sample.twccTargetKbps,
         sample.receivedBitrateKbps,
-        sample.pacerTargetBitrateKbps,
       ])
       .filter(Number.isFinite),
-    ...capacities.filter(Number.isFinite),
-    ...(analysis.networkConditions?.changes || [])
-      .map((change) => change.capacityKbps)
+  );
+  const maximumEncoderBitrate = Math.max(
+    1000,
+    ...samples
+      .map((sample) => sample.encoderTargetKbps)
       .filter(Number.isFinite),
   );
+  const maximumBitrate =
+    Math.ceil(Math.max(maximumMediaBitrate, maximumEncoderBitrate * 2) / 1000) *
+    1000;
   const x = (milliseconds) =>
     margin.left + (milliseconds / maximumTime) * plotWidth;
   const y = (kilobitsPerSecond) =>
     margin.top +
     plotHeight -
     (Math.min(kilobitsPerSecond, maximumBitrate) / maximumBitrate) * plotHeight;
-  const phaseBlocks = manifest.phases
-    .map((phase, index) => {
-      const phaseSamples = samples.filter(
-        (sample) => sample.phase === phase.name,
-      );
-      if (phaseSamples.length === 0) {
-        return "";
-      }
-      const start = phaseSamples[0].elapsedMilliseconds;
-      const end = phaseSamples.at(-1).elapsedMilliseconds;
-      const fill = index % 2 === 0 ? "#f3f4f6" : "#e5e7eb";
-      const path = phase.shaping ? "controlled link" : "unshaped";
-      const label = phase.name === "conditioning" ? "settling" : phase.name;
-      return `<rect x="${round(x(start))}" y="${margin.top}" width="${round(Math.max(1, x(end) - x(start)))}" height="${plotHeight}" fill="${fill}"/><text x="${round(x(start) + 7)}" y="${margin.top - 22}" font-size="18" font-weight="600" fill="#374151">${escapeXML(label)}</text><text x="${round(x(start) + 7)}" y="${margin.top - 3}" font-size="15" fill="#6b7280">${path}</text>`;
-    })
-    .join("");
-  const grid = Array.from({ length: 5 }, (_, index) => {
-    const value = (maximumBitrate * index) / 4;
+  const grid = Array.from({ length: 6 }, (_, index) => {
+    const value = (maximumBitrate * index) / 5;
     const ordinate = y(value);
-    return `<line x1="${margin.left}" y1="${round(ordinate)}" x2="${width - margin.right}" y2="${round(ordinate)}" stroke="#d1d5db"/><text x="${margin.left - 12}" y="${round(ordinate + 5)}" text-anchor="end" font-size="16" fill="#6b7280">${Math.round(value / 100) / 10} Mb/s</text>`;
+    const label =
+      index === 5
+        ? `${Math.round(value / 100) / 10}+`
+        : Math.round(value / 100) / 10;
+    return `<line x1="${margin.left}" y1="${round(ordinate)}" x2="${width - margin.right}" y2="${round(ordinate)}" stroke="#d1d5db"/><text x="${margin.left - 12}" y="${round(ordinate + 5)}" text-anchor="end" font-size="16" fill="#6b7280">${label} Mb/s</text>`;
   }).join("");
   const series = [
-    ["Encoder media", "#2563eb", "encoderTargetKbps", ""],
-    ["TWCC media", "#d97706", "twccTargetKbps", ""],
-    ["Received media", "#059669", "receivedBitrateKbps", ""],
-    ["Pacer wire", "#7c3aed", "pacerTargetBitrateKbps", ""],
+    ["Encoder target", "#2563eb", "encoderTargetKbps"],
+    ["Received media", "#059669", "receivedBitrateKbps"],
   ];
   const lines = series
-    .map(([label, color, field, dash], index) => {
+    .map(([label, color, field], index) => {
       const points = samples
         .filter((sample) => Number.isFinite(sample[field]) && sample[field] > 0)
         .map(
@@ -1142,8 +1127,8 @@ export function renderSVG(analysis, manifest) {
             `${round(x(sample.elapsedMilliseconds))},${round(y(sample[field]))}`,
         )
         .join(" ");
-      const legendX = margin.left + index * 170;
-      return `<polyline fill="none" stroke="${color}" stroke-width="2.5" stroke-dasharray="${dash}" points="${points}"/><line x1="${legendX}" y1="${height - 36}" x2="${legendX + 24}" y2="${height - 36}" stroke="${color}" stroke-width="3"/><text x="${legendX + 31}" y="${height - 30}" font-size="16" fill="#111827">${label}</text>`;
+      const legendX = margin.left + index * 210;
+      return `<polyline fill="none" stroke="${color}" stroke-width="3" points="${points}"/><line x1="${legendX}" y1="70" x2="${legendX + 24}" y2="70" stroke="${color}" stroke-width="3"/><text x="${legendX + 31}" y="76" font-size="16" fill="#111827">${label}</text>`;
     })
     .join("");
   const capacityPointList = [];
@@ -1172,27 +1157,8 @@ export function renderSVG(analysis, manifest) {
     );
   }
   const capacityPoints = capacityPointList.join(" ");
-  const capacityLegendX = margin.left + 4 * 170;
-  const capacityLine = `<polyline fill="none" stroke="#be185d" stroke-width="3" stroke-dasharray="8 6" points="${capacityPoints}"/><line x1="${capacityLegendX}" y1="${height - 36}" x2="${capacityLegendX + 24}" y2="${height - 36}" stroke="#be185d" stroke-width="3" stroke-dasharray="8 6"/><text x="${capacityLegendX + 31}" y="${height - 30}" font-size="16" fill="#111827">Link capacity</text>`;
-  const constrainedSchedule =
-    manifest.phases.find((phase) => phase.name === "constrained")?.shaping
-      ?.schedule || [];
-  const isolatedCapacityStep =
-    constrainedSchedule.length > 0 &&
-    new Set(constrainedSchedule.map((step) => step.delay)).size === 1 &&
-    new Set(constrainedSchedule.map((step) => step.jitter)).size === 1 &&
-    constrainedSchedule.every(
-      (step) => step.loss === undefined || step.loss === "0%",
-    );
-  const subtitle = isolatedCapacityStep
-    ? "Capacity transitions are isolated at " +
-      constrainedSchedule[0].delay +
-      " delay, " +
-      constrainedSchedule[0].jitter +
-      " jitter, and 0% injected loss"
-    : "Capacity, delay, jitter, and loss follow the recorded phase manifest";
-  const resultColor = analysis.passed ? "#047857" : "#b91c1c";
-  const resultLabel = analysis.passed ? "PASS" : "FAIL";
+  const capacityLegendX = margin.left + 2 * 210;
+  const capacityLine = `<polyline fill="none" stroke="#be185d" stroke-width="3" stroke-dasharray="8 6" points="${capacityPoints}"/><line x1="${capacityLegendX}" y1="70" x2="${capacityLegendX + 24}" y2="70" stroke="#be185d" stroke-width="3" stroke-dasharray="8 6"/><text x="${capacityLegendX + 31}" y="76" font-size="16" fill="#111827">Available capacity</text>`;
   const timeTicks = Array.from({ length: 6 }, (_, index) => {
     const elapsed = (maximumTime * index) / 5;
     const abscissa = round(x(elapsed));
@@ -1200,19 +1166,15 @@ export function renderSVG(analysis, manifest) {
   }).join("");
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title description" style="font-family:system-ui,sans-serif">
-  <title id="title">Adaptive sender response to controlled link changes</title>
-  <desc id="description">Measured encoder, TWCC, receive, and pacer rates are plotted against the independently configured traffic-control schedule, separating media and wire budgets.</desc>
+  <title id="title">Media bitrate follows available capacity</title>
+  <desc id="description">The measured encoder target and received media rate react after controlled changes in available link capacity.</desc>
   <rect width="100%" height="100%" fill="#ffffff"/>
-  <text x="${margin.left}" y="38" font-size="32" font-weight="750" fill="#111827">Adaptive sender response to controlled link changes</text>
-  <text x="${margin.left}" y="68" font-size="18" fill="#4b5563">${escapeXML(subtitle)}</text>
-  <text x="${width - margin.right}" y="34" text-anchor="end" font-size="20" font-weight="700" fill="${resultColor}">${resultLabel}</text>
-  ${phaseBlocks}
+  <text x="${margin.left}" y="38" font-size="32" font-weight="750" fill="#111827">Media bitrate follows available capacity</text>
   ${grid}
   ${lines}
   ${capacityLine}
   <line x1="${margin.left}" y1="${margin.top + plotHeight}" x2="${width - margin.right}" y2="${margin.top + plotHeight}" stroke="#111827"/>
   ${timeTicks}
-  <text x="${width / 2}" y="${height - 82}" text-anchor="middle" font-size="17" fill="#6b7280">Media rates · encoder, TWCC, received · wire rates · pacer, configured capacity</text>
 </svg>
 `;
 }
@@ -1545,6 +1507,10 @@ Generated at ${manifest.generatedAt} from repository revision \`${manifest.git.r
 
 ![Adaptive bitrate response](./adaptive-bitrate.svg)
 
+![Packet repair](./packet-repair.svg)
+
+![Decoded frame rate](./frame-rate.svg)
+
 ${Number.isFinite(manifest.video?.adaptive?.maximumBitrateKbps) ? `The media controller starts at ${manifest.video.adaptive.initialBitrateKbps} kbps and operates from ${manifest.video.adaptive.minimumBitrateKbps} through ${manifest.video.adaptive.maximumBitrateKbps} kbps. Its ${manifest.video.adaptive.changeThresholdPct}% hysteresis keeps a healthy-link target stable once it is close to the configured ceiling.` : ""}
 
 ${setupSection}${mobilitySection}${signalingSection}## Phase summary
@@ -1673,16 +1639,12 @@ export async function writeArtifacts(outputDirectory, analysis, manifest) {
     renderSVG(analysis, manifest),
   );
   await writeFile(
-    `${outputDirectory}/network-conditions.svg`,
-    renderNetworkConditionsSVG(analysis, manifest),
+    `${outputDirectory}/frame-rate.svg`,
+    renderFrameRateSVG(analysis),
   );
   await writeFile(
-    `${outputDirectory}/playback-quality.svg`,
-    renderPlaybackQualitySVG(analysis, manifest),
-  );
-  await writeFile(
-    `${outputDirectory}/transport-evidence.svg`,
-    renderTransportEvidenceSVG(analysis, manifest),
+    `${outputDirectory}/packet-repair.svg`,
+    renderPacketRepairSVG(analysis),
   );
   const columns = [
     "capturedAt",
