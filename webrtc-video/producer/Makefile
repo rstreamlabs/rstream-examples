@@ -111,7 +111,7 @@ test-race: check-build-tools css
 	go test -race ./...
 
 test-gcc-regression: check-go
-	go test -count=1 -race -run '^Test(RateControllerIncreaseDoesNotReduceTarget|RateControllerRecoversMultiplicativelyToPreDecreaseTarget|RateControllerRecoveryStopsAtPreDecreaseTarget|RateControllerTracksAndRecoversADecreasedTarget|SendSideBWEAppliesConfiguredBoundsToLossController|LossBasedBWEHonorsConfiguredBitrateBounds)$$' github.com/pion/interceptor/pkg/gcc
+	go test -count=1 -race -run '^Test(RateControllerIncreaseDoesNotReduceTarget|RateControllerRecoversMultiplicativelyToPreDecreaseTarget|RateControllerRecoveryStopsAtPreDecreaseTarget|RateControllerTracksAndRecoversADecreasedTarget|RateControllerBoundsRepeatedCongestionResponse|RateControllerRateLimitsSustainedCongestionResponse|RateControllerRespondsToSeparateCongestionEpisodes|RateControllerRecoverySurvivesTransientOveruse|SendSideBWEAppliesConfiguredBoundsToLossController|LossBasedBWEHonorsConfiguredBitrateBounds)$$' github.com/pion/interceptor/pkg/gcc
 
 test-provisioning: check-build-tools
 	go test -tags noembeddedweb ./...
