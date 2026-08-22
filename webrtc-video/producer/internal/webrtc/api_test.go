@@ -182,15 +182,6 @@ func TestFlexFECRepairPacketsTraverseTWCCAndGCC(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create producer peer connection: %v", err)
 	}
-	connected := make(chan struct{}, 1)
-	producer.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
-		if state == webrtc.PeerConnectionStateConnected {
-			select {
-			case connected <- struct{}{}:
-			default:
-			}
-		}
-	})
 	if estimator.GetTargetBitrate() != 5_000_000 {
 		t.Fatalf("media target = %d, want 5000000", estimator.GetTargetBitrate())
 	}
@@ -247,6 +238,19 @@ func TestFlexFECRepairPacketsTraverseTWCCAndGCC(t *testing.T) {
 	defer func() {
 		_ = viewer.Close()
 	}()
+	connected := make(chan struct{}, 1)
+	signalConnected := func() {
+		if producer.ConnectionState() != webrtc.PeerConnectionStateConnected ||
+			viewer.ConnectionState() != webrtc.PeerConnectionStateConnected {
+			return
+		}
+		select {
+		case connected <- struct{}{}:
+		default:
+		}
+	}
+	producer.OnConnectionStateChange(func(webrtc.PeerConnectionState) { signalConnected() })
+	viewer.OnConnectionStateChange(func(webrtc.PeerConnectionState) { signalConnected() })
 	if _, err := viewer.AddTransceiverFromKind(
 		webrtc.RTPCodecTypeVideo,
 		webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly},
@@ -288,9 +292,10 @@ func TestFlexFECRepairPacketsTraverseTWCCAndGCC(t *testing.T) {
 	if err := viewer.SetRemoteDescription(*producer.LocalDescription()); err != nil {
 		t.Fatalf("set viewer remote description: %v", err)
 	}
+	signalConnected()
 	select {
 	case <-connected:
-	case <-time.After(5 * time.Second):
+	case <-time.After(15 * time.Second):
 		t.Fatalf(
 			"peer connection timed out: producer=%s producer_ice=%s viewer=%s viewer_ice=%s",
 			producer.ConnectionState(),
