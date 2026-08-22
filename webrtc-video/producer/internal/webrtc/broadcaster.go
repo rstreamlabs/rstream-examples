@@ -1377,9 +1377,11 @@ func (b *Broadcaster) newAdaptiveController(
 		backend,
 		interval,
 		estimator.GetTargetBitrate,
-		func() float64 {
-			loss, _ := estimator.GetStats()["averageLoss"].(float64)
-			return loss
+		func() adaptation.LossState {
+			stats := estimator.GetStats()
+			loss, _ := stats["averageLoss"].(float64)
+			guardActive, _ := stats["lossGuardActive"].(bool)
+			return adaptation.LossState{Average: loss, GuardActive: guardActive}
 		},
 		requestRecoveryKeyFrame,
 	), true

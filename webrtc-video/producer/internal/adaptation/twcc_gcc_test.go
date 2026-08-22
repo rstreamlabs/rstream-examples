@@ -170,7 +170,7 @@ func TestTWCCGCCBackendDoesNotRequestKeyFrameForHealthyRamp(t *testing.T) {
 	}
 }
 
-func TestTWCCGCCBackendRequestsKeyFramesForLossDrivenDecreases(t *testing.T) {
+func TestTWCCGCCBackendRequestsOneKeyFrameWhenLossGuardActivates(t *testing.T) {
 	backend := newTestTWCCGCCBackend(t, config.Default())
 	now := time.Unix(100, 0)
 	backend.now = func() time.Time { return now }
@@ -182,20 +182,31 @@ func TestTWCCGCCBackendRequestsKeyFramesForLossDrivenDecreases(t *testing.T) {
 	if !ok || decision.TargetBitrateKbps != 4000 {
 		t.Fatalf("first loss decision = %+v, %v, want 4000 kbit/s", decision, ok)
 	}
-	if !backend.ConsumeRecoveryKeyFrame() {
-		t.Fatal("first loss-driven decrease did not request a recovery key frame")
-	}
 	now = now.Add(time.Second)
 	decision, ok = backend.Decide(Observation{
 		EstimatedBitrateBps:      3_000_000,
 		EncoderTargetBitrateKbps: 4000,
 		AverageLoss:              0.20,
+		LossGuardActive:          true,
 	})
 	if !ok || decision.TargetBitrateKbps != 3000 {
 		t.Fatalf("continued loss decision = %+v, %v, want 3000 kbit/s", decision, ok)
 	}
 	if !backend.ConsumeRecoveryKeyFrame() {
-		t.Fatal("continued loss did not request another recovery key frame")
+		t.Fatal("loss-guard activation did not expose the pending recovery key frame")
+	}
+	now = now.Add(time.Second)
+	decision, ok = backend.Decide(Observation{
+		EstimatedBitrateBps:      2_000_000,
+		EncoderTargetBitrateKbps: 3000,
+		AverageLoss:              0.20,
+		LossGuardActive:          true,
+	})
+	if !ok || decision.TargetBitrateKbps != 2000 {
+		t.Fatalf("continued guard decision = %+v, %v, want 2000 kbit/s", decision, ok)
+	}
+	if backend.ConsumeRecoveryKeyFrame() {
+		t.Fatal("one guarded loss episode requested more than one recovery key frame")
 	}
 	now = now.Add(6 * time.Second)
 	_, _ = backend.Decide(Observation{
@@ -206,6 +217,7 @@ func TestTWCCGCCBackendRequestsKeyFramesForLossDrivenDecreases(t *testing.T) {
 		EstimatedBitrateBps:      2_000_000,
 		EncoderTargetBitrateKbps: 4000,
 		AverageLoss:              0.25,
+		LossGuardActive:          true,
 	})
 	if !ok || decision.TargetBitrateKbps != 2000 {
 		t.Fatalf("next loss decision = %+v, %v, want 2000 kbit/s", decision, ok)

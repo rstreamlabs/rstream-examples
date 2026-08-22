@@ -25,10 +25,16 @@ type Observation struct {
 	EstimatedBitrateBps      int
 	EncoderTargetBitrateKbps int
 	AverageLoss              float64
+	LossGuardActive          bool
 }
 
 type Decision struct {
 	TargetBitrateKbps int
+}
+
+type LossState struct {
+	Average     float64
+	GuardActive bool
 }
 
 type Backend interface {
@@ -46,7 +52,7 @@ type Controller struct {
 	backend                 Backend
 	interval                time.Duration
 	estimateSource          func() int
-	lossSource              func() float64
+	lossSource              func() LossState
 	requestRecoveryKeyFrame func()
 	latestEstimate          atomic.Int64
 	active                  atomic.Bool
@@ -65,7 +71,7 @@ func NewController(
 	backend Backend,
 	interval time.Duration,
 	estimateSource func() int,
-	lossSource func() float64,
+	lossSource func() LossState,
 	requestRecoveryKeyFrame func(),
 ) *Controller {
 	info := encoder.Info()
@@ -186,13 +192,18 @@ func (c *Controller) applyEstimate(estimate int, allowIncrease bool) bool {
 		EncoderTargetBitrateKbps: encoderInfo.TargetBitrateKbps,
 	}
 	if c.lossSource != nil {
-		observation.AverageLoss = c.lossSource()
+		loss := c.lossSource()
+		observation.AverageLoss = loss.Average
+		observation.LossGuardActive = loss.GuardActive
 	}
 	decision, ok := c.backend.Decide(observation)
 	c.updateSnapshot(func(snapshot *Snapshot) {
 		snapshot.EncoderTargetBitrateKbps = encoderInfo.TargetBitrateKbps
 	})
 	if !ok || (!allowIncrease && decision.TargetBitrateKbps >= encoderInfo.TargetBitrateKbps) {
+		if observation.LossGuardActive {
+			c.requestPendingRecoveryKeyFrame()
+		}
 		return false
 	}
 	if err := c.encoder.SetTargetBitrateKbps(decision.TargetBitrateKbps); err != nil {
@@ -202,10 +213,8 @@ func (c *Controller) applyEstimate(estimate int, allowIncrease bool) bool {
 		})
 		return true
 	}
-	if recovery, ok := c.backend.(recoveryKeyFrameBackend); ok &&
-		recovery.ConsumeRecoveryKeyFrame() &&
-		c.requestRecoveryKeyFrame != nil {
-		c.requestRecoveryKeyFrame()
+	if decision.TargetBitrateKbps > encoderInfo.TargetBitrateKbps || observation.LossGuardActive {
+		c.requestPendingRecoveryKeyFrame()
 	}
 	c.logger.Debug("Adaptive bitrate applied: %d kbit/s", decision.TargetBitrateKbps)
 	c.updateSnapshot(func(snapshot *Snapshot) {
@@ -214,6 +223,14 @@ func (c *Controller) applyEstimate(estimate int, allowIncrease bool) bool {
 		snapshot.AppliedUpdates++
 	})
 	return true
+}
+
+func (c *Controller) requestPendingRecoveryKeyFrame() {
+	recovery, ok := c.backend.(recoveryKeyFrameBackend)
+	if !ok || c.requestRecoveryKeyFrame == nil || !recovery.ConsumeRecoveryKeyFrame() {
+		return
+	}
+	c.requestRecoveryKeyFrame()
 }
 
 func (c *Controller) updateSnapshot(update func(*Snapshot)) {
