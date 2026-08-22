@@ -202,12 +202,10 @@ func (c *Controller) applyEstimate(estimate int, allowIncrease bool) bool {
 		})
 		return true
 	}
-	if decision.TargetBitrateKbps > encoderInfo.TargetBitrateKbps {
-		if recovery, ok := c.backend.(recoveryKeyFrameBackend); ok &&
-			recovery.ConsumeRecoveryKeyFrame() &&
-			c.requestRecoveryKeyFrame != nil {
-			c.requestRecoveryKeyFrame()
-		}
+	if recovery, ok := c.backend.(recoveryKeyFrameBackend); ok &&
+		recovery.ConsumeRecoveryKeyFrame() &&
+		c.requestRecoveryKeyFrame != nil {
+		c.requestRecoveryKeyFrame()
 	}
 	c.logger.Debug("Adaptive bitrate applied: %d kbit/s", decision.TargetBitrateKbps)
 	c.updateSnapshot(func(snapshot *Snapshot) {

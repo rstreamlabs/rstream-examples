@@ -245,6 +245,56 @@ func TestControllerBlocksPeriodicIncreaseUntilMeasuredLossRecovers(t *testing.T)
 	}
 }
 
+func TestControllerRequestsOneKeyFrameForLossDrivenDecreases(t *testing.T) {
+	const interval = 20 * time.Millisecond
+	var estimate atomic.Int64
+	estimate.Store(4_000_000)
+	var lossBits atomic.Uint64
+	lossBits.Store(math.Float64bits(0.30))
+	encoder := &recordingEncoder{target: 8000, updates: make(chan int, 2)}
+	recoveryKeyFrames := make(chan struct{}, 2)
+	controller := NewController(
+		logs.NewLogger(logs.NewHub(16), false),
+		encoder,
+		newTestTWCCGCCBackend(t, config.Default()),
+		interval,
+		func() int { return int(estimate.Load()) },
+		func() float64 { return math.Float64frombits(lossBits.Load()) },
+		func() { recoveryKeyFrames <- struct{}{} },
+	)
+	controller.Start()
+	t.Cleanup(controller.Close)
+	controller.UpdateEstimatedBitrate(4_000_000)
+	select {
+	case target := <-encoder.updates:
+		if target != 4000 {
+			t.Fatalf("loss-driven target = %d, want 4000", target)
+		}
+	case <-time.After(4 * interval):
+		t.Fatal("controller did not apply the loss-driven decrease")
+	}
+	select {
+	case <-recoveryKeyFrames:
+	case <-time.After(time.Second):
+		t.Fatal("loss-driven decrease did not request a recovery key frame")
+	}
+	estimate.Store(3_000_000)
+	controller.UpdateEstimatedBitrate(3_000_000)
+	select {
+	case target := <-encoder.updates:
+		if target != 3000 {
+			t.Fatalf("second loss-driven target = %d, want 3000", target)
+		}
+	case <-time.After(4 * interval):
+		t.Fatal("controller did not apply the second loss-driven decrease")
+	}
+	select {
+	case <-recoveryKeyFrames:
+		t.Fatal("one loss episode requested more than one recovery key frame")
+	case <-time.After(2 * interval):
+	}
+}
+
 func TestControllerReportsOnlyItsRunningLifecycleAsActive(t *testing.T) {
 	encoder := &recordingEncoder{target: 5000, updates: make(chan int, 1)}
 	cfg := config.Default()

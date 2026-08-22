@@ -170,6 +170,51 @@ func TestTWCCGCCBackendDoesNotRequestKeyFrameForHealthyRamp(t *testing.T) {
 	}
 }
 
+func TestTWCCGCCBackendRequestsOneKeyFramePerLossEpisode(t *testing.T) {
+	backend := newTestTWCCGCCBackend(t, config.Default())
+	now := time.Unix(100, 0)
+	backend.now = func() time.Time { return now }
+	decision, ok := backend.Decide(Observation{
+		EstimatedBitrateBps:      4_000_000,
+		EncoderTargetBitrateKbps: 8000,
+		AverageLoss:              0.30,
+	})
+	if !ok || decision.TargetBitrateKbps != 4000 {
+		t.Fatalf("first loss decision = %+v, %v, want 4000 kbit/s", decision, ok)
+	}
+	if !backend.ConsumeRecoveryKeyFrame() {
+		t.Fatal("first loss-driven decrease did not request a recovery key frame")
+	}
+	now = now.Add(time.Second)
+	decision, ok = backend.Decide(Observation{
+		EstimatedBitrateBps:      3_000_000,
+		EncoderTargetBitrateKbps: 4000,
+		AverageLoss:              0.20,
+	})
+	if !ok || decision.TargetBitrateKbps != 3000 {
+		t.Fatalf("continued loss decision = %+v, %v, want 3000 kbit/s", decision, ok)
+	}
+	if backend.ConsumeRecoveryKeyFrame() {
+		t.Fatal("continued loss requested a second recovery key frame")
+	}
+	now = now.Add(6 * time.Second)
+	_, _ = backend.Decide(Observation{
+		EstimatedBitrateBps:      4_000_000,
+		EncoderTargetBitrateKbps: 3000,
+	})
+	decision, ok = backend.Decide(Observation{
+		EstimatedBitrateBps:      2_000_000,
+		EncoderTargetBitrateKbps: 4000,
+		AverageLoss:              0.25,
+	})
+	if !ok || decision.TargetBitrateKbps != 2000 {
+		t.Fatalf("next loss decision = %+v, %v, want 2000 kbit/s", decision, ok)
+	}
+	if !backend.ConsumeRecoveryKeyFrame() {
+		t.Fatal("a later loss episode did not request a recovery key frame")
+	}
+}
+
 func TestTWCCGCCBackendStillReducesDuringIncreaseHold(t *testing.T) {
 	backend := newTestTWCCGCCBackend(t, config.Default())
 	now := time.Unix(100, 0)

@@ -384,7 +384,7 @@ func (b *Broadcaster) OpenSession(ctx context.Context) (*Session, error) {
 	if adaptiveController, ok := b.newAdaptiveController(
 		encoderController,
 		estimator,
-		session.requestKeyFrame,
+		func() { session.requestRecoveryKeyFrame(0) },
 	); ok {
 		session.adaptive = adaptiveController
 		snapshot := adaptiveController.Snapshot()
