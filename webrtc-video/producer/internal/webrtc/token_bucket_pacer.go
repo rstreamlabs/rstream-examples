@@ -142,7 +142,6 @@ type tokenBucketPacer struct {
 	isClosed                                 bool
 	queueSlots                               chan struct{}
 	queueDrops                               atomic.Uint64
-	queuedPrimaryFrames                      atomic.Int64
 	queuedPrimaryServiceNs                   atomic.Int64
 	queuedRetransmissionServiceNs            atomic.Int64
 	queuedForwardErrorCorrectionServiceNs    atomic.Int64
@@ -193,15 +192,16 @@ type tokenBucketPacer struct {
 }
 
 const (
-	maximumMediaAdmissionDelay = 225 * time.Millisecond
-	maximumRepairResidence     = maximumMediaAdmissionDelay
-	defaultRetransmissionRTT   = 100 * time.Millisecond
-	retransmissionSafetyMargin = 5 * time.Millisecond
-	retransmissionPrunePeriod  = time.Second
-	maximumObservedRTT         = 10 * time.Second
+	maximumMediaAdmissionDelay             = 225 * time.Millisecond
+	maximumRepairResidence                 = maximumMediaAdmissionDelay
+	defaultRetransmissionRTT               = 100 * time.Millisecond
+	retransmissionSafetyMargin             = 5 * time.Millisecond
+	retransmissionPrunePeriod              = time.Second
+	maximumObservedRTT                     = 10 * time.Second
+	minimumPrimaryServicePerRetransmission = 2
 	// Pion packetizes outbound media below its 1200-byte MTU. The additional
-	// headroom covers RTP extensions and repair encapsulation when bounding the
-	// single repair packet that the scheduler may place before each media frame.
+	// headroom covers RTP extensions and repair encapsulation when bounding
+	// retransmissions that the scheduler may place ahead of primary packets.
 	maximumRepairPacketBytes = 1500
 )
 
@@ -388,9 +388,6 @@ func (p *tokenBucketPacer) Write(
 		p.queuedForwardErrorCorrectionServiceNs.Add(packet.serviceNs)
 	default:
 		p.queuedPrimaryServiceNs.Add(packet.serviceNs)
-		if packet.header.Marker {
-			p.queuedPrimaryFrames.Add(1)
-		}
 	}
 	p.observeSustainedQueueDelay()
 	switch packet.repair {
@@ -425,10 +422,7 @@ func (p *tokenBucketPacer) AdmitMediaFrame(size int, keyFrame bool) (decision me
 	}()
 	p.admissionMu.Lock()
 	defer p.admissionMu.Unlock()
-	projectedDelay := p.admissionQueueDelay() + queueDelayAtRate(
-		int64(size),
-		p.sustainedBytesPerSecond(),
-	)
+	projectedDelay := p.admissionQueueDelay(size)
 	if p.droppingUntilKeyFrame {
 		if keyFrame && projectedDelay <= maximumMediaAdmissionDelay {
 			p.droppingUntilKeyFrame = false
@@ -481,12 +475,15 @@ func (p *tokenBucketPacer) run() {
 	lastUpdate := time.Now()
 	availableBytes := p.maximumBurstBytes()
 	var pending *pacedPacket
-	consecutiveRetransmissions := 0
+	primaryServiceSinceRetransmission := int64(0)
+	urgentRetransmissionAllowed := true
 	primaryPacketsSinceFEC := 0
 	forwardErrorCorrectionPacketsDue := 0
 	applyRateChange := func(packet *pacedPacket) *pacedPacket {
 		packet, changed := p.applyRateChange(packet)
 		if changed {
+			primaryServiceSinceRetransmission = 0
+			urgentRetransmissionAllowed = true
 			primaryPacketsSinceFEC = 0
 			forwardErrorCorrectionPacketsDue = 0
 		}
@@ -501,7 +498,8 @@ func (p *tokenBucketPacer) run() {
 			default:
 			}
 			pending = p.nextPacket(
-				consecutiveRetransmissions,
+				primaryServiceSinceRetransmission,
+				urgentRetransmissionAllowed,
 				forwardErrorCorrectionPacketsDue,
 			)
 			if pending == nil {
@@ -590,7 +588,7 @@ func (p *tokenBucketPacer) run() {
 			}
 			switch pending.repair {
 			case repairKindNone:
-				consecutiveRetransmissions = 0
+				primaryServiceSinceRetransmission += max(int64(0), pending.serviceNs)
 				mediaPackets, repairPackets := p.forwardErrorCorrectionProtection()
 				if mediaPackets > 0 && repairPackets > 0 && forwardErrorCorrectionPacketsDue == 0 {
 					primaryPacketsSinceFEC = min(mediaPackets, primaryPacketsSinceFEC+1)
@@ -599,7 +597,8 @@ func (p *tokenBucketPacer) run() {
 					}
 				}
 			case repairKindRetransmission:
-				consecutiveRetransmissions++
+				primaryServiceSinceRetransmission = 0
+				urgentRetransmissionAllowed = false
 			case repairKindForwardErrorCorrection:
 				if forwardErrorCorrectionPacketsDue > 0 {
 					forwardErrorCorrectionPacketsDue--
@@ -718,9 +717,6 @@ func (p *tokenBucketPacer) release(packet *pacedPacket) {
 		p.queuedForwardErrorCorrectionServiceNs.Add(-packet.serviceNs)
 	default:
 		p.queuedPrimaryServiceNs.Add(-packet.serviceNs)
-		if packet.header.Marker {
-			p.queuedPrimaryFrames.Add(-1)
-		}
 	}
 	*packet.payload = (*packet.payload)[:0]
 	p.payloadPool.Put(packet.payload)
@@ -755,7 +751,8 @@ func (p *tokenBucketPacer) discardQueuedPackets() {
 }
 
 func (p *tokenBucketPacer) nextPacket(
-	consecutiveRetransmissions int,
+	primaryServiceSinceRetransmission int64,
+	urgentRetransmissionAllowed bool,
 	forwardErrorCorrectionPacketsDue int,
 ) *pacedPacket {
 	if forwardErrorCorrectionPacketsDue > 0 {
@@ -765,8 +762,8 @@ func (p *tokenBucketPacer) nextPacket(
 		default:
 		}
 	}
-	const maximumRetransmissionBurst = 1
-	if consecutiveRetransmissions < maximumRetransmissionBurst {
+	if urgentRetransmissionAllowed ||
+		primaryServiceSinceRetransmission >= p.retransmissionPrimaryServiceThreshold() {
 		select {
 		case packet := <-p.retransmissionQueue:
 			return packet
@@ -987,23 +984,32 @@ func (p *tokenBucketPacer) scheduledQueueDelay() time.Duration {
 	return time.Duration(primary + retransmission + forwardErrorCorrection)
 }
 
-func (p *tokenBucketPacer) admissionQueueDelay() time.Duration {
-	primary := max(int64(0), p.queuedPrimaryServiceNs.Load())
+func (p *tokenBucketPacer) admissionQueueDelay(additionalPrimaryBytes int) time.Duration {
+	primary := max(int64(0), p.queuedPrimaryServiceNs.Load()) + queueDelayAtRate(
+		int64(max(0, additionalPrimaryBytes)),
+		p.sustainedBytesPerSecond(),
+	).Nanoseconds()
 	retransmission := max(int64(0), p.queuedRetransmissionServiceNs.Load())
 	forwardErrorCorrection := max(
 		int64(0),
 		p.queuedForwardErrorCorrectionServiceNs.Load(),
 	)
-	frameBound := max(int64(0), p.queuedPrimaryFrames.Load()) + 1
-	maximumRetransmissionAhead := frameBound * queueDelayAtRate(
+	maximumRetransmissionAhead := queueDelayAtRate(
 		maximumRepairPacketBytes,
 		p.sustainedBytesPerSecond(),
-	).Nanoseconds()
+	).Nanoseconds() + primary/int64(minimumPrimaryServicePerRetransmission)
 	return time.Duration(
 		primary +
 			forwardErrorCorrection +
 			min(retransmission, maximumRetransmissionAhead),
 	)
+}
+
+func (p *tokenBucketPacer) retransmissionPrimaryServiceThreshold() int64 {
+	return int64(minimumPrimaryServicePerRetransmission) * queueDelayAtRate(
+		maximumRepairPacketBytes,
+		p.sustainedBytesPerSecond(),
+	).Nanoseconds()
 }
 
 func queueDelayAtRate(bytes int64, bytesPerSecond float64) time.Duration {
@@ -1058,7 +1064,7 @@ func (p *tokenBucketPacer) recoveryKeyFrameDelay() time.Duration {
 	bytesPerSecond := p.sustainedBytesPerSecond()
 	reservedDuration := queueDelayAtRate(reserveBytes+reserveBytes/4, bytesPerSecond)
 	targetQueueDelay := max(time.Duration(0), maximumMediaAdmissionDelay-reservedDuration)
-	return max(time.Duration(0), p.admissionQueueDelay()-targetQueueDelay)
+	return max(time.Duration(0), p.admissionQueueDelay(0)-targetQueueDelay)
 }
 
 func (p *tokenBucketPacer) recordMediaFrameDrop(size int) {

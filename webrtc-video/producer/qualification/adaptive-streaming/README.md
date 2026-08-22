@@ -68,10 +68,11 @@ Docker API latency remains outside the measured phase durations, including
 when the producer runs on a separate daemon. An interruption removes the qdisc
 before the container is cleaned up.
 
-Queued media always follows GCC's current pacing budget, including immediately
-after a target decrease. New access units that exceed the 225 ms admission
-envelope are dropped whole before packetization. Recovery resumes on a key frame
-once the queue can contain its most recently observed size plus 25% headroom.
+Media already accepted for packetization drains at its admission rate after a
+target decrease, while newly encoded access units immediately use GCC's current
+budget. New access units that exceed the 225 ms admission envelope are dropped
+whole before packetization. Recovery resumes on a key frame once the queue can
+contain its most recently observed size plus 25% headroom.
 The report separately exposes encoder requests, complete frame drops, the
 key-frame reserve, actual packet residence time, and prospective sustained-rate
 backlog. These signals make the latency bound, sequence continuity, and egress
@@ -83,7 +84,7 @@ The link moves through six measured phases:
 | ------------ | ---------------------------------------------------------- |
 | warmup       | unshaped reference                                         |
 | baseline     | unshaped quality ceiling                                   |
-| conditioning | 30 s at 32 Mbit/s; no delay, jitter, or random loss        |
+| conditioning | 45 s at 32 Mbit/s; no delay, jitter, or random loss        |
 | constrained  | 16, 12, 8, then 4 Mbit/s; no delay, jitter, or random loss |
 | impaired     | 4 Mbit/s; 120 ms delay; 30 ms jitter; 2% random loss       |
 | recovery     | 4 then 32 Mbit/s; no delay, jitter, or random loss         |

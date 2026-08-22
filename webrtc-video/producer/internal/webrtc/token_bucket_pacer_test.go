@@ -743,6 +743,117 @@ func TestTokenBucketPacerRepairsLossBeforeAReceiverReorderWindowCanOverflow(t *t
 	}
 }
 
+func TestTokenBucketPacerBoundsRetransmissionServiceDuringABurst(t *testing.T) {
+	pacer := newTokenBucketPacer(10_000_000, 1, 32)
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	type writtenPacket struct {
+		sequence uint16
+		ssrc     uint32
+	}
+	written := make(chan writtenPacket, 13)
+	var first sync.Once
+	writer := interceptor.RTPWriterFunc(func(
+		header *rtp.Header,
+		payload []byte,
+		_ interceptor.Attributes,
+	) (int, error) {
+		first.Do(func() {
+			close(entered)
+			<-release
+		})
+		written <- writtenPacket{sequence: header.SequenceNumber, ssrc: header.SSRC}
+		return header.MarshalSize() + len(payload), nil
+	})
+	pacer.AddStream(10, writer)
+	pacer.AddStream(11, writer)
+	pacer.markRetransmissionStream(11)
+	if _, err := pacer.Write(&rtp.Header{SSRC: 10, SequenceNumber: 1, Timestamp: 100}, []byte{1}, nil); err != nil {
+		t.Fatalf("queue first primary packet: %v", err)
+	}
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("writer did not receive the first primary packet")
+	}
+	for sequence := uint16(2); sequence <= 7; sequence++ {
+		if _, err := pacer.Write(&rtp.Header{
+			SSRC:           10,
+			SequenceNumber: sequence,
+			Timestamp:      100,
+			Marker:         sequence == 7,
+		}, []byte{byte(sequence)}, nil); err != nil {
+			t.Fatalf("queue primary packet %d: %v", sequence, err)
+		}
+	}
+	for sequence := uint16(101); sequence <= 106; sequence++ {
+		original := sequence - 100
+		if _, err := pacer.Write(
+			&rtp.Header{SSRC: 11, SequenceNumber: sequence, Timestamp: 100},
+			[]byte{byte(original >> 8), byte(original)},
+			nil,
+		); err != nil {
+			t.Fatalf("queue retransmission packet %d: %v", sequence, err)
+		}
+	}
+	close(release)
+	order := make([]writtenPacket, 0, cap(written))
+	for range cap(written) {
+		select {
+		case packet := <-written:
+			order = append(order, packet)
+		case <-time.After(time.Second):
+			t.Fatalf("timed out waiting for paced packets; order=%v", order)
+		}
+	}
+	if err := pacer.Close(); err != nil {
+		t.Fatalf("close pacer: %v", err)
+	}
+	wantSSRCs := []uint32{10, 11, 10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11}
+	wantSequences := []uint16{1, 101, 2, 3, 4, 5, 6, 7, 102, 103, 104, 105, 106}
+	for index, want := range wantSSRCs {
+		if order[index].ssrc != want {
+			t.Fatalf("packet order = %v, want SSRC order %v", order, wantSSRCs)
+		}
+		if order[index].sequence != wantSequences[index] {
+			t.Fatalf("packet order = %v, want sequence order %v", order, wantSequences)
+		}
+	}
+}
+
+func TestTokenBucketPacerWeightsRetransmissionsByServiceTime(t *testing.T) {
+	pacer := &tokenBucketPacer{
+		forwardErrorCorrectionQueue: make(chan *pacedPacket, 1),
+		pacingFactor:                1,
+		regularQueue:                make(chan *pacedPacket, 6),
+		retransmissionQueue:         make(chan *pacedPacket, 1),
+	}
+	pacer.targetBitrate.Store(48_000)
+	pacer.retransmissionQueue <- &pacedPacket{
+		header:    rtp.Header{SequenceNumber: 100},
+		repair:    repairKindRetransmission,
+		serviceNs: int64(250 * time.Millisecond),
+	}
+	for sequence := uint16(1); sequence <= 6; sequence++ {
+		pacer.regularQueue <- &pacedPacket{
+			header:    rtp.Header{SequenceNumber: sequence},
+			serviceNs: int64(100 * time.Millisecond),
+		}
+	}
+	primaryService := int64(0)
+	for sequence := uint16(1); sequence <= 5; sequence++ {
+		packet := pacer.nextPacket(primaryService, false, 0)
+		if packet == nil || packet.repair != repairKindNone || packet.header.SequenceNumber != sequence {
+			t.Fatalf("paced packet %d = %#v, want primary sequence %d", sequence, packet, sequence)
+		}
+		primaryService += packet.serviceNs
+	}
+	packet := pacer.nextPacket(primaryService, false, 0)
+	if packet == nil || packet.repair != repairKindRetransmission || packet.header.SequenceNumber != 100 {
+		t.Fatalf("paced packet after service budget = %#v, want retransmission 100", packet)
+	}
+}
+
 func TestTokenBucketPacerSendsFECImmediatelyAfterItsProtectedGroup(t *testing.T) {
 	pacer := newTokenBucketPacer(10_000_000, 1, 32)
 	protection := flexFECProtection{mediaPackets: 5, repairPackets: 1}
@@ -951,7 +1062,7 @@ func TestTokenBucketPacerResetsFECGroupAfterRateDecreaseTrimsRepair(t *testing.T
 	}
 }
 
-func TestTokenBucketPacerDoesNotStarvePrimaryDuringRepairBurst(t *testing.T) {
+func TestTokenBucketPacerBoundsRepairWithoutStarvingPrimaryPackets(t *testing.T) {
 	pacer := newTokenBucketPacer(10_000_000, 1, 16)
 	entered := make(chan struct{})
 	release := make(chan struct{})
@@ -1000,10 +1111,10 @@ func TestTokenBucketPacerDoesNotStarvePrimaryDuringRepairBurst(t *testing.T) {
 			t.Fatal("timed out waiting for paced packets")
 		}
 	}
-	wantPrefix := []uint16{1, 10, 2, 11, 3}
-	for index, want := range wantPrefix {
+	wantOrder := []uint16{1, 10, 2, 3, 11, 12, 13}
+	for index, want := range wantOrder {
 		if order[index] != want {
-			t.Fatalf("packet order = %v, want prefix %v", order, wantPrefix)
+			t.Fatalf("packet order = %v, want %v", order, wantOrder)
 		}
 	}
 	if err := pacer.Close(); err != nil {

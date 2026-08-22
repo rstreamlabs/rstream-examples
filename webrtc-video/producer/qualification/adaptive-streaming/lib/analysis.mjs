@@ -1581,8 +1581,8 @@ budget for stale repair. A recovery
 key-frame request is deferred until the queue has room for the most recently
 observed key-frame size plus 25% headroom, avoiding a request that would produce
 another key frame only to discard it. Admission accounts for every queued
-primary and FEC service interval, plus the single retransmission that scheduling may
-place before each queued frame. Repair packets older than 225 ms are expired
+primary and FEC service interval, plus the bounded retransmission work that
+scheduling may place before queued primary packets. Repair packets older than 225 ms are expired
 rather than consuming bandwidth after their media window. Expiration is
 reported separately from queue overflow. High-water values are cumulative
 process counters, so a later phase retains an earlier peak unless it establishes
@@ -1595,8 +1595,12 @@ ${pacingRows}
 ### Repair timeliness
 
 FEC is paced immediately after each protected ${manifest.protection?.flexFECMediaPackets || 0}-packet media group so it can
-arrive before playout. Retransmissions remain at media-frame boundaries because
-they repair an already reported loss and must not delay completion of the current frame.
+arrive before playout. During a NACK burst, retransmissions are interleaved at a
+maximum of one unit of repair service for every two units of primary-media
+service while primary media is queued. Weighting the scheduler by service time,
+rather than packet count, preserves the bound when packet sizes or admission
+rates differ. It reaches the receiver before a large access unit can exhaust its
+reorder window without allowing repair traffic to starve current media.
 The split counters below make a late proactive repair distinguishable from an
 expired retransmission.
 

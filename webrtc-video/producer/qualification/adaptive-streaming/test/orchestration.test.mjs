@@ -139,7 +139,7 @@ test("runs impairment timing inside the producer namespace", async () => {
     fileURLToPath(new URL("../traffic-control.sh", import.meta.url)),
     "utf8",
   );
-  assert.match(runScript, /RSTREAM_QUALIFICATION_CONDITIONING_SECONDS:-30/);
+  assert.match(runScript, /RSTREAM_QUALIFICATION_CONDITIONING_SECONDS:-45/);
   assert.match(runScript, /start_traffic_control/);
   assert.match(
     runScript,
