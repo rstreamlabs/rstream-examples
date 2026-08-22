@@ -35,6 +35,7 @@ jq -e '
   .passed == false and
   .runnerStatus == {capacity: 0, impairment: 1, fanout: 0, sourceCapacity: 0, sourceImpairment: 0} and
   .gates.runnerStatusMatchesReports == true and
+  .gates.componentReportsPassed == false and
   .gates.edgeAuthenticationEnabled == true and
   .gates.directImpairmentQualified == false and
   .gates.customAdapterCapacityQualified == true and

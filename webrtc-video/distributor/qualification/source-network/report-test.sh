@@ -15,6 +15,7 @@ write_fixture() {
     workingTreeDirty: false,
     executionStatus: 0,
     passed: true,
+    images: {producer: "producer-image", distributor: "distributor-image", browser: "browser-image"},
     profile: {
       edgeAuthentication: true,
       sourceNetwork: {enabled: true, capacityKbps: $capacity, delayMilliseconds: (if $loss > 0 then 60 else 0 end), jitterMilliseconds: (if $loss > 0 then 15 else 0 end), lossPercent: $loss},
@@ -65,10 +66,18 @@ jq -e '
   .passed == true and
   .publishable == true and
   .gates.producerToAdapterOnly == true and
+  .gates.sameImages == true and
   .gates.capacityResponse == true and
   .gates.repairResponse == true and
   .bitrate.conditionedEncoderTargetKbps == {minimum: 3800, maximum: 3800}
 ' "${temporary_directory}/capacity-summary.json" >/dev/null
+
+jq -s '.[1].images.distributor = "different-distributor-image"' \
+  "${temporary_directory}/capacity.jsonl" >"${temporary_directory}/different-image.json"
+jq --argjson run_count 3 -f "${script_directory}/report.jq" \
+  "${temporary_directory}/different-image.json" | jq -e '
+    .passed == false and .gates.sameImages == false
+  ' >/dev/null
 
 for run in 1 2 3; do
   write_fixture 0 1 "${run}" >>"${temporary_directory}/loss.jsonl"

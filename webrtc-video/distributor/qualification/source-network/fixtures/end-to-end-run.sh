@@ -19,6 +19,7 @@ jq -n \
     mode: "mediamtx",
     workingTreeDirty: false,
     passed: $passed,
+    images: {producer: "producer-image", distributor: "distributor-image", browser: "browser-image"},
     profile: {
       edgeAuthentication: true,
       sourceNetwork: {enabled: true, capacityKbps: $capacity, delayMilliseconds: 0, jitterMilliseconds: 0, lossPercent: $loss},
@@ -59,4 +60,3 @@ jq -n \
     }
   }' >"${output_directory}/result.json"
 exit "${status}"
-

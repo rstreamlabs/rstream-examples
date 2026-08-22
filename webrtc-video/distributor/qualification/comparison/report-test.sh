@@ -21,6 +21,11 @@ jq -n '
     workingTreeDirty: false,
     executionStatus: (if passed then 0 else 1 end),
     passed: passed,
+    images: {
+      producer: "producer-image",
+      browser: "browser-image",
+      distributor: (if mode == "mediamtx" then "distributor-image" else null end)
+    },
     setupMilliseconds: (if mode == "direct" then 500 else 750 end),
     setup: {
       whepPostDurationMilliseconds: (if mode == "direct" then 100 else 150 end),
@@ -62,6 +67,7 @@ jq \
     .mediamtx.teardown.whepDeleteDurationMilliseconds == {minimum: 125, maximum: 125} and
     .direct.visualQuality.viewerNetworkAverageDecodedQP == {minimum: 28, maximum: 28} and
     .direct.sourceAdaptation.adaptedRuns == 3 and
+    .gates.sameImages == true and
     .mediamtx.sourceAdaptation.adaptedRuns == 0 and
     .verdict.directProfileQualified == true and
     .verdict.directAdaptive == true and
@@ -69,6 +75,12 @@ jq \
     .verdict.mediaMTXSingleRenditionAdaptive == false and
     .verdict.mediaMTXSourceRespondsToViewerTWCC == false and
     .verdict.mediaMTXRequiresRenditionStrategy == true
+  ' >/dev/null
+
+jq '.[2].images.producer = "different-producer-image"' "${fixture}" | jq \
+  --argjson run_count 3 \
+  -f "${script_directory}/report.jq" | jq -e '
+    .passed == false and .gates.sameImages == false
   ' >/dev/null
 
 jq 'map(

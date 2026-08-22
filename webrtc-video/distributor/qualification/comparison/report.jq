@@ -67,6 +67,9 @@ def mode_summary(mode):
   };
 (mode_runs("direct")) as $direct |
 (mode_runs("mediamtx")) as $distributed |
+([$runs[].images.producer] | unique) as $producer_images |
+([$runs[].images.browser] | unique) as $browser_images |
+([$distributed[].images.distributor] | unique) as $distributor_images |
 ([$runs[].profile] | unique | first) as $profile |
 ($profile.viewerNetwork.capacityKbps > 0) as $adaptation_required |
 (
@@ -85,6 +88,12 @@ def mode_summary(mode):
     evidenceComplete: (($direct | length) == $run_count and ($distributed | length) == $run_count),
     sameRevision: (([$runs[].revision] | unique | length) == 1),
     sameProfile: (([$runs[].profile] | unique | length) == 1),
+    sameImages: (
+      ($producer_images | length) == 1 and
+      ($browser_images | length) == 1 and
+      ($distributor_images | length) == 1 and
+      ([$direct[].images.distributor == null] | all)
+    ),
     resourceReportsComplete: ([$runs[] | (.resources.components.producer.samples >= 2 and .resources.components.browser.samples >= 2 and (if .mode == "mediamtx" then .resources.components.distributor.samples >= 2 else true end))] | all),
     directReferenceQualified: ([$direct[].passed] | all),
     directSourceAdapted: (if $adaptation_required then [$direct[] | .phases.viewerNetwork.encoderTargetKbps.medianLast10Seconds <= (.phases.baseline.encoderTargetKbps.medianLast10Seconds * 0.8)] | all else true end),

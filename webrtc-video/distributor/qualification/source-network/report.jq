@@ -3,6 +3,9 @@ def range(values): values | if length == 0 then null else {minimum: min, maximum
 def numeric(path): [$runs[] | getpath(path) | select(type == "number")];
 ([$runs[].profile] | unique) as $profiles |
 ([$runs[].revision] | unique) as $revisions |
+([$runs[].images.producer] | unique) as $producer_images |
+([$runs[].images.distributor] | unique) as $distributor_images |
+([$runs[].images.browser] | unique) as $browser_images |
 ($profiles | first) as $profile |
 ($profile.sourceNetwork.capacityKbps > 0) as $capacity_conditioned |
 ($profile.sourceNetwork.lossPercent > 0) as $loss_conditioned |
@@ -42,6 +45,11 @@ def numeric(path): [$runs[] | getpath(path) | select(type == "number")];
     allResultsPassed: ([$runs[].passed == true] | length == $run_count and all),
     sameRevision: (($revisions | length) == 1),
     sameProfile: (($profiles | length) == 1),
+    sameImages: (
+      ($producer_images | length) == 1 and
+      ($distributor_images | length) == 1 and
+      ($browser_images | length) == 1
+    ),
     customAdapterModeOnly: ([$runs[].mode == "mediamtx"] | all),
     edgeAuthenticationEnabled: ([$runs[].profile.edgeAuthentication == true] | all),
     producerToAdapterOnly: ([$runs[] |
@@ -91,4 +99,3 @@ def numeric(path): [$runs[] | getpath(path) | select(type == "number")];
 }
 | .passed = ([.gates[]] | all)
 | .publishable = (.passed and ([$runs[].workingTreeDirty] | any | not))
-

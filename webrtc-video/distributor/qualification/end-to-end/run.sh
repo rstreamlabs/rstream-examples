@@ -400,11 +400,11 @@ jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 0, trans
 jq -n '{required: false}' >"${output_directory}/native-source-profile.json"
 
 printf 'Building producer and browser images\n'
-docker build --file "${qualification_directory}/Dockerfile" --tag "${producer_image}" "${video_directory}"
-docker build --file "${qualification_directory}/Browser.Dockerfile" --tag "${browser_image}" "${video_directory}"
+docker build --provenance=false --file "${qualification_directory}/Dockerfile" --tag "${producer_image}" "${video_directory}"
+docker build --provenance=false --file "${qualification_directory}/Browser.Dockerfile" --tag "${browser_image}" "${video_directory}"
 if [[ "${uses_mediamtx}" == true ]]; then
   printf 'Building the distributor image\n'
-  docker build --file "${distributor_directory}/Dockerfile" --tag "${distributor_image}" "${distributor_directory}"
+  docker build --provenance=false --file "${distributor_directory}/Dockerfile" --tag "${distributor_image}" "${distributor_directory}"
 fi
 
 docker network create --driver bridge "${network_name}" >/dev/null

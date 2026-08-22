@@ -94,6 +94,7 @@ jq -n \
     .passed == true and
     .publishable == true and
     .gates.directCapacityQualified == true and
+    .gates.componentReportsPassed == true and
     .gates.mediaMTXImpairmentQualified == true and
     .gates.customAdapterCapacityQualified == true and
     .gates.customAdapterRepairQualified == true and
@@ -118,6 +119,7 @@ jq -n \
   --slurpfile source_impairment "${temporary_directory}/source-impairment.json" \
   -f "${script_directory}/report.jq" | jq -e '
     .passed == false and
+    .gates.componentReportsPassed == false and
     .gates.mediaMTXImpairmentQualified == false
   ' >/dev/null
 

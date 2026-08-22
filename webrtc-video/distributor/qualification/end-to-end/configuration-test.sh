@@ -31,4 +31,10 @@ if ! grep -Fq \
   exit 1
 fi
 
+reproducible_builds="$(grep -Fc 'docker build --provenance=false' "${script_directory}/run.sh")"
+if [[ "${reproducible_builds}" != 3 ]]; then
+  printf 'all three qualification images must disable non-deterministic provenance attestations\n' >&2
+  exit 1
+fi
+
 printf 'MediaMTX qualification configuration tests passed\n'

@@ -44,6 +44,13 @@ def status_matches(report; status):
       status_matches($source_capacity_report; $source_capacity_status) and
       status_matches($source_impairment_report; $source_impairment_status)
     ),
+    componentReportsPassed: (
+      $capacity_report.passed == true and
+      $impairment_report.passed == true and
+      $fanout_report.passed == true and
+      $source_capacity_report.passed == true and
+      $source_impairment_report.passed == true
+    ),
     edgeAuthenticationEnabled: (
       $capacity_report.profile.edgeAuthentication == true and
       $impairment_report.profile.edgeAuthentication == true and
