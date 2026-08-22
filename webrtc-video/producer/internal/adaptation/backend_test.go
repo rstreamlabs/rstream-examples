@@ -270,6 +270,7 @@ func TestControllerRequestsOneKeyFrameWhenLossGuardActivates(t *testing.T) {
 		},
 		func() { recoveryKeyFrames <- struct{}{} },
 	)
+	controller.recoveryKeyFrameDelay = 3 * interval
 	controller.Start()
 	t.Cleanup(controller.Close)
 	controller.UpdateEstimatedBitrate(4_000_000)
@@ -299,8 +300,8 @@ func TestControllerRequestsOneKeyFrameWhenLossGuardActivates(t *testing.T) {
 	}
 	select {
 	case <-recoveryKeyFrames:
-	case <-time.After(time.Second):
-		t.Fatal("loss-guard activation did not request a recovery key frame")
+		t.Fatal("loss-guard activation requested a key frame before the target settled")
+	case <-time.After(interval):
 	}
 	estimate.Store(2_000_000)
 	controller.UpdateEstimatedBitrate(2_000_000)
@@ -311,6 +312,16 @@ func TestControllerRequestsOneKeyFrameWhenLossGuardActivates(t *testing.T) {
 		}
 	case <-time.After(4 * interval):
 		t.Fatal("controller did not apply the continued guard decrease")
+	}
+	select {
+	case <-recoveryKeyFrames:
+		t.Fatal("continued guard decrease did not reset the recovery quiet period")
+	case <-time.After(2 * interval):
+	}
+	select {
+	case <-recoveryKeyFrames:
+	case <-time.After(5 * interval):
+		t.Fatal("settled loss guard did not request a recovery key frame")
 	}
 	select {
 	case <-recoveryKeyFrames:
@@ -332,6 +343,7 @@ func TestControllerRequestsOneKeyFrameWhenLossGuardActivatesAtCurrentTarget(t *t
 		func() LossState { return LossState{GuardActive: true} },
 		func() { recoveryKeyFrames <- struct{}{} },
 	)
+	controller.recoveryKeyFrameDelay = 2 * interval
 	controller.Start()
 	t.Cleanup(controller.Close)
 	controller.UpdateEstimatedBitrate(2_000_000)
@@ -349,6 +361,31 @@ func TestControllerRequestsOneKeyFrameWhenLossGuardActivatesAtCurrentTarget(t *t
 	case <-recoveryKeyFrames:
 		t.Fatal("one guarded loss episode requested more than one recovery key frame")
 	case <-time.After(2 * interval):
+	}
+}
+
+func TestControllerCloseCancelsSettlingRecoveryKeyFrame(t *testing.T) {
+	const interval = 20 * time.Millisecond
+	encoder := &recordingEncoder{target: 2000, updates: make(chan int, 1)}
+	recoveryKeyFrames := make(chan struct{}, 1)
+	controller := NewController(
+		logs.NewLogger(logs.NewHub(16), false),
+		encoder,
+		newTestTWCCGCCBackend(t, config.Default()),
+		interval,
+		func() int { return 2_000_000 },
+		func() LossState { return LossState{GuardActive: true} },
+		func() { recoveryKeyFrames <- struct{}{} },
+	)
+	controller.recoveryKeyFrameDelay = 3 * interval
+	controller.Start()
+	controller.UpdateEstimatedBitrate(2_000_000)
+	time.Sleep(interval)
+	controller.Close()
+	select {
+	case <-recoveryKeyFrames:
+		t.Fatal("recovery key-frame request fired after controller close")
+	case <-time.After(4 * interval):
 	}
 }
 

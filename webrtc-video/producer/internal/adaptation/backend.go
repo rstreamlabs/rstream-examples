@@ -46,6 +46,8 @@ type recoveryKeyFrameBackend interface {
 	ConsumeRecoveryKeyFrame() bool
 }
 
+const guardedRecoveryKeyFrameQuietPeriod = 500 * time.Millisecond
+
 type Controller struct {
 	logger                  *logs.Logger
 	encoder                 media.EncoderController
@@ -54,6 +56,10 @@ type Controller struct {
 	estimateSource          func() int
 	lossSource              func() LossState
 	requestRecoveryKeyFrame func()
+	recoveryKeyFrameDelay   time.Duration
+	recoveryKeyFrameTimer   *time.Timer
+	recoveryKeyFrameTimerC  <-chan time.Time
+	lossGuardActive         bool
 	latestEstimate          atomic.Int64
 	active                  atomic.Bool
 	updates                 chan struct{}
@@ -83,6 +89,7 @@ func NewController(
 		estimateSource:          estimateSource,
 		lossSource:              lossSource,
 		requestRecoveryKeyFrame: requestRecoveryKeyFrame,
+		recoveryKeyFrameDelay:   guardedRecoveryKeyFrameQuietPeriod,
 		updates:                 make(chan struct{}, 1),
 		close:                   make(chan struct{}),
 		done:                    make(chan struct{}),
@@ -137,6 +144,7 @@ func (c *Controller) Close() {
 
 func (c *Controller) run() {
 	defer func() {
+		c.stopRecoveryKeyFrameTimer()
 		c.active.Store(false)
 		close(c.done)
 	}()
@@ -163,6 +171,9 @@ func (c *Controller) run() {
 			if c.applyEstimate(estimate, true) {
 				lastUpdateAttempt = now
 			}
+		case <-c.recoveryKeyFrameTimerC:
+			c.recoveryKeyFrameTimerC = nil
+			c.requestPendingRecoveryKeyFrame()
 		case <-c.close:
 			return
 		}
@@ -196,13 +207,15 @@ func (c *Controller) applyEstimate(estimate int, allowIncrease bool) bool {
 		observation.AverageLoss = loss.Average
 		observation.LossGuardActive = loss.GuardActive
 	}
+	lossGuardStarted := observation.LossGuardActive && !c.lossGuardActive
+	c.lossGuardActive = observation.LossGuardActive
 	decision, ok := c.backend.Decide(observation)
 	c.updateSnapshot(func(snapshot *Snapshot) {
 		snapshot.EncoderTargetBitrateKbps = encoderInfo.TargetBitrateKbps
 	})
 	if !ok || (!allowIncrease && decision.TargetBitrateKbps >= encoderInfo.TargetBitrateKbps) {
-		if observation.LossGuardActive {
-			c.requestPendingRecoveryKeyFrame()
+		if lossGuardStarted {
+			c.schedulePendingRecoveryKeyFrame()
 		}
 		return false
 	}
@@ -213,8 +226,12 @@ func (c *Controller) applyEstimate(estimate int, allowIncrease bool) bool {
 		})
 		return true
 	}
-	if decision.TargetBitrateKbps > encoderInfo.TargetBitrateKbps || observation.LossGuardActive {
-		c.requestPendingRecoveryKeyFrame()
+	if decision.TargetBitrateKbps > encoderInfo.TargetBitrateKbps {
+		if c.requestPendingRecoveryKeyFrame() {
+			c.stopRecoveryKeyFrameTimer()
+		}
+	} else if observation.LossGuardActive {
+		c.schedulePendingRecoveryKeyFrame()
 	}
 	c.logger.Debug("Adaptive bitrate applied: %d kbit/s", decision.TargetBitrateKbps)
 	c.updateSnapshot(func(snapshot *Snapshot) {
@@ -225,12 +242,47 @@ func (c *Controller) applyEstimate(estimate int, allowIncrease bool) bool {
 	return true
 }
 
-func (c *Controller) requestPendingRecoveryKeyFrame() {
+func (c *Controller) requestPendingRecoveryKeyFrame() bool {
 	recovery, ok := c.backend.(recoveryKeyFrameBackend)
 	if !ok || c.requestRecoveryKeyFrame == nil || !recovery.ConsumeRecoveryKeyFrame() {
-		return
+		return false
 	}
 	c.requestRecoveryKeyFrame()
+	return true
+}
+
+func (c *Controller) schedulePendingRecoveryKeyFrame() {
+	if c.recoveryKeyFrameDelay <= 0 {
+		c.requestPendingRecoveryKeyFrame()
+		return
+	}
+	if c.recoveryKeyFrameTimer == nil {
+		c.recoveryKeyFrameTimer = time.NewTimer(c.recoveryKeyFrameDelay)
+		c.recoveryKeyFrameTimerC = c.recoveryKeyFrameTimer.C
+		return
+	}
+	if !c.recoveryKeyFrameTimer.Stop() {
+		select {
+		case <-c.recoveryKeyFrameTimer.C:
+		default:
+		}
+	}
+	c.recoveryKeyFrameTimer.Reset(c.recoveryKeyFrameDelay)
+	c.recoveryKeyFrameTimerC = c.recoveryKeyFrameTimer.C
+}
+
+func (c *Controller) stopRecoveryKeyFrameTimer() {
+	if c.recoveryKeyFrameTimer == nil {
+		return
+	}
+	if !c.recoveryKeyFrameTimer.Stop() {
+		select {
+		case <-c.recoveryKeyFrameTimer.C:
+		default:
+		}
+	}
+	c.recoveryKeyFrameTimer = nil
+	c.recoveryKeyFrameTimerC = nil
 }
 
 func (c *Controller) updateSnapshot(update func(*Snapshot)) {
