@@ -3,7 +3,7 @@ IMAGE ?= rstream-video-distributor:local
 OUT ?= out
 BINARY := $(OUT)/rstream-video-distributor
 
-.PHONY: build test test-qualification-compile test-race vet format-check verify integration compose-check image image-test qualify-fanout qualify-native clean
+.PHONY: build test test-qualification-compile test-race vet format-check verify integration compose-check image image-test qualify-fanout qualify-native qualify-source clean
 
 build:
 	mkdir -p $(OUT)
@@ -43,6 +43,10 @@ qualify-fanout:
 
 qualify-native:
 	./qualification/native/run.sh $(OUT)/qualification/native
+
+qualify-source:
+	RSTREAM_DISTRIBUTOR_SOURCE_CAPACITY_KBPS=$${RSTREAM_DISTRIBUTOR_SOURCE_CAPACITY_KBPS:-4000} \
+		./qualification/source-network/run.sh $(OUT)/qualification/source-network
 
 clean:
 	rm -rf $(OUT)

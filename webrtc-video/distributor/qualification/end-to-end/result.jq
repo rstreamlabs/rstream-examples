@@ -133,6 +133,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
       minimumFrameRateRatio: minimum_frame_rate_ratio
     },
     viewerNetwork: {
+      enabled: $viewer_network[0].enabled,
       capacityKbps: $viewer_network[0].capacityKbps,
       delayMilliseconds: $viewer_network[0].delayMilliseconds,
       jitterMilliseconds: $viewer_network[0].jitterMilliseconds,
@@ -140,6 +141,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
       queuePackets: $viewer_network[0].queuePackets
     },
     sourceNetwork: {
+      enabled: $source_network[0].enabled,
       capacityKbps: $source_network[0].capacityKbps,
       delayMilliseconds: $source_network[0].delayMilliseconds,
       jitterMilliseconds: $source_network[0].jitterMilliseconds,

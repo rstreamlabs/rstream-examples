@@ -13,11 +13,16 @@ qualification_directory="${temporary_directory}/qualification"
 mkdir -p \
   "${qualification_directory}/comparison" \
   "${qualification_directory}/fanout" \
+  "${qualification_directory}/source-network" \
   "${qualification_directory}/matrix"
 cp "${script_directory}/run.sh" "${script_directory}/report.jq" "${qualification_directory}/matrix/"
 cp "${script_directory}/fixtures/comparison-run.sh" "${qualification_directory}/comparison/run.sh"
 cp "${script_directory}/fixtures/fanout-run.sh" "${qualification_directory}/fanout/run.sh"
-chmod +x "${qualification_directory}/comparison/run.sh" "${qualification_directory}/fanout/run.sh"
+cp "${script_directory}/fixtures/source-network-run.sh" "${qualification_directory}/source-network/run.sh"
+chmod +x \
+  "${qualification_directory}/comparison/run.sh" \
+  "${qualification_directory}/fanout/run.sh" \
+  "${qualification_directory}/source-network/run.sh"
 status=0
 RSTREAM_CONTEXT=test \
 RSTREAM_DISTRIBUTOR_MATRIX_RUNS=3 \
@@ -28,10 +33,12 @@ if [[ "${status}" != 1 ]]; then
 fi
 jq -e '
   .passed == false and
-  .runnerStatus == {capacity: 0, impairment: 1, fanout: 0} and
+  .runnerStatus == {capacity: 0, impairment: 1, fanout: 0, sourceCapacity: 0, sourceImpairment: 0} and
   .gates.runnerStatusMatchesReports == true and
   .gates.edgeAuthenticationEnabled == true and
   .gates.directImpairmentQualified == false and
+  .gates.customAdapterCapacityQualified == true and
+  .gates.customAdapterRepairQualified == true and
   .productVerdict.direct == "no-go"
 ' "${temporary_directory}/output/summary.json" >/dev/null
 

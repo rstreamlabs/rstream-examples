@@ -64,9 +64,14 @@ jobs:
             webrtc-video/distributor/qualification/matrix/run-test.sh
             webrtc-video/distributor/qualification/matrix/fixtures/comparison-run.sh
             webrtc-video/distributor/qualification/matrix/fixtures/fanout-run.sh
+            webrtc-video/distributor/qualification/matrix/fixtures/source-network-run.sh
             webrtc-video/distributor/qualification/matrix/run.sh
             webrtc-video/distributor/qualification/native/report-test.sh
             webrtc-video/distributor/qualification/native/run.sh
+            webrtc-video/distributor/qualification/source-network/report-test.sh
+            webrtc-video/distributor/qualification/source-network/fixtures/end-to-end-run.sh
+            webrtc-video/distributor/qualification/source-network/run-test.sh
+            webrtc-video/distributor/qualification/source-network/run.sh
           )
           shellcheck "${bash_scripts[@]}"
           for script in "${bash_scripts[@]}"; do
@@ -82,6 +87,8 @@ jobs:
           webrtc-video/distributor/qualification/matrix/report-test.sh
           webrtc-video/distributor/qualification/matrix/run-test.sh
           webrtc-video/distributor/qualification/native/report-test.sh
+          webrtc-video/distributor/qualification/source-network/report-test.sh
+          webrtc-video/distributor/qualification/source-network/run-test.sh
           PYTHONPATH=netcat-media-streaming/qualification python3 -m unittest \
             netcat-media-streaming/qualification/test_analyze_frames.py \
             netcat-media-streaming/qualification/test_analyze_logs.py \

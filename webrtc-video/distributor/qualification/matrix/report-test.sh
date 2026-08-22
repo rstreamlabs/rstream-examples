@@ -58,20 +58,48 @@ jq -n '{
   publishable: true
 }' >"${temporary_directory}/fanout.json"
 
+jq -n '{
+  revision: "revision",
+  runs: 3,
+  profile: {
+    edgeAuthentication: true,
+    sourceNetwork: {enabled: true, capacityKbps: 4000, delayMilliseconds: 0, jitterMilliseconds: 0, lossPercent: 0},
+    viewerNetwork: {enabled: false}
+  },
+  setupMilliseconds: {minimum: 500, maximum: 750},
+  bitrate: {conditionedEncoderTargetKbps: {minimum: 3800, maximum: 3900}},
+  sourceNetwork: {repairedRTX: {minimum: 0, maximum: 0}},
+  gates: {producerToAdapterOnly: true, capacityResponse: true, repairResponse: true, recoveredTarget: true, resourceEvidenceComplete: true},
+  passed: true,
+  publishable: true
+}' >"${temporary_directory}/source-capacity.json"
+
+jq '
+  .profile.sourceNetwork = {enabled: true, capacityKbps: 0, delayMilliseconds: 60, jitterMilliseconds: 15, lossPercent: 1} |
+  .sourceNetwork.repairedRTX = {minimum: 8, maximum: 12}
+' "${temporary_directory}/source-capacity.json" >"${temporary_directory}/source-impairment.json"
+
 jq -n \
   --argjson capacity_status 0 \
   --argjson impairment_status 0 \
   --argjson fanout_status 0 \
+  --argjson source_capacity_status 0 \
+  --argjson source_impairment_status 0 \
   --slurpfile capacity "${temporary_directory}/capacity.json" \
   --slurpfile impairment "${temporary_directory}/impairment.json" \
   --slurpfile fanout "${temporary_directory}/fanout.json" \
+  --slurpfile source_capacity "${temporary_directory}/source-capacity.json" \
+  --slurpfile source_impairment "${temporary_directory}/source-impairment.json" \
   -f "${script_directory}/report.jq" | jq -e '
     .passed == true and
     .publishable == true and
     .gates.directCapacityQualified == true and
     .gates.mediaMTXImpairmentQualified == true and
+    .gates.customAdapterCapacityQualified == true and
+    .gates.customAdapterRepairQualified == true and
     .gates.adaptiveBoundaryDemonstrated == true and
     .productVerdict.direct == "go" and
+    .productVerdict.mediaMTXWithRstreamAdapter == "go" and
     .productVerdict.mediaMTXHeterogeneousAdaptive == "no-go"
   ' >/dev/null
 
@@ -81,9 +109,13 @@ jq -n \
   --argjson capacity_status 0 \
   --argjson impairment_status 1 \
   --argjson fanout_status 0 \
+  --argjson source_capacity_status 0 \
+  --argjson source_impairment_status 0 \
   --slurpfile capacity "${temporary_directory}/capacity.json" \
   --slurpfile impairment "${temporary_directory}/impairment-failed.json" \
   --slurpfile fanout "${temporary_directory}/fanout.json" \
+  --slurpfile source_capacity "${temporary_directory}/source-capacity.json" \
+  --slurpfile source_impairment "${temporary_directory}/source-impairment.json" \
   -f "${script_directory}/report.jq" | jq -e '
     .passed == false and
     .gates.mediaMTXImpairmentQualified == false
@@ -95,9 +127,13 @@ jq -n \
   --argjson capacity_status 0 \
   --argjson impairment_status 1 \
   --argjson fanout_status 0 \
+  --argjson source_capacity_status 0 \
+  --argjson source_impairment_status 0 \
   --slurpfile capacity "${temporary_directory}/capacity.json" \
   --slurpfile impairment "${temporary_directory}/impairment-slow-recovery.json" \
   --slurpfile fanout "${temporary_directory}/fanout.json" \
+  --slurpfile source_capacity "${temporary_directory}/source-capacity.json" \
+  --slurpfile source_impairment "${temporary_directory}/source-impairment.json" \
   -f "${script_directory}/report.jq" | jq -e '
     .passed == false and
     .gates.directImpairmentQualified == false and
@@ -110,9 +146,13 @@ jq -n \
   --argjson capacity_status 0 \
   --argjson impairment_status 0 \
   --argjson fanout_status 0 \
+  --argjson source_capacity_status 0 \
+  --argjson source_impairment_status 0 \
   --slurpfile capacity "${temporary_directory}/capacity-unauthenticated.json" \
   --slurpfile impairment "${temporary_directory}/impairment.json" \
   --slurpfile fanout "${temporary_directory}/fanout.json" \
+  --slurpfile source_capacity "${temporary_directory}/source-capacity.json" \
+  --slurpfile source_impairment "${temporary_directory}/source-impairment.json" \
   -f "${script_directory}/report.jq" | jq -e '
     .passed == false and
     .publishable == false and
@@ -123,12 +163,35 @@ jq -n \
   --argjson capacity_status 1 \
   --argjson impairment_status 0 \
   --argjson fanout_status 0 \
+  --argjson source_capacity_status 0 \
+  --argjson source_impairment_status 0 \
   --slurpfile capacity "${temporary_directory}/capacity.json" \
   --slurpfile impairment "${temporary_directory}/impairment.json" \
   --slurpfile fanout "${temporary_directory}/fanout.json" \
+  --slurpfile source_capacity "${temporary_directory}/source-capacity.json" \
+  --slurpfile source_impairment "${temporary_directory}/source-impairment.json" \
   -f "${script_directory}/report.jq" | jq -e '
     .passed == false and
     .gates.runnerStatusMatchesReports == false
+  ' >/dev/null
+
+jq '.gates.repairResponse = false | .passed = false | .publishable = false' \
+  "${temporary_directory}/source-impairment.json" >"${temporary_directory}/source-impairment-failed.json"
+jq -n \
+  --argjson capacity_status 0 \
+  --argjson impairment_status 0 \
+  --argjson fanout_status 0 \
+  --argjson source_capacity_status 0 \
+  --argjson source_impairment_status 1 \
+  --slurpfile capacity "${temporary_directory}/capacity.json" \
+  --slurpfile impairment "${temporary_directory}/impairment.json" \
+  --slurpfile fanout "${temporary_directory}/fanout.json" \
+  --slurpfile source_capacity "${temporary_directory}/source-capacity.json" \
+  --slurpfile source_impairment "${temporary_directory}/source-impairment-failed.json" \
+  -f "${script_directory}/report.jq" | jq -e '
+    .passed == false and
+    .gates.customAdapterRepairQualified == false and
+    .productVerdict.mediaMTXWithRstreamAdapter == "no-go"
   ' >/dev/null
 
 printf 'Distribution matrix report tests passed\n'
