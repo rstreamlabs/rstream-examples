@@ -395,7 +395,8 @@ jq -n '{enabled: false, capacityKbps: 0, delayMilliseconds: 0, jitterMillisecond
 jq -n '{enabled: false, capacityKbps: 0, delayMilliseconds: 0, jitterMilliseconds: 0, lossPercent: 0, queuePackets: 0, qdisc: null, filters: []}' \
   >"${output_directory}/source-network.json"
 jq -n '{}' >"${output_directory}/adapter-result.json"
-jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 0}' >"${output_directory}/runtime-health.json"
+jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 0, transportBufferWarnings: 0}' \
+  >"${output_directory}/runtime-health.json"
 jq -n '{required: false}' >"${output_directory}/native-source-profile.json"
 
 printf 'Building producer and browser images\n'
@@ -806,17 +807,31 @@ if [[ "${distribution_mode}" == mediamtx-native ]]; then
     >"${output_directory}/native-source-profile.tmp.json"
   mv "${output_directory}/native-source-profile.tmp.json" "${output_directory}/native-source-profile.json"
 fi
+runtime_log_files=("${output_directory}/producer.log")
 if [[ "${uses_mediamtx}" == true ]]; then
-  runtime_fatal_errors="$(grep -Eic '(^|[[:space:]])(ERR|FTL)([[:space:]]|$)|panic:|fatal error:' "${output_directory}/distributor.log" || true)"
-  runtime_h264_errors="$(grep -Eic 'invalid FU-A packet|non-starting FU-A|invalid H264|invalid NALU|unable to decode.*H264' "${output_directory}/distributor.log" || true)"
-  runtime_packet_loss_warnings="$(grep -Eic '[0-9]+ RTP packets lost' "${output_directory}/distributor.log" || true)"
-  jq -n \
-    --argjson fatal_errors "${runtime_fatal_errors}" \
-    --argjson h264_errors "${runtime_h264_errors}" \
-    --argjson packet_loss_warnings "${runtime_packet_loss_warnings}" \
-    '{fatalErrors: $fatal_errors, h264PacketizationErrors: $h264_errors, packetLossWarnings: $packet_loss_warnings}' \
-    >"${output_directory}/runtime-health.json"
+  runtime_log_files+=("${output_directory}/distributor.log")
 fi
+count_runtime_matches() {
+  local pattern="$1"
+  {
+    grep -h -E -i -c -- "${pattern}" "${runtime_log_files[@]}" || true
+  } | awk '{sum += $1} END {print sum + 0}'
+}
+runtime_fatal_errors="$(count_runtime_matches '(^|[[:space:]])(ERR|FTL)([[:space:]]|$)|panic:|fatal error:')"
+runtime_h264_errors="$(count_runtime_matches 'invalid FU-A packet|non-starting FU-A|invalid H264|invalid NALU|unable to decode.*H264')"
+runtime_packet_loss_warnings="$(count_runtime_matches '[0-9]+ RTP packets lost')"
+runtime_transport_buffer_warnings="$(count_runtime_matches 'failed to sufficiently increase (receive|send) buffer size')"
+jq -n \
+  --argjson fatal_errors "${runtime_fatal_errors}" \
+  --argjson h264_errors "${runtime_h264_errors}" \
+  --argjson packet_loss_warnings "${runtime_packet_loss_warnings}" \
+  --argjson transport_buffer_warnings "${runtime_transport_buffer_warnings}" \
+  '{
+    fatalErrors: $fatal_errors,
+    h264PacketizationErrors: $h264_errors,
+    packetLossWarnings: $packet_loss_warnings,
+    transportBufferWarnings: $transport_buffer_warnings
+  }' >"${output_directory}/runtime-health.json"
 
 if [[ ! -s "${output_directory}/resource-samples.jsonl" ]]; then
   printf 'container resource sampler did not produce data\n' >&2
@@ -870,6 +885,9 @@ node "${script_directory}/sanitize-artifacts.mjs" "${output_directory}"
 
 if [[ "$(jq -r '.passed' "${output_directory}/result.json")" != true ]]; then
   jq '.gates' "${output_directory}/result.json" >&2
+  if [[ "$(jq -r '.gates.performanceEnvironment' "${output_directory}/result.json")" != true ]]; then
+    printf 'qualification host transport buffers are insufficient; inspect runtime-health.json and producer.log\n' >&2
+  fi
   printf 'distributed end-to-end qualification failed\n' >&2
   exit 1
 fi

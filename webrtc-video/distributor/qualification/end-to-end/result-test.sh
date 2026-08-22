@@ -25,7 +25,7 @@ jq -n '{enabled: true, capacityKbps: 4000, delayMilliseconds: 0, jitterMilliseco
 jq -n '{enabled: false, capacityKbps: 0, delayMilliseconds: 0, jitterMilliseconds: 0, lossPercent: 0, queuePackets: 0, qdisc: null, filters: []}' >"${fixture_directory}/source-network.json"
 jq -n '{invalid_fec: 0, reorder_late: 0, reorder_skipped: 0, reorder_discarded: 0, discontinuities: 0, key_frame_requests: 0, damaged_source_frames_dropped: 0, damaged_source_packets_dropped: 0, repaired_rtx: 0, repaired_fec: 1, expired: 0}' \
   >"${fixture_directory}/adapter.json"
-jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 0}' >"${fixture_directory}/runtime-health.json"
+jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 0, transportBufferWarnings: 0}' >"${fixture_directory}/runtime-health.json"
 jq -n '{required: false}' >"${fixture_directory}/native-source-profile.json"
 jq -nc '
   def sample(phase; elapsed; frames; bytes; target): {
@@ -114,6 +114,7 @@ render_result() {
 }
 
 render_result "${fixture_directory}/samples.jsonl" | jq -e '
+    .functionalPassed == true and
     .passed == true and
     .profile.edgeAuthentication == true and
     .profile.edgeCredentialLifetimeSeconds == 300 and
@@ -133,6 +134,7 @@ render_result "${fixture_directory}/samples.jsonl" | jq -e '
     .teardown.whepDeleteDurationMilliseconds == 125 and
     .gates.qualityEvidence == true and
     .gates.runtimeMediaIntegrity == true and
+    .gates.performanceEnvironment == true and
     .phases.baseline.averageDecodedQP == 25 and
     .phases.recovery.encoderTargetKbps.sustainedMinimumLast10Seconds == 7000 and
     .phases.recovery.encoderTargetKbps.medianLast10Seconds == 7000 and
@@ -225,21 +227,32 @@ render_result \
     .passed == false
   ' >/dev/null
 
-jq -n '{fatalErrors: 0, h264PacketizationErrors: 1, packetLossWarnings: 0}' >"${fixture_directory}/runtime-health.json"
+jq -n '{fatalErrors: 0, h264PacketizationErrors: 1, packetLossWarnings: 0, transportBufferWarnings: 0}' >"${fixture_directory}/runtime-health.json"
 render_result "${fixture_directory}/samples.jsonl" | jq -e '
   .runtimeHealth.h264PacketizationErrors == 1 and
   .gates.runtimeMediaIntegrity == false and
   .passed == false
 ' >/dev/null
-jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 0}' >"${fixture_directory}/runtime-health.json"
+jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 0, transportBufferWarnings: 0}' >"${fixture_directory}/runtime-health.json"
 
-jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 1}' >"${fixture_directory}/runtime-health.json"
+jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 1, transportBufferWarnings: 0}' >"${fixture_directory}/runtime-health.json"
 render_result "${fixture_directory}/samples.jsonl" | jq -e '
   .runtimeHealth.packetLossWarnings == 1 and
   .gates.runtimeMediaIntegrity == false and
   .passed == false
 ' >/dev/null
-jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 0}' >"${fixture_directory}/runtime-health.json"
+jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 0, transportBufferWarnings: 0}' >"${fixture_directory}/runtime-health.json"
+
+jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 0, transportBufferWarnings: 1}' >"${fixture_directory}/runtime-health.json"
+render_result "${fixture_directory}/samples.jsonl" | jq -e '
+  .runtimeHealth.transportBufferWarnings == 1 and
+  .gates.runtimeMediaIntegrity == true and
+  .gates.performanceEnvironment == false and
+  .functionalPassed == true and
+  .passed == false and
+  .publishable == false
+' >/dev/null
+jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 0, transportBufferWarnings: 0}' >"${fixture_directory}/runtime-health.json"
 
 jq -n '{
   enabled: true,

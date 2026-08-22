@@ -250,6 +250,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
       $runtime_health[0].h264PacketizationErrors == 0 and
       $runtime_health[0].packetLossWarnings == 0
     ),
+    performanceEnvironment: ($runtime_health[0].transportBufferWarnings == 0),
     nativeSourceLifecycle: (
       if $mode == "mediamtx-native" then
         $native_source_profile[0].required and
@@ -385,5 +386,6 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
         (.phases.baseline.encoderTargetKbps.medianLast10Seconds * 0.8)
     else true end
   )
-| .passed = ([.gates[]] | all)
+| .functionalPassed = ([.gates | to_entries[] | select(.key != "performanceEnvironment") | .value] | all)
+| .passed = (.functionalPassed and .gates.performanceEnvironment)
 | .publishable = (.passed and (.workingTreeDirty | not))
