@@ -314,6 +314,10 @@ test("keeps one qualification path when the producer uses another Docker daemon"
   );
   assert.match(runScript, /--playout-delay-hint-seconds/);
   assert.match(runScript, /producer_docker build/);
+  assert.match(
+    runScript,
+    /producer_docker build "\$\{pull_arguments\[@\]\}" \\\n+    --provenance=false/,
+  );
   assert.match(runScript, /producer_docker run --detach/);
   assert.match(runScript, /producer_docker exec --interactive --user 0/);
   assert.match(runScript, /producer_docker stop --time 5/);
@@ -326,6 +330,10 @@ test("keeps one qualification path when the producer uses another Docker daemon"
     /type=volume,source=\$\{producer_runtime_volume\},target=\/runtime,readonly/,
   );
   assert.match(runScript, /docker build "\$\{pull_arguments\[@\]\}"/);
+  assert.match(
+    runScript,
+    /docker build "\$\{pull_arguments\[@\]\}" \\\n+  --provenance=false/,
+  );
   assert.match(runScript, /docker run \\\n  "\$\{browser_arguments\[@\]\}"/);
 });
 

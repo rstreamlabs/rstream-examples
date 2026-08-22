@@ -63,6 +63,21 @@ test("rejects mixed revisions and a dirty producer tree", () => {
   assert.equal(assertion(result, "clean-producer-tree").passed, false);
 });
 
+test("rejects different producer or browser images", () => {
+  const runs = [
+    run("direct", "nack-rtx", true, 28, 0.01),
+    run("relay", "nack-rtx", true, 27, 0.02),
+    run("direct", "nack-rtx-flexfec", true, 29, 0.006),
+    run("relay", "nack-rtx-flexfec", true, 28, 0.014),
+  ];
+  runs[0].manifest.producerImage = "producer-image-changed";
+  runs[1].manifest.browserImage = "browser-image-changed";
+  const result = compare(runs);
+  assert.equal(result.passed, false);
+  assert.equal(assertion(result, "single-producer-image").passed, false);
+  assert.equal(assertion(result, "single-browser-image").passed, false);
+});
+
 test("rejects mixed FlexFEC ratios in one full-profile matrix", () => {
   const runs = [
     run("direct", "nack-rtx", true, 28, 0.01),
@@ -182,12 +197,14 @@ function run(
   return {
     directory: `${path}-${profile}`,
     manifest: {
+      browserImage: "browser-image",
       git: {
         dirty: false,
         producerTree: "producer-tree",
         revision: "revision",
       },
       networkPath: { kind: path },
+      producerImage: "producer-image",
       phases: [
         {
           name: "impaired",

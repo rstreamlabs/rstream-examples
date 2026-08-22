@@ -903,6 +903,7 @@ esac
 build_status=1
 for attempt in 1 2 3; do
   if producer_docker build "${pull_arguments[@]}" \
+    --provenance=false \
     --file "${script_directory}/Dockerfile" \
     --tag "${image_tag}" \
     "${video_directory}"; then
@@ -1044,6 +1045,7 @@ jq -n \
 printf 'Building the isolated qualification browser\n'
 record_setup_milestone browser-build-started
 docker build "${pull_arguments[@]}" \
+  --provenance=false \
   --file "${script_directory}/Browser.Dockerfile" \
   --tag "${browser_image_tag}" \
   "${video_directory}"

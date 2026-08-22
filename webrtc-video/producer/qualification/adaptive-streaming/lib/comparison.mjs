@@ -115,6 +115,22 @@ export function compare(runs, minimumRepetitions = 1) {
   );
   assert(
     assertions,
+    complete.length > 0 &&
+      new Set(complete.map((run) => run.manifest.producerImage)).size === 1 &&
+      complete.every((run) => run.manifest.producerImage),
+    "single-producer-image",
+    "every run qualifies the same producer container image",
+  );
+  assert(
+    assertions,
+    complete.length > 0 &&
+      new Set(complete.map((run) => run.manifest.browserImage)).size === 1 &&
+      complete.every((run) => run.manifest.browserImage),
+    "single-browser-image",
+    "every run qualifies the same browser container image",
+  );
+  assert(
+    assertions,
     complete.length > 0 && new Set(impairmentProfiles).size === 1 && impairment,
     "single-impairment-profile",
     "every run applies the same declared network conditions",
