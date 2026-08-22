@@ -69,7 +69,11 @@ states the release envelope rather than replacing it.
 
 ## Repeated matrix result
 
-![Direct and rstream relay qualification matrix](./matrix/comparison.svg)
+![Decoded output](./matrix/comparison-decoded-output.svg)
+
+![H.264 quantization](./matrix/comparison-quantization.svg)
+
+![Frozen time](./matrix/comparison-frozen-time.svg)
 
 Bars show the median of three selected runs. Whiskers show the complete
 selected range, and red lines show the release gates.

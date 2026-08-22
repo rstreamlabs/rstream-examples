@@ -273,7 +273,11 @@ export function renderComparisonMarkdown(result, metadata = {}) {
 
 Generated at ${metadata.generatedAt || new Date().toISOString()}${metadata.revision ? ` from repository revision \`${metadata.revision}\`` : ""}.
 
-![Direct and rstream comparison](./comparison.svg)
+![Decoded output](./comparison-decoded-output.svg)
+
+![H.264 quantization](./comparison-quantization.svg)
+
+![Frozen time](./comparison-frozen-time.svg)
 
 ## Impaired-link result
 
@@ -291,64 +295,63 @@ The full profile means adaptive TWCC/GCC plus NACK, RTX, and ${result.protection
 `;
 }
 
-export function renderComparisonSVG(result) {
+export function renderComparisonSVGs(result) {
   const colors = ["#475569", "#d97706", "#2563eb", "#059669"];
   const groups = expectedGroups.map(([path, profile], index) => ({
     color: colors[index],
     label: `${path === "direct" ? "Direct" : "Relay"} ${profile === "nack-rtx" ? "base" : "full"}`,
     summary: result.groups[groupKey(path, profile)],
   }));
-  const panels = [
+  const definitions = [
     {
+      description: "Decoded frame rate for direct and rstream relay delivery under the controlled impairment.",
       field: "impairedFPS",
       format: (value) => value.toFixed(1),
       gate: 20,
       gateLabel: "20 fps gate",
       maximum: 30,
+      name: "comparison-decoded-output.svg",
       title: "Decoded output",
       unit: "fps · higher is better",
     },
     {
+      description: "Average H.264 quantization for direct and rstream relay delivery under the controlled impairment.",
       field: "impairedAverageQP",
       format: (value) => value.toFixed(1),
       gate: 42,
       gateLabel: "QP 42 gate",
       maximum: 51,
+      name: "comparison-quantization.svg",
       title: "H.264 quantization",
       unit: "average QP · lower is better",
     },
     {
+      description: "Frozen-time share for direct and rstream relay delivery under the controlled impairment.",
       field: "impairedFreezeRatio",
       format: (value) => `${(value * 100).toFixed(1)}%`,
       gate: 0.1,
       gateLabel: "10% gate",
       maximum: 0.35,
+      name: "comparison-frozen-time.svg",
       title: "Frozen time",
-      unit: "share of phase · lower is better",
+      unit: "share of impaired phase · lower is better",
     },
   ];
-  const width = 720;
-  const height = 1280;
-  const startX = 28;
-  const plotLeft = 190;
-  const plotRight = width - 32;
+  const width = 960;
+  const height = 440;
+  const plotLeft = 230;
+  const plotRight = 900;
   const plotWidth = plotRight - plotLeft;
-  const panelTop = 142;
-  const panelHeight = 330;
-  const panel = (definition, index) => {
-    const top = panelTop + index * panelHeight;
+  const render = (definition) => {
     const scale = (value) =>
       plotLeft +
-      Math.max(
-        0,
-        Math.min(plotWidth, (value / definition.maximum) * plotWidth),
-      );
+      Math.max(0, Math.min(plotWidth, (value / definition.maximum) * plotWidth));
     const gateX = scale(definition.gate);
     const bars = groups
-      .map((group, groupIndex) => {
+      .map((group, index) => {
         const distribution = group.summary[definition.field];
-        const barY = top + 86 + groupIndex * 49;
-        const centerY = barY + 15;
+        const y = 151 + index * 50;
+        const centerY = y + 16;
         const medianX = scale(distribution.median);
         const maximumX = scale(distribution.maximum);
         const minimumX = scale(distribution.minimum);
@@ -357,48 +360,42 @@ export function renderComparisonSVG(result) {
         const labelX = labelInside
           ? medianX - 10
           : Math.min(plotRight - 6, Math.max(medianX, maximumX) + 10);
-        const labelAnchor = labelInside ? "end" : "start";
-        const labelColor = labelInside ? "#ffffff" : "#0f172a";
-        return `<text x="${startX}" y="${barY + 21}" font-size="19" font-weight="650" fill="#0f172a">${pathLabel}</text>
-    <text x="${startX + 72}" y="${barY + 21}" font-size="18" fill="#475569">${profileLabel}</text>
-    <rect x="${plotLeft}" y="${barY}" width="${round(Math.max(1, medianX - plotLeft))}" height="30" rx="5" fill="${group.color}" fill-opacity="0.9"/>
+        return `<text x="48" y="${y + 23}" font-size="19" font-weight="650" fill="#0f172a">${pathLabel}</text>
+    <text x="128" y="${y + 23}" font-size="18" fill="#475569">${profileLabel}</text>
+    <rect x="${plotLeft}" y="${y}" width="${round(Math.max(1, medianX - plotLeft))}" height="32" rx="5" fill="${group.color}" fill-opacity="0.9"/>
     <line x1="${round(minimumX)}" y1="${centerY}" x2="${round(maximumX)}" y2="${centerY}" stroke="#0f172a" stroke-width="3"/>
-    <line x1="${round(minimumX)}" y1="${centerY - 7}" x2="${round(minimumX)}" y2="${centerY + 7}" stroke="#0f172a" stroke-width="3"/>
-    <line x1="${round(maximumX)}" y1="${centerY - 7}" x2="${round(maximumX)}" y2="${centerY + 7}" stroke="#0f172a" stroke-width="3"/>
-    <text x="${round(labelX)}" y="${barY + 22}" text-anchor="${labelAnchor}" font-size="18" font-weight="750" fill="${labelColor}">${definition.format(distribution.median)}</text>`;
+    <line x1="${round(minimumX)}" y1="${centerY - 8}" x2="${round(minimumX)}" y2="${centerY + 8}" stroke="#0f172a" stroke-width="3"/>
+    <line x1="${round(maximumX)}" y1="${centerY - 8}" x2="${round(maximumX)}" y2="${centerY + 8}" stroke="#0f172a" stroke-width="3"/>
+    <text x="${round(labelX)}" y="${y + 23}" text-anchor="${labelInside ? "end" : "start"}" font-size="18" font-weight="750" fill="${labelInside ? "#ffffff" : "#0f172a"}">${definition.format(distribution.median)}</text>`;
       })
       .join("\n    ");
-    return `<rect x="${startX}" y="${top}" width="${width - startX * 2}" height="${panelHeight - 18}" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
-  <text x="${startX + 18}" y="${top + 34}" font-size="26" font-weight="750" fill="#0f172a">${definition.title}</text>
-  <text x="${startX + 18}" y="${top + 61}" font-size="18" fill="#475569">${definition.unit}</text>
-  <line x1="${plotLeft}" y1="${top + 74}" x2="${plotLeft}" y2="${top + 282}" stroke="#cbd5e1"/>
-  <line x1="${plotRight}" y1="${top + 74}" x2="${plotRight}" y2="${top + 282}" stroke="#cbd5e1"/>
-  <line x1="${round(gateX)}" y1="${top + 74}" x2="${round(gateX)}" y2="${top + 282}" stroke="#dc2626" stroke-width="2" stroke-dasharray="7 6"/>
-  <text x="${round(gateX - 6)}" y="${top + 72}" text-anchor="end" font-size="17" font-weight="650" fill="#b91c1c">${definition.gateLabel}</text>
-  <text x="${plotLeft}" y="${top + 304}" font-size="16" fill="#64748b">0</text>
-  <text x="${plotRight}" y="${top + 304}" text-anchor="end" font-size="16" fill="#64748b">${definition.format(definition.maximum)}</text>
-  ${bars}`;
-  };
-  const passColor = result.passed ? "#047857" : "#b91c1c";
-  return `<?xml version="1.0" encoding="UTF-8"?>
+    return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title description" style="font-family:system-ui,sans-serif">
-  <title id="title">Adaptive streaming direct and rstream comparison</title>
-  <desc id="description">Median decoded frames per second, H.264 quantization, and frozen-time percentage with minimum and maximum whiskers across three direct and three rstream relay runs per protection profile.</desc>
+  <title id="title">${definition.title}</title>
+  <desc id="description">${definition.description}</desc>
   <rect width="100%" height="100%" fill="#ffffff"/>
-  <text x="${startX}" y="38" font-size="28" font-weight="750" fill="#0f172a">Direct and relay media quality</text>
-  <text x="${startX}" y="76" font-size="19" fill="#475569">${escapeXML(formatCapacity(result.impairment?.capacityKbps))} · ${escapeXML(result.impairment?.delay || "unknown delay")} one-way delay · ${escapeXML(result.impairment?.jitter || "unknown jitter")} jitter · ${escapeXML(result.impairment?.loss || "unknown loss")} loss</text>
-  <text x="${startX}" y="106" font-size="18" fill="#64748b">Medians and min–max across three independent runs</text>
-  <text x="${width - startX}" y="38" text-anchor="end" font-size="22" font-weight="750" fill="${passColor}">${result.passed ? "PASS" : "FAIL"}</text>
-  ${panels.map(panel).join("\n  ")}
-  <text x="${startX}" y="1167" font-size="18" fill="#475569">Base · NACK + RTX</text>
-  <text x="${startX}" y="1197" font-size="18" fill="#475569">Full · NACK + RTX + one FlexFEC packet per five media packets</text>
-  <text x="${startX}" y="1237" font-size="17" fill="#64748b">Bars show medians; whiskers show min–max; dashed red lines are release gates.</text>
+  <text x="28" y="42" font-size="32" font-weight="750" fill="#0f172a">${definition.title}</text>
+  <text x="28" y="76" font-size="18" fill="#475569">${definition.unit} · median and min–max</text>
+  <rect x="28" y="110" width="904" height="270" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
+  <line x1="${plotLeft}" y1="140" x2="${plotLeft}" y2="344" stroke="#cbd5e1"/>
+  <line x1="${plotRight}" y1="140" x2="${plotRight}" y2="344" stroke="#cbd5e1"/>
+  <line x1="${round(gateX)}" y1="140" x2="${round(gateX)}" y2="344" stroke="#dc2626" stroke-width="2" stroke-dasharray="7 6"/>
+  <text x="${round(gateX - 8)}" y="134" text-anchor="end" font-size="17" font-weight="650" fill="#b91c1c">${definition.gateLabel}</text>
+  ${bars}
+  <text x="${plotLeft}" y="368" font-size="16" fill="#64748b">0</text>
+  <text x="${plotRight}" y="368" text-anchor="end" font-size="16" fill="#64748b">${definition.format(definition.maximum)}</text>
+  <text x="28" y="420" font-size="17" fill="#475569">Base · NACK + RTX   ·   Full · NACK + RTX + bounded FlexFEC</text>
 </svg>
 `;
+  };
+  return Object.fromEntries(
+    definitions.map((definition) => [definition.name, render(definition)]),
+  );
 }
 
 export async function writeComparison(directory, result, metadata) {
   const compact = { ...result };
+  const figures = renderComparisonSVGs(result);
   await Promise.all([
     writeFile(
       join(directory, "comparison.json"),
@@ -408,7 +405,9 @@ export async function writeComparison(directory, result, metadata) {
       join(directory, "comparison.md"),
       renderComparisonMarkdown(result, metadata),
     ),
-    writeFile(join(directory, "comparison.svg"), renderComparisonSVG(result)),
+    ...Object.entries(figures).map(([name, contents]) =>
+      writeFile(join(directory, name), contents),
+    ),
   ]);
 }
 

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="520" viewBox="0 0 960 520" role="img" aria-labelledby="title description" style="font-family:system-ui,sans-serif">
+  <title id="title">One source serves multiple viewers</title>
+  <desc id="description">Device ingress remains constant while MediaMTX egress grows with the number of viewers.</desc>
+  <rect width="100%" height="100%" fill="#ffffff"/>
+  <text x="28" y="42" font-size="32" font-weight="750" fill="#0f172a">One source serves multiple viewers</text>
+  <text x="28" y="76" font-size="18" fill="#475569">Aggregate throughput · Mbit/s</text>
+  <line x1="574" y1="68" x2="610" y2="68" stroke="#2563eb" stroke-width="5"/>
+  <text x="620" y="75" font-size="17" fill="#475569">Device ingress</text>
+  <line x1="752" y1="68" x2="788" y2="68" stroke="#059669" stroke-width="5"/>
+  <text x="798" y="75" font-size="17" fill="#475569">Viewer egress</text>
+  <line x1="112" y1="420" x2="910" y2="420" stroke="#e2e8f0"/>
+  <text x="98" y="426" text-anchor="end" font-size="16" fill="#64748b">0</text>
+  <line x1="112" y1="378" x2="910" y2="378" stroke="#e2e8f0"/>
+  <text x="98" y="384" text-anchor="end" font-size="16" fill="#64748b">10</text>
+  <line x1="112" y1="336" x2="910" y2="336" stroke="#e2e8f0"/>
+  <text x="98" y="342" text-anchor="end" font-size="16" fill="#64748b">20</text>
+  <line x1="112" y1="294" x2="910" y2="294" stroke="#e2e8f0"/>
+  <text x="98" y="300" text-anchor="end" font-size="16" fill="#64748b">30</text>
+  <line x1="112" y1="252" x2="910" y2="252" stroke="#e2e8f0"/>
+  <text x="98" y="258" text-anchor="end" font-size="16" fill="#64748b">40</text>
+  <line x1="112" y1="210" x2="910" y2="210" stroke="#e2e8f0"/>
+  <text x="98" y="216" text-anchor="end" font-size="16" fill="#64748b">50</text>
+  <line x1="112" y1="168" x2="910" y2="168" stroke="#e2e8f0"/>
+  <text x="98" y="174" text-anchor="end" font-size="16" fill="#64748b">60</text>
+  <line x1="112" y1="126" x2="910" y2="126" stroke="#e2e8f0"/>
+  <text x="98" y="132" text-anchor="end" font-size="16" fill="#64748b">70</text>
+  <path d="M112,386.03 L511,386.02 L910,386.02" fill="none" stroke="#2563eb" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M112,386.03 L511,284.09 L910,148.19" fill="none" stroke="#059669" stroke-width="5" stroke-linejoin="round"/>
+  <circle cx="112" cy="386.03" r="7" fill="#2563eb"/>
+  <text x="112" y="372.03" text-anchor="middle" font-size="17" font-weight="700" fill="#0f172a">8.09</text>
+  <circle cx="511" cy="386.02" r="7" fill="#2563eb"/>
+  <text x="511" y="372.02" text-anchor="middle" font-size="17" font-weight="700" fill="#0f172a">8.09</text>
+  <circle cx="910" cy="386.02" r="7" fill="#2563eb"/>
+  <text x="910" y="372.02" text-anchor="middle" font-size="17" font-weight="700" fill="#0f172a">8.09</text>
+  <circle cx="112" cy="386.03" r="7" fill="#059669"/>
+  <text x="112" y="372.03" text-anchor="middle" font-size="17" font-weight="700" fill="#0f172a">8.09</text>
+  <circle cx="511" cy="284.09" r="7" fill="#059669"/>
+  <text x="511" y="270.09" text-anchor="middle" font-size="17" font-weight="700" fill="#0f172a">32.36</text>
+  <circle cx="910" cy="148.19" r="7" fill="#059669"/>
+  <text x="910" y="134.19" text-anchor="middle" font-size="17" font-weight="700" fill="#0f172a">64.72</text>
+  <text x="112" y="452" text-anchor="middle" font-size="18" font-weight="650" fill="#0f172a">1 viewer</text>
+  <text x="511" y="452" text-anchor="middle" font-size="18" font-weight="650" fill="#0f172a">4 viewers</text>
+  <text x="910" y="452" text-anchor="middle" font-size="18" font-weight="650" fill="#0f172a">8 viewers</text>
+  <text x="28" y="500" font-size="17" fill="#475569">The device publishes one stream; distribution capacity grows at MediaMTX.</text>
+</svg>

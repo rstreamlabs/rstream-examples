@@ -16,7 +16,7 @@ if ! [[ "${run_count}" =~ ^[0-9]+$ ]] || ((run_count < 3 || run_count > 20)); th
   printf 'RSTREAM_DISTRIBUTOR_FANOUT_RUNS must be from 3 through 20\n' >&2
   exit 1
 fi
-for command in git go jq; do
+for command in git go jq node; do
   if ! command -v "${command}" >/dev/null; then
     printf 'required command not found: %s\n' "${command}" >&2
     exit 1
@@ -61,6 +61,10 @@ jq -s \
   --argjson working_tree_dirty "${working_tree_dirty}" \
   -f "${script_directory}/report.jq" \
   "${output_directory}"/runs/*.json >"${output_directory}/summary.json"
+
+node "${script_directory}/render.mjs" \
+  "${output_directory}/summary.json" \
+  "${output_directory}/fanout.svg"
 
 if ! jq -e '
   .passed == true and

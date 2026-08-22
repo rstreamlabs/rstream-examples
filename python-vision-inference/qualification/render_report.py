@@ -16,7 +16,7 @@ def svg_bars(
     rows: list[tuple[str, float, str]],
     unit: str,
 ) -> None:
-    width = 900
+    width = 960
     left = 260
     right = 170
     row_height = 46
@@ -27,10 +27,10 @@ def svg_bars(
     scale = (width - left - right) / axis_maximum
     lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" '
-        f'height="{height}" viewBox="0 0 {width} {height}">',
+        f'height="{height}" viewBox="0 0 {width} {height}" style="font-family:system-ui,sans-serif">',
         '<rect width="100%" height="100%" fill="#ffffff"/>',
         f'<text x="24" y="42" fill="#111827" font-family="sans-serif" '
-        f'font-size="26" font-weight="700">{html.escape(title)}</text>',
+        f'font-size="32" font-weight="750">{html.escape(title)}</text>',
         f'<line x1="{left}" y1="68" x2="{left}" y2="{height - 18}" stroke="#cbd5e1"/>',
     ]
     for tick in range(5):
@@ -62,7 +62,7 @@ def svg_bars(
 
 
 def svg_failover_timeline(path: Path, detection_ms: float, failover_ms: float) -> None:
-    width = 900
+    width = 960
     height = 300
     left = 72
     right = 48
@@ -72,12 +72,12 @@ def svg_failover_timeline(path: Path, detection_ms: float, failover_ms: float) -
     detection_x = left + detection_ms * scale
     failover_x = left + failover_ms * scale
     lines = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-labelledby="title description">',
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-labelledby="title description" style="font-family:system-ui,sans-serif">',
         '<title id="title">Inference failover timeline</title>',
         '<desc id="description">Worker A is stopped, the open stream reports EOF, and a matching inference result returns through worker B.</desc>',
         '<rect width="100%" height="100%" fill="#ffffff"/>',
-        '<text x="28" y="42" fill="#111827" font-family="sans-serif" font-size="26" font-weight="700">Inference failover timeline</text>',
-        '<text x="28" y="72" fill="#475569" font-family="sans-serif" font-size="17">Abrupt worker loss · same reference frame · surviving worker</text>',
+        '<text x="28" y="42" fill="#111827" font-size="32" font-weight="750">Inference failover timeline</text>',
+        '<text x="28" y="76" fill="#475569" font-size="18">Abrupt worker loss · same reference frame · surviving worker</text>',
         f'<line x1="{left}" y1="{line_y}" x2="{failover_x:.1f}" y2="{line_y}" stroke="#cbd5e1" stroke-width="8" stroke-linecap="round"/>',
         f'<line x1="{left}" y1="{line_y}" x2="{detection_x:.1f}" y2="{line_y}" stroke="#d97706" stroke-width="8" stroke-linecap="round"/>',
         f'<line x1="{detection_x:.1f}" y1="{line_y}" x2="{failover_x:.1f}" y2="{line_y}" stroke="#059669" stroke-width="8" stroke-linecap="round"/>',

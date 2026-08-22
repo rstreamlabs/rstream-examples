@@ -3,7 +3,7 @@ IMAGE ?= rstream-video-distributor:local
 OUT ?= out
 BINARY := $(OUT)/rstream-video-distributor
 
-.PHONY: build test test-qualification-compile test-race vet format-check verify integration compose-check image image-test qualify-fanout qualify-native qualify-source clean
+.PHONY: build test test-qualification-tools test-qualification-compile test-race vet format-check verify integration compose-check image image-test qualify-fanout qualify-native qualify-source clean
 
 build:
 	mkdir -p $(OUT)
@@ -11,6 +11,9 @@ build:
 
 test:
 	$(GO) test ./...
+
+test-qualification-tools:
+	node --test qualification/fanout/render.test.mjs
 
 test-qualification-compile:
 	$(GO) test -run '^$$' -tags='integration qualification' ./internal/bridge
@@ -24,7 +27,7 @@ vet:
 format-check:
 	@test -z "$$($(GO) run mvdan.cc/gofumpt@v0.9.2 -l ./cmd ./internal)"
 
-verify: format-check vet test test-qualification-compile test-race build
+verify: format-check vet test test-qualification-tools test-qualification-compile test-race build
 
 integration: compose-check image-test
 	$(GO) test -race -tags=integration ./internal/bridge

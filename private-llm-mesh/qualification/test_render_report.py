@@ -109,7 +109,7 @@ class RenderReportTest(unittest.TestCase):
             self.assertIn("A stopped", chart)
             self.assertIn("A returned", chart)
             self.assertIn("Elapsed time", chart)
-            self.assertIn("5 successful turns", chart)
+            self.assertIn("controlled worker loss and recovery", chart)
 
     def test_live_violation_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -1203,7 +1203,7 @@ export function renderSVG(analysis, manifest) {
   <title id="title">Adaptive sender response to controlled link changes</title>
   <desc id="description">Measured encoder, TWCC, receive, and pacer rates are plotted against the independently configured traffic-control schedule, separating media and wire budgets.</desc>
   <rect width="100%" height="100%" fill="#ffffff"/>
-  <text x="${margin.left}" y="38" font-size="30" font-weight="600" fill="#111827">Adaptive sender response to controlled link changes</text>
+  <text x="${margin.left}" y="38" font-size="32" font-weight="750" fill="#111827">Adaptive sender response to controlled link changes</text>
   <text x="${margin.left}" y="68" font-size="18" fill="#4b5563">${escapeXML(subtitle)}</text>
   <text x="${width - margin.right}" y="34" text-anchor="end" font-size="20" font-weight="700" fill="${resultColor}">${resultLabel}</text>
   ${phaseBlocks}

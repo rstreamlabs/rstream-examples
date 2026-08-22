@@ -332,8 +332,9 @@ relay runs and keeps direct references on the browser daemon. This preserves
 the isolated direct bridge while removing producer/browser CPU contention from
 the end-to-end TURN evidence.
 
-`comparison.md` is the human report, `comparison.json` is the automation
-verdict, and `comparison.svg` is the compact visual suitable for the guide.
+`comparison.md` is the human report and `comparison.json` is the automation
+verdict. The three `comparison-*.svg` figures separate frame cadence,
+quantization, and frozen time so each visual answers one question.
 
 The matrix uses one 4 Mbit/s wire bottleneck for the default `1/5` profile and
 the explicit `2/4` stress comparison. The encoder has a 2 Mbit/s media floor:

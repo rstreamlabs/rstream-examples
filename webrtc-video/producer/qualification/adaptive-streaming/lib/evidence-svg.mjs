@@ -545,7 +545,7 @@ function documentSVG(c, title, description, body, footer) {
 <svg xmlns="http://www.w3.org/2000/svg" width="${c.width}" height="${c.height}" viewBox="0 0 ${c.width} ${c.height}" role="img" aria-labelledby="title description" style="font-family:system-ui,sans-serif">
 <title id="title">${xml(title)}</title><desc id="description">${xml(description)}</desc>
 <rect width="100%" height="100%" fill="#ffffff"/>
-  <text x="28" y="40" font-size="32" font-weight="650" fill="#111827">${xml(title)}</text>
+  <text x="28" y="40" font-size="32" font-weight="750" fill="#111827">${xml(title)}</text>
 <text x="${c.width - c.right}" y="38" text-anchor="end" font-size="20" font-weight="700" fill="${passed ? "#047857" : "#b91c1c"}">${passed ? "PASS" : "FAIL"}</text>
 ${body}
 <line x1="${c.left}" y1="${c.height - 55}" x2="${c.width - c.right}" y2="${c.height - 55}" stroke="#111827"/>

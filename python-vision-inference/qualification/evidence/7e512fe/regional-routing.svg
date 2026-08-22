@@ -1,21 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="900" height="204" viewBox="0 0 900 204">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="204" viewBox="0 0 960 204" style="font-family:system-ui,sans-serif">
 <rect width="100%" height="100%" fill="#ffffff"/>
-<text x="24" y="42" fill="#111827" font-family="sans-serif" font-size="26" font-weight="700">Equal-capacity worker RTT by region</text>
+<text x="24" y="42" fill="#111827" font-family="sans-serif" font-size="32" font-weight="750">Equal-capacity worker RTT by region</text>
 <line x1="260" y1="68" x2="260" y2="186" stroke="#cbd5e1"/>
 <line x1="260.0" y1="68" x2="260.0" y2="186" stroke="#e2e8f0"/>
 <text x="260.0" y="202" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="12">0</text>
-<line x1="377.5" y1="68" x2="377.5" y2="186" stroke="#e2e8f0"/>
-<text x="377.5" y="202" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="12">100</text>
-<line x1="495.0" y1="68" x2="495.0" y2="186" stroke="#e2e8f0"/>
-<text x="495.0" y="202" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="12">200</text>
-<line x1="612.5" y1="68" x2="612.5" y2="186" stroke="#e2e8f0"/>
-<text x="612.5" y="202" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="12">300</text>
-<line x1="730.0" y1="68" x2="730.0" y2="186" stroke="#e2e8f0"/>
-<text x="730.0" y="202" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="12">400</text>
+<line x1="392.5" y1="68" x2="392.5" y2="186" stroke="#e2e8f0"/>
+<text x="392.5" y="202" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="12">100</text>
+<line x1="525.0" y1="68" x2="525.0" y2="186" stroke="#e2e8f0"/>
+<text x="525.0" y="202" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="12">200</text>
+<line x1="657.5" y1="68" x2="657.5" y2="186" stroke="#e2e8f0"/>
+<text x="657.5" y="202" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="12">300</text>
+<line x1="790.0" y1="68" x2="790.0" y2="186" stroke="#e2e8f0"/>
+<text x="790.0" y="202" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="12">400</text>
 <text x="24" y="96" fill="#111827" font-family="sans-serif" font-size="17">us-east-1</text>
-<rect x="260" y="78" width="468.0" height="26" rx="4" fill="#dc2626"/>
-<text x="738.0" y="98" fill="#111827" font-family="sans-serif" font-size="17">398.32 ms</text>
+<rect x="260" y="78" width="527.8" height="26" rx="4" fill="#dc2626"/>
+<text x="797.8" y="98" fill="#111827" font-family="sans-serif" font-size="17">398.32 ms</text>
 <text x="24" y="142" fill="#111827" font-family="sans-serif" font-size="17">eu-west-3</text>
-<rect x="260" y="124" width="174.9" height="26" rx="4" fill="#059669"/>
-<text x="444.9" y="144" fill="#111827" font-family="sans-serif" font-size="17">148.85 ms</text>
+<rect x="260" y="124" width="197.2" height="26" rx="4" fill="#059669"/>
+<text x="467.2" y="144" fill="#111827" font-family="sans-serif" font-size="17">148.85 ms</text>
 </svg>

@@ -35,16 +35,15 @@ def svg_worker_lifecycle(
     timeline_start = min(start for start, _ in phase_times)
     timeline_end = max(end for _, end in phase_times)
     timeline_duration = max(1.0, timeline_end - timeline_start)
-    successful_turns = sum(int(phase.get("summary", {}).get("successful", 0)) for _, phase in phases)
     lane_y = {"qualification-worker-a": 180, "qualification-worker-b": 280}
     colors = {"qualification-worker-a": "#2563eb", "qualification-worker-b": "#059669"}
     lines = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-labelledby="title description">',
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-labelledby="title description" style="font-family:system-ui,sans-serif">',
         '<title id="title">Worker routing through loss and recovery</title>',
         '<desc id="description">Measured workload phases show both workers serving traffic, worker B serving alone after worker A stops, and both workers serving again after worker A returns.</desc>',
         '<rect width="100%" height="100%" fill="#ffffff"/>',
-        '<text x="28" y="42" fill="#111827" font-family="sans-serif" font-size="26" font-weight="700">Worker routing through loss and recovery</text>',
-        f'<text x="28" y="70" fill="#475569" font-family="sans-serif" font-size="17">Measured phase time · {successful_turns} successful turns · zero failed streams</text>',
+        '<text x="28" y="42" fill="#111827" font-size="32" font-weight="750">Worker routing through loss and recovery</text>',
+        '<text x="28" y="76" fill="#475569" font-size="18">Traffic movement during controlled worker loss and recovery</text>',
         f'<line x1="{left}" y1="{lane_y["qualification-worker-a"]}" x2="{width - right}" y2="{lane_y["qualification-worker-a"]}" stroke="#cbd5e1"/>',
         f'<line x1="{left}" y1="{lane_y["qualification-worker-b"]}" x2="{width - right}" y2="{lane_y["qualification-worker-b"]}" stroke="#cbd5e1"/>',
         f'<text x="{left - 18}" y="{lane_y["qualification-worker-a"] + 6}" text-anchor="end" fill="#111827" font-family="sans-serif" font-size="18">worker A</text>',

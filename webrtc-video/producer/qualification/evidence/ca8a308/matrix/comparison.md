@@ -2,7 +2,11 @@
 
 Generated at 2026-08-17T02:21:05.440Z from repository revision `ca8a308907aaa5661954af81d10f04bd8e5f52bb`.
 
-![Direct and rstream comparison](./comparison.svg)
+![Decoded output](./comparison-decoded-output.svg)
+
+![H.264 quantization](./comparison-quantization.svg)
+
+![Frozen time](./comparison-frozen-time.svg)
 
 ## Impaired-link result
 

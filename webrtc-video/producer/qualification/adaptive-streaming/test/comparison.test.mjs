@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   compare,
   renderComparisonMarkdown,
-  renderComparisonSVG,
+  renderComparisonSVGs,
 } from "../lib/comparison.mjs";
 
 test("accepts a full profile that closes the direct/relay quality gap", () => {
@@ -18,13 +18,22 @@ test("accepts a full profile that closes the direct/relay quality gap", () => {
   const markdown = renderComparisonMarkdown(result);
   assert.match(markdown, /full protection profile/);
   assert.match(markdown, /2 FlexFEC repair packets per 4 media packets/);
-  const svg = renderComparisonSVG(result);
-  assert.match(svg, /Decoded output/);
-  assert.match(svg, /20 fps gate/);
-  assert.match(svg, /whiskers show min–max/);
-  assert.match(svg, /width="720" height="1280"/);
-  assert.match(svg, /font-family:system-ui,sans-serif/);
-  assert.match(svg, /Direct and relay media quality/);
+  const figures = renderComparisonSVGs(result);
+  assert.deepEqual(Object.keys(figures), [
+    "comparison-decoded-output.svg",
+    "comparison-quantization.svg",
+    "comparison-frozen-time.svg",
+  ]);
+  assert.match(figures["comparison-decoded-output.svg"], /Decoded output/);
+  assert.match(figures["comparison-decoded-output.svg"], /20 fps gate/);
+  assert.match(figures["comparison-decoded-output.svg"], /median and min–max/);
+  assert.match(figures["comparison-decoded-output.svg"], /width="960" height="440"/);
+  assert.match(figures["comparison-decoded-output.svg"], /font-family:system-ui,sans-serif/);
+  assert.match(figures["comparison-quantization.svg"], /QP 42 gate/);
+  assert.match(figures["comparison-frozen-time.svg"], /10% gate/);
+  for (const svg of Object.values(figures)) {
+    assert.doesNotMatch(svg, />PASS</);
+  }
 });
 
 test("rejects an incomplete or degraded full relay profile", () => {
