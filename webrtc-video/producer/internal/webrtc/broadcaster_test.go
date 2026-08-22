@@ -1154,6 +1154,39 @@ func TestSessionRechecksPacerBacklogBeforeCongestionRecoveryKeyFrame(t *testing.
 	}
 }
 
+func TestSessionCloseCancelsCongestionRecoveryAdmissionRetry(t *testing.T) {
+	const delay = 20 * time.Millisecond
+	checked := make(chan struct{}, 4)
+	estimator := fakeBandwidthEstimator{recoveryDelaySource: func() time.Duration {
+		checked <- struct{}{}
+		return delay
+	}}
+	encoder := &recordingKeyFrameRequester{requested: make(chan struct{}, 1)}
+	session := &Session{
+		id:        "viewer",
+		encoder:   encoder,
+		estimator: estimator,
+		logger:    logs.NewLogger(logs.NewHub(8), false),
+		closed:    make(chan struct{}),
+	}
+	session.requestCongestionRecoveryKeyFrame()
+	for range 2 {
+		select {
+		case <-checked:
+		case <-time.After(4 * delay):
+			t.Fatal("congestion recovery did not reach its admission retry")
+		}
+	}
+	session.Close("test complete")
+	select {
+	case <-encoder.requested:
+		t.Fatal("congestion recovery requested a key frame after session close")
+	case <-checked:
+		t.Fatal("congestion recovery continued checking admission after session close")
+	case <-time.After(4 * delay):
+	}
+}
+
 func TestSessionDefersNewRecoveryEpisodeWithinRequestInterval(t *testing.T) {
 	encoder := &recordingKeyFrameRequester{requested: make(chan struct{}, 2)}
 	session := &Session{
