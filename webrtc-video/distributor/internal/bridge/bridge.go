@@ -107,15 +107,6 @@ func run(ctx context.Context, configuration config.Config, options runOptions) (
 	if err != nil {
 		return Result{}, fmt.Errorf("resolve source for path %q: %w", configuration.Path, err)
 	}
-	destination, sender, output, destinationSession, err := openDestination(ctx, configuration, endpoint.DestinationAuthorization, client)
-	if err != nil {
-		return Result{}, err
-	}
-	defer func() {
-		if destinationSession != nil {
-			err = errors.Join(err, closeSession(destinationSession))
-		}
-	}()
 	sourcePeer, tracks, sourceSession, err := openSource(ctx, endpoint, client)
 	if err != nil {
 		return Result{}, err
@@ -129,6 +120,15 @@ func run(ctx context.Context, configuration config.Config, options runOptions) (
 	if err != nil {
 		return Result{}, err
 	}
+	destination, sender, output, destinationSession, err := openDestination(ctx, configuration, endpoint.DestinationAuthorization, client)
+	if err != nil {
+		return Result{}, err
+	}
+	defer func() {
+		if destinationSession != nil {
+			err = errors.Join(err, closeSession(destinationSession))
+		}
+	}()
 	if err := requestSourceKeyFrame(sourcePeer, uint32(incoming.track.SSRC())); err != nil {
 		return Result{}, fmt.Errorf("request initial source key frame: %w", err)
 	}

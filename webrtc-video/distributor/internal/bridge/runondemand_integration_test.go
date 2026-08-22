@@ -55,6 +55,7 @@ type sourceHarness struct {
 	twcc           atomic.Uint32
 	nextSequence   atomic.Uint32
 	warmupWrites   atomic.Uint32
+	warmupDelay    time.Duration
 	once           sync.Once
 	warmupStopOnce sync.Once
 	offerMu        sync.Mutex
@@ -152,6 +153,28 @@ func TestMediaMTXRunOnDemandRepairsWithRTXWhenFlexFECIsUnavailable(t *testing.T)
 	viewer.close()
 	waitSignal(t, source.deleted, "source WHEP DELETE after the viewer")
 	waitLogContains(t, logs, "repaired_rtx=1")
+}
+
+func TestMediaMTXRunOnDemandWaitsForDelayedSourceBeforePublishing(t *testing.T) {
+	mediaMTX := mediaMTXExecutable(t)
+	source := newSourceHarnessWithDelay(t, 750*time.Millisecond)
+	server := httptest.NewServer(http.HandlerFunc(source.serveHTTP))
+	defer server.Close()
+	process, logs := startMediaMTX(t, mediaMTX, server.URL+"/whep")
+	defer stopMediaMTX(t, process, logs)
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("MediaMTX and bridge logs:\n%s", logs.String())
+		}
+	})
+	viewer := newViewer(t)
+	defer viewer.close()
+	waitSignal(t, source.connected, "delayed source peer connection")
+	if source.warmupWrites.Load() == 0 {
+		t.Fatal("viewer connected before the delayed source published media")
+	}
+	viewer.close()
+	waitSignal(t, source.deleted, "delayed source WHEP DELETE after the viewer")
 }
 
 func TestMediaMTXNativeWHEPSourceSharesOneOnDemandSession(t *testing.T) {
@@ -394,6 +417,12 @@ func newSourceHarnessWithoutFlexFEC(t *testing.T) *sourceHarness {
 	return newSourceHarnessWithFlexFEC(t, false)
 }
 
+func newSourceHarnessWithDelay(t *testing.T, delay time.Duration) *sourceHarness {
+	harness := newSourceHarnessWithFlexFEC(t, true)
+	harness.warmupDelay = delay
+	return harness
+}
+
 func newSourceHarnessWithFlexFEC(t *testing.T, flexFEC bool) *sourceHarness {
 	t.Helper()
 	peer, track, sender := newSender(t, flexFEC)
@@ -445,6 +474,15 @@ func newSourceHarnessWithFlexFEC(t *testing.T, flexFEC bool) *sourceHarness {
 
 func (s *sourceHarness) writeWarmup() {
 	defer close(s.warmupDone)
+	if s.warmupDelay > 0 {
+		timer := time.NewTimer(s.warmupDelay)
+		defer timer.Stop()
+		select {
+		case <-s.warmupStop:
+			return
+		case <-timer.C:
+		}
+	}
 	ticker := time.NewTicker(5 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -714,6 +752,7 @@ webrtcLocalTCPAddress: ""
 webrtcIPsFromInterfaces: false
 webrtcAdditionalHosts: [127.0.0.1]
 webrtcICEServers2: []
+webrtcTrackGatherTimeout: 250ms
 pathDefaults:
   maxReaders: %d
   runOnDemand: %q
