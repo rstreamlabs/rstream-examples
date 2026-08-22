@@ -304,7 +304,8 @@ export function renderComparisonSVGs(result) {
   }));
   const definitions = [
     {
-      description: "Decoded frame rate for direct and rstream relay delivery under the controlled impairment.",
+      description:
+        "Decoded frame rate for direct and rstream relay delivery under the controlled impairment.",
       field: "impairedFPS",
       format: (value) => value.toFixed(1),
       gate: 20,
@@ -315,7 +316,8 @@ export function renderComparisonSVGs(result) {
       unit: "fps · higher is better",
     },
     {
-      description: "Average H.264 quantization for direct and rstream relay delivery under the controlled impairment.",
+      description:
+        "Average H.264 quantization for direct and rstream relay delivery under the controlled impairment.",
       field: "impairedAverageQP",
       format: (value) => value.toFixed(1),
       gate: 42,
@@ -326,7 +328,8 @@ export function renderComparisonSVGs(result) {
       unit: "average QP · lower is better",
     },
     {
-      description: "Frozen-time share for direct and rstream relay delivery under the controlled impairment.",
+      description:
+        "Frozen-time share for direct and rstream relay delivery under the controlled impairment.",
       field: "impairedFreezeRatio",
       format: (value) => `${(value * 100).toFixed(1)}%`,
       gate: 0.1,
@@ -345,7 +348,10 @@ export function renderComparisonSVGs(result) {
   const render = (definition) => {
     const scale = (value) =>
       plotLeft +
-      Math.max(0, Math.min(plotWidth, (value / definition.maximum) * plotWidth));
+      Math.max(
+        0,
+        Math.min(plotWidth, (value / definition.maximum) * plotWidth),
+      );
     const gateX = scale(definition.gate);
     const bars = groups
       .map((group, index) => {

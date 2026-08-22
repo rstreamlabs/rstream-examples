@@ -27,8 +27,14 @@ test("accepts a full profile that closes the direct/relay quality gap", () => {
   assert.match(figures["comparison-decoded-output.svg"], /Decoded output/);
   assert.match(figures["comparison-decoded-output.svg"], /20 fps gate/);
   assert.match(figures["comparison-decoded-output.svg"], /median and min–max/);
-  assert.match(figures["comparison-decoded-output.svg"], /width="960" height="440"/);
-  assert.match(figures["comparison-decoded-output.svg"], /font-family:system-ui,sans-serif/);
+  assert.match(
+    figures["comparison-decoded-output.svg"],
+    /width="960" height="440"/,
+  );
+  assert.match(
+    figures["comparison-decoded-output.svg"],
+    /font-family:system-ui,sans-serif/,
+  );
   assert.match(figures["comparison-quantization.svg"], /QP 42 gate/);
   assert.match(figures["comparison-frozen-time.svg"], /10% gate/);
   for (const svg of Object.values(figures)) {
