@@ -21,7 +21,8 @@ import (
 type fakeSourceFactory struct{}
 
 type fakeBandwidthEstimator struct {
-	stats map[string]any
+	stats         map[string]any
+	recoveryDelay time.Duration
 }
 
 type rejectingBandwidthEstimator struct {
@@ -47,6 +48,10 @@ func (f fakeBandwidthEstimator) OnTargetBitrateChange(func(int)) {}
 
 func (f fakeBandwidthEstimator) GetStats() map[string]any {
 	return f.stats
+}
+
+func (f fakeBandwidthEstimator) recoveryKeyFrameDelay() time.Duration {
+	return f.recoveryDelay
 }
 
 func (r *rejectingBandwidthEstimator) GetTargetBitrate() int {
@@ -1071,6 +1076,30 @@ func TestSessionSchedulesAndCancelsRecoveryKeyFrameRetries(t *testing.T) {
 	stats := session.StatsSnapshot()
 	if stats.RecoveryKeyFrameRequests != 1 {
 		t.Fatalf("recovery key-frame requests = %d, want 1", stats.RecoveryKeyFrameRequests)
+	}
+}
+
+func TestSessionDefersCongestionRecoveryKeyFrameUntilPacerCanAdmitIt(t *testing.T) {
+	const delay = 50 * time.Millisecond
+	encoder := &recordingKeyFrameRequester{requested: make(chan struct{}, 1)}
+	session := &Session{
+		id:        "viewer",
+		encoder:   encoder,
+		estimator: fakeBandwidthEstimator{recoveryDelay: delay},
+		logger:    logs.NewLogger(logs.NewHub(8), false),
+		closed:    make(chan struct{}),
+	}
+	defer session.Close("test complete")
+	session.requestCongestionRecoveryKeyFrame()
+	select {
+	case <-encoder.requested:
+		t.Fatal("congestion recovery key frame ignored the pacer delay")
+	case <-time.After(delay / 2):
+	}
+	select {
+	case <-encoder.requested:
+	case <-time.After(2 * delay):
+		t.Fatal("congestion recovery key frame did not fire after the pacer delay")
 	}
 }
 

@@ -360,6 +360,13 @@ func (e *associatedStreamBandwidthEstimator) pacerStats() map[string]any {
 	return provider.Stats()
 }
 
+func (e *associatedStreamBandwidthEstimator) recoveryKeyFrameDelay() time.Duration {
+	if e.pacer == nil {
+		return 0
+	}
+	return e.pacer.recoveryKeyFrameDelay()
+}
+
 func (e *associatedStreamBandwidthEstimator) AddStream(
 	info *interceptor.StreamInfo,
 	writer interceptor.RTPWriter,

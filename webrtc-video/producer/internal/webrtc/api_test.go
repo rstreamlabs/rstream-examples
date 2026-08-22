@@ -129,6 +129,26 @@ func TestAssociatedEstimatorEnforcesConfiguredMediaFloorAcrossLossController(t *
 	}
 }
 
+func TestAssociatedEstimatorUsesPacerBacklogForRecoveryKeyFrameDelay(t *testing.T) {
+	pacer := newMinimumBitratePacer(2_000_000, 2_000_000)
+	t.Cleanup(func() {
+		if err := pacer.Close(); err != nil {
+			t.Errorf("close pacer: %v", err)
+		}
+	})
+	delegate := pacer.delegate.(*tokenBucketPacer)
+	delegate.keyFrameReserveBytes.Store(100_000)
+	setSyntheticQueuedBytes(delegate, 500_000)
+	estimator := &associatedStreamBandwidthEstimator{pacer: pacer}
+	if delay := estimator.recoveryKeyFrameDelay(); delay <= 0 {
+		t.Fatalf("recovery key-frame delay = %v, want a positive backlog delay", delay)
+	}
+	setSyntheticQueuedBytes(delegate, 0)
+	if delay := estimator.recoveryKeyFrameDelay(); delay != 0 {
+		t.Fatalf("drained recovery key-frame delay = %v, want 0", delay)
+	}
+}
+
 func TestPeerConnectionFactoryKeepsTWCCProtocolWithoutEstimatorWhenAdaptiveIsOff(t *testing.T) {
 	cfg := config.Default()
 	factory, _, err := newPeerConnectionFactory(cfg)

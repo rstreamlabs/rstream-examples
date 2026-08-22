@@ -384,7 +384,7 @@ func (b *Broadcaster) OpenSession(ctx context.Context) (*Session, error) {
 	if adaptiveController, ok := b.newAdaptiveController(
 		encoderController,
 		estimator,
-		func() { session.requestRecoveryKeyFrame(0) },
+		session.requestCongestionRecoveryKeyFrame,
 	); ok {
 		session.adaptive = adaptiveController
 		snapshot := adaptiveController.Snapshot()
@@ -1251,6 +1251,14 @@ func (s *Session) requestKeyFrame() {
 
 func (s *Session) requestRecoveryKeyFrame(delay time.Duration) {
 	s.scheduleKeyFrameRequest(delay, true)
+}
+
+func (s *Session) requestCongestionRecoveryKeyFrame() {
+	delay := time.Duration(0)
+	if delayer, ok := s.estimator.(interface{ recoveryKeyFrameDelay() time.Duration }); ok {
+		delay = delayer.recoveryKeyFrameDelay()
+	}
+	s.requestRecoveryKeyFrame(delay)
 }
 
 func (s *Session) scheduleKeyFrameRequest(delay time.Duration, deferIfLimited bool) {

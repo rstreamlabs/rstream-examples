@@ -155,6 +155,14 @@ func (p *minimumBitratePacer) observeRoundTripTime(roundTripTime time.Duration) 
 	}
 }
 
+func (p *minimumBitratePacer) recoveryKeyFrameDelay() time.Duration {
+	delayer, ok := p.delegate.(interface{ recoveryKeyFrameDelay() time.Duration })
+	if !ok {
+		return 0
+	}
+	return delayer.recoveryKeyFrameDelay()
+}
+
 func (p *minimumBitratePacer) SetTargetBitrate(bitrate int) {
 	p.targetMu.Lock()
 	defer p.targetMu.Unlock()
