@@ -44,9 +44,12 @@ The impairment schedule runs as one process inside the producer network
 namespace. It first holds a 32 Mbit/s profile with no added delay, jitter, or
 random loss long enough for the controller to settle after qdisc activation.
 The final ten seconds before the first capacity step define the causal
-reference for that run. At least 80% of those samples and the final sample must
-stay within 10% of the window's median encoder target. Congestion reduction and
-recovery are measured from that stable target, while the earlier unshaped
+reference for that run. Every target in that window must remain within 20% of
+its median, which is the smallest reduction accepted as a congestion response,
+and the final sample must remain within 10%. This admits a bounded GCC transient
+without allowing pre-existing target movement to masquerade as a response to
+the capacity step. Congestion reduction and recovery are measured from that
+bounded reference, while the earlier unshaped
 baseline remains the healthy-link quality reference. A real relay may therefore
 settle below an initial access-link peak without turning that peak into an
 artificial recovery requirement.

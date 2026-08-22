@@ -625,6 +625,23 @@ async function collectSample(activePage) {
     const inbound = inboundReports.sort(
       (left, right) => (right.bytesReceived || 0) - (left.bytesReceived || 0),
     )[0];
+    const inboundRTPReports = inboundReports
+      .map((report) => ({
+        bytesReceived: report.bytesReceived || 0,
+        codecID: report.codecId || "",
+        fecPacketsDiscarded: report.fecPacketsDiscarded || 0,
+        fecPacketsReceived: report.fecPacketsReceived || 0,
+        framesDecoded: report.framesDecoded || 0,
+        id: report.id,
+        kind: report.kind || report.mediaType || "",
+        nackCount: report.nackCount || 0,
+        packetsLost: report.packetsLost || 0,
+        packetsReceived: report.packetsReceived || 0,
+        retransmittedBytesReceived: report.retransmittedBytesReceived || 0,
+        retransmittedPacketsReceived: report.retransmittedPacketsReceived || 0,
+        ssrc: report.ssrc ?? null,
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id));
     if (!selectedPair) {
       for (const report of reports.values()) {
         if (
@@ -772,6 +789,20 @@ async function collectSample(activePage) {
         bandwidth?.pacerSentRetransmission,
       ),
       pacerSentFEC: bandwidthNumber(bandwidth?.pacerSentFEC),
+      pacerPrimarySSRC: bandwidthNumber(bandwidth?.pacerPrimarySSRC),
+      pacerRetransmissionSSRC: bandwidthNumber(
+        bandwidth?.pacerRetransmissionSSRC,
+      ),
+      pacerForwardErrorCorrectionSSRC: bandwidthNumber(
+        bandwidth?.pacerForwardErrorCorrectionSSRC,
+      ),
+      pacerFirstRetransmissionSequence:
+        bandwidth?.pacerFirstRetransmissionSequence ?? null,
+      pacerLastRetransmissionSequence:
+        bandwidth?.pacerLastRetransmissionSequence ?? null,
+      pacerRetransmissionSequenceSamples: bandwidthNumber(
+        bandwidth?.pacerRetransmissionSequenceSamples,
+      ),
       adaptiveBitrateUpdates: sessionNumber(
         sessionStats?.adaptiveBitrateUpdates,
       ),
@@ -789,6 +820,7 @@ async function collectSample(activePage) {
       peerConnectionsCreated: peers.length,
       iceConnectionState: peer.iceConnectionState,
       iceGatheringState: peer.iceGatheringState,
+      inboundRTPReports,
       pliCount: inbound?.pliCount || 0,
       playback: text("#playback-status"),
       playoutDelayHintSeconds:

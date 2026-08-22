@@ -47,6 +47,50 @@ func TestTokenBucketPacerWritesPrimaryAndRepairStreams(t *testing.T) {
 	}
 }
 
+func TestTokenBucketPacerReportsRepairStreamIdentityAndSequence(t *testing.T) {
+	pacer := newTokenBucketPacer(10_000_000, 1, 16)
+	written := make(chan struct{}, 1)
+	writer := interceptor.RTPWriterFunc(func(
+		header *rtp.Header,
+		payload []byte,
+		_ interceptor.Attributes,
+	) (int, error) {
+		written <- struct{}{}
+		return header.MarshalSize() + len(payload), nil
+	})
+	pacer.AddStream(10, writer)
+	pacer.markPrimaryStream(10)
+	pacer.AddStream(11, writer)
+	pacer.markRetransmissionStream(11)
+	pacer.AddStream(12, writer)
+	pacer.markForwardErrorCorrectionStream(12)
+	if _, err := pacer.Write(&rtp.Header{
+		SSRC:           11,
+		SequenceNumber: 65535,
+	}, []byte{0, 42}, nil); err != nil {
+		t.Fatalf("queue RTX packet: %v", err)
+	}
+	select {
+	case <-written:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for RTX write")
+	}
+	stats := pacer.Stats()
+	if stats["pacerPrimarySSRC"] != uint32(10) ||
+		stats["pacerRetransmissionSSRC"] != uint32(11) ||
+		stats["pacerForwardErrorCorrectionSSRC"] != uint32(12) {
+		t.Fatalf("unexpected stream identity diagnostics: %+v", stats)
+	}
+	if stats["pacerFirstRetransmissionSequence"] != uint32(65535) ||
+		stats["pacerLastRetransmissionSequence"] != uint32(65535) ||
+		stats["pacerRetransmissionSequenceSamples"] != uint64(1) {
+		t.Fatalf("unexpected RTX sequence diagnostics: %+v", stats)
+	}
+	if err := pacer.Close(); err != nil {
+		t.Fatalf("close pacer: %v", err)
+	}
+}
+
 func TestTokenBucketPacerOwnsQueuedPacketData(t *testing.T) {
 	pacer := newTokenBucketPacer(10_000_000, 1, 16)
 	entered := make(chan struct{}, 1)

@@ -12,6 +12,7 @@ const minimumTWCCLossGuardStatuses = 20;
 const minimumSustainedRecoveryMilliseconds = 10_000;
 const minimumSustainedRecoveryTargetRatio = 0.8;
 const networkTransitionGuardMilliseconds = 2000;
+const stableConditioningMaximumDeviationRatio = 0.2;
 const stableConditioningWindowMilliseconds = 10_000;
 
 export function enrichSamples(samples) {
@@ -107,9 +108,11 @@ export function analyze(
       ? stableConditioningSamples.filter(
           (sample) =>
             sample.encoderTargetKbps >=
-              stableConditioningMedianEncoderTargetKbps * 0.9 &&
+              stableConditioningMedianEncoderTargetKbps *
+                (1 - stableConditioningMaximumDeviationRatio) &&
             sample.encoderTargetKbps <=
-              stableConditioningMedianEncoderTargetKbps * 1.1,
+              stableConditioningMedianEncoderTargetKbps *
+                (1 + stableConditioningMaximumDeviationRatio),
         ).length / stableConditioningSamples.length
       : 0;
   const stableConditioningEndingEncoderTargetKbps =
@@ -290,13 +293,13 @@ export function analyze(
     assert(
       assertions,
       stableConditioningSamples.length >= 5 &&
-        stableConditioningTargetRatio >= 0.8 &&
+        stableConditioningTargetRatio === 1 &&
         stableConditioningEndingEncoderTargetKbps >=
           stableConditioningMedianEncoderTargetKbps * 0.9 &&
         stableConditioningEndingEncoderTargetKbps <=
           stableConditioningMedianEncoderTargetKbps * 1.1,
-      "capacity-experiment-settled",
-      "at least 80% of samples and the final sample in the pre-transition window stay within 10% of that window's median encoder target",
+      "capacity-reference-bounded",
+      "every sample in the pre-transition window stays within the 20% response threshold and the final sample stays within 10% of that window's median encoder target",
     );
   }
   if (
@@ -523,16 +526,13 @@ export function analyze(
       "retransmission-sender-pacing",
       "the sender records paced retransmissions while loss is injected",
     );
-    if (!manifest.protection?.flexFEC) {
-      assert(
-        assertions,
-        counterIncrease(enriched, "retransmittedPacketsReceived", [
-          "impaired",
-        ]) > 0,
-        "rtx-repair",
-        "the receiver observes RTX repair packets while loss is injected without proactive FEC",
-      );
-    }
+    assert(
+      assertions,
+      counterIncrease(enriched, "retransmittedPacketsReceived", ["impaired"]) >
+        0,
+      "rtx-repair",
+      "the receiver observes RTX repair packets while loss is injected",
+    );
     assert(
       assertions,
       (impaired?.nackToPacketRatio || Infinity) <= 0.1,

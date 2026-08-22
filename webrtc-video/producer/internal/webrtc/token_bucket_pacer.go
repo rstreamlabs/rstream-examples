@@ -175,6 +175,12 @@ type tokenBucketPacer struct {
 	sentRetransmissionBytes                  atomic.Uint64
 	sentForwardErrorCorrection               atomic.Uint64
 	sentForwardErrorCorrectionBytes          atomic.Uint64
+	primarySSRC                              atomic.Uint32
+	retransmissionSSRC                       atomic.Uint32
+	forwardErrorCorrectionSSRC               atomic.Uint32
+	firstRetransmissionSequence              atomic.Uint32
+	lastRetransmissionSequence               atomic.Uint32
+	retransmissionSequenceSamples            atomic.Uint64
 	transportSequence                        atomic.Uint32
 	writersMu                                sync.RWMutex
 	writers                                  map[uint32]pacedStream
@@ -244,6 +250,10 @@ func (p *tokenBucketPacer) AddStream(ssrc uint32, writer interceptor.RTPWriter) 
 	p.writersMu.Unlock()
 }
 
+func (p *tokenBucketPacer) markPrimaryStream(ssrc uint32) {
+	p.primarySSRC.Store(ssrc)
+}
+
 func (p *tokenBucketPacer) markRetransmissionStream(ssrc uint32) {
 	p.writersMu.Lock()
 	stream, ok := p.writers[ssrc]
@@ -252,6 +262,7 @@ func (p *tokenBucketPacer) markRetransmissionStream(ssrc uint32) {
 		p.writers[ssrc] = stream
 	}
 	p.writersMu.Unlock()
+	p.retransmissionSSRC.Store(ssrc)
 }
 
 func (p *tokenBucketPacer) markForwardErrorCorrectionStream(ssrc uint32) {
@@ -262,6 +273,7 @@ func (p *tokenBucketPacer) markForwardErrorCorrectionStream(ssrc uint32) {
 		p.writers[ssrc] = stream
 	}
 	p.writersMu.Unlock()
+	p.forwardErrorCorrectionSSRC.Store(ssrc)
 }
 
 func (p *tokenBucketPacer) configureForwardErrorCorrection(protection flexFECProtection) {
@@ -566,6 +578,9 @@ func (p *tokenBucketPacer) run() {
 				p.discardQueuedPackets()
 			} else if pending.repair != repairKindNone {
 				p.recordRepairSent(pending.repair, written)
+				if pending.repair == repairKindRetransmission {
+					p.recordRetransmissionSequence(pending.header.SequenceNumber)
+				}
 				if pending.tracksRepair {
 					p.markRetransmissionSent(pending.retransmission, now)
 				}
@@ -618,6 +633,21 @@ func (p *tokenBucketPacer) run() {
 		case <-timer.C:
 		}
 	}
+}
+
+func (p *tokenBucketPacer) recordRetransmissionSequence(sequence uint16) {
+	encoded := uint32(sequence) + 1
+	if p.retransmissionSequenceSamples.Add(1) == 1 {
+		p.firstRetransmissionSequence.Store(encoded)
+	}
+	p.lastRetransmissionSequence.Store(encoded)
+}
+
+func sequenceStat(encoded uint32) any {
+	if encoded == 0 {
+		return nil
+	}
+	return encoded - 1
 }
 
 func (p *tokenBucketPacer) prepareTransportSequence(packet *pacedPacket) error {
@@ -829,6 +859,12 @@ func (p *tokenBucketPacer) Stats() map[string]any {
 		"pacerSentRetransmissionBytes":                            p.sentRetransmissionBytes.Load(),
 		"pacerSentForwardErrorCorrection":                         p.sentForwardErrorCorrection.Load(),
 		"pacerSentForwardErrorCorrectionBytes":                    p.sentForwardErrorCorrectionBytes.Load(),
+		"pacerPrimarySSRC":                                        p.primarySSRC.Load(),
+		"pacerRetransmissionSSRC":                                 p.retransmissionSSRC.Load(),
+		"pacerForwardErrorCorrectionSSRC":                         p.forwardErrorCorrectionSSRC.Load(),
+		"pacerFirstRetransmissionSequence":                        sequenceStat(p.firstRetransmissionSequence.Load()),
+		"pacerLastRetransmissionSequence":                         sequenceStat(p.lastRetransmissionSequence.Load()),
+		"pacerRetransmissionSequenceSamples":                      p.retransmissionSequenceSamples.Load(),
 	}
 }
 

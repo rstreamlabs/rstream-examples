@@ -94,6 +94,9 @@ func (p *minimumBitratePacer) AddStream(ssrc uint32, writer interceptor.RTPWrite
 	p.writers[ssrc] = writer
 	p.writersMu.Unlock()
 	p.delegate.AddStream(ssrc, writer)
+	if marker, ok := p.delegate.(interface{ markPrimaryStream(uint32) }); ok {
+		marker.markPrimaryStream(ssrc)
+	}
 }
 
 func (p *minimumBitratePacer) addAssociatedStreams(primarySSRC uint32, associatedSSRCs ...uint32) {

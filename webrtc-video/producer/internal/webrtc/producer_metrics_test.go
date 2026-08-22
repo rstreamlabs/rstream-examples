@@ -42,6 +42,12 @@ func TestProducerMetricsRemainMonotonicAfterSessionRetirement(t *testing.T) {
 			"pacerSentRetransmissionBytes":                   uint64(1100),
 			"pacerSentForwardErrorCorrection":                uint64(12),
 			"pacerSentForwardErrorCorrectionBytes":           uint64(1200),
+			"pacerPrimarySSRC":                               uint32(101),
+			"pacerRetransmissionSSRC":                        uint32(102),
+			"pacerForwardErrorCorrectionSSRC":                uint32(103),
+			"pacerFirstRetransmissionSequence":               uint32(65530),
+			"pacerLastRetransmissionSequence":                uint32(4),
+			"pacerRetransmissionSequenceSamples":             uint64(11),
 			"staleBitrateCallbacks":                          uint64(13),
 			"twccFeedbackPackets":                            uint64(14),
 			"twccMalformedFeedback":                          uint64(15),
@@ -70,6 +76,13 @@ func TestProducerMetricsRemainMonotonicAfterSessionRetirement(t *testing.T) {
 		opening:  1,
 	}
 	active := broadcaster.MetricsSnapshot()
+	bandwidth := session.StatsSnapshot().Bandwidth
+	if bandwidth == nil || bandwidth.PacerPrimarySSRC != 101 ||
+		bandwidth.PacerRetransmissionSSRC != 102 || bandwidth.PacerForwardErrorCorrectionSSRC != 103 ||
+		bandwidth.PacerFirstRetransmissionSequence != 65530 || bandwidth.PacerLastRetransmissionSequence != 4 ||
+		bandwidth.PacerRetransmissionSequenceSamples != 11 {
+		t.Fatalf("unexpected session stream diagnostics: %+v", bandwidth)
+	}
 	if active.ActiveSessions != 1 || active.OpeningSessions != 1 {
 		t.Fatalf("unexpected active lifecycle metrics: %+v", active)
 	}

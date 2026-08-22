@@ -206,7 +206,7 @@ test("uses the settled controlled path as the congestion reference", () => {
   assert.equal(result.preTransitionEncoderTargetKbps, 4400);
   assert.equal(result.congestionResponseRequired, true);
   for (const name of [
-    "capacity-experiment-settled",
+    "capacity-reference-bounded",
     "congestion-response",
     "recovery-time",
     "sustained-recovery",
@@ -242,8 +242,107 @@ test("uses the settled controlled path as the congestion reference", () => {
   );
   assert.equal(
     mobilityResult.assertions.some(
-      (assertion) => assertion.name === "capacity-experiment-settled",
+      (assertion) => assertion.name === "capacity-reference-bounded",
     ),
+    false,
+  );
+});
+
+test("accepts a bounded transient without weakening the capacity reference", () => {
+  const startedAt = Date.parse("2026-08-16T10:00:00.000Z");
+  const conditioningTargets = [
+    6800, 6800, 6800, 8000, 8000, 8000, 8000, 8000, 8000, 8000,
+  ];
+  const definitions = [
+    ["baseline", Array(15).fill(8000), null],
+    ["conditioning", [...Array(5).fill(8000), ...conditioningTargets], 32_000],
+    ["constrained", Array(15).fill(3000), 4000],
+    ["impaired", Array(15).fill(2800), 4000],
+    ["recovery", Array(15).fill(8000), 32_000],
+  ];
+  let bytesReceived = 0;
+  let elapsedMilliseconds = 0;
+  const samples = definitions.flatMap(([phase, targets]) =>
+    targets.map((encoderTargetKbps) => {
+      elapsedMilliseconds += 1000;
+      bytesReceived += (encoderTargetKbps * 1000) / 8;
+      return {
+        bytesReceived,
+        capturedAt: new Date(startedAt + elapsedMilliseconds).toISOString(),
+        elapsedMilliseconds,
+        encoderTargetKbps,
+        phase,
+        twccTargetKbps: encoderTargetKbps,
+      };
+    }),
+  );
+  const manifest = {
+    phases: definitions.map(([name, , capacityKbps]) => ({
+      name,
+      shaping: capacityKbps ? { capacityKbps } : null,
+    })),
+  };
+  const result = analyze(
+    samples,
+    manifest,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    [
+      {
+        name: "conditioning-started",
+        observedAt: new Date(startedAt + 16_000).toISOString(),
+      },
+      {
+        name: "constrained-started",
+        observedAt: new Date(startedAt + 31_000).toISOString(),
+      },
+    ],
+  );
+  assert.equal(result.stableConditioningMedianEncoderTargetKbps, 8000);
+  assert.equal(result.stableConditioningTargetRatio, 1);
+  assert.equal(
+    result.assertions.find(
+      (assertion) => assertion.name === "capacity-reference-bounded",
+    ).passed,
+    true,
+  );
+  const unbounded = samples.map((sample) =>
+    sample.phase === "conditioning" && sample.elapsedMilliseconds === 21_000
+      ? { ...sample, encoderTargetKbps: 6000 }
+      : sample,
+  );
+  const unboundedResult = analyze(
+    unbounded,
+    manifest,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    [
+      {
+        name: "conditioning-started",
+        observedAt: new Date(startedAt + 16_000).toISOString(),
+      },
+      {
+        name: "constrained-started",
+        observedAt: new Date(startedAt + 31_000).toISOString(),
+      },
+    ],
+  );
+  assert.equal(
+    unboundedResult.assertions.find(
+      (assertion) => assertion.name === "capacity-reference-bounded",
+    ).passed,
     false,
   );
 });
@@ -1866,7 +1965,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     ).passed,
     false,
   );
-  const proactiveRepairWinsTheRace = analyze(
+  const missingRTXDeliveryWithProactiveRepair = analyze(
     fecSamples.map((sample) => ({
       ...sample,
       retransmittedPacketsReceived: 0,
@@ -1882,13 +1981,13 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     },
   );
   assert.equal(
-    proactiveRepairWinsTheRace.assertions.some(
+    missingRTXDeliveryWithProactiveRepair.assertions.find(
       (assertion) => assertion.name === "rtx-repair",
-    ),
+    ).passed,
     false,
   );
   assert.equal(
-    proactiveRepairWinsTheRace.assertions.find(
+    missingRTXDeliveryWithProactiveRepair.assertions.find(
       (assertion) => assertion.name === "retransmission-sender-pacing",
     ).passed,
     true,

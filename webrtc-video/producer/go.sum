@@ -86,8 +86,8 @@ github.com/quic-go/quic-go v0.60.0 h1:xcQioE8OM66UQLeUMHltK1CCcOu3JbVB4JAQdDQSB+
 github.com/quic-go/quic-go v0.60.0/go.mod h1:wpKpjmPpftl30sL6pFh7REVpjbcCVy4zt2vDyK1TuJk=
 github.com/rogpeppe/go-internal v1.15.0 h1:D0RCU5rMAp+SpgkiNdrjfJ+LX4J1M32V2NeCY7EJ6hc=
 github.com/rogpeppe/go-internal v1.15.0/go.mod h1:DrUVZyrJU+txYW5/1kwtXQSMFio52ZOxX7yM1VHvnxs=
-github.com/rstreamlabs/pion-interceptor v0.1.48-0.20260822022030-0ca92741a4eb h1:sf3l79KVbKm9MPBCV3DOioi161bu62bGxWtWPp9r8Mk=
-github.com/rstreamlabs/pion-interceptor v0.1.48-0.20260822022030-0ca92741a4eb/go.mod h1:vSX9xXRF2GK54zmL7SEaErhmNb+xvL+3RPPT9qsWFZ4=
+github.com/rstreamlabs/pion-interceptor v0.1.48-0.20260822041326-1bb7066a8f75 h1:3PmSEMgvAAMjma350EjWbIQ5GGCtIjDyXg0bQtMLn3s=
+github.com/rstreamlabs/pion-interceptor v0.1.48-0.20260822041326-1bb7066a8f75/go.mod h1:vSX9xXRF2GK54zmL7SEaErhmNb+xvL+3RPPT9qsWFZ4=
 github.com/rstreamlabs/rstream-go v1.29.1 h1:x1/TtfBBJcqWAF/rs+Hqoxf79Ip50lp9x8FV5BiRZxc=
 github.com/rstreamlabs/rstream-go v1.29.1/go.mod h1:OkD70XDy96+rQV8WK9QU91uwTVLtXzFVWIySEOpCs+w=
 github.com/stretchr/testify v1.12.0 h1:K6Mr6jO9JICuend/5xzTM03ydSV3vdNRYAdPSukj8uI=

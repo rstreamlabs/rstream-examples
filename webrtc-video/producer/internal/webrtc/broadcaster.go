@@ -106,6 +106,12 @@ type BandwidthStats struct {
 	PacerSentRetransmissionBytes         uint64  `json:"pacerSentRetransmissionBytes"`
 	PacerSentFEC                         uint64  `json:"pacerSentFEC"`
 	PacerSentFECBytes                    uint64  `json:"pacerSentFECBytes"`
+	PacerPrimarySSRC                     uint32  `json:"pacerPrimarySSRC"`
+	PacerRetransmissionSSRC              uint32  `json:"pacerRetransmissionSSRC"`
+	PacerForwardErrorCorrectionSSRC      uint32  `json:"pacerForwardErrorCorrectionSSRC"`
+	PacerFirstRetransmissionSequence     uint32  `json:"pacerFirstRetransmissionSequence"`
+	PacerLastRetransmissionSequence      uint32  `json:"pacerLastRetransmissionSequence"`
+	PacerRetransmissionSequenceSamples   uint64  `json:"pacerRetransmissionSequenceSamples"`
 	StaleBitrateCallbacks                uint64  `json:"staleBitrateCallbacks"`
 	TWCCFeedbackPackets                  uint64  `json:"twccFeedbackPackets"`
 	TWCCMalformedFeedback                uint64  `json:"twccMalformedFeedback"`
@@ -1034,6 +1040,12 @@ func snapshotBandwidthStats(estimator bandwidthEstimator) *BandwidthStats {
 	stats.PacerSentRetransmissionBytes, _ = raw["pacerSentRetransmissionBytes"].(uint64)
 	stats.PacerSentFEC, _ = raw["pacerSentForwardErrorCorrection"].(uint64)
 	stats.PacerSentFECBytes, _ = raw["pacerSentForwardErrorCorrectionBytes"].(uint64)
+	stats.PacerPrimarySSRC, _ = raw["pacerPrimarySSRC"].(uint32)
+	stats.PacerRetransmissionSSRC, _ = raw["pacerRetransmissionSSRC"].(uint32)
+	stats.PacerForwardErrorCorrectionSSRC, _ = raw["pacerForwardErrorCorrectionSSRC"].(uint32)
+	stats.PacerFirstRetransmissionSequence, _ = raw["pacerFirstRetransmissionSequence"].(uint32)
+	stats.PacerLastRetransmissionSequence, _ = raw["pacerLastRetransmissionSequence"].(uint32)
+	stats.PacerRetransmissionSequenceSamples, _ = raw["pacerRetransmissionSequenceSamples"].(uint64)
 	stats.StaleBitrateCallbacks, _ = raw["staleBitrateCallbacks"].(uint64)
 	stats.TWCCFeedbackPackets, _ = raw["twccFeedbackPackets"].(uint64)
 	stats.TWCCMalformedFeedback, _ = raw["twccMalformedFeedback"].(uint64)
