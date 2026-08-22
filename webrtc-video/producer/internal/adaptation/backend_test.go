@@ -329,7 +329,7 @@ func TestControllerRequestsOneKeyFrameWhenLossGuardActivatesAtCurrentTarget(t *t
 		newTestTWCCGCCBackend(t, config.Default()),
 		interval,
 		func() int { return 2_000_000 },
-		func() LossState { return LossState{Average: 0.30, GuardActive: true} },
+		func() LossState { return LossState{GuardActive: true} },
 		func() { recoveryKeyFrames <- struct{}{} },
 	)
 	controller.Start()

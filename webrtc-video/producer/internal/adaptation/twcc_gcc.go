@@ -52,21 +52,21 @@ func (b *TWCCGCCBackend) Decide(observation Observation) (Decision, bool) {
 	}
 	target := clampKbps(observation.EstimatedBitrateBps/1000, b.minBitrateKbps, b.maxBitrateKbps)
 	if target < current {
-		b.updateIncreaseState(observation.AverageLoss)
+		b.updateIncreaseState(observation.AverageLoss, observation.LossGuardActive)
 		if withinThreshold(current, target, b.decreaseThresholdPct) {
 			return Decision{}, false
 		}
 		return Decision{TargetBitrateKbps: target}, true
 	}
 	if target == current {
-		b.updateIncreaseState(observation.AverageLoss)
+		b.updateIncreaseState(observation.AverageLoss, observation.LossGuardActive)
 		return Decision{}, false
 	}
 	if withinThreshold(current, target, b.changeThresholdPct) {
-		b.updateIncreaseState(observation.AverageLoss)
+		b.updateIncreaseState(observation.AverageLoss, observation.LossGuardActive)
 		return Decision{}, false
 	}
-	increaseAllowed := b.updateIncreaseState(observation.AverageLoss)
+	increaseAllowed := b.updateIncreaseState(observation.AverageLoss, observation.LossGuardActive)
 	if !increaseAllowed {
 		return Decision{}, false
 	}
@@ -77,9 +77,9 @@ func (b *TWCCGCCBackend) Decide(observation Observation) (Decision, bool) {
 	return Decision{TargetBitrateKbps: target}, true
 }
 
-func (b *TWCCGCCBackend) updateIncreaseState(averageLoss float64) bool {
+func (b *TWCCGCCBackend) updateIncreaseState(averageLoss float64, lossGuardActive bool) bool {
 	now := b.now()
-	lossIsHigh := math.IsNaN(averageLoss) || math.IsInf(averageLoss, 0) ||
+	lossIsHigh := lossGuardActive || math.IsNaN(averageLoss) || math.IsInf(averageLoss, 0) ||
 		averageLoss < 0 || averageLoss > b.maxIncreaseLoss
 	b.mu.Lock()
 	defer b.mu.Unlock()
