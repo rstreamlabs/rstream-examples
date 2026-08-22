@@ -519,9 +519,9 @@ export function analyze(
   if (manifest.webrtc?.rtxNegotiated) {
     assert(
       assertions,
-      counterIncrease(enriched, "pacerSentRTX", ["impaired"]) > 0,
-      "rtx-sender-pacing",
-      "the sender records paced RTX packets while loss is injected",
+      counterIncrease(enriched, "pacerSentRetransmission", ["impaired"]) > 0,
+      "retransmission-sender-pacing",
+      "the sender records paced retransmissions while loss is injected",
     );
     if (!manifest.protection?.flexFEC) {
       assert(
@@ -1262,13 +1262,13 @@ export function renderMarkdown(analysis, manifest) {
   );
   const repairObserved = manifest.webrtc?.rtxNegotiated
     ? manifest.protection?.flexFEC
-      ? `NACK ${impaired.nackIncrease}; sender RTX ${impaired.pacerSentRTXIncrease}; receiver RTX ${impaired.retransmittedPacketsIncrease}; FlexFEC ${impaired.fecPacketsIncrease}`
-      : `NACK ${impaired.nackIncrease}; sender RTX ${impaired.pacerSentRTXIncrease}; receiver RTX ${impaired.retransmittedPacketsIncrease}`
+      ? `NACK ${impaired.nackIncrease}; sender retransmissions ${impaired.pacerSentRetransmissionIncrease}; receiver retransmissions ${impaired.retransmittedPacketsIncrease}; FlexFEC ${impaired.fecPacketsIncrease}`
+      : `NACK ${impaired.nackIncrease}; sender retransmissions ${impaired.pacerSentRetransmissionIncrease}; receiver retransmissions ${impaired.retransmittedPacketsIncrease}`
     : `NACK ${impaired.nackIncrease}`;
   const repairRequired = manifest.webrtc?.rtxNegotiated
     ? manifest.protection?.flexFEC
-      ? "NACK, sender RTX, and FlexFEC greater than zero"
-      : "NACK, sender RTX, and receiver RTX greater than zero"
+      ? "NACK, sender retransmissions, and FlexFEC greater than zero"
+      : "NACK, sender and receiver retransmissions greater than zero"
     : "NACK greater than zero";
   const decisionRows = [
     ...(Number.isFinite(analysis.healthyLinkTargetRatio)
@@ -1351,7 +1351,7 @@ export function renderMarkdown(analysis, manifest) {
   const repairRows = Object.entries(analysis.phases)
     .map(
       ([name, phase]) =>
-        `| ${name} | ${formatNumber(phase.maximumPacerFECDelayMilliseconds, 1)} | ${phase.pacerSentFECIncrease} | ${phase.pacerFECPacketsExpiredIncrease} | ${phase.pacerFECPacketsTrimmedIncrease} | ${formatNumber(phase.maximumPacerRTXDelayMilliseconds, 1)} | ${formatNumber(phase.maximumPacerRetransmissionRTTMilliseconds, 1)} | ${formatNumber(phase.maximumPacerRetransmissionIntervalMilliseconds, 1)} | ${phase.pacerSentRTXIncrease} | ${phase.pacerRTXPacketsExpiredIncrease} | ${phase.pacerRTXPacketsTrimmedIncrease} | ${phase.pacerRTXPacketsCoalescedIncrease} | ${phase.pacerRTXPacketsSuppressedIncrease} |`,
+        `| ${name} | ${formatNumber(phase.maximumPacerFECDelayMilliseconds, 1)} | ${phase.pacerSentFECIncrease} | ${phase.pacerFECPacketsExpiredIncrease} | ${phase.pacerFECPacketsTrimmedIncrease} | ${formatNumber(phase.maximumPacerRetransmissionDelayMilliseconds, 1)} | ${formatNumber(phase.maximumPacerRetransmissionRTTMilliseconds, 1)} | ${formatNumber(phase.maximumPacerRetransmissionIntervalMilliseconds, 1)} | ${phase.pacerSentRetransmissionIncrease} | ${phase.pacerRetransmissionPacketsExpiredIncrease} | ${phase.pacerRetransmissionPacketsTrimmedIncrease} | ${phase.pacerRetransmissionPacketsCoalescedIncrease} | ${phase.pacerRetransmissionPacketsSuppressedIncrease} |`,
     )
     .join("\n");
   const encoderCadenceRows = Object.entries(analysis.phases)
@@ -1540,7 +1540,7 @@ ${Number.isFinite(manifest.video?.adaptive?.maximumBitrateKbps) ? `The media con
 
 ${setupSection}${mobilitySection}${signalingSection}## Phase summary
 
-| Phase | Samples | Connected | Received kbps (median) | Link use | TWCC kbps (median) | Encoder kbps (median) | Decoded fps | Avg QP | Decode ms/frame | Frozen | NACK | RTX packets | FEC packets | Max RTT ms |
+| Phase | Samples | Connected | Received kbps (median) | Link use | TWCC kbps (median) | Encoder kbps (median) | Decoded fps | Avg QP | Decode ms/frame | Frozen | NACK | Receiver retransmissions | FEC packets | Max RTT ms |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 ${phaseRows}
 
@@ -1576,12 +1576,12 @@ encoder and new media immediately. A frame that was already accepted and
 packetized drains at its admission rate: slowing or deleting part of that RTP
 frame would create sequence holes and multi-second latency. This bounded
 transition is exposed by the actual-residence and scheduled-backlog columns.
-Queued FEC and RTX are purged on a rate decrease rather than consuming the new
+Queued FEC and retransmissions are purged on a rate decrease rather than consuming the new
 budget for stale repair. A recovery
 key-frame request is deferred until the queue has room for the most recently
 observed key-frame size plus 25% headroom, avoiding a request that would produce
 another key frame only to discard it. Admission accounts for every queued
-primary and FEC service interval, plus the single RTX packet that scheduling may
+primary and FEC service interval, plus the single retransmission that scheduling may
 place before each queued frame. Repair packets older than 225 ms are expired
 rather than consuming bandwidth after their media window. Expiration is
 reported separately from queue overflow. High-water values are cumulative
@@ -1595,12 +1595,12 @@ ${pacingRows}
 ### Repair timeliness
 
 FEC is paced immediately after each protected ${manifest.protection?.flexFECMediaPackets || 0}-packet media group so it can
-arrive before playout. RTX remains at media-frame boundaries because it repairs
-an already reported loss and must not delay completion of the current frame.
+arrive before playout. Retransmissions remain at media-frame boundaries because
+they repair an already reported loss and must not delay completion of the current frame.
 The split counters below make a late proactive repair distinguishable from an
 expired retransmission.
 
-| Phase | Max FEC residence ms | FEC sent | FEC expired | FEC rate-trimmed | Max RTX residence ms | RTT ms | Min retry ms | RTX sent | RTX expired | RTX rate-trimmed | RTX pending coalesced | RTX recent suppressed |
+| Phase | Max FEC residence ms | FEC sent | FEC expired | FEC rate-trimmed | Max retransmission residence ms | RTT ms | Min retry ms | Retransmissions sent | Retransmissions expired | Retransmissions rate-trimmed | Pending retransmissions coalesced | Recent retransmissions suppressed |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 ${repairRows}
 
@@ -1713,7 +1713,7 @@ export async function writeArtifacts(outputDirectory, analysis, manifest) {
     "pacerMaximumQueueDelayMilliseconds",
     "pacerMaximumPrimaryDelayMilliseconds",
     "pacerMaximumRepairDelayMilliseconds",
-    "pacerMaximumRTXDelayMilliseconds",
+    "pacerMaximumRetransmissionDelayMilliseconds",
     "pacerMaximumFECDelayMilliseconds",
     "pacerMaximumSustainedDelayMilliseconds",
     "pacerMaximumAdmittedDelayMilliseconds",
@@ -1722,17 +1722,17 @@ export async function writeArtifacts(outputDirectory, analysis, manifest) {
     "pacerMediaBytesDropped",
     "pacerRepairPacketsExpired",
     "pacerRepairPacketsTrimmed",
-    "pacerRTXPacketsExpired",
-    "pacerRTXPacketsCoalesced",
-    "pacerRTXPacketsSuppressed",
+    "pacerRetransmissionPacketsExpired",
+    "pacerRetransmissionPacketsCoalesced",
+    "pacerRetransmissionPacketsSuppressed",
     "pacerRetransmissionRTTMilliseconds",
     "pacerRetransmissionIntervalMilliseconds",
     "pacerFECPacketsExpired",
-    "pacerRTXPacketsTrimmed",
+    "pacerRetransmissionPacketsTrimmed",
     "pacerFECPacketsTrimmed",
     "pacerSentPrimary",
     "pacerSentRepair",
-    "pacerSentRTX",
+    "pacerSentRetransmission",
     "pacerSentFEC",
     "adaptiveBitrateUpdates",
     "adaptiveBitrateFailures",
@@ -2314,9 +2314,11 @@ function summarizePhase(samples, phase, encoderQuality) {
         (sample) => sample.pacerMaximumRepairDelayMilliseconds || 0,
       ),
     ),
-    maximumPacerRTXDelayMilliseconds: Math.max(
+    maximumPacerRetransmissionDelayMilliseconds: Math.max(
       0,
-      ...samples.map((sample) => sample.pacerMaximumRTXDelayMilliseconds || 0),
+      ...samples.map(
+        (sample) => sample.pacerMaximumRetransmissionDelayMilliseconds || 0,
+      ),
     ),
     maximumPacerRetransmissionRTTMilliseconds: Math.max(
       0,
@@ -2373,19 +2375,19 @@ function summarizePhase(samples, phase, encoderQuality) {
       "pacerRepairPacketsTrimmed",
       [phase.name],
     ),
-    pacerRTXPacketsExpiredIncrease: counterIncrease(
+    pacerRetransmissionPacketsExpiredIncrease: counterIncrease(
       samples,
-      "pacerRTXPacketsExpired",
+      "pacerRetransmissionPacketsExpired",
       [phase.name],
     ),
-    pacerRTXPacketsCoalescedIncrease: counterIncrease(
+    pacerRetransmissionPacketsCoalescedIncrease: counterIncrease(
       samples,
-      "pacerRTXPacketsCoalesced",
+      "pacerRetransmissionPacketsCoalesced",
       [phase.name],
     ),
-    pacerRTXPacketsSuppressedIncrease: counterIncrease(
+    pacerRetransmissionPacketsSuppressedIncrease: counterIncrease(
       samples,
-      "pacerRTXPacketsSuppressed",
+      "pacerRetransmissionPacketsSuppressed",
       [phase.name],
     ),
     pacerFECPacketsExpiredIncrease: counterIncrease(
@@ -2393,9 +2395,9 @@ function summarizePhase(samples, phase, encoderQuality) {
       "pacerFECPacketsExpired",
       [phase.name],
     ),
-    pacerRTXPacketsTrimmedIncrease: counterIncrease(
+    pacerRetransmissionPacketsTrimmedIncrease: counterIncrease(
       samples,
-      "pacerRTXPacketsTrimmed",
+      "pacerRetransmissionPacketsTrimmed",
       [phase.name],
     ),
     pacerFECPacketsTrimmedIncrease: counterIncrease(
@@ -2409,9 +2411,11 @@ function summarizePhase(samples, phase, encoderQuality) {
     pacerSentRepairIncrease: counterIncrease(samples, "pacerSentRepair", [
       phase.name,
     ]),
-    pacerSentRTXIncrease: counterIncrease(samples, "pacerSentRTX", [
-      phase.name,
-    ]),
+    pacerSentRetransmissionIncrease: counterIncrease(
+      samples,
+      "pacerSentRetransmission",
+      [phase.name],
+    ),
     pacerSentFECIncrease: counterIncrease(samples, "pacerSentFEC", [
       phase.name,
     ]),

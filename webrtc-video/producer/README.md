@@ -232,7 +232,7 @@ include:
 # Encoder output in Mbit/s
 rate(rstream_video_producer_encoded_bytes_total[1m]) * 8 / 1e6
 
-# RTP traffic written by the pacer, including RTX and FlexFEC
+# RTP traffic written by the pacer, including retransmissions and FlexFEC
 sum(rate(rstream_video_producer_pacer_sent_bytes_total[1m])) * 8 / 1e6
 
 # Encoded frames per second
@@ -241,21 +241,22 @@ sum(rate(rstream_video_producer_encoded_frames_total[1m]))
 # Seconds since the capture pipeline produced a frame
 time() - rstream_video_producer_last_encoded_frame_timestamp_seconds
 
-# Longest RTT used to suppress a duplicate RTX request
+# Longest RTT used to suppress a duplicate retransmission request
 rstream_video_producer_pacer_maximum_retransmission_round_trip_time_seconds
 
-# Duplicate RTX requests avoided before they consume wire capacity
-sum(rate(rstream_video_producer_pacer_repair_discarded_packets_total{repair="rtx",reason=~"coalesced|suppressed"}[1m]))
+# Duplicate retransmission requests avoided before they consume wire capacity
+sum(rate(rstream_video_producer_pacer_repair_discarded_packets_total{repair="retransmission",reason=~"coalesced|suppressed"}[1m]))
 ```
 
 The current gauges separate the TWCC media estimate and encoder media target
 from the pacer's sustained wire budget and short-burst allowance. They also
 expose packet-loss ratio, delay estimate, queue depth, queue delay, and active
-loss guards. The repair view includes the current RTT-derived RTX suppression
-window and the number of duplicate requests coalesced or suppressed before they
-consume wire capacity. Counters cover source backpressure, frame admission
-drops, adaptive updates, key-frame recovery, malformed feedback, RTX and
-FlexFEC traffic, and repair packets discarded before transmission. The
+loss guards. The repair view includes the current RTT-derived retransmission
+suppression window and the number of duplicate requests coalesced or suppressed
+before they consume wire capacity. Counters cover source backpressure, frame
+admission drops, adaptive updates, key-frame recovery, malformed feedback,
+retransmission and FlexFEC traffic, and repair packets discarded before
+transmission. The
 OpenMetrics response emits HELP and TYPE metadata for every family, plus UNIT
 metadata for values expressed in bytes, bytes per second, or seconds.
 
@@ -441,8 +442,8 @@ queue value.
 
 Transport-wide sequence numbers are assigned at actual pacer egress, after the
 bounded repair-priority scheduler has chosen the next packet. Assigning them
-before that scheduler would turn intentional RTX prioritization into apparent
-packet loss at the receiver. Primary and RTX packets share this contiguous
+before that scheduler would turn intentional retransmission prioritization into
+apparent packet loss at the receiver. Primary and retransmission packets share this contiguous
 sequence space; FlexFEC remains outside it because Chromium does not report
 that repair stream through TWCC. The qualification report cross-checks the
 resulting feedback loss against independent Linux traffic-control counters.
@@ -489,7 +490,7 @@ the result, so the measured trade-offs remain tied to an exact implementation.
 | Update hysteresis      |                               2 s, 10% increases, immediate decreases | Filters optimistic estimator noise while keeping the encoder aligned with the protected-wire pacing budget. Decreases bypass the periodic increase gate.                                                                                                                                                                                                                                 |
 | Recovery gate          |                               At most 1% loss, followed by a 5 s hold | Prevents a delayed optimistic estimate from raising the encoder while loss is still active. After the hold, the encoder follows GCC's current bounded target rather than applying a second application-side ramp that would starve the estimator of probe traffic.                                                                                                                       |
 | Pacing and admission   | 1.5x burst allowance over GCC's wire target, 225 ms admission ceiling | Media, proactive repair, and retransmissions share one sustained capacity budget. The bounded burst allowance drains encoded access units and timely repair without raising the long-term wire target. Over-budget access units are rejected whole before RTP packetization.                                                                                                             |
-| Repair scheduling      |                 One repair packet per scheduling burst; 225 ms expiry | Gives RTX a prompt opportunity without starving current media, and discards a repair packet once its playback value is lower than the latency it would add.                                                                                                                                                                                                                              |
+| Repair scheduling      |                 One repair packet per scheduling burst; 225 ms expiry | Gives a retransmission a prompt opportunity without starving current media, and discards a repair packet once its playback value is lower than the latency it would add.                                                                                                                                                                                                                 |
 | FlexFEC                |                              One repair packet per five media packets | Adds moderate proactive protection for lossy, higher-RTT paths where reactive RTX can arrive after the playout window. Stronger ratios remain explicit stress profiles; leave FlexFEC disabled when measured NACK/RTX recovery is sufficient or the link cannot afford the overhead.                                                                                                     |
 
 With the 1080p30 H.264 reference settings, the sender starts at `5 Mbps` and may

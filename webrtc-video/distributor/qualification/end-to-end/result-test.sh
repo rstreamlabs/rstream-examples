@@ -61,7 +61,7 @@ jq -nc '
     lossGuardTargetKbps: 0,
     lossTargetKbps: target,
     pacerPacingBitrateKbps: target,
-    pacerSentRTX: 0,
+    pacerSentRetransmission: 0,
     pacerTargetBitrateKbps: target,
     recoveryKeyFrameCoalesced: 0,
     recoveryKeyFrameFailures: 0,
@@ -233,6 +233,14 @@ render_result "${fixture_directory}/samples.jsonl" | jq -e '
 ' >/dev/null
 jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 0}' >"${fixture_directory}/runtime-health.json"
 
+jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 1}' >"${fixture_directory}/runtime-health.json"
+render_result "${fixture_directory}/samples.jsonl" | jq -e '
+  .runtimeHealth.packetLossWarnings == 1 and
+  .gates.runtimeMediaIntegrity == false and
+  .passed == false
+' >/dev/null
+jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 0}' >"${fixture_directory}/runtime-health.json"
+
 jq -n '{
   enabled: true,
   scope: "producer-to-adapter",
@@ -249,7 +257,7 @@ jq -c '
   .phase |= if . == "viewer-network" then "source-network" else . end |
   .adaptiveBitrateUpdates = 0 |
   .twccFeedbackPackets = (.elapsedMilliseconds / 1000 | floor) |
-  .pacerSentRTX = (.elapsedMilliseconds / 1000 | floor) |
+  .pacerSentRetransmission = (.elapsedMilliseconds / 1000 | floor) |
   .encoderTargetKbps = 8000 |
   .twccTargetKbps = 8000
 ' "${fixture_directory}/samples.jsonl" >"${fixture_directory}/source-loss-samples.jsonl"
@@ -261,7 +269,7 @@ render_result \
   "${fixture_directory}/viewer-network-disabled.json" \
   "${fixture_directory}/source-loss-qualified.json" | jq -e '
     .sourceNetwork.qdisc.drops == 10 and
-    .sourceNetwork.pacerSentRTXDelta > 0 and
+    .sourceNetwork.pacerSentRetransmissionDelta > 0 and
     .sourceNetwork.adaptiveBitrateUpdatesDelta == 0 and
     .phases.sourceNetwork.encoderTargetKbps.medianLast10Seconds == 8000 and
     .gates.sourceNetworkCausality == true and
@@ -280,7 +288,7 @@ render_result \
   "${fixture_directory}/source-loss-qualified.json" \
   "${fixture_directory}/adapter-without-repairs.json" | jq -e '
     .sourceNetwork.qdisc.drops == 10 and
-    .sourceNetwork.pacerSentRTXDelta > 0 and
+    .sourceNetwork.pacerSentRetransmissionDelta > 0 and
     .adapter.repaired_rtx == 0 and
     .adapter.repaired_fec == 0 and
     .gates.sourceNetworkCausality == false and

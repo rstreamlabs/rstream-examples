@@ -5,11 +5,13 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/pion/interceptor"
 	"github.com/pion/rtcp"
+	"github.com/pion/rtp/codecs"
 	"github.com/pion/webrtc/v4"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/config"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/logs"
@@ -1151,6 +1153,180 @@ func TestDirectSessionRequestsKeyFrameImmediatelyAfterConnection(t *testing.T) {
 	}
 	if got := len(encoder.requested); got != 1 {
 		t.Fatalf("direct startup key-frame requests = %d, want 1", got)
+	}
+}
+
+func TestMediaMTXNativeSessionWaitsForReceiverFeedbackBeforeMedia(t *testing.T) {
+	encoder := &recordingKeyFrameRequester{requested: make(chan struct{}, 1)}
+	trackProbe := make(chan struct{}, 1)
+	session := &Session{
+		id:            "viewer",
+		encoder:       encoder,
+		logger:        logs.NewLogger(logs.NewHub(8), false),
+		closed:        make(chan struct{}),
+		mediaReady:    make(chan struct{}),
+		receiverReady: make(chan struct{}),
+		writeNativeTrackProbe: func() error {
+			trackProbe <- struct{}{}
+			return nil
+		},
+	}
+	session.mediaMTXNative.Store(true)
+	session.mediaSSRC.Store(42)
+	defer session.Close("test complete")
+	session.handleConnected()
+	select {
+	case <-trackProbe:
+	case <-time.After(time.Second):
+		t.Fatal("native session did not send the receiver track probe")
+	}
+	select {
+	case <-session.mediaReady:
+		t.Fatal("native session released media before receiver feedback")
+	default:
+	}
+	session.handleRTCPPackets([]rtcp.Packet{
+		&rtcp.ReceiverReport{Reports: []rtcp.ReceptionReport{{SSRC: 42}}},
+		&rtcp.TransportLayerCC{MediaSSRC: 42},
+		&rtcp.PictureLossIndication{MediaSSRC: 43},
+	})
+	select {
+	case <-session.mediaReady:
+		t.Fatal("native session accepted transport feedback as receiver readiness")
+	default:
+	}
+	session.handleRTCPPackets([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: 42}})
+	select {
+	case <-session.mediaReady:
+	case <-time.After(time.Second):
+		t.Fatal("native session did not release media after receiver feedback")
+	}
+	if got := len(encoder.requested); got != 1 {
+		t.Fatalf("native startup key-frame requests = %d, want 1", got)
+	}
+}
+
+func TestMediaMTXNativeTrackProbeIsOneNonVCLH264Packet(t *testing.T) {
+	payloads := (&codecs.H264Payloader{}).Payload(1200, []byte(nativeMediaMTXTrackProbe))
+	if len(payloads) != 1 {
+		t.Fatalf("native MediaMTX track probe RTP payloads = %d, want 1", len(payloads))
+	}
+	if len(payloads[0]) == 0 || payloads[0][0]&0x1f != 6 {
+		t.Fatalf("native MediaMTX track probe payload = %x, want an H264 SEI NALU", payloads[0])
+	}
+}
+
+func TestMediaMTXNativeSessionClosesAfterReceiverReadinessTimeout(t *testing.T) {
+	encoder := &recordingKeyFrameRequester{requested: make(chan struct{}, 1)}
+	session := &Session{
+		id:                     "viewer",
+		encoder:                encoder,
+		logger:                 logs.NewLogger(logs.NewHub(8), false),
+		closed:                 make(chan struct{}),
+		mediaReady:             make(chan struct{}),
+		receiverReady:          make(chan struct{}),
+		nativeReadinessTimeout: 10 * time.Millisecond,
+		writeNativeTrackProbe:  func() error { return nil },
+	}
+	session.mediaMTXNative.Store(true)
+	session.handleConnected()
+	select {
+	case <-session.closed:
+	case <-time.After(time.Second):
+		t.Fatal("native session remained open after the bounded readiness wait")
+	}
+	select {
+	case <-session.mediaReady:
+		t.Fatal("native session released media after the receiver readiness timeout")
+	default:
+	}
+	if got := len(encoder.requested); got != 0 {
+		t.Fatalf("timed-out native session key-frame requests = %d, want 0", got)
+	}
+}
+
+func TestMediaMTXNativeSessionCloseCancelsReceiverReadinessWait(t *testing.T) {
+	encoder := &recordingKeyFrameRequester{requested: make(chan struct{}, 1)}
+	session := &Session{
+		id:                     "viewer",
+		encoder:                encoder,
+		logger:                 logs.NewLogger(logs.NewHub(8), false),
+		closed:                 make(chan struct{}),
+		mediaReady:             make(chan struct{}),
+		receiverReady:          make(chan struct{}),
+		nativeReadinessTimeout: 10 * time.Millisecond,
+		writeNativeTrackProbe:  func() error { return nil },
+	}
+	session.mediaMTXNative.Store(true)
+	session.handleConnected()
+	session.Close("test complete")
+	time.Sleep(2 * session.nativeReadinessTimeout)
+	select {
+	case <-session.mediaReady:
+		t.Fatal("closed native session released media")
+	default:
+	}
+	if got := len(encoder.requested); got != 0 {
+		t.Fatalf("closed native session key-frame requests = %d, want 0", got)
+	}
+}
+
+func TestMediaMTXNativeSessionClosesWhenReceiverBootstrapFails(t *testing.T) {
+	bootstrapError := errors.New("track probe unavailable")
+	session := &Session{
+		id:            "viewer",
+		logger:        logs.NewLogger(logs.NewHub(8), false),
+		closed:        make(chan struct{}),
+		mediaReady:    make(chan struct{}),
+		receiverReady: make(chan struct{}),
+		writeNativeTrackProbe: func() error {
+			return bootstrapError
+		},
+	}
+	session.mediaMTXNative.Store(true)
+	session.handleConnected()
+	select {
+	case <-session.closed:
+	default:
+		t.Fatal("native session remained open after receiver bootstrap failure")
+	}
+	select {
+	case <-session.mediaReady:
+		t.Fatal("native session released media after receiver bootstrap failure")
+	default:
+	}
+}
+
+func TestMediaMTXNativeSessionBootstrapsOnlyOnceForConcurrentConnectedCallbacks(t *testing.T) {
+	const callers = 100
+	var trackProbeWrites atomic.Uint32
+	session := &Session{
+		id:            "viewer",
+		logger:        logs.NewLogger(logs.NewHub(8), false),
+		closed:        make(chan struct{}),
+		mediaReady:    make(chan struct{}),
+		receiverReady: make(chan struct{}),
+		writeNativeTrackProbe: func() error {
+			trackProbeWrites.Add(1)
+			return nil
+		},
+	}
+	session.mediaMTXNative.Store(true)
+	defer session.Close("test complete")
+	start := make(chan struct{})
+	var workers sync.WaitGroup
+	workers.Add(callers)
+	for range callers {
+		go func() {
+			defer workers.Done()
+			<-start
+			session.handleConnected()
+		}()
+	}
+	close(start)
+	workers.Wait()
+	if got := trackProbeWrites.Load(); got != 1 {
+		t.Fatalf("native receiver track probe writes = %d, want 1", got)
 	}
 }
 

@@ -33,7 +33,7 @@ type pacedPacket struct {
 	writer          interceptor.RTPWriter
 	repair          repairKind
 	retransmission  retransmissionKey
-	tracksRTX       bool
+	tracksRepair    bool
 	trackTWCC       bool
 	twccID          uint8
 }
@@ -52,10 +52,11 @@ const (
 )
 
 type pacedStream struct {
-	writer    interceptor.RTPWriter
-	repair    repairKind
-	trackTWCC bool
-	twccID    uint8
+	writer          interceptor.RTPWriter
+	primarySequence *primarySequenceTracker
+	repair          repairKind
+	trackTWCC       bool
+	twccID          uint8
 }
 
 type repairKind uint8
@@ -65,6 +66,47 @@ const (
 	repairKindRetransmission
 	repairKindForwardErrorCorrection
 )
+
+type primarySequenceTracker struct {
+	latest atomic.Uint64
+	seen   [primarySequenceHistorySize]atomic.Uint64
+}
+
+const primarySequenceHistorySize = 2048
+
+func (t *primarySequenceTracker) repeated(sequence uint16) bool {
+	extended := t.extend(sequence)
+	encoded := extended + 1
+	return t.seen[extended%primarySequenceHistorySize].Swap(encoded) == encoded
+}
+
+func (t *primarySequenceTracker) extend(sequence uint16) uint64 {
+	const sequenceSpace = uint64(1 << 16)
+	const halfSequenceSpace = sequenceSpace / 2
+	for {
+		state := t.latest.Load()
+		if state == 0 {
+			candidate := uint64(sequence)
+			if t.latest.CompareAndSwap(0, candidate+1) {
+				return candidate
+			}
+			continue
+		}
+		latest := state - 1
+		candidate := latest&^(sequenceSpace-1) | uint64(sequence)
+		if candidate+halfSequenceSpace < latest {
+			candidate += sequenceSpace
+		} else if candidate > latest+halfSequenceSpace && candidate >= sequenceSpace {
+			candidate -= sequenceSpace
+		}
+		if candidate <= latest {
+			return candidate
+		}
+		if t.latest.CompareAndSwap(state, candidate+1) {
+			return candidate
+		}
+	}
+}
 
 type mediaFrameAdmission struct {
 	admitted          bool
@@ -198,7 +240,7 @@ func newTokenBucketPacer(
 
 func (p *tokenBucketPacer) AddStream(ssrc uint32, writer interceptor.RTPWriter) {
 	p.writersMu.Lock()
-	p.writers[ssrc] = pacedStream{writer: writer}
+	p.writers[ssrc] = pacedStream{writer: writer, primarySequence: &primarySequenceTracker{}}
 	p.writersMu.Unlock()
 }
 
@@ -288,8 +330,8 @@ func (p *tokenBucketPacer) Write(
 		return 0, errPacerQueueFull
 	}
 	packetSize := header.MarshalSize() + len(payload)
-	retransmission, tracksRTX := retransmissionIdentity(header, payload, stream.repair)
-	if tracksRTX {
+	repair, retransmission, tracksRetransmission := classifyPacket(header, payload, stream)
+	if tracksRetransmission {
 		switch p.reserveRetransmission(retransmission) {
 		case retransmissionAlreadyPending:
 			<-p.queueSlots
@@ -309,7 +351,7 @@ func (p *tokenBucketPacer) Write(
 	}
 	copy(*buffer, payload)
 	admittedBitrate := 0
-	if stream.repair == repairKindNone {
+	if repair == repairKindNone {
 		admittedBitrate = int(p.packetizationBitrate.Load())
 	}
 	packet := &pacedPacket{
@@ -320,9 +362,9 @@ func (p *tokenBucketPacer) Write(
 		payload:         buffer,
 		size:            packetSize,
 		writer:          stream.writer,
-		repair:          stream.repair,
+		repair:          repair,
 		retransmission:  retransmission,
-		tracksRTX:       tracksRTX,
+		tracksRepair:    tracksRetransmission,
 		trackTWCC:       stream.trackTWCC,
 		twccID:          stream.twccID,
 	}
@@ -426,7 +468,6 @@ func (p *tokenBucketPacer) run() {
 	defer timer.Stop()
 	lastUpdate := time.Now()
 	availableBytes := p.maximumBurstBytes()
-	primaryFrameActive := false
 	var pending *pacedPacket
 	consecutiveRetransmissions := 0
 	primaryPacketsSinceFEC := 0
@@ -450,31 +491,18 @@ func (p *tokenBucketPacer) run() {
 			pending = p.nextPacket(
 				consecutiveRetransmissions,
 				forwardErrorCorrectionPacketsDue,
-				primaryFrameActive,
 			)
 			if pending == nil {
-				if primaryFrameActive {
-					if forwardErrorCorrectionPacketsDue > 0 {
-						select {
-						case <-p.closed:
-							p.discardQueuedPackets()
-							return
-						case <-p.rateChanged:
-							availableBytes, lastUpdate = p.refill(availableBytes, lastUpdate, time.Now(), 0, p.bytesPerSecond())
-							pending = applyRateChange(pending)
-						case pending = <-p.forwardErrorCorrectionQueue:
-						case pending = <-p.regularQueue:
-						}
-					} else {
-						select {
-						case <-p.closed:
-							p.discardQueuedPackets()
-							return
-						case <-p.rateChanged:
-							availableBytes, lastUpdate = p.refill(availableBytes, lastUpdate, time.Now(), 0, p.bytesPerSecond())
-							pending = applyRateChange(pending)
-						case pending = <-p.regularQueue:
-						}
+				if forwardErrorCorrectionPacketsDue > 0 {
+					select {
+					case <-p.closed:
+						p.discardQueuedPackets()
+						return
+					case <-p.rateChanged:
+						availableBytes, lastUpdate = p.refill(availableBytes, lastUpdate, time.Now(), 0, p.bytesPerSecond())
+						pending = applyRateChange(pending)
+					case pending = <-p.forwardErrorCorrectionQueue:
+					case pending = <-p.regularQueue:
 					}
 				} else {
 					select {
@@ -538,7 +566,7 @@ func (p *tokenBucketPacer) run() {
 				p.discardQueuedPackets()
 			} else if pending.repair != repairKindNone {
 				p.recordRepairSent(pending.repair, written)
-				if pending.tracksRTX {
+				if pending.tracksRepair {
 					p.markRetransmissionSent(pending.retransmission, now)
 				}
 			} else {
@@ -547,18 +575,13 @@ func (p *tokenBucketPacer) run() {
 			}
 			switch pending.repair {
 			case repairKindNone:
+				consecutiveRetransmissions = 0
 				mediaPackets, repairPackets := p.forwardErrorCorrectionProtection()
 				if mediaPackets > 0 && repairPackets > 0 && forwardErrorCorrectionPacketsDue == 0 {
 					primaryPacketsSinceFEC = min(mediaPackets, primaryPacketsSinceFEC+1)
 					if primaryPacketsSinceFEC == mediaPackets {
 						forwardErrorCorrectionPacketsDue = repairPackets
 					}
-				}
-				if pending.header.Marker {
-					primaryFrameActive = false
-					consecutiveRetransmissions = 0
-				} else {
-					primaryFrameActive = true
 				}
 			case repairKindRetransmission:
 				consecutiveRetransmissions++
@@ -655,7 +678,7 @@ func (p *tokenBucketPacer) maximumBurstBytesAtRate(bytesPerSecond float64) float
 }
 
 func (p *tokenBucketPacer) release(packet *pacedPacket) {
-	if packet.tracksRTX {
+	if packet.tracksRepair {
 		p.releaseRetransmission(packet.retransmission)
 	}
 	switch packet.repair {
@@ -704,21 +727,12 @@ func (p *tokenBucketPacer) discardQueuedPackets() {
 func (p *tokenBucketPacer) nextPacket(
 	consecutiveRetransmissions int,
 	forwardErrorCorrectionPacketsDue int,
-	primaryFrameActive bool,
 ) *pacedPacket {
 	if forwardErrorCorrectionPacketsDue > 0 {
 		select {
 		case packet := <-p.forwardErrorCorrectionQueue:
 			return packet
 		default:
-		}
-	}
-	if primaryFrameActive {
-		select {
-		case packet := <-p.regularQueue:
-			return packet
-		default:
-			return nil
 		}
 	}
 	const maximumRetransmissionBurst = 1
@@ -829,6 +843,24 @@ func retransmissionIdentity(
 	return retransmissionKey{
 		ssrc:             header.SSRC,
 		originalSequence: binary.BigEndian.Uint16(payload[:2]),
+	}, true
+}
+
+func classifyPacket(
+	header *rtp.Header,
+	payload []byte,
+	stream pacedStream,
+) (repairKind, retransmissionKey, bool) {
+	if retransmission, ok := retransmissionIdentity(header, payload, stream.repair); ok {
+		return stream.repair, retransmission, true
+	}
+	if stream.repair != repairKindNone || stream.primarySequence == nil ||
+		!stream.primarySequence.repeated(header.SequenceNumber) {
+		return stream.repair, retransmissionKey{}, false
+	}
+	return repairKindRetransmission, retransmissionKey{
+		ssrc:             header.SSRC,
+		originalSequence: header.SequenceNumber,
 	}, true
 }
 

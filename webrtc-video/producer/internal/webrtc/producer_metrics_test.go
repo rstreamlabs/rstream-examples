@@ -94,13 +94,13 @@ func TestProducerMetricsRemainMonotonicAfterSessionRetirement(t *testing.T) {
 		t.Fatalf("unexpected delay controller state metrics: %+v", active)
 	}
 	if active.TWCCReportedStatuses != 18 || active.RecoveryKeyFrameRequests != 21 ||
-		active.PacerRTXPacketsCoalesced != 26 || active.PacerRTXPacketsSuppressed != 27 {
+		active.PacerRetransmissionPacketsCoalesced != 26 || active.PacerRetransmissionPacketsSuppressed != 27 {
 		t.Fatalf("unexpected active counters: %+v", active)
 	}
-	if active.MaximumRTXRTTSeconds != 0.06 || active.MaximumRTXRetryIntervalSeconds != 0.065 {
+	if active.MaximumRetransmissionRTTSeconds != 0.06 || active.MaximumRetransmissionRetryIntervalSeconds != 0.065 {
 		t.Fatalf("unexpected retransmission timing metrics: %+v", active)
 	}
-	if active.PacerSentPrimaryBytes != 1000 || active.PacerSentRTXBytes != 1100 || active.PacerSentFECBytes != 1200 {
+	if active.PacerSentPrimaryBytes != 1000 || active.PacerSentRetransmissionBytes != 1100 || active.PacerSentFECBytes != 1200 {
 		t.Fatalf("unexpected wire byte counters: %+v", active)
 	}
 	if count := broadcaster.retireSession(session); count != 0 {
@@ -113,14 +113,14 @@ func TestProducerMetricsRemainMonotonicAfterSessionRetirement(t *testing.T) {
 	if retired.EstimatedBitrateBps != 0 || retired.LossControllerTargetBitrateBps != 0 ||
 		retired.DelayControllerTargetBitrateBps != 0 || retired.LossGuardTargetBitrateBps != 0 ||
 		retired.DelayControllerDecreaseSessions != 0 || retired.DelayControllerOveruseSessions != 0 ||
-		retired.MaximumPacketLossRatio != 0 || retired.MaximumRTXRTTSeconds != 0 ||
-		retired.MaximumRTXRetryIntervalSeconds != 0 {
+		retired.MaximumPacketLossRatio != 0 || retired.MaximumRetransmissionRTTSeconds != 0 ||
+		retired.MaximumRetransmissionRetryIntervalSeconds != 0 {
 		t.Fatalf("retired session leaked into current gauges: %+v", retired)
 	}
 	if retired.TWCCReportedStatuses != active.TWCCReportedStatuses ||
 		retired.RecoveryKeyFrameRequests != active.RecoveryKeyFrameRequests ||
-		retired.PacerSentRTX != active.PacerSentRTX ||
-		retired.PacerSentRTXBytes != active.PacerSentRTXBytes {
+		retired.PacerSentRetransmission != active.PacerSentRetransmission ||
+		retired.PacerSentRetransmissionBytes != active.PacerSentRetransmissionBytes {
 		t.Fatalf("lifetime counters changed at retirement: active=%+v retired=%+v", active, retired)
 	}
 	broadcaster.retireSession(session)

@@ -47,8 +47,8 @@ export function parseOpenMetrics(body) {
 
 export function producerSample(samples) {
   const value = (name) => metricValue(samples, name);
-  const labeled = (name, label, expected) =>
-    metricValue(samples, name, label, expected);
+  const labeled = (name, ...labelMatchers) =>
+    metricValue(samples, name, labelMatchers);
   const scale = (metric, factor) => (metric === null ? null : metric * factor);
   const lossGuardSessions = value(
     "rstream_video_producer_loss_guard_active_sessions",
@@ -165,15 +165,19 @@ export function producerSample(samples) {
       ),
       1_000,
     ),
-    pacerRTXPacketsCoalesced: labeled(
+    pacerRetransmissionPacketsCoalesced: labeled(
       "rstream_video_producer_pacer_repair_discarded_packets_total",
       "reason",
       "coalesced",
+      "repair",
+      "retransmission",
     ),
-    pacerRTXPacketsSuppressed: labeled(
+    pacerRetransmissionPacketsSuppressed: labeled(
       "rstream_video_producer_pacer_repair_discarded_packets_total",
       "reason",
       "suppressed",
+      "repair",
+      "retransmission",
     ),
     pacerSentFEC: labeled(
       "rstream_video_producer_pacer_sent_packets_total",
@@ -185,10 +189,10 @@ export function producerSample(samples) {
       "kind",
       "primary",
     ),
-    pacerSentRTX: labeled(
+    pacerSentRetransmission: labeled(
       "rstream_video_producer_pacer_sent_packets_total",
       "kind",
-      "rtx",
+      "retransmission",
     ),
     pacerTargetBitrateKbps: scale(
       value("rstream_video_producer_pacer_target_bytes_per_second"),
@@ -235,10 +239,18 @@ export function producerSample(samples) {
   };
 }
 
-function metricValue(samples, name, label = "", expected = "") {
+function metricValue(samples, name, labelMatchers = []) {
+  if (labelMatchers.length % 2 !== 0) {
+    throw new Error("producer metric label matchers must be pairs");
+  }
   const matches = samples.filter(
     (sample) =>
-      sample.name === name && (!label || sample.labels[label] === expected),
+      sample.name === name &&
+      labelMatchers.every(
+        (matcher, index) =>
+          index % 2 !== 0 ||
+          sample.labels[matcher] === labelMatchers[index + 1],
+      ),
   );
   if (matches.length === 0) {
     return null;

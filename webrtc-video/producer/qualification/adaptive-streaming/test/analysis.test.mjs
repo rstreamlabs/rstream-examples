@@ -782,7 +782,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
   let jitterBufferEmittedCount = 0;
   let jitterBufferTargetDelaySeconds = 0;
   let retransmittedPacketsReceived = 0;
-  let pacerSentRTX = 0;
+  let pacerSentRetransmission = 0;
   let totalDecodeTimeSeconds = 0;
   for (const [phase, encoderTargetKbps, receivedBitrateKbps] of phases) {
     for (let index = 0; index < 20; index += 1) {
@@ -800,7 +800,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
       packetsReceived += 100;
       if (phase === "impaired") {
         retransmittedPacketsReceived += 1;
-        pacerSentRTX += 1;
+        pacerSentRetransmission += 1;
       }
       samples.push({
         bytesReceived,
@@ -822,7 +822,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
         nackCount,
         packetsReceived,
         peerConnectionState: "connected",
-        pacerSentRTX,
+        pacerSentRetransmission,
         pacerTargetBitrateKbps: encoderTargetKbps,
         phase,
         playback: "Playing",
@@ -909,7 +909,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
   assert.match(report, /\| Shaper activation \| not measured \|/);
   assert.match(
     report,
-    /\| Packet repair \| NACK [0-9]+; sender RTX [0-9]+; receiver RTX [0-9]+ \|/,
+    /\| Packet repair \| NACK [0-9]+; sender retransmissions [0-9]+; receiver retransmissions [0-9]+ \|/,
   );
   assert.equal(result.trafficControl.impairedDropRatio, 40 / 2040);
   assert.equal(result.candidatePairSwitches, 1);
@@ -1889,7 +1889,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
   );
   assert.equal(
     proactiveRepairWinsTheRace.assertions.find(
-      (assertion) => assertion.name === "rtx-sender-pacing",
+      (assertion) => assertion.name === "retransmission-sender-pacing",
     ).passed,
     true,
   );
@@ -2131,7 +2131,7 @@ test("rejects negotiated RTX when loss produces no repair packets", () => {
   assert.equal(result.passed, false);
   assert.equal(
     result.assertions.find(
-      (assertion) => assertion.name === "rtx-sender-pacing",
+      (assertion) => assertion.name === "retransmission-sender-pacing",
     ).passed,
     false,
   );

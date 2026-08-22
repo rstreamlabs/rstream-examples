@@ -49,26 +49,26 @@ func TestCollectorExportsStableUnitsAndBoundedDimensions(t *testing.T) {
 		DeliveryDroppedFrames: 2,
 	}}
 	producer := staticProducerProvider{stats: rtc.ProducerStats{
-		ActiveSessions:                  1,
-		TWCCNegotiatedSessions:          1,
-		NACKNegotiatedSessions:          1,
-		EstimatedBitrateBps:             8_000_000,
-		LossControllerTargetBitrateBps:  7_000_000,
-		DelayControllerTargetBitrateBps: 6_000_000,
-		DelayControllerDecreaseSessions: 1,
-		DelayControllerOveruseSessions:  1,
-		LossGuardActiveSessions:         1,
-		LossGuardTargetBitrateBps:       5_000_000,
-		MaximumPacketLossRatio:          0.025,
-		MaximumDelayEstimateSeconds:     0.018,
-		PacerSentPrimaryBytes:           9000,
-		PacerRTXPacketsCoalesced:        7,
-		PacerRTXPacketsSuppressed:       8,
-		MaximumRTXRTTSeconds:            0.06,
-		MaximumRTXRetryIntervalSeconds:  0.065,
-		TWCCFeedbackPackets:             10,
-		TWCCReportedStatuses:            100,
-		TWCCReportedLost:                3,
+		ActiveSessions:                            1,
+		TWCCNegotiatedSessions:                    1,
+		NACKNegotiatedSessions:                    1,
+		EstimatedBitrateBps:                       8_000_000,
+		LossControllerTargetBitrateBps:            7_000_000,
+		DelayControllerTargetBitrateBps:           6_000_000,
+		DelayControllerDecreaseSessions:           1,
+		DelayControllerOveruseSessions:            1,
+		LossGuardActiveSessions:                   1,
+		LossGuardTargetBitrateBps:                 5_000_000,
+		MaximumPacketLossRatio:                    0.025,
+		MaximumDelayEstimateSeconds:               0.018,
+		PacerSentPrimaryBytes:                     9000,
+		PacerRetransmissionPacketsCoalesced:       7,
+		PacerRetransmissionPacketsSuppressed:      8,
+		MaximumRetransmissionRTTSeconds:           0.06,
+		MaximumRetransmissionRetryIntervalSeconds: 0.065,
+		TWCCFeedbackPackets:                       10,
+		TWCCReportedStatuses:                      100,
+		TWCCReportedLost:                          3,
 	}}
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(NewCollector(cfg, source, producer, staticWHEPProvider{
@@ -119,10 +119,10 @@ func TestCollectorExportsStableUnitsAndBoundedDimensions(t *testing.T) {
 	if value := metricValue(t, families, namespace+"_pacer_sent_bytes_total", map[string]string{"kind": "primary"}); value != 9000 {
 		t.Fatalf("primary wire bytes = %f, want 9000", value)
 	}
-	if value := metricValue(t, families, namespace+"_pacer_repair_discarded_packets_total", map[string]string{"repair": "rtx", "reason": "coalesced"}); value != 7 {
+	if value := metricValue(t, families, namespace+"_pacer_repair_discarded_packets_total", map[string]string{"repair": "retransmission", "reason": "coalesced"}); value != 7 {
 		t.Fatalf("coalesced RTX packets = %f, want 7", value)
 	}
-	if value := metricValue(t, families, namespace+"_pacer_repair_discarded_packets_total", map[string]string{"repair": "rtx", "reason": "suppressed"}); value != 8 {
+	if value := metricValue(t, families, namespace+"_pacer_repair_discarded_packets_total", map[string]string{"repair": "retransmission", "reason": "suppressed"}); value != 8 {
 		t.Fatalf("suppressed RTX packets = %f, want 8", value)
 	}
 	if value := metricValue(t, families, namespace+"_pacer_maximum_retransmission_round_trip_time_seconds", nil); value != 0.06 {

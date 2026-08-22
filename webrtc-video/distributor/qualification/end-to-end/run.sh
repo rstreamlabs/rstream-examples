@@ -7,6 +7,9 @@ uses_adapter=false
 # shellcheck source=mode.sh
 # shellcheck disable=SC1091
 source "${script_directory}/mode.sh"
+# shellcheck source=phase.sh
+# shellcheck disable=SC1091
+source "${script_directory}/phase.sh"
 distributor_directory="$(cd "${script_directory}/../.." && pwd -P)"
 video_directory="$(cd "${distributor_directory}/.." && pwd -P)"
 producer_directory="${video_directory}/producer"
@@ -338,15 +341,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 write_phase() {
-  local name=$1
-  local encoded
-  encoded="$(jq -cn --arg name "${name}" --arg started_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    '{name: $name, startedAt: $started_at}')"
-  # Docker Desktop bind mounts follow the original inode. Replacing it can
-  # leave a running container on a stale partial view; one compact in-place
-  # write keeps the mounted inode stable, while the reader retries the brief
-  # truncate/write boundary.
-  printf '%s\n' "${encoded}" >"${control_directory}/phase.json"
+  write_phase_file "${control_directory}/phase.json" "$1"
 }
 
 printf 'Preparing an isolated rstream runtime\n'

@@ -718,8 +718,8 @@ async function collectSample(activePage) {
       pacerMaximumRepairDelayMilliseconds: bandwidthNumber(
         bandwidth?.pacerMaximumRepairDelayMs,
       ),
-      pacerMaximumRTXDelayMilliseconds: bandwidthNumber(
-        bandwidth?.pacerMaximumRTXDelayMs,
+      pacerMaximumRetransmissionDelayMilliseconds: bandwidthNumber(
+        bandwidth?.pacerMaximumRetransmissionDelayMs,
       ),
       pacerMaximumFECDelayMilliseconds: bandwidthNumber(
         bandwidth?.pacerMaximumFECDelayMs,
@@ -741,14 +741,14 @@ async function collectSample(activePage) {
       pacerRepairPacketsTrimmed: bandwidthNumber(
         bandwidth?.pacerRepairPacketsTrimmed,
       ),
-      pacerRTXPacketsExpired: bandwidthNumber(
-        bandwidth?.pacerRTXPacketsExpired,
+      pacerRetransmissionPacketsExpired: bandwidthNumber(
+        bandwidth?.pacerRetransmissionPacketsExpired,
       ),
-      pacerRTXPacketsCoalesced: bandwidthNumber(
-        bandwidth?.pacerRTXPacketsCoalesced,
+      pacerRetransmissionPacketsCoalesced: bandwidthNumber(
+        bandwidth?.pacerRetransmissionPacketsCoalesced,
       ),
-      pacerRTXPacketsSuppressed: bandwidthNumber(
-        bandwidth?.pacerRTXPacketsSuppressed,
+      pacerRetransmissionPacketsSuppressed: bandwidthNumber(
+        bandwidth?.pacerRetransmissionPacketsSuppressed,
       ),
       pacerRetransmissionRTTMilliseconds: bandwidthNumber(
         bandwidth?.pacerRetransmissionRTTMs,
@@ -759,8 +759,8 @@ async function collectSample(activePage) {
       pacerFECPacketsExpired: bandwidthNumber(
         bandwidth?.pacerFECPacketsExpired,
       ),
-      pacerRTXPacketsTrimmed: bandwidthNumber(
-        bandwidth?.pacerRTXPacketsTrimmed,
+      pacerRetransmissionPacketsTrimmed: bandwidthNumber(
+        bandwidth?.pacerRetransmissionPacketsTrimmed,
       ),
       pacerFECPacketsTrimmed: bandwidthNumber(
         bandwidth?.pacerFECPacketsTrimmed,
@@ -768,7 +768,9 @@ async function collectSample(activePage) {
       pacerQueuePackets: bandwidthNumber(bandwidth?.pacerQueuePackets),
       pacerSentPrimary: bandwidthNumber(bandwidth?.pacerSentPrimary),
       pacerSentRepair: bandwidthNumber(bandwidth?.pacerSentRepair),
-      pacerSentRTX: bandwidthNumber(bandwidth?.pacerSentRTX),
+      pacerSentRetransmission: bandwidthNumber(
+        bandwidth?.pacerSentRetransmission,
+      ),
       pacerSentFEC: bandwidthNumber(bandwidth?.pacerSentFEC),
       adaptiveBitrateUpdates: sessionNumber(
         sessionStats?.adaptiveBitrateUpdates,

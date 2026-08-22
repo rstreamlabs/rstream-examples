@@ -205,7 +205,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
   sourceNetwork: ($source_network[0] + {
     twccFeedbackPacketsDelta: phase_counter_delta("source-network"; "twccFeedbackPackets"),
     adaptiveBitrateUpdatesDelta: phase_counter_delta("source-network"; "adaptiveBitrateUpdates"),
-    pacerSentRTXDelta: phase_counter_delta("source-network"; "pacerSentRTX"),
+    pacerSentRetransmissionDelta: phase_counter_delta("source-network"; "pacerSentRetransmission"),
     pacerSentFECDelta: phase_counter_delta("source-network"; "pacerSentFEC"),
     framesDecodedDelta: phase_delta("source-network"; "framesDecoded"),
     framesDroppedDelta: phase_counter_delta("source-network"; "framesDropped"),
@@ -245,7 +245,11 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
         end)
       )
     ),
-    runtimeMediaIntegrity: ($runtime_health[0].fatalErrors == 0 and $runtime_health[0].h264PacketizationErrors == 0),
+    runtimeMediaIntegrity: (
+      $runtime_health[0].fatalErrors == 0 and
+      $runtime_health[0].h264PacketizationErrors == 0 and
+      $runtime_health[0].packetLossWarnings == 0
+    ),
     nativeSourceLifecycle: (
       if $mode == "mediamtx-native" then
         $native_source_profile[0].required and
@@ -331,7 +335,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
       .sourceNetwork.twccFeedbackPacketsDelta > 0 and
       (if .sourceNetwork.lossPercent > 0 then
         .sourceNetwork.qdisc.drops > 0 and
-        .sourceNetwork.pacerSentRTXDelta > 0 and
+        .sourceNetwork.pacerSentRetransmissionDelta > 0 and
         (($adapter[0].repaired_rtx + $adapter[0].repaired_fec) > 0)
       else true end)
     else true end

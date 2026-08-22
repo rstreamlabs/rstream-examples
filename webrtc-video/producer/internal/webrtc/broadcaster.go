@@ -59,59 +59,59 @@ type ICEPathStats struct {
 }
 
 type BandwidthStats struct {
-	LossTargetBitrateBps         int     `json:"lossTargetBitrateBps"`
-	DelayTargetBitrateBps        int     `json:"delayTargetBitrateBps"`
-	AverageLoss                  float64 `json:"averageLoss"`
-	FlexFECMediaPackets          uint32  `json:"flexFECMediaPackets"`
-	FlexFECRepairPackets         uint32  `json:"flexFECRepairPackets"`
-	DelayMeasurementMs           float64 `json:"delayMeasurementMs"`
-	DelayEstimateMs              float64 `json:"delayEstimateMs"`
-	DelayThresholdMs             float64 `json:"delayThresholdMs"`
-	Usage                        string  `json:"usage"`
-	State                        string  `json:"state"`
-	LossGuardActive              bool    `json:"lossGuardActive"`
-	LossGuardTargetBitrateBps    int     `json:"lossGuardTargetBitrateBps"`
-	LossGuardLastObservedLoss    float64 `json:"lossGuardLastObservedLoss"`
-	LossGuardReductions          uint64  `json:"lossGuardReductions"`
-	LossGuardRecoveries          uint64  `json:"lossGuardRecoveries"`
-	PacerTargetBitrateBps        int     `json:"pacerTargetBitrateBps"`
-	PacerPacingBitrateBps        int     `json:"pacerPacingBitrateBps"`
-	PacerQueuePackets            int     `json:"pacerQueuePackets"`
-	PacerQueueDrops              uint64  `json:"pacerQueueDrops"`
-	PacerQueueDelayMs            float64 `json:"pacerQueueDelayMs"`
-	PacerMaximumDelayMs          float64 `json:"pacerMaximumDelayMs"`
-	PacerMaximumPrimaryDelayMs   float64 `json:"pacerMaximumPrimaryDelayMs"`
-	PacerMaximumRepairDelayMs    float64 `json:"pacerMaximumRepairDelayMs"`
-	PacerMaximumRTXDelayMs       float64 `json:"pacerMaximumRTXDelayMs"`
-	PacerMaximumFECDelayMs       float64 `json:"pacerMaximumFECDelayMs"`
-	PacerMaximumSustainedDelayMs float64 `json:"pacerMaximumSustainedDelayMs"`
-	PacerMaximumAdmittedDelayMs  float64 `json:"pacerMaximumAdmittedDelayMs"`
-	PacerKeyFrameReserveBytes    int64   `json:"pacerKeyFrameReserveBytes"`
-	PacerMediaFrameDrops         uint64  `json:"pacerMediaFrameDrops"`
-	PacerMediaByteDrops          uint64  `json:"pacerMediaByteDrops"`
-	PacerRepairPacketsExpired    uint64  `json:"pacerRepairPacketsExpired"`
-	PacerRepairPacketsTrimmed    uint64  `json:"pacerRepairPacketsTrimmed"`
-	PacerRTXPacketsExpired       uint64  `json:"pacerRTXPacketsExpired"`
-	PacerRTXPacketsCoalesced     uint64  `json:"pacerRTXPacketsCoalesced"`
-	PacerRTXPacketsSuppressed    uint64  `json:"pacerRTXPacketsSuppressed"`
-	PacerRTXRoundTripTimeMs      float64 `json:"pacerRetransmissionRTTMs"`
-	PacerRTXRetryIntervalMs      float64 `json:"pacerRetransmissionIntervalMs"`
-	PacerFECPacketsExpired       uint64  `json:"pacerFECPacketsExpired"`
-	PacerRTXPacketsTrimmed       uint64  `json:"pacerRTXPacketsTrimmed"`
-	PacerFECPacketsTrimmed       uint64  `json:"pacerFECPacketsTrimmed"`
-	PacerSentPrimary             uint64  `json:"pacerSentPrimary"`
-	PacerSentPrimaryBytes        uint64  `json:"pacerSentPrimaryBytes"`
-	PacerSentRepair              uint64  `json:"pacerSentRepair"`
-	PacerSentRTX                 uint64  `json:"pacerSentRTX"`
-	PacerSentRTXBytes            uint64  `json:"pacerSentRTXBytes"`
-	PacerSentFEC                 uint64  `json:"pacerSentFEC"`
-	PacerSentFECBytes            uint64  `json:"pacerSentFECBytes"`
-	StaleBitrateCallbacks        uint64  `json:"staleBitrateCallbacks"`
-	TWCCFeedbackPackets          uint64  `json:"twccFeedbackPackets"`
-	TWCCMalformedFeedback        uint64  `json:"twccMalformedFeedback"`
-	TWCCPaddingStatuses          uint64  `json:"twccPaddingStatuses"`
-	TWCCReportedLost             uint64  `json:"twccReportedLost"`
-	TWCCReportedStatuses         uint64  `json:"twccReportedStatuses"`
+	LossTargetBitrateBps                 int     `json:"lossTargetBitrateBps"`
+	DelayTargetBitrateBps                int     `json:"delayTargetBitrateBps"`
+	AverageLoss                          float64 `json:"averageLoss"`
+	FlexFECMediaPackets                  uint32  `json:"flexFECMediaPackets"`
+	FlexFECRepairPackets                 uint32  `json:"flexFECRepairPackets"`
+	DelayMeasurementMs                   float64 `json:"delayMeasurementMs"`
+	DelayEstimateMs                      float64 `json:"delayEstimateMs"`
+	DelayThresholdMs                     float64 `json:"delayThresholdMs"`
+	Usage                                string  `json:"usage"`
+	State                                string  `json:"state"`
+	LossGuardActive                      bool    `json:"lossGuardActive"`
+	LossGuardTargetBitrateBps            int     `json:"lossGuardTargetBitrateBps"`
+	LossGuardLastObservedLoss            float64 `json:"lossGuardLastObservedLoss"`
+	LossGuardReductions                  uint64  `json:"lossGuardReductions"`
+	LossGuardRecoveries                  uint64  `json:"lossGuardRecoveries"`
+	PacerTargetBitrateBps                int     `json:"pacerTargetBitrateBps"`
+	PacerPacingBitrateBps                int     `json:"pacerPacingBitrateBps"`
+	PacerQueuePackets                    int     `json:"pacerQueuePackets"`
+	PacerQueueDrops                      uint64  `json:"pacerQueueDrops"`
+	PacerQueueDelayMs                    float64 `json:"pacerQueueDelayMs"`
+	PacerMaximumDelayMs                  float64 `json:"pacerMaximumDelayMs"`
+	PacerMaximumPrimaryDelayMs           float64 `json:"pacerMaximumPrimaryDelayMs"`
+	PacerMaximumRepairDelayMs            float64 `json:"pacerMaximumRepairDelayMs"`
+	PacerMaximumRetransmissionDelayMs    float64 `json:"pacerMaximumRetransmissionDelayMs"`
+	PacerMaximumFECDelayMs               float64 `json:"pacerMaximumFECDelayMs"`
+	PacerMaximumSustainedDelayMs         float64 `json:"pacerMaximumSustainedDelayMs"`
+	PacerMaximumAdmittedDelayMs          float64 `json:"pacerMaximumAdmittedDelayMs"`
+	PacerKeyFrameReserveBytes            int64   `json:"pacerKeyFrameReserveBytes"`
+	PacerMediaFrameDrops                 uint64  `json:"pacerMediaFrameDrops"`
+	PacerMediaByteDrops                  uint64  `json:"pacerMediaByteDrops"`
+	PacerRepairPacketsExpired            uint64  `json:"pacerRepairPacketsExpired"`
+	PacerRepairPacketsTrimmed            uint64  `json:"pacerRepairPacketsTrimmed"`
+	PacerRetransmissionPacketsExpired    uint64  `json:"pacerRetransmissionPacketsExpired"`
+	PacerRetransmissionPacketsCoalesced  uint64  `json:"pacerRetransmissionPacketsCoalesced"`
+	PacerRetransmissionPacketsSuppressed uint64  `json:"pacerRetransmissionPacketsSuppressed"`
+	PacerRetransmissionRoundTripTimeMs   float64 `json:"pacerRetransmissionRTTMs"`
+	PacerRetransmissionRetryIntervalMs   float64 `json:"pacerRetransmissionIntervalMs"`
+	PacerFECPacketsExpired               uint64  `json:"pacerFECPacketsExpired"`
+	PacerRetransmissionPacketsTrimmed    uint64  `json:"pacerRetransmissionPacketsTrimmed"`
+	PacerFECPacketsTrimmed               uint64  `json:"pacerFECPacketsTrimmed"`
+	PacerSentPrimary                     uint64  `json:"pacerSentPrimary"`
+	PacerSentPrimaryBytes                uint64  `json:"pacerSentPrimaryBytes"`
+	PacerSentRepair                      uint64  `json:"pacerSentRepair"`
+	PacerSentRetransmission              uint64  `json:"pacerSentRetransmission"`
+	PacerSentRetransmissionBytes         uint64  `json:"pacerSentRetransmissionBytes"`
+	PacerSentFEC                         uint64  `json:"pacerSentFEC"`
+	PacerSentFECBytes                    uint64  `json:"pacerSentFECBytes"`
+	StaleBitrateCallbacks                uint64  `json:"staleBitrateCallbacks"`
+	TWCCFeedbackPackets                  uint64  `json:"twccFeedbackPackets"`
+	TWCCMalformedFeedback                uint64  `json:"twccMalformedFeedback"`
+	TWCCPaddingStatuses                  uint64  `json:"twccPaddingStatuses"`
+	TWCCReportedLost                     uint64  `json:"twccReportedLost"`
+	TWCCReportedStatuses                 uint64  `json:"twccReportedStatuses"`
 }
 
 type Broadcaster struct {
@@ -149,8 +149,14 @@ type Session struct {
 	adaptive                  *adaptation.Controller
 	close                     sync.Once
 	closed                    chan struct{}
+	lifecycleMu               sync.Mutex
 	mediaReady                chan struct{}
 	mediaReadyOnce            sync.Once
+	receiverReady             chan struct{}
+	receiverReadyOnce         sync.Once
+	nativeBootstrapOnce       sync.Once
+	nativeReadinessTimeout    time.Duration
+	writeNativeTrackProbe     func() error
 	onClose                   func(string)
 	statsMu                   sync.RWMutex
 	stats                     SessionStats
@@ -194,6 +200,7 @@ type candidateCounts struct {
 const (
 	networkRecoveryTimeout  = 30 * time.Second
 	keyFrameRequestInterval = 250 * time.Millisecond
+	nativeReceiverTimeout   = 8 * time.Second
 )
 
 // ErrSessionCapacity identifies a temporary viewer-admission refusal.
@@ -292,17 +299,24 @@ func (b *Broadcaster) OpenSession(ctx context.Context) (*Session, error) {
 	}
 	samples, unsubscribe := source.Subscribe()
 	session := &Session{
-		id:                       sessionID,
-		logger:                   b.logger,
-		pc:                       peerConnection,
-		track:                    track,
-		sender:                   sender,
-		unsubscribe:              unsubscribe,
-		release:                  release,
-		estimator:                estimator,
-		encoder:                  encoderController,
-		closed:                   make(chan struct{}),
-		mediaReady:               make(chan struct{}),
+		id:            sessionID,
+		logger:        b.logger,
+		pc:            peerConnection,
+		track:         track,
+		sender:        sender,
+		unsubscribe:   unsubscribe,
+		release:       release,
+		estimator:     estimator,
+		encoder:       encoderController,
+		closed:        make(chan struct{}),
+		mediaReady:    make(chan struct{}),
+		receiverReady: make(chan struct{}),
+		writeNativeTrackProbe: func() error {
+			return track.WriteSample(rtcmedia.Sample{
+				Data:     []byte(nativeMediaMTXTrackProbe),
+				Duration: time.Second / 30,
+			})
+		},
 		requiredTransport:        requiredWHEPTransport(b.cfg),
 		allowMediaMTXNativeOffer: b.cfg.Web.WHEP.AllowMediaMTXNativeOffer,
 		nativeMediaBitrateBps:    initialBitrateBps,
@@ -562,12 +576,68 @@ func (s *Session) missingConfiguredTransportFeatures() []string {
 
 func (s *Session) handleConnected() {
 	s.clearNetworkRecovery()
+	if s.mediaMTXNative.Load() {
+		s.nativeBootstrapOnce.Do(s.startNativeReceiverBootstrap)
+		return
+	}
+	s.releaseMedia()
+}
+
+func (s *Session) startNativeReceiverBootstrap() {
+	if s.writeNativeTrackProbe == nil || s.receiverReady == nil {
+		s.releaseMedia()
+		return
+	}
+	if err := s.writeNativeTrackProbe(); err != nil {
+		s.logger.Warn("Viewer %s receiver bootstrap failed: %v", s.id, err)
+		s.Close("receiver bootstrap failed")
+		return
+	}
+	go s.waitForNativeReceiver()
+}
+
+const nativeMediaMTXTrackProbe = "\x00\x00\x00\x01\x06\x05\x10rstreambootstrap\x80"
+
+func (s *Session) waitForNativeReceiver() {
+	timeout := s.nativeReadinessTimeout
+	if timeout <= 0 {
+		timeout = nativeReceiverTimeout
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-s.receiverReady:
+	case <-timer.C:
+		s.logger.Warn("Viewer %s receiver readiness feedback timed out after %s", s.id, timeout)
+		s.Close("receiver readiness timed out")
+		return
+	case <-s.closed:
+		return
+	}
+	s.releaseMedia()
+}
+
+func (s *Session) releaseMedia() {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if s.isClosed() {
+		return
+	}
 	s.mediaReadyOnce.Do(func() {
+		s.requestRecoveryKeyFrame(0)
 		if s.mediaReady != nil {
 			close(s.mediaReady)
 		}
 	})
-	s.requestRecoveryKeyFrame(0)
+}
+
+func (s *Session) markNativeReceiverReady() {
+	if !s.mediaMTXNative.Load() || s.receiverReady == nil {
+		return
+	}
+	s.receiverReadyOnce.Do(func() {
+		close(s.receiverReady)
+	})
 }
 
 func (s *Session) createAnswer(ctx context.Context, offer string, gatherComplete bool) (string, error) {
@@ -667,7 +737,9 @@ func transportNegotiationFromParameters(parameters webrtc.RTPSendParameters) tra
 
 func (s *Session) Close(reason string) {
 	s.close.Do(func() {
+		s.lifecycleMu.Lock()
 		close(s.closed)
+		s.lifecycleMu.Unlock()
 		s.clearNetworkRecovery()
 		s.cancelScheduledKeyFrameRequest()
 		if s.unsubscribe != nil {
@@ -938,7 +1010,7 @@ func snapshotBandwidthStats(estimator bandwidthEstimator) *BandwidthStats {
 	stats.PacerMaximumDelayMs, _ = raw["pacerMaximumQueueDelayMilliseconds"].(float64)
 	stats.PacerMaximumPrimaryDelayMs, _ = raw["pacerMaximumPrimaryResidenceMilliseconds"].(float64)
 	stats.PacerMaximumRepairDelayMs, _ = raw["pacerMaximumRepairResidenceMilliseconds"].(float64)
-	stats.PacerMaximumRTXDelayMs, _ = raw["pacerMaximumRetransmissionResidenceMilliseconds"].(float64)
+	stats.PacerMaximumRetransmissionDelayMs, _ = raw["pacerMaximumRetransmissionResidenceMilliseconds"].(float64)
 	stats.PacerMaximumFECDelayMs, _ = raw["pacerMaximumForwardErrorCorrectionResidenceMilliseconds"].(float64)
 	stats.PacerMaximumSustainedDelayMs, _ = raw["pacerMaximumSustainedDelayMilliseconds"].(float64)
 	stats.PacerMaximumAdmittedDelayMs, _ = raw["pacerMaximumAdmittedSustainedDelayMilliseconds"].(float64)
@@ -947,19 +1019,19 @@ func snapshotBandwidthStats(estimator bandwidthEstimator) *BandwidthStats {
 	stats.PacerMediaByteDrops, _ = raw["pacerMediaBytesDropped"].(uint64)
 	stats.PacerRepairPacketsExpired, _ = raw["pacerRepairPacketsExpired"].(uint64)
 	stats.PacerRepairPacketsTrimmed, _ = raw["pacerRepairPacketsTrimmed"].(uint64)
-	stats.PacerRTXPacketsExpired, _ = raw["pacerRetransmissionPacketsExpired"].(uint64)
-	stats.PacerRTXPacketsCoalesced, _ = raw["pacerRetransmissionPacketsCoalesced"].(uint64)
-	stats.PacerRTXPacketsSuppressed, _ = raw["pacerRetransmissionPacketsSuppressed"].(uint64)
-	stats.PacerRTXRoundTripTimeMs, _ = raw["pacerRetransmissionRoundTripTimeMilliseconds"].(float64)
-	stats.PacerRTXRetryIntervalMs, _ = raw["pacerRetransmissionMinimumIntervalMilliseconds"].(float64)
+	stats.PacerRetransmissionPacketsExpired, _ = raw["pacerRetransmissionPacketsExpired"].(uint64)
+	stats.PacerRetransmissionPacketsCoalesced, _ = raw["pacerRetransmissionPacketsCoalesced"].(uint64)
+	stats.PacerRetransmissionPacketsSuppressed, _ = raw["pacerRetransmissionPacketsSuppressed"].(uint64)
+	stats.PacerRetransmissionRoundTripTimeMs, _ = raw["pacerRetransmissionRoundTripTimeMilliseconds"].(float64)
+	stats.PacerRetransmissionRetryIntervalMs, _ = raw["pacerRetransmissionMinimumIntervalMilliseconds"].(float64)
 	stats.PacerFECPacketsExpired, _ = raw["pacerForwardErrorCorrectionPacketsExpired"].(uint64)
-	stats.PacerRTXPacketsTrimmed, _ = raw["pacerRetransmissionPacketsTrimmed"].(uint64)
+	stats.PacerRetransmissionPacketsTrimmed, _ = raw["pacerRetransmissionPacketsTrimmed"].(uint64)
 	stats.PacerFECPacketsTrimmed, _ = raw["pacerForwardErrorCorrectionPacketsTrimmed"].(uint64)
 	stats.PacerSentPrimary, _ = raw["pacerSentPrimary"].(uint64)
 	stats.PacerSentPrimaryBytes, _ = raw["pacerSentPrimaryBytes"].(uint64)
 	stats.PacerSentRepair, _ = raw["pacerSentRepair"].(uint64)
-	stats.PacerSentRTX, _ = raw["pacerSentRetransmission"].(uint64)
-	stats.PacerSentRTXBytes, _ = raw["pacerSentRetransmissionBytes"].(uint64)
+	stats.PacerSentRetransmission, _ = raw["pacerSentRetransmission"].(uint64)
+	stats.PacerSentRetransmissionBytes, _ = raw["pacerSentRetransmissionBytes"].(uint64)
 	stats.PacerSentFEC, _ = raw["pacerSentForwardErrorCorrection"].(uint64)
 	stats.PacerSentFECBytes, _ = raw["pacerSentForwardErrorCorrectionBytes"].(uint64)
 	stats.StaleBitrateCallbacks, _ = raw["staleBitrateCallbacks"].(uint64)
@@ -1010,7 +1082,18 @@ func (s *Session) handleRTCPPackets(packets []rtcp.Packet) {
 	mediaSSRC := s.outboundMediaSSRC()
 	for _, packet := range packets {
 		switch value := packet.(type) {
-		case *rtcp.PictureLossIndication, *rtcp.FullIntraRequest:
+		case *rtcp.PictureLossIndication:
+			if value.MediaSSRC != mediaSSRC {
+				continue
+			}
+			s.markNativeReceiverReady()
+			s.rtcpKeyFrameRequests.Add(1)
+			s.requestKeyFrame()
+		case *rtcp.FullIntraRequest:
+			if value.MediaSSRC != mediaSSRC {
+				continue
+			}
+			s.markNativeReceiverReady()
 			s.rtcpKeyFrameRequests.Add(1)
 			s.requestKeyFrame()
 		case *rtcp.ReceiverReport:
@@ -1159,6 +1242,9 @@ func (s *Session) requestRecoveryKeyFrame(delay time.Duration) {
 }
 
 func (s *Session) scheduleKeyFrameRequest(delay time.Duration, deferIfLimited bool) {
+	if s.isClosed() {
+		return
+	}
 	now := time.Now()
 	due := now.Add(max(delay, 0))
 	s.keyFrameMu.Lock()

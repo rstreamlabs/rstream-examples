@@ -3,65 +3,65 @@ package webrtc
 import "github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/config"
 
 type ProducerStats struct {
-	ActiveSessions                  int
-	OpeningSessions                 int
-	TWCCNegotiatedSessions          int
-	NACKNegotiatedSessions          int
-	RTXNegotiatedSessions           int
-	FlexFECNegotiatedSessions       int
-	EstimatedBitrateBps             int64
-	LossControllerTargetBitrateBps  int64
-	DelayControllerTargetBitrateBps int64
-	DelayControllerIncreaseSessions int
-	DelayControllerDecreaseSessions int
-	DelayControllerHoldSessions     int
-	DelayControllerNormalSessions   int
-	DelayControllerOveruseSessions  int
-	DelayControllerUnderuseSessions int
-	EncoderTargetBitrateBps         int64
-	PacerTargetBitrateBps           int64
-	PacerPacingBitrateBps           int64
-	PacerQueuePackets               int64
-	MaximumPacketLossRatio          float64
-	MaximumDelayEstimateSeconds     float64
-	MaximumPacerQueueDelaySeconds   float64
-	MaximumRTXRTTSeconds            float64
-	MaximumRTXRetryIntervalSeconds  float64
-	LossGuardActiveSessions         int
-	LossGuardTargetBitrateBps       int64
-	AdaptiveBitrateUpdates          uint64
-	AdaptiveBitrateFailures         uint64
-	RecoveryKeyFrameRequests        uint64
-	RecoveryKeyFrameCoalesced       uint64
-	RecoveryKeyFrameFailures        uint64
-	RTCPKeyFrameRequests            uint64
-	RTCPMalformedFeedback           uint64
-	LossGuardReductions             uint64
-	LossGuardRecoveries             uint64
-	PacerQueueDrops                 uint64
-	PacerMediaFrameDrops            uint64
-	PacerMediaByteDrops             uint64
-	PacerRepairPacketsExpired       uint64
-	PacerRepairPacketsTrimmed       uint64
-	PacerRTXPacketsExpired          uint64
-	PacerRTXPacketsCoalesced        uint64
-	PacerRTXPacketsSuppressed       uint64
-	PacerFECPacketsExpired          uint64
-	PacerRTXPacketsTrimmed          uint64
-	PacerFECPacketsTrimmed          uint64
-	PacerSentPrimary                uint64
-	PacerSentPrimaryBytes           uint64
-	PacerSentRepair                 uint64
-	PacerSentRTX                    uint64
-	PacerSentRTXBytes               uint64
-	PacerSentFEC                    uint64
-	PacerSentFECBytes               uint64
-	StaleBitrateCallbacks           uint64
-	TWCCFeedbackPackets             uint64
-	TWCCMalformedFeedback           uint64
-	TWCCPaddingStatuses             uint64
-	TWCCReportedLost                uint64
-	TWCCReportedStatuses            uint64
+	ActiveSessions                            int
+	OpeningSessions                           int
+	TWCCNegotiatedSessions                    int
+	NACKNegotiatedSessions                    int
+	RTXNegotiatedSessions                     int
+	FlexFECNegotiatedSessions                 int
+	EstimatedBitrateBps                       int64
+	LossControllerTargetBitrateBps            int64
+	DelayControllerTargetBitrateBps           int64
+	DelayControllerIncreaseSessions           int
+	DelayControllerDecreaseSessions           int
+	DelayControllerHoldSessions               int
+	DelayControllerNormalSessions             int
+	DelayControllerOveruseSessions            int
+	DelayControllerUnderuseSessions           int
+	EncoderTargetBitrateBps                   int64
+	PacerTargetBitrateBps                     int64
+	PacerPacingBitrateBps                     int64
+	PacerQueuePackets                         int64
+	MaximumPacketLossRatio                    float64
+	MaximumDelayEstimateSeconds               float64
+	MaximumPacerQueueDelaySeconds             float64
+	MaximumRetransmissionRTTSeconds           float64
+	MaximumRetransmissionRetryIntervalSeconds float64
+	LossGuardActiveSessions                   int
+	LossGuardTargetBitrateBps                 int64
+	AdaptiveBitrateUpdates                    uint64
+	AdaptiveBitrateFailures                   uint64
+	RecoveryKeyFrameRequests                  uint64
+	RecoveryKeyFrameCoalesced                 uint64
+	RecoveryKeyFrameFailures                  uint64
+	RTCPKeyFrameRequests                      uint64
+	RTCPMalformedFeedback                     uint64
+	LossGuardReductions                       uint64
+	LossGuardRecoveries                       uint64
+	PacerQueueDrops                           uint64
+	PacerMediaFrameDrops                      uint64
+	PacerMediaByteDrops                       uint64
+	PacerRepairPacketsExpired                 uint64
+	PacerRepairPacketsTrimmed                 uint64
+	PacerRetransmissionPacketsExpired         uint64
+	PacerRetransmissionPacketsCoalesced       uint64
+	PacerRetransmissionPacketsSuppressed      uint64
+	PacerFECPacketsExpired                    uint64
+	PacerRetransmissionPacketsTrimmed         uint64
+	PacerFECPacketsTrimmed                    uint64
+	PacerSentPrimary                          uint64
+	PacerSentPrimaryBytes                     uint64
+	PacerSentRepair                           uint64
+	PacerSentRetransmission                   uint64
+	PacerSentRetransmissionBytes              uint64
+	PacerSentFEC                              uint64
+	PacerSentFECBytes                         uint64
+	StaleBitrateCallbacks                     uint64
+	TWCCFeedbackPackets                       uint64
+	TWCCMalformedFeedback                     uint64
+	TWCCPaddingStatuses                       uint64
+	TWCCReportedLost                          uint64
+	TWCCReportedStatuses                      uint64
 }
 
 type producerTotals struct {
@@ -164,8 +164,8 @@ func addActiveSessionStats(producer *ProducerStats, session SessionStats, shared
 	producer.MaximumPacketLossRatio = max(producer.MaximumPacketLossRatio, bandwidth.AverageLoss)
 	producer.MaximumDelayEstimateSeconds = max(producer.MaximumDelayEstimateSeconds, bandwidth.DelayEstimateMs/1000)
 	producer.MaximumPacerQueueDelaySeconds = max(producer.MaximumPacerQueueDelaySeconds, bandwidth.PacerQueueDelayMs/1000)
-	producer.MaximumRTXRTTSeconds = max(producer.MaximumRTXRTTSeconds, bandwidth.PacerRTXRoundTripTimeMs/1000)
-	producer.MaximumRTXRetryIntervalSeconds = max(producer.MaximumRTXRetryIntervalSeconds, bandwidth.PacerRTXRetryIntervalMs/1000)
+	producer.MaximumRetransmissionRTTSeconds = max(producer.MaximumRetransmissionRTTSeconds, bandwidth.PacerRetransmissionRoundTripTimeMs/1000)
+	producer.MaximumRetransmissionRetryIntervalSeconds = max(producer.MaximumRetransmissionRetryIntervalSeconds, bandwidth.PacerRetransmissionRetryIntervalMs/1000)
 	producer.LossControllerTargetBitrateBps += int64(bandwidth.LossTargetBitrateBps)
 	producer.DelayControllerTargetBitrateBps += int64(bandwidth.DelayTargetBitrateBps)
 	switch bandwidth.State {
@@ -206,17 +206,17 @@ func addProducerTotals(producer *ProducerStats, totals producerTotals) {
 	producer.PacerMediaByteDrops += bandwidth.PacerMediaByteDrops
 	producer.PacerRepairPacketsExpired += bandwidth.PacerRepairPacketsExpired
 	producer.PacerRepairPacketsTrimmed += bandwidth.PacerRepairPacketsTrimmed
-	producer.PacerRTXPacketsExpired += bandwidth.PacerRTXPacketsExpired
-	producer.PacerRTXPacketsCoalesced += bandwidth.PacerRTXPacketsCoalesced
-	producer.PacerRTXPacketsSuppressed += bandwidth.PacerRTXPacketsSuppressed
+	producer.PacerRetransmissionPacketsExpired += bandwidth.PacerRetransmissionPacketsExpired
+	producer.PacerRetransmissionPacketsCoalesced += bandwidth.PacerRetransmissionPacketsCoalesced
+	producer.PacerRetransmissionPacketsSuppressed += bandwidth.PacerRetransmissionPacketsSuppressed
 	producer.PacerFECPacketsExpired += bandwidth.PacerFECPacketsExpired
-	producer.PacerRTXPacketsTrimmed += bandwidth.PacerRTXPacketsTrimmed
+	producer.PacerRetransmissionPacketsTrimmed += bandwidth.PacerRetransmissionPacketsTrimmed
 	producer.PacerFECPacketsTrimmed += bandwidth.PacerFECPacketsTrimmed
 	producer.PacerSentPrimary += bandwidth.PacerSentPrimary
 	producer.PacerSentPrimaryBytes += bandwidth.PacerSentPrimaryBytes
 	producer.PacerSentRepair += bandwidth.PacerSentRepair
-	producer.PacerSentRTX += bandwidth.PacerSentRTX
-	producer.PacerSentRTXBytes += bandwidth.PacerSentRTXBytes
+	producer.PacerSentRetransmission += bandwidth.PacerSentRetransmission
+	producer.PacerSentRetransmissionBytes += bandwidth.PacerSentRetransmissionBytes
 	producer.PacerSentFEC += bandwidth.PacerSentFEC
 	producer.PacerSentFECBytes += bandwidth.PacerSentFECBytes
 	producer.StaleBitrateCallbacks += bandwidth.StaleBitrateCallbacks
@@ -235,17 +235,17 @@ func addBandwidthCounters(target *BandwidthStats, source BandwidthStats) {
 	target.PacerMediaByteDrops += source.PacerMediaByteDrops
 	target.PacerRepairPacketsExpired += source.PacerRepairPacketsExpired
 	target.PacerRepairPacketsTrimmed += source.PacerRepairPacketsTrimmed
-	target.PacerRTXPacketsExpired += source.PacerRTXPacketsExpired
-	target.PacerRTXPacketsCoalesced += source.PacerRTXPacketsCoalesced
-	target.PacerRTXPacketsSuppressed += source.PacerRTXPacketsSuppressed
+	target.PacerRetransmissionPacketsExpired += source.PacerRetransmissionPacketsExpired
+	target.PacerRetransmissionPacketsCoalesced += source.PacerRetransmissionPacketsCoalesced
+	target.PacerRetransmissionPacketsSuppressed += source.PacerRetransmissionPacketsSuppressed
 	target.PacerFECPacketsExpired += source.PacerFECPacketsExpired
-	target.PacerRTXPacketsTrimmed += source.PacerRTXPacketsTrimmed
+	target.PacerRetransmissionPacketsTrimmed += source.PacerRetransmissionPacketsTrimmed
 	target.PacerFECPacketsTrimmed += source.PacerFECPacketsTrimmed
 	target.PacerSentPrimary += source.PacerSentPrimary
 	target.PacerSentPrimaryBytes += source.PacerSentPrimaryBytes
 	target.PacerSentRepair += source.PacerSentRepair
-	target.PacerSentRTX += source.PacerSentRTX
-	target.PacerSentRTXBytes += source.PacerSentRTXBytes
+	target.PacerSentRetransmission += source.PacerSentRetransmission
+	target.PacerSentRetransmissionBytes += source.PacerSentRetransmissionBytes
 	target.PacerSentFEC += source.PacerSentFEC
 	target.PacerSentFECBytes += source.PacerSentFECBytes
 	target.StaleBitrateCallbacks += source.StaleBitrateCallbacks
