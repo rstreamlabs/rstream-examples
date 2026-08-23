@@ -18,8 +18,8 @@ LLAMA_CPP_DIR  ?= third_party/llama.cpp
 LLAMA_BUILD    := $(LLAMA_CPP_DIR)/build-static
 LLAMA_BUILD_JOBS ?=
 LLAMA_BUILD_PARALLEL := $(if $(strip $(LLAMA_BUILD_JOBS)),-j$(LLAMA_BUILD_JOBS),-j)
-STATICCHECK_VERSION ?= v0.7.0
-GOVULNCHECK_VERSION ?= v1.1.4
+STATICCHECK_VERSION ?= v0.8.1
+GOVULNCHECK_VERSION ?= v1.7.0
 GO_TEST_FLAGS ?=
 
 # Acceleration follows the host: Metal on Apple Silicon, where it is always
