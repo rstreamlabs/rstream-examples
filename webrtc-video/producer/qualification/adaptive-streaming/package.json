@@ -7,7 +7,7 @@
     "check": "node --check ./collect.mjs && node --check ./compare.mjs && node --check ./sample-receiver-udp.mjs && node --check ./lib/analysis.mjs && node --check ./lib/comparison.mjs && node --check ../../../distributor/qualification/end-to-end/sanitize-stream.mjs && node --check ../../../distributor/qualification/end-to-end/sanitize-artifacts.mjs && npm test && node --test ../../../distributor/qualification/end-to-end/sanitize-artifacts.test.mjs"
   },
   "devDependencies": {
-    "esbuild": "0.25.9",
+    "esbuild": "0.28.2",
     "playwright-core": "1.62.1"
   }
 }
