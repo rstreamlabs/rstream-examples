@@ -10,9 +10,9 @@ require (
 	github.com/pion/rtcp v1.2.17
 	github.com/pion/rtp v1.10.5
 	github.com/pion/sdp/v3 v3.0.19
-	github.com/pion/webrtc/v4 v4.2.18
+	github.com/pion/webrtc/v4 v4.2.19
 	github.com/prometheus/client_golang v1.24.1
-	github.com/prometheus/client_model v0.6.2
+	github.com/prometheus/client_model v0.6.3
 	github.com/rstreamlabs/rstream-go v1.29.3
 	gopkg.in/yaml.v3 v3.0.1
 )
