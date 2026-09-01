@@ -13,7 +13,7 @@ require (
 	github.com/pion/webrtc/v4 v4.2.18
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/client_model v0.6.2
-	github.com/rstreamlabs/rstream-go v1.29.1
+	github.com/rstreamlabs/rstream-go v1.29.3
 	gopkg.in/yaml.v3 v3.0.1
 )
 
