@@ -1,6 +1,6 @@
 module github.com/rstreamlabs/rstream-examples/private-llm-mesh/worker
 
-go 1.26.6
+go 1.27.0
 
 require github.com/rstreamlabs/rstream-go v1.29.1
 

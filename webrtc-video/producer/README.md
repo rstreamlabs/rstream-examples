@@ -73,7 +73,7 @@ rstream login
 rstream project use <project-endpoint>
 ```
 
-For local development you need Go `1.26.6+`, a C compiler, `pkg-config`,
+For local development you need Go `1.27+`, a C compiler, `pkg-config`,
 and a GStreamer installation that includes the development files and the
 elements required by the selected pipeline. Node.js `20+` and npm are only
 required when building the embedded local viewer UI with `make build`,
