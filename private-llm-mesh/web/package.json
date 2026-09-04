@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "audit": "npm audit --omit=dev --audit-level=moderate",
+    "audit": "../../.github/scripts/npm-audit.sh moderate",
     "build": "next build",
     "clean": "rm -rf .next tsconfig.tsbuildinfo",
     "dev": "next dev",
