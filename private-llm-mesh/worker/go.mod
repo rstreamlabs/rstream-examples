@@ -2,11 +2,10 @@ module github.com/rstreamlabs/rstream-examples/private-llm-mesh/worker
 
 go 1.27.0
 
-require github.com/rstreamlabs/rstream-go v1.29.3
+require github.com/rstreamlabs/rstream-go v1.30.0
 
 require (
 	github.com/eclipse-keypont/crypto11 v1.6.8 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/johnstarich/go/dns v0.2.5 // indirect
 	github.com/kr/text v0.2.0 // indirect

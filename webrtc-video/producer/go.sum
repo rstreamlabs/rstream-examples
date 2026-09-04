@@ -88,8 +88,8 @@ github.com/rogpeppe/go-internal v1.15.0 h1:D0RCU5rMAp+SpgkiNdrjfJ+LX4J1M32V2NeCY
 github.com/rogpeppe/go-internal v1.15.0/go.mod h1:DrUVZyrJU+txYW5/1kwtXQSMFio52ZOxX7yM1VHvnxs=
 github.com/rstreamlabs/pion-interceptor v0.1.48-0.20260822042700-f4a26c59b0fa h1:AeegFcSxt72MpGbm4YoPKU0MbKAgBQONUjnRVfR/eiA=
 github.com/rstreamlabs/pion-interceptor v0.1.48-0.20260822042700-f4a26c59b0fa/go.mod h1:vSX9xXRF2GK54zmL7SEaErhmNb+xvL+3RPPT9qsWFZ4=
-github.com/rstreamlabs/rstream-go v1.29.3 h1:DR52q8IxFi1sun8ZLUNa57TbsK3y8/qZZi/c967cefY=
-github.com/rstreamlabs/rstream-go v1.29.3/go.mod h1:5L4GPy7mUUcXr43Q/F/nU+Y22SiXbWli9Ac1dlbo3aA=
+github.com/rstreamlabs/rstream-go v1.30.0 h1:Q1r1+LxGSC7q7oUAI4VtXn4+dY38sHt0MN6974mZgBc=
+github.com/rstreamlabs/rstream-go v1.30.0/go.mod h1:HvfdN9VyBa04YtS6vMZuPTCRuFGf7qf/N7EaPkiX9lg=
 github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
 github.com/thales-e-security/pool v0.0.2 h1:RAPs4q2EbWsTit6tpzuvTFlgFRJ3S8Evf5gtvVDbmPg=
