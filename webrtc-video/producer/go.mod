@@ -1,6 +1,6 @@
 module github.com/rstreamlabs/rstream-examples/webrtc-video/producer
 
-go 1.26.6
+go 1.27.0
 
 require (
 	github.com/go-gst/go-gst v1.4.0
@@ -10,10 +10,10 @@ require (
 	github.com/pion/rtcp v1.2.17
 	github.com/pion/rtp v1.10.5
 	github.com/pion/sdp/v3 v3.0.19
-	github.com/pion/webrtc/v4 v4.2.18
+	github.com/pion/webrtc/v4 v4.2.19
 	github.com/prometheus/client_golang v1.24.1
-	github.com/prometheus/client_model v0.6.2
-	github.com/rstreamlabs/rstream-go v1.29.1
+	github.com/prometheus/client_model v0.6.3
+	github.com/rstreamlabs/rstream-go v1.30.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -30,7 +30,7 @@ require (
 	github.com/miekg/pkcs11 v1.1.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pion/datachannel v1.6.2 // indirect
-	github.com/pion/dtls/v3 v3.1.5 // indirect
+	github.com/pion/dtls/v3 v3.1.8 // indirect
 	github.com/pion/mdns/v2 v2.1.0 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
 	github.com/pion/sctp v1.11.1 // indirect

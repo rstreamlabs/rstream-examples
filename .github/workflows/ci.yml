@@ -37,6 +37,8 @@ jobs:
             sh -n "$script"
           done
           bash_scripts=(
+            .github/scripts/npm-audit.sh
+            .github/scripts/npm-audit_test.sh
             netcat-media-streaming/qualification/check.sh
             netcat-media-streaming/qualification/common.sh
             netcat-media-streaming/qualification/datagram-media.sh
@@ -79,6 +81,7 @@ jobs:
           for script in "${bash_scripts[@]}"; do
             bash -n "$script"
           done
+          .github/scripts/npm-audit_test.sh
           webrtc-video/distributor/qualification/fanout/report-test.sh
           webrtc-video/distributor/qualification/end-to-end/resource-report-test.sh
           webrtc-video/distributor/qualification/end-to-end/result-test.sh
@@ -216,7 +219,7 @@ jobs:
       - name: Audit production dependencies
         working-directory: nextjs-rstream-preview
         shell: bash
-        run: npm audit --omit=dev --audit-level=moderate
+        run: ../.github/scripts/npm-audit.sh moderate
   python-fastapi-rstream-tunnel:
     name: Python FastAPI rstream tunnel
     runs-on: ubuntu-latest
@@ -261,7 +264,7 @@ jobs:
       - name: Audit production dependencies
         working-directory: python-vision-inference/device
         shell: bash
-        run: npm audit --omit=dev --audit-level=moderate
+        run: ../../.github/scripts/npm-audit.sh moderate
   python-vision-inference-worker:
     name: Python vision inference worker
     runs-on: ubuntu-latest
@@ -366,7 +369,7 @@ jobs:
       - name: Audit production dependencies
         working-directory: webrtc-video/platform
         shell: bash
-        run: npm audit --omit=dev --audit-level=high
+        run: ../../.github/scripts/npm-audit.sh high
   webrtc-video-distributor:
     name: WebRTC video distributor
     runs-on: ubuntu-latest
@@ -465,7 +468,7 @@ jobs:
       - name: Audit production dependencies
         working-directory: webrtc-video/producer
         shell: bash
-        run: npm audit --omit=dev --audit-level=high
+        run: ../../.github/scripts/npm-audit.sh high
   private-masque-egress-gateway:
     name: Private MASQUE egress gateway
     runs-on: ubuntu-latest

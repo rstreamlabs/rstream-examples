@@ -1,6 +1,6 @@
 module github.com/rstreamlabs/rstream-examples/webrtc-video/distributor
 
-go 1.26.6
+go 1.27.0
 
 require (
 	github.com/pion/interceptor v0.1.47
@@ -14,7 +14,7 @@ require (
 require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/pion/datachannel v1.6.2 // indirect
-	github.com/pion/dtls/v3 v3.1.5 // indirect
+	github.com/pion/dtls/v3 v3.1.8 // indirect
 	github.com/pion/ice/v4 v4.4.1 // indirect
 	github.com/pion/mdns/v2 v2.1.0 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
