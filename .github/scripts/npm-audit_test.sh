@@ -26,24 +26,25 @@ case "$NPM_AUDIT_TEST_MODE" in
     printf '# npm audit report\n1 high severity vulnerability\n' >&2
     exit 1
     ;;
-  transient)
-    if ((attempt == 1)); then
-      printf 'npm error audit endpoint returned an error\n' >&2
-      exit 1
-    fi
-    printf 'found 0 vulnerabilities\n'
-    ;;
-  unavailable)
+  transient|unavailable)
     printf 'npm error audit endpoint returned an error\n' >&2
     exit 1
     ;;
 esac
 EOF
-cat >"$test_directory/bin/sleep" <<'EOF'
+cat >"$test_directory/bin/npx" <<'EOF'
 #!/usr/bin/env bash
-exit 0
+set -euo pipefail
+test "${npm_config_fetch_timeout:-}" = 120000
+test "$*" = '--yes npm@11.19.1 audit --omit=dev --audit-level=high'
+printf '1\n' >"$NPM_AUDIT_TEST_STATE-fallback"
+if [[ "$NPM_AUDIT_TEST_MODE" == unavailable ]]; then
+  printf 'npm error audit endpoint returned an error\n' >&2
+  exit 1
+fi
+printf 'found 0 vulnerabilities\n'
 EOF
-chmod 0755 "$test_directory/bin/npm" "$test_directory/bin/sleep"
+chmod 0755 "$test_directory/bin/npm" "$test_directory/bin/npx"
 run_audit() {
   NPM_AUDIT_TEST_MODE=$1 NPM_AUDIT_TEST_STATE=$2 \
     PATH="$test_directory/bin:$PATH" \
@@ -55,13 +56,16 @@ if run_audit vulnerable "$vulnerable_state"; then
   exit 1
 fi
 test "$(<"$vulnerable_state")" = 1
+test ! -e "$vulnerable_state-fallback"
 transient_state="$test_directory/transient-state"
 run_audit transient "$transient_state"
-test "$(<"$transient_state")" = 2
+test "$(<"$transient_state")" = 1
+test "$(<"$transient_state-fallback")" = 1
 unavailable_state="$test_directory/unavailable-state"
 if run_audit unavailable "$unavailable_state"; then
   printf 'persistent registry failure was accepted\n' >&2
   exit 1
 fi
-test "$(<"$unavailable_state")" = 3
+test "$(<"$unavailable_state")" = 1
+test "$(<"$unavailable_state-fallback")" = 1
 printf 'PASS npm audit retry policy\n'
