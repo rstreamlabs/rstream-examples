@@ -223,7 +223,9 @@ Configure `webrtc.adaptive.twccGCC.minBitrateKbps: 500` and
 The supported maximum is 50000 kbit/s; the default remains 8000. Larger values
 require a pipeline, hardware, and uplink qualified for that rate.
 
-Each preset is a ceiling on the adaptive encoder target. The congestion loop
+Each preset is a ceiling on the adaptive encoder target. It excludes RTP/RTCP,
+retransmission, and FEC overhead; actual network traffic can exceed this value.
+Resolution and frame rate remain defined by the pipeline. The congestion loop
 continues protecting the uplink and may reduce the actual rate. Auto restores
 that loop's full configured range. Presets change neither resolution nor frame
 rate. They require TWCC/GCC adaptation and a controllable encoder; the reduced
@@ -526,7 +528,7 @@ The main settings are:
 - `webrtc.initialBitrateKbps`, which seeds the sender before the first TWCC reports arrive
 - `webrtc.adaptive.enabled`, which turns adaptation on or off
 - `webrtc.adaptive.backend`, which selects the backend
-- `webrtc.adaptive.twccGCC.minBitrateKbps` and `maxBitrateKbps`, which define the allowed range (500–8000 kbit/s is supported; the 1080p30 H.264 examples keep a quality-protecting 2000 kbit/s floor)
+- `webrtc.adaptive.twccGCC.minBitrateKbps` and `maxBitrateKbps`, which define the allowed range (configuration accepts up to 50000 kbit/s; the qualified reference remains 2000–8000 kbit/s, and the optional quality profile uses 500–10000 kbit/s)
 - `webrtc.adaptive.twccGCC.updateInterval`, which sets how often bitrate changes may be applied
 - `webrtc.adaptive.twccGCC.changeThresholdPct` and `decreaseThresholdPct`, which keep small estimator fluctuations from reconfiguring the encoder while preserving the available pacing headroom; startup validation rejects a decrease threshold that the configured FlexFEC ratio cannot safely absorb
 - `webrtc.adaptive.twccGCC.maxIncreaseLossPct`, which prevents a delayed estimator increase from raising the encoder target while measured packet loss is still above the configured recovery threshold

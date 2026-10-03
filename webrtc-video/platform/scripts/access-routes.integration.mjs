@@ -285,6 +285,18 @@ try {
   const bobList = await request(origin, "bob", "/api/devices")
   assert.equal(bobList.status, 200)
   assert.equal(bobList.body.devices[0].id, shared.body.device.id)
+  const provisioning = await fetch(`${origin}/api/devices/tunnel`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${shared.body.secret}` },
+    signal: AbortSignal.timeout(10000),
+  })
+  assert.equal(provisioning.status, 200)
+  const producerPayload = await provisioning.json()
+  assert.equal(producerPayload.labels.organization, "42")
+  assert.equal(producerPayload.labels.user, undefined)
+  const producerClaims = JSON.stringify(decode(producerPayload.token))
+  assert.match(producerClaims, /"organization":"42"/)
+  assert.doesNotMatch(producerClaims, /"user"/)
   assert.equal(
     (await request(origin, "bob", "/api/devices", { name: "Camera" })).status,
     409,
@@ -316,6 +328,31 @@ try {
   const claims = JSON.stringify(decode(watch.body.auth.token))
   assert.match(claims, /"organization":"42"/)
   assert.doesNotMatch(claims, /"user"/)
+  // A database DDL lock must not leave an application query waiting forever.
+  const databaseLock = new Client({
+    connectionString: baseEnvironment.POSTGRES_PRISMA_DIRECT_URL,
+  })
+  await databaseLock.connect()
+  try {
+    await databaseLock.query(
+      "BEGIN; LOCK TABLE devices IN ACCESS EXCLUSIVE MODE",
+    )
+    const startedAt = Date.now()
+    const response = await fetch(`${origin}/api/devices`, {
+      headers: { Cookie: `next-auth.session-token=${sessions.bob}` },
+      signal: AbortSignal.timeout(8000),
+    })
+    await response.arrayBuffer()
+    assert.equal(response.status, 500)
+    assert.ok(
+      Date.now() - startedAt < 7500,
+      "SQL statements must have a finite wait",
+    )
+  } finally {
+    await databaseLock.query("ROLLBACK")
+    await databaseLock.end()
+  }
+  assert.equal((await request(origin, "bob", "/api/devices")).status, 200)
   assert.equal(
     (
       await request(

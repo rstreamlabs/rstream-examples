@@ -161,7 +161,11 @@ migration keeps existing personal devices private and adds a database constraint
 requiring exactly one owner. Changing the environment switches the visible
 inventory; it does not copy or reassign devices. Restart the application after
 configuration changes. Device limits are serialized in PostgreSQL per owner;
-request-rate quotas are bounded per process, so deployments with several replicas
+Application database connections and pool acquisition time out after five seconds;
+PostgreSQL statements have a five-second server limit with a six-second client
+deadline. Idle transactions terminate after ten seconds. Migration connections
+use the separate direct URL and do not inherit these application limits.
+Request-rate quotas are bounded per process, so deployments with several replicas
 should also apply their own shared ingress rate limits.
 
 ### Select the distribution backend
@@ -374,7 +378,8 @@ Use `../producer/config.provisioning.quality.h264.yaml` to advertise Low
 (1 Mbit/s), Medium (4 Mbit/s), High (10 Mbit/s), and Auto. Presets are bitrate
 ceilings; congestion control can reduce the encoder target below the selected
 ceiling. Auto restores the configured adaptive range. Resolution and frame rate
-stay defined by the device pipeline.
+stay defined by the device pipeline. RTP/RTCP, retransmission, and FEC overhead
+are additional traffic beyond the encoded-video ceiling.
 
 The player discovers modes from `GET /api/devices/:id/quality`. Its selector is
 hidden for unconfigured devices and updates other viewers within five seconds.
@@ -474,7 +479,8 @@ MEDIAMTX_ALLOW_DIRECT_FALLBACK=false RSTREAM_QUALIFICATION_QUALITY=1 \
 ```
 
 The quality run changes all four modes through the actual device tunnel while
-two browser readers share one encoder, rejects a stale version, and exercises
+two browser readers share one encoder, measures actual encoded throughput at
+MediaMTX, rejects a stale version, and exercises
 distributor failure/recovery. The required-MediaMTX variant also checks that
 explicit direct authorization is refused. Use a committed, clean checkout for
 publishable evidence. Each runner cleans up the resources it creates.

@@ -60,8 +60,8 @@ contains the selected matrix, synchronized network, sender, playback, and
 transport time series, mobility evidence, every automated gate, and the
 rejected-run register.
 
-The root Makefile targets the device role, so `make build`, `make run`,
-`make test`, `make verify`, and `make clean` delegate to `producer/`. The
+The root `make build`, `make test`, `make verify`, and `make clean` targets cover
+both Go roles. `make run` starts the producer. The
 [producer README](./producer/README.md) starts with the standalone path and
 continues through the congestion, repair, mobility, and qualification model.
 
@@ -69,7 +69,9 @@ Run the platform directly with npm:
 
 ```bash
 cd platform
-npm install
+npm ci
+cp .env.example .env.local
+# Fill PostgreSQL, GitHub OAuth, NextAuth, and rstream settings in .env.local.
 npm run prisma:migrate
 npm run dev
 ```
