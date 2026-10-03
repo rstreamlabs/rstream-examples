@@ -225,8 +225,28 @@ does the distributor's full race suite. Its separate `-race -tags=integration`
 suite also passes against the actual MediaMTX 1.21.1 binary, exercising native
 and adapter sessions, shared readers, FlexFEC/RTX repair and session recovery.
 Both module sets pass `go mod verify`.
-The earlier local-override evidence remains historical. Fresh qualification of
-these ordinary builds, without a private dependency replacement, is required.
+The earlier local-override evidence remains historical. The fresh canonical
+[matrix at clean revision `b5c3889`](./distributor/qualification/evidence/b5c3889/matrix-summary.json)
+uses ordinary builds with the published dependency and identical images across
+three repetitions of every profile. Its overall verdict is **failed**. Fan-out
+to one/four/eight readers passes, as do all three delay/jitter/loss checks on
+each MediaMTX leg (60ms/15ms/1%); the source-leg checks decode 29.83–30.18 fps
+without freezes. The 4 Mbit/s source-capacity series has no secondary freezes
+and always recovers 8 Mbit/s, but two runs fail: one drops four frames (1.15%
+in the steady-state window), and one averages 23.73 fps, below the 80% cadence
+gate. The third passes. Direct capacity and impairment each pass only one of
+three runs; direct capacity disruption reaches 3.333s, above the 3s bound.
+All runs pass runtime/environment integrity. The expected failure of an
+undersized single-rendition viewer remains distinct from these unqualified
+source/direct transitions. No gate was relaxed or failed run omitted. Temporary
+UDP limits are restored and owned containers removed. Investigate repair timing
+and transition behavior before claiming network qualification; latency and
+resource comparisons remain separate work.
+
+The discovery configuration review additionally reproduced valid display names
+being rejected or changed when environment expansion encounters YAML quotes or
+backslashes. A literal scalar preserves those names; the real configuration
+loader regression covers quotes, backslashes, punctuation and UTF-8.
 
 ## Cross-cutting latency and resource criteria
 
