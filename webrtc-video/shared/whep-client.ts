@@ -552,7 +552,12 @@ export class WHEPClient {
       return;
     }
     const generation = this.generation;
-    if (!event.candidate) {
+    const candidate = event.candidate?.toJSON();
+    // Firefox emits an RTCIceCandidate with an empty candidate string at the
+    // end of a generation, followed by the aggregate null event. Both finish
+    // gathering for this client's single bundled video transport; neither is
+    // a candidate attribute to serialize into SDP (WebRTC 1.0).
+    if (!candidate || candidate.candidate === "") {
       generation.complete = true;
       for (const resolve of generation.waiters.splice(0)) {
         resolve();
@@ -560,7 +565,6 @@ export class WHEPClient {
       this.scheduleCandidatePatch(0);
       return;
     }
-    const candidate = event.candidate.toJSON();
     if (generation.embedded.has(candidateKey(candidate))) {
       return;
     }

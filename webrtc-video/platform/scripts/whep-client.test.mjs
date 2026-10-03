@@ -274,6 +274,61 @@ test("WHEP sends a separate completion fragment when gathering finishes after ca
   await client.close()
 })
 
+test("WHEP treats an empty ICE candidate as end of gathering, including the later null event", async () => {
+  const requests = [],
+    errors = []
+  const peer = new ManualCompletionPeer()
+  const client = new WHEPClient({
+    authorization: "Bearer viewer-token",
+    endpoint: "https://edge.example/whep",
+    fetch: async (_input, init) => {
+      requests.push({ body: String(init.body ?? ""), method: init.method })
+      if (init.method === "POST")
+        return response(initialAnswer, 201, {
+          "Content-Type": "application/sdp",
+          ETag: '"generation-1"',
+          Location: "/whep/empty-completion",
+        })
+      return response(null, init.method === "PATCH" ? 204 : 200)
+    },
+    iceServers: [],
+    onError: (error) => errors.push(error.message),
+    onTrack: () => {},
+    peerFactory: () => peer,
+  })
+  try {
+    await client.start()
+    peer.onicecandidate({
+      candidate: {
+        toJSON: () => ({
+          candidate: "",
+          sdpMid: "0",
+          usernameFragment: "client-1",
+        }),
+      },
+    })
+    await eventually(
+      () =>
+        errors.length ||
+        requests.some((request) => /a=end-of-candidates/.test(request.body)),
+    )
+    assert.deepEqual(errors, [])
+    peer.completeGathering()
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    assert.equal(
+      requests.filter(
+        (request) =>
+          request.method === "PATCH" &&
+          /a=end-of-candidates/.test(request.body),
+      ).length,
+      1,
+    )
+    assert.equal(peer.closed, false)
+  } finally {
+    await client.close()
+  }
+})
+
 test("WHEP does not patch a candidate already embedded in its initial offer", async () => {
   const requests = []
   const client = new WHEPClient({
