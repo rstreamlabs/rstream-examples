@@ -15,7 +15,9 @@ tunnel:
     app: webrtc-video-platform
     inventory: discovered
     device: ${VIDEO_DEVICE_ID}
-    device-name: "${VIDEO_DEVICE_NAME}"
+    # Preserve quotes and backslashes when expanding the display name.
+    device-name: |-
+      ${VIDEO_DEVICE_NAME}
   auth:
     token: true
     rstream: false

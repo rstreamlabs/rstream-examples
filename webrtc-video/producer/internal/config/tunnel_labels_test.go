@@ -59,3 +59,23 @@ func TestDiscoveredReferenceProfile(t *testing.T) {
 		t.Fatal("discovered source must use local credentials and the configured display name")
 	}
 }
+
+func TestDiscoveredReferencePreservesDisplayName(t *testing.T) {
+	t.Setenv("VIDEO_DEVICE_ID", "85a6703e-04de-42b6-93ac-c3b70c4cab51")
+	for _, name := range []string{
+		`Camera "front"`,
+		`Camera C:\video`,
+		`Caméra #1: {front}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("VIDEO_DEVICE_NAME", name)
+			cfg, err := Load("../../config.discovery.h264.yaml")
+			if err != nil {
+				t.Fatalf("load discovered profile with a valid display name: %v", err)
+			}
+			if got := cfg.Tunnel.Labels["device-name"]; got != name {
+				t.Fatalf("display name = %q, want %q", got, name)
+			}
+		})
+	}
+}
