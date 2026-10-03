@@ -175,8 +175,24 @@ retention deletion without starting an on-demand source. Earlier failed fixture
 runs exposed MediaMTX's missing-directory 400 response and FFmpeg's password
 length limit; the client handles only the precise missing-directory case, and
 the RTSP fixture now uses MediaMTX's supported token query parameter. Browser
-playback still uses no URL credentials. Full-volume behavior, production-path
-live resource impact and replay UI/visual acceptance remain qualification work.
+playback still uses no URL credentials.
+
+The optional replay UI now uses separate bounded MP4 clips, a timeline that
+preserves gaps, and an explicit return to the existing live WebRTC session.
+Source quality is hidden during replay and controls remain below the picture.
+Closing replay cancels its media load; unmounting or hiding the page also
+cancels index reads. Returning to a visible page restores replay paused;
+expiry and unavailable indexes have
+explicit states. Browser checks pass in Chromium and WebKit for actual MP4
+decoding, contiguous clips, stop-at-gap behavior, keyboard seeking, responsive
+layouts, expiry, index outage/recovery, visibility cancellation and return to the
+same live video/MediaStream without renegotiation. These checks use controlled
+recording responses; native MediaMTX storage and playback are covered separately.
+The platform's 167 unit checks, TypeScript check and production build pass, as
+do the real PostgreSQL/Next.js route/access checks. Fresh desktop/mobile captures
+have been presented and the user has accepted the replay presentation in normal
+and full-page layouts. Full-volume behavior, production-path live resource
+impact and Firefox application-level replay qualification remain.
 
 Provide optional short-retention recording and authenticated playback, keeping
 WebRTC as the live path. MediaMTX 1.20 supports recording and HTTP playback;
@@ -189,6 +205,8 @@ not harm live latency. Recording stays disabled by default.
 ## Visual acceptance
 
 The initial discovered-inventory desktop/mobile presentation was accepted.
+The recent-recording timeline and controls were also accepted in normal and
+full-page layouts after desktop/mobile captures were presented.
 Add same-tab full-page viewing with discreet controls, preserved playback,
 keyboard/focus handling and restored scroll position. Use a layout expansion
 independent of the native Fullscreen API; verify Chromium, Firefox and WebKit,

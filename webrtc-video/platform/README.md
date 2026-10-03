@@ -477,7 +477,7 @@ No metrics request starts the video source or adds a producer connection.
 
 ## Optional recent recordings
 
-Recording is disabled by default. The private recent-recording API can be tested
+Recording is disabled by default. Recent recording and playback can be tested
 with the local MediaMTX stack:
 
 ```bash
@@ -488,8 +488,21 @@ This explicitly enables MediaMTX recording and its private playback server,
 binds port 9996 to loopback and mounts a temporary 512 MiB recording volume.
 Recordings disappear when the container is removed. The producer still starts
 on demand; requesting an index or a recorded clip does not start a live source.
-The replay UI is being qualified separately; enabling this option currently
-provides the authenticated API, without changing live WebRTC playback.
+When the recording API is available, a history button appears beside the
+full-page control. It opens the most recent available recording. The timeline
+marks recorded spans and gaps; selecting a gap or an expired segment shows an
+explicit unavailable state. **Live** returns to the existing WebRTC session.
+The source-quality controls apply to live capture and are hidden during replay.
+Controls stay below the picture in both normal and full-page views.
+
+Replay uses a separate MP4 video element and bounded clips, not a seek on the
+WebRTC stream. The live connection stays established so returning to live does
+not reconnect the source. Contiguous clips load in sequence; gaps stop replay
+instead of silently jumping forward. Clip changes can introduce a short pause;
+this is not a seamless DVR. Hiding the page cancels the replay media load and
+index polling; returning restores the position paused, subject to retention.
+The dashboard exposes these controls while the device is online. Live
+resource/latency qualification remains pending.
 
 For a separate deployment, configure MediaMTX as described in the
 [distributor recording section](../distributor/README.md#optional-recent-recordings).
@@ -640,6 +653,7 @@ npx playwright-core install firefox webkit
 RSTREAM_DISCOVERY_BROWSER=/path/to/chrome \
 RSTREAM_FULL_PAGE_BROWSERS=1 \
 RSTREAM_METRICS_BROWSER=1 \
+RSTREAM_RECORDING_BROWSER=1 \
 RSTREAM_UI_CAPTURE_DIRECTORY=/path/to/ui-evidence \
   node scripts/access-routes.integration.mjs
 ```
@@ -649,6 +663,11 @@ UI. It checks session continuity, keyboard/focus handling, scroll restoration,
 portrait/landscape layout and source disappearance. `RSTREAM_METRICS_BROWSER=1`
 also checks distribution indicators and recovery after a metrics outage. It does not replace network
 qualification or testing on physical mobile devices.
+`RSTREAM_RECORDING_BROWSER=1` additionally requires FFmpeg and checks real MP4
+decoding in Chromium/WebKit, replay navigation, gaps, expiry, index outages,
+visibility cancellation and return to the same live session. The recording
+index and media service are controlled fixtures in this UI check; the native
+MediaMTX recording test above covers actual recording and retention.
 The disposable Firefox profile permits loopback ICE, selects the local loopback
 interface and disables address obfuscation for this same-machine fixture. User
 browser profiles are untouched. A failed connection is reported as a failed

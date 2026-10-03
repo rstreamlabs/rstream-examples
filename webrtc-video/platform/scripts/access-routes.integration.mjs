@@ -781,6 +781,37 @@ try {
   )
   if (process.env.RSTREAM_DISCOVERY_BROWSER) {
     const { chromium, firefox, webkit } = await import("playwright-core")
+    if (process.env.RSTREAM_RECORDING_BROWSER === "1") {
+      for (const [name, type, options] of [
+        [
+          "recording-chromium",
+          chromium,
+          { executablePath: process.env.RSTREAM_DISCOVERY_BROWSER },
+        ],
+        ["recording-webkit", webkit, {}],
+      ]) {
+        const browser = await type.launch({ ...options, headless: true })
+        try {
+          const context = await browser.newContext()
+          await context.addCookies([
+            {
+              name: "next-auth.session-token",
+              value: sessions.bob,
+              url: origin,
+            },
+          ])
+          await qualifyFullPage({
+            context,
+            origin,
+            name,
+            directory: process.env.RSTREAM_UI_CAPTURE_DIRECTORY,
+            observeRecordings: true,
+          })
+        } finally {
+          await browser.close()
+        }
+      }
+    }
     if (process.env.RSTREAM_METRICS_BROWSER === "1") {
       const browser = await chromium.launch({
         executablePath: process.env.RSTREAM_DISCOVERY_BROWSER,

@@ -41,8 +41,9 @@ The implementation is split by responsibility:
 - [`distributor/`](./distributor/) is the optional MediaMTX backend. It opens
   one strict producer WHEP session on first demand and republishes a repaired
   H.264 stream within the configured viewer limit. An optional
-  [recent-recording API](./platform/README.md#optional-recent-recordings)
-  provides authorized, bounded MP4 playback; recording remains off by default.
+  [recent-recording mode](./platform/README.md#optional-recent-recordings)
+  provides authorized, bounded MP4 replay and timeline controls in the platform;
+  recording remains off by default.
 
 ## Qualified reference path
 

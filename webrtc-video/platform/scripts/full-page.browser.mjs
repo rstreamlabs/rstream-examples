@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { createSocket } from "node:dgram"
 import { mkdir } from "node:fs/promises"
 import { join } from "node:path"
+import { recordingFixture } from "./recordings.browser.mjs"
 
 // Local, real WebRTC media exercises layout continuity independently of the
 // external engine. Transport/network qualification remains a separate harness.
@@ -11,6 +12,7 @@ export async function qualifyFullPage({
   directory,
   name,
   observeDistribution = false,
+  observeRecordings = false,
 }) {
   // A real local STUN responder keeps ICE gathering deterministic without
   // depending on a public service or waiting for a deliberately dead URI.
@@ -44,6 +46,7 @@ export async function qualifyFullPage({
   const signaling = []
   page.on("pageerror", (error) => errors.push(error.message))
   let sessions = 0
+  let recording
   let metricsAvailable = true
   if (observeDistribution)
     await page.route("**/api/devices/*/metrics", (route) => {
@@ -211,12 +214,25 @@ export async function qualifyFullPage({
   const capture = async (suffix) => {
     if (!directory) return
     await mkdir(directory, { recursive: true })
+    const fullPage =
+      suffix.startsWith("inline") || suffix === "metrics-unavailable"
+    await page.evaluate(async (fullPage) => {
+      if (fullPage) window.scrollTo({ top: 0, left: 0, behavior: "instant" })
+      await new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve)),
+      )
+    }, fullPage)
     await page.screenshot({
       path: join(directory, `${name}-${suffix}.png`),
-      fullPage: suffix.startsWith("inline") || suffix === "metrics-unavailable",
+      fullPage,
     })
   }
   try {
+    if (observeRecordings) recording = await recordingFixture(page)
+    else
+      await page.route("**/api/devices/*/recordings", (route) =>
+        route.fulfill({ status: 204 }),
+      )
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto(origin)
     await page.waitForFunction(
@@ -403,6 +419,16 @@ export async function qualifyFullPage({
         before,
       ),
     )
+    if (recording) {
+      await recording.qualify({ video, source, capture })
+      assert.equal(
+        sessions,
+        initialSessions,
+        "Recording controls must not reconnect live WebRTC",
+      )
+      assert.equal(context.pages().length, initialTabs)
+      assert.equal(page.url(), initialURL)
+    }
     // Losing the selected source while expanded must restore the page too.
     await page.getByRole("button", { name: "Full page", exact: true }).click()
     await page.route("**/api/devices", (route) =>
@@ -454,6 +480,7 @@ export async function qualifyFullPage({
       })
       .catch(() => {})
     await page.close()
+    await recording?.close()
     await new Promise((resolve) => stun.close(resolve))
   }
 }
