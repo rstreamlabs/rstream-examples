@@ -39,11 +39,13 @@ test("local MediaMTX stack defaults to direct public exposure", () => {
   assert.deepEqual(localStackOptions([]), {
     exposure: "public",
     nextMode: "development",
+    recording: false,
     stateFile: undefined,
   })
   assert.deepEqual(localStackOptions(["--exposure", "rstream"]), {
     exposure: "rstream",
     nextMode: "development",
+    recording: false,
     stateFile: undefined,
   })
   assert.deepEqual(
@@ -56,12 +58,14 @@ test("local MediaMTX stack defaults to direct public exposure", () => {
     {
       exposure: "public",
       nextMode: "development",
+      recording: false,
       stateFile: "/tmp/rstream-stack.json",
     },
   )
   assert.deepEqual(localStackOptions(["--next-mode", "production"]), {
     exposure: "public",
     nextMode: "production",
+    recording: false,
     stateFile: undefined,
   })
   assert.throws(
@@ -195,4 +199,16 @@ test("local MediaMTX stack uses HTTPS for every control-plane callback", () => {
     environment.RSTREAM_SOURCE_RESOLVER_PRIVATE_KEY_BASE64,
     keys.RSTREAM_SOURCE_RESOLVER_PRIVATE_KEY_BASE64,
   )
+})
+
+test("recent recording requires explicit activation of both recorder and private playback", () => {
+  assert.equal(localStackOptions(["--recording", "true"]).recording, true)
+  assert.throws(() => localStackOptions(["--recording", "yes"]))
+  const keys = generateMediaMTXKeys("recording")
+  const disabled = mediaMTXEnvironment("platform.example", keys)
+  assert.equal(disabled.MTX_PLAYBACK, "false")
+  assert.equal(disabled.MTX_PATHDEFAULTS_RECORD, "false")
+  const enabled = mediaMTXEnvironment("platform.example", keys, true)
+  assert.equal(enabled.MTX_PLAYBACK, "true")
+  assert.equal(enabled.MTX_PATHDEFAULTS_RECORD, "true")
 })

@@ -1,6 +1,7 @@
 import "server-only"
 
 import { MediaMTXMetricsReader } from "./mediamtx-metrics"
+import { MediaMTXPlayback } from "./mediamtx-playback"
 
 import { createHash } from "node:crypto"
 
@@ -19,6 +20,35 @@ let resolverVerifierCache:
 
 let metricsReaderCache:
   { endpoint: string; reader: MediaMTXMetricsReader } | undefined
+
+let playbackCache: { identity: string; client: MediaMTXPlayback } | undefined
+
+export function mediaMTXPlayback() {
+  const env = rstreamEnv()
+  const endpoint = env.MEDIAMTX_PLAYBACK_URL
+  if (env.VIDEO_DISTRIBUTOR !== "mediamtx" || !endpoint) return null
+  const identity = JSON.stringify([
+    endpoint,
+    env.MEDIAMTX_RECORDING_WINDOW_SECONDS,
+  ])
+  if (playbackCache?.identity !== identity) {
+    playbackCache = {
+      identity,
+      client: new MediaMTXPlayback({
+        endpoint,
+        windowSeconds: env.MEDIAMTX_RECORDING_WINDOW_SECONDS,
+        credential: (path) =>
+          tokenService().sign({
+            action: "playback",
+            path,
+            subject: "platform-playback",
+            ttlSeconds: 45,
+          }),
+      }),
+    }
+  }
+  return playbackCache.client
+}
 
 export async function mediaMTXMetrics(deviceID: string, signal: AbortSignal) {
   const env = rstreamEnv()

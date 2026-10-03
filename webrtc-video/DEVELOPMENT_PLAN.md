@@ -151,6 +151,20 @@ idle and counter-reset states; avoid misleading zero rates on the first sample.
 
 ## Separate lot: recent recording and playback
 
+The server foundation is implemented locally: opt-in MediaMTX recording with
+short retention, a bounded temporary local volume, a private playback endpoint,
+separate playback JWT permissions, and authorized recent-index/MP4 routes.
+Requests have duration/size/concurrency/deadline bounds and cancel upstream body
+reads on disconnect. Unit and real PostgreSQL/Next.js access checks pass.
+A native MediaMTX 1.20 test records a real H.264 RTSP source, verifies playback
+JWT isolation, decodes the resulting MP4 in Chromium/Firefox/WebKit and verifies
+retention deletion without starting an on-demand source. Earlier failed fixture
+runs exposed MediaMTX's missing-directory 400 response and FFmpeg's password
+length limit; the client handles only the precise missing-directory case, and
+the RTSP fixture now uses MediaMTX's supported token query parameter. Browser
+playback still uses no URL credentials. Full-volume behavior, production-path
+live resource impact and replay UI/visual acceptance remain qualification work.
+
 Provide optional short-retention recording and authenticated playback, keeping
 WebRTC as the live path. MediaMTX 1.20 supports recording and HTTP playback;
 this does not provide seek on the existing WHEP session. Recordings cover only

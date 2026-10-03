@@ -37,10 +37,15 @@ export function localStackOptions(args) {
     const value = args[index + 1]
     if (
       !value ||
-      !new Set(["--exposure", "--next-mode", "--state-file"]).has(name)
+      !new Set([
+        "--exposure",
+        "--next-mode",
+        "--state-file",
+        "--recording",
+      ]).has(name)
     ) {
       throw new Error(
-        "usage: run-local-mediamtx.mjs [--exposure public|rstream] [--next-mode development|production] [--state-file PATH]",
+        "usage: run-local-mediamtx.mjs [--exposure public|rstream] [--next-mode development|production] [--state-file PATH] [--recording true|false]",
       )
     }
     if (values.has(name)) {
@@ -51,16 +56,24 @@ export function localStackOptions(args) {
   const exposure = values.get("--exposure") ?? "public"
   if (!new Set(["public", "rstream"]).has(exposure)) {
     throw new Error(
-      "usage: run-local-mediamtx.mjs [--exposure public|rstream] [--next-mode development|production] [--state-file PATH]",
+      "usage: run-local-mediamtx.mjs [--exposure public|rstream] [--next-mode development|production] [--state-file PATH] [--recording true|false]",
     )
   }
   const nextMode = values.get("--next-mode") ?? "development"
   if (!new Set(["development", "production"]).has(nextMode)) {
     throw new Error(
-      "usage: run-local-mediamtx.mjs [--exposure public|rstream] [--next-mode development|production] [--state-file PATH]",
+      "usage: run-local-mediamtx.mjs [--exposure public|rstream] [--next-mode development|production] [--state-file PATH] [--recording true|false]",
     )
   }
-  return { exposure, nextMode, stateFile: values.get("--state-file") }
+  const recording = values.get("--recording") ?? "false"
+  if (!new Set(["true", "false"]).has(recording))
+    throw new Error("--recording must be true or false")
+  return {
+    exposure,
+    nextMode,
+    recording: recording === "true",
+    stateFile: values.get("--state-file"),
+  }
 }
 
 export function tunnelResources(names, exposure) {
@@ -130,9 +143,11 @@ export async function writeStackState(path, state) {
   return () => rm(path, { force: true })
 }
 
-export function mediaMTXEnvironment(platformHost, keys) {
+export function mediaMTXEnvironment(platformHost, keys, recording = false) {
   const platformOrigin = `https://${platformHost}`
   return {
+    MTX_PLAYBACK: String(recording),
+    MTX_PATHDEFAULTS_RECORD: String(recording),
     MTX_AUTHJWTAUDIENCE: audience,
     MTX_AUTHJWTISSUER: issuer,
     MTX_AUTHJWTJWKS: `${platformOrigin}/api/video/distributor/jwks`,
@@ -487,13 +502,17 @@ async function runLocalMediaMTX() {
       cwd: distributorDirectory,
     })
     await Promise.all(
-      [3000, 8889, 9998, 9999].map((port) => requireAvailablePort(port)),
+      [3000, 8889, 9998, 9999, ...(options.recording ? [9996] : [])].map(
+        (port) => requireAvailablePort(port),
+      ),
     )
     await requireAvailableUDPPort(8189)
     await runCommand("npm", ["run", "clean"], { cwd: platformDirectory })
     const platformEnvironment = {
       ...process.env,
       MEDIAMTX_METRICS_URL: "http://127.0.0.1:9998/metrics",
+      MEDIAMTX_PLAYBACK_URL: options.recording ? "http://127.0.0.1:9996" : "",
+      MEDIAMTX_RECORDING_WINDOW_SECONDS: "300",
       MEDIAMTX_JWT_ADDITIONAL_JWKS: '{"keys":[]}',
       MEDIAMTX_JWT_AUDIENCE: audience,
       MEDIAMTX_JWT_ISSUER: issuer,
@@ -551,7 +570,11 @@ async function runLocalMediaMTX() {
       nextFailure,
       runnerFailure,
     ])
-    const distributorEnvironment = mediaMTXEnvironment(platformHost, keys)
+    const distributorEnvironment = mediaMTXEnvironment(
+      platformHost,
+      keys,
+      options.recording,
+    )
     const dockerArguments = [
       "run",
       "--detach",
@@ -577,6 +600,13 @@ async function runLocalMediaMTX() {
     for (const [name, value] of Object.entries(distributorEnvironment)) {
       dockerArguments.push("--env", `${name}=${value}`)
     }
+    if (options.recording)
+      dockerArguments.push(
+        "--publish",
+        "127.0.0.1:9996:9996/tcp",
+        "--tmpfs",
+        "/recordings:rw,nosuid,nodev,noexec,size=512m,uid=10001,gid=10001,mode=0700",
+      )
     dockerArguments.push(image)
     await runCommand("docker", dockerArguments)
     distributorStarted = true

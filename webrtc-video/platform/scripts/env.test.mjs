@@ -17,6 +17,8 @@ const mediaMTXEnvironment = {
 const managedNames = [
   "MEDIAMTX_EXPOSURE",
   "MEDIAMTX_METRICS_URL",
+  "MEDIAMTX_PLAYBACK_URL",
+  "MEDIAMTX_RECORDING_WINDOW_SECONDS",
   "MEDIAMTX_JWT_PRIVATE_KEY_BASE64",
   "MEDIAMTX_PUBLIC_URL",
   "MEDIAMTX_SOURCE_RESOLVER_JWKS",
@@ -190,3 +192,30 @@ function withEnvironment(environment, operation) {
     }
   }
 }
+
+test("recording service is opt-in and rejects incompatible modes, URLs and windows", () => {
+  withEnvironment(baseEnvironment, () =>
+    assert.equal(rstreamEnvResult().data.MEDIAMTX_PLAYBACK_URL, undefined),
+  )
+  const recording = {
+    ...mediaMTXEnvironment,
+    MEDIAMTX_EXPOSURE: "public",
+    MEDIAMTX_PUBLIC_URL: "https://media.example",
+    MEDIAMTX_PLAYBACK_URL: "http://127.0.0.1:9996",
+  }
+  withEnvironment(recording, () => {
+    assert.equal(rstreamEnvResult().success, true)
+    assert.equal(rstreamEnvResult().data.MEDIAMTX_RECORDING_WINDOW_SECONDS, 300)
+  })
+  for (const settings of [
+    { VIDEO_DISTRIBUTOR: "direct" },
+    { MEDIAMTX_PLAYBACK_URL: "file:///tmp" },
+    { MEDIAMTX_PLAYBACK_URL: "http://u:p@host" },
+    { MEDIAMTX_PLAYBACK_URL: "http://host/?path=x" },
+    { MEDIAMTX_RECORDING_WINDOW_SECONDS: "29" },
+    { MEDIAMTX_RECORDING_WINDOW_SECONDS: "601" },
+  ])
+    withEnvironment({ ...recording, ...settings }, () =>
+      assert.equal(rstreamEnvResult().success, false),
+    )
+})

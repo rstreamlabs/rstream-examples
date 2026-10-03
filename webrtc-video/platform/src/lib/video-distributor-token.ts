@@ -7,7 +7,7 @@ import {
   type KeyObject,
 } from "node:crypto"
 
-export type MediaMTXAction = "publish" | "read"
+export type MediaMTXAction = "publish" | "read" | "playback"
 
 export type MediaMTXTokenOptions = {
   action: MediaMTXAction
@@ -79,7 +79,11 @@ export class MediaMTXTokenService {
   sign(options: MediaMTXTokenOptions) {
     const path = validateMediaPath(options.path)
     const subject = requiredClaim(options.subject, "subject")
-    if (options.action !== "publish" && options.action !== "read") {
+    if (
+      options.action !== "publish" &&
+      options.action !== "read" &&
+      options.action !== "playback"
+    ) {
       throw new Error("MediaMTX token action is invalid")
     }
     if (

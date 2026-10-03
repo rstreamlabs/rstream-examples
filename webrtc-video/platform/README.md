@@ -475,6 +475,60 @@ three-second deadline and a 32 KiB response bound. Cancelling one observer does
 not interrupt another; cancelling the last observer stops the upstream request.
 No metrics request starts the video source or adds a producer connection.
 
+## Optional recent recordings
+
+Recording is disabled by default. The private recent-recording API can be tested
+with the local MediaMTX stack:
+
+```bash
+npm run mediamtx:local -- --recording true
+```
+
+This explicitly enables MediaMTX recording and its private playback server,
+binds port 9996 to loopback and mounts a temporary 512 MiB recording volume.
+Recordings disappear when the container is removed. The producer still starts
+on demand; requesting an index or a recorded clip does not start a live source.
+The replay UI is being qualified separately; enabling this option currently
+provides the authenticated API, without changing live WebRTC playback.
+
+For a separate deployment, configure MediaMTX as described in the
+[distributor recording section](../distributor/README.md#optional-recent-recordings).
+Set `MEDIAMTX_PLAYBACK_URL` to its private HTTP(S) playback base URL and
+`MEDIAMTX_RECORDING_WINDOW_SECONDS` to the recent window to expose (300 seconds
+by default, 30–600 supported). An empty URL disables the API. The recent window
+restricts access; it does not configure disk retention or reserve storage.
+
+`GET /api/devices/<device-id>/recordings` returns the available time spans, or
+204 when disabled. `GET /api/devices/<device-id>/recordings/playback?start=<RFC3339>&duration=<seconds>`
+streams a standard MP4 clip of at most 30 seconds within that window. Every
+request checks device access. Discovered devices must still be present in the
+authorized live inventory; a stale database observation alone does not grant
+recording access. Separate spans can indicate a gap or codec/format change and
+must not be assumed to concatenate. Deletion between index and playback can
+return 404; an unavailable recording service returns 503.
+
+Next.js supplies a short-lived, path-scoped `playback` JWT to MediaMTX. No JWT,
+upstream URL or recording filename reaches the browser. Media responses stream
+with backpressure, a 30-second request deadline and a 64 MiB bound. Disconnects
+cancel upstream reads, including an unconsumed body. MediaMTX's MP4 endpoint
+does not support byte ranges; a Range request receives the bounded whole clip
+with status 200 and `Accept-Ranges: none`. No media body is cached by Next.js.
+Each application process admits four concurrent clips and four index reads;
+index requests coalesce for two seconds, with at most 128 cached devices and
+32 waiters per read. Capacity must account for the number of application
+processes and for replay traffic passing through Next.js.
+
+The native MediaMTX integration check requires `mediamtx` 1.20.0, FFmpeg,
+FFprobe and the Playwright Chromium/Firefox/WebKit runtimes:
+
+```bash
+npm run test:mediamtx-recording
+```
+
+This checks recording authorization, idle-source behavior, actual H.264
+recording and MP4 decoding, and deletion after a short test retention period.
+It does not replace the live latency/resource and replay-UI qualification.
+
 ## Optional source quality
 
 The player's **Full page** button expands the video inside the current tab,

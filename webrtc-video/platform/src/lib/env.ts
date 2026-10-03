@@ -45,6 +45,8 @@ const rstreamEnvSchema = z
     MEDIAMTX_EXPOSURE: z.enum(["public", "rstream"]).default("rstream"),
     MEDIAMTX_PUBLIC_URL: optionalUrlSchema,
     MEDIAMTX_METRICS_URL: optionalUrlSchema,
+    MEDIAMTX_PLAYBACK_URL: optionalUrlSchema,
+    MEDIAMTX_RECORDING_WINDOW_SECONDS: secondsSchema("300"),
     MEDIAMTX_TUNNEL_NAME: optionalStringSchema,
     MEDIAMTX_SOURCE_RESOLVER_JWKS: optionalStringSchema,
     MEDIAMTX_SOURCE_RESOLVER_ISSUER: z
@@ -115,8 +117,40 @@ const rstreamEnvSchema = z
       }
     }
     if (env.VIDEO_DISTRIBUTOR !== "mediamtx") {
+      if (env.MEDIAMTX_PLAYBACK_URL)
+        ctx.addIssue({
+          code: "custom",
+          path: ["MEDIAMTX_PLAYBACK_URL"],
+          message: "Playback requires VIDEO_DISTRIBUTOR=mediamtx.",
+        })
       return
     }
+    if (env.MEDIAMTX_PLAYBACK_URL) {
+      const url = new URL(env.MEDIAMTX_PLAYBACK_URL)
+      if (
+        env.MEDIAMTX_PLAYBACK_URL.length > 2048 ||
+        !["http:", "https:"].includes(url.protocol) ||
+        url.username ||
+        url.password ||
+        url.search ||
+        url.hash
+      )
+        ctx.addIssue({
+          code: "custom",
+          path: ["MEDIAMTX_PLAYBACK_URL"],
+          message:
+            "Playback requires an HTTP(S) base URL without credentials, query or fragment.",
+        })
+    }
+    if (
+      env.MEDIAMTX_RECORDING_WINDOW_SECONDS < 30 ||
+      env.MEDIAMTX_RECORDING_WINDOW_SECONDS > 600
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["MEDIAMTX_RECORDING_WINDOW_SECONDS"],
+        message: "Recording window must be from 30 through 600 seconds.",
+      })
     for (const [name, value] of [
       ["MEDIAMTX_SOURCE_RESOLVER_JWKS", env.MEDIAMTX_SOURCE_RESOLVER_JWKS],
       ["MEDIAMTX_JWT_PRIVATE_KEY_BASE64", env.MEDIAMTX_JWT_PRIVATE_KEY_BASE64],

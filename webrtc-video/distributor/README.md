@@ -272,6 +272,39 @@ reorder window closes, and RTX/FlexFEC packets that arrived too late. The
 current on-demand process deliberately does not open a second metrics listener
 per device.
 
+## Optional recent recordings
+
+The bundled configuration leaves `record` and `playback` disabled. To enable a
+short history, explicitly set `MTX_PATHDEFAULTS_RECORD=true` and
+`MTX_PLAYBACK=true`, then supply a writable `/recordings` mount owned by UID/GID
+10001. Keep playback port 9996 on loopback or a private network accessible to
+Next.js. Playback uses the existing JWT issuer/JWKS and a separate, path-scoped
+`playback` permission; live `read` and `publish` tokens cannot read recordings.
+The administrative API remains disabled.
+
+The configuration uses fMP4, one-second parts, an 8 MiB maximum part size,
+five-second minimum segments and five-minute retention. Recording only follows
+an already transmitting path. It does not create a permanent reader or change
+the on-demand source lifecycle. Codec changes and interruptions can split the
+available time spans.
+
+**Retention is not a byte quota.** MediaMTX cleans periodically (half the
+configured retention interval in version 1.20), and segments can exceed their
+minimum duration while waiting for a key frame. Use a dedicated filesystem with
+an enforced quota or a size-limited temporary volume. Size it for the aggregate
+bitrate of simultaneously active devices, cleanup delay and key-frame overhead.
+The local helper's 512 MiB tmpfs is bounded, consumes server memory, and is
+discarded with the container; it does not guarantee five minutes at every
+bitrate/device count. For sustained server use, prefer an appropriately sized
+quota-limited disk volume and monitor recording errors/free space. Keep media
+storage separate from logs and the system filesystem.
+
+Next.js exposes only the configured recent window and proxies bounded MP4
+clips; see the [platform API and local setup](../platform/README.md#optional-recent-recordings).
+Live video continues to use WebRTC. Qualify disk activity, full-volume behavior
+and simultaneous replay against your live latency/resource budget before
+enabling this optional feature in a deployment.
+
 ## Technical qualification
 
 Prepare the Linux host's UDP socket limits before live QUIC qualification:

@@ -167,6 +167,7 @@ try {
     RSTREAM_ENGINE: "engine.qualification.invalid:443",
     VIDEO_DISTRIBUTOR: "direct",
     MEDIAMTX_METRICS_URL: "",
+    MEDIAMTX_PLAYBACK_URL: "",
     NEXT_TELEMETRY_DISABLED: "1",
   }
   execFileSync(join(root, "node_modules/.bin/prisma"), ["migrate", "deploy"], {
@@ -209,6 +210,15 @@ try {
   if(inventory.error)throw new Error('simulated engine outage');
   return Response.json(inventory);
  }
+ if(url.hostname==='playback.qualification.invalid'){
+  const token=request.headers.get('authorization')?.replace(/^Bearer /,'');
+  const claims=JSON.parse(Buffer.from(token.split('.')[1],'base64url').toString());
+  const permission=claims.mediamtx_permissions;
+  if(permission.length!==1||permission[0].action!=='playback'||permission[0].path!==url.searchParams.get('path'))throw new Error('incorrect recording credential scope');
+  if(url.pathname==='/list')return Response.json([{start:new Date(Date.now()-60000).toISOString(),duration:30,url:'http://private.invalid/get?secret=never-forward'}]);
+  if(url.pathname==='/get'&&Number(url.searchParams.get('duration'))<=30)return new Response('test-media',{headers:{'Content-Type':'video/mp4'}});
+  throw new Error('invalid recording request');
+ }
  if(url.hostname==='metrics.qualification.invalid'){
   if(url.searchParams.get('type')!=='paths')throw new Error('Unscoped metrics scrape');
   const path=url.searchParams.get('path');
@@ -240,6 +250,27 @@ try {
     name: "Camera",
   })
   assert.equal(personal.status, 201)
+  assert.equal(
+    (
+      await request(
+        origin,
+        "alice",
+        `/api/devices/${personal.body.device.id}/recordings`,
+      )
+    ).status,
+    204,
+  )
+  assert.equal(
+    (
+      await request(
+        origin,
+        "alice",
+        `/api/devices/${personal.body.device.id}/recordings/playback`,
+      )
+    ).status,
+    404,
+  )
+
   assert.equal(
     (
       await request(
@@ -428,6 +459,7 @@ try {
     MEDIAMTX_TUNNEL_NAME: "qualification-media",
     MEDIAMTX_ALLOW_DIRECT_FALLBACK: "false",
     MEDIAMTX_METRICS_URL: "http://metrics.qualification.invalid/metrics",
+    MEDIAMTX_PLAYBACK_URL: "http://playback.qualification.invalid",
   }
   origin = await start("user")
   assert.equal(
@@ -451,6 +483,53 @@ try {
     404,
     "A warm metrics cache never bypasses ownership",
   )
+  const recordingPath = `/api/devices/${personal.body.device.id}/recordings`
+  const index = await request(origin, "alice", recordingPath)
+  assert.equal(index.status, 200)
+  assert.equal(index.body.spans.length, 1)
+  assert.equal(JSON.stringify(index.body).includes("private.invalid"), false)
+  assert.equal(
+    (await request(origin, "bob", recordingPath)).status,
+    404,
+    "Index cache does not bypass personal ownership",
+  )
+  assert.equal(
+    (await request(origin, "alice", `${recordingPath}?path=other`)).status,
+    400,
+  )
+  const clipQuery = new URLSearchParams({
+    start: index.body.spans[0].start,
+    duration: "5",
+  })
+  const clipURL = `${origin}${recordingPath}/playback?${clipQuery}`
+  const clip = await fetch(clipURL, {
+    headers: {
+      Cookie: `next-auth.session-token=${sessions.alice}`,
+      Range: "bytes=0-1",
+    },
+  })
+  assert.equal(clip.status, 200)
+  assert.equal(clip.headers.get("content-type"), "video/mp4")
+  assert.equal(clip.headers.get("accept-ranges"), "none")
+  assert.equal(await clip.text(), "test-media")
+  assert.equal(
+    (await request(origin, "bob", `${recordingPath}/playback?${clipQuery}`))
+      .status,
+    404,
+  )
+  const unauthenticated = await fetch(clipURL)
+  assert.equal(unauthenticated.status, 401)
+  await unauthenticated.body?.cancel()
+  assert.equal(
+    (
+      await request(
+        origin,
+        "alice",
+        `${recordingPath}/playback?start=invalid&duration=31`,
+      )
+    ).status,
+    400,
+  )
   origin = await start("organization")
   const requiredMedia = await request(origin, "alice", "/api/devices", {
     name: "Required media",
@@ -462,6 +541,14 @@ try {
     `/api/devices/${requiredMedia.body.device.id}/metrics`,
   )
   assert.equal(mediaMetrics.status, 200)
+  const orgRecordingPath = `/api/devices/${requiredMedia.body.device.id}/recordings`
+  assert.equal((await request(origin, "alice", orgRecordingPath)).status, 200)
+  assert.equal((await request(origin, "bob", orgRecordingPath)).status, 200)
+  assert.equal(
+    (await request(origin, "outsider", orgRecordingPath)).status,
+    403,
+  )
+
   assert.equal(mediaMetrics.body.readers, 2)
   assert.equal(mediaMetrics.body.inboundBitsPerSecond, null)
   assert.deepEqual(
@@ -816,6 +903,12 @@ try {
         .getByRole("heading", { name: "Inspection camera", exact: true })
         .waitFor({ timeout: 15000 })
       setInventory({ error: true })
+      assert.equal(
+        (await request(origin, "bob", `/api/devices/${discoveryID}/recordings`))
+          .status,
+        503,
+      )
+
       await page
         .getByText("Live inventory cannot be confirmed.", { exact: false })
         .waitFor({ timeout: 15000 })
@@ -885,6 +978,13 @@ try {
   setInventory([])
   const offline = await request(origin, "bob", "/api/devices")
   assert.equal(offline.body.devices[0].online, false)
+  assert.equal(
+    (await request(origin, "bob", `/api/devices/${discoveryID}/recordings`))
+      .status,
+    404,
+    "History alone does not authorize recorded media",
+  )
+
   assert.ok(offline.body.devices[0].lastSeenAt)
   assert.equal(
     (await request(origin, "bob", `/api/devices/${discoveryID}/metrics`))
