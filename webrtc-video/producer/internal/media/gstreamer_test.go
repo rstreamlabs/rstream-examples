@@ -3,14 +3,80 @@ package media
 import (
 	"context"
 	"errors"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+	"weak"
 
 	"github.com/go-gst/go-gst/gst"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/logs"
 )
+
+func TestClosedGStreamerSourceReleasesNativeCallbacks(t *testing.T) {
+	for _, lifecycle := range []string{"never-started", "playing", "stopped", "eos"} {
+		t.Run(lifecycle, func(t *testing.T) {
+			ref := closedSourceReference(t, lifecycle)
+			deadline := time.Now().Add(5 * time.Second)
+			for {
+				runtime.GC()
+				if ref.Value() == nil {
+					return
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("closed source is still reachable through its native appsink callbacks")
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+		})
+	}
+}
+
+// Keep source references and deferred cleanup off the caller's stack before
+// checking reachability. A weak pointer does not keep the Go/native cycle alive.
+func closedSourceReference(t *testing.T, lifecycle string) weak.Pointer[GStreamerSource] {
+	t.Helper()
+	pipeline := "videotestsrc is-live=true ! video/x-raw,width=32,height=24,framerate=30/1 ! appsink name=video sync=false"
+	if lifecycle == "eos" {
+		pipeline = strings.Replace(pipeline, "is-live=true", "is-live=true num-buffers=2", 1)
+	}
+	source, err := NewGStreamerSource(pipeline, "video", 500, logs.NewLogger(logs.NewHub(8), false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := source.Close(); err != nil {
+			t.Errorf("Close(): %v", err)
+		}
+	}()
+	if lifecycle != "never-started" {
+		units, unsubscribe := source.Subscribe()
+		defer unsubscribe()
+		if err := source.Start(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		timer := time.NewTimer(5 * time.Second)
+		defer timer.Stop()
+		for {
+			select {
+			case _, ok := <-units:
+				if !ok || lifecycle != "eos" {
+					goto received
+				}
+			case <-timer.C:
+				t.Fatal("pipeline did not produce a sample or complete EOS")
+			}
+		}
+	}
+received:
+	if lifecycle == "stopped" {
+		if err := source.Stop(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return weak.Make(source)
+}
 
 func TestConcurrentStartWaitsForTheActualPipelineTransition(t *testing.T) {
 	firstFailure := errors.New("first pipeline transition failed")

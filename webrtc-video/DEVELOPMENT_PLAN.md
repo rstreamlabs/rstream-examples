@@ -15,6 +15,10 @@ operating systems or networks.
   waits, lifecycle fixes, dependency updates and corresponding guide changes.
 - MediaMTX source RTCP consumption: sender reports must reach Pion's report
   interceptor so the producer receives usable round-trip measurements.
+- Explicit release of GStreamer's native appsink callbacks on source closure.
+  A reachability regression reproduces the previous source/pipeline retention
+  and checks never-started, playing, stopped and end-of-stream lifecycles;
+  the producer's full Go race suite passes with the fix.
 
 ## Implemented: project discovery; live-engine qualification pending
 

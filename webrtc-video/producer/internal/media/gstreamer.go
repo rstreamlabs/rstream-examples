@@ -293,6 +293,13 @@ func (s *GStreamerSource) Close() error {
 		stopBus()
 	}
 	<-s.busDone
+	if s.sink != nil {
+		// The native callback registry holds the closures, which retain this
+		// source and its pipeline. Break that cycle explicitly on close; waiting
+		// for the pipeline's Go finalizer would keep the whole source alive.
+		// Replacing callbacks is thread-safe with the supported GStreamer runtime.
+		s.sink.SetCallbacks(&app.SinkCallbacks{})
+	}
 	s.mu.Lock()
 	for ch := range s.subs {
 		close(ch)
