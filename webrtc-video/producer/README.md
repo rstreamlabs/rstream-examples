@@ -118,6 +118,7 @@ sudo apt install -y \
   gstreamer1.0-plugins-base \
   gstreamer1.0-plugins-good \
   gstreamer1.0-plugins-ugly \
+  gstreamer1.0-libav \
   gstreamer1.0-tools \
   libgstreamer-plugins-base1.0-dev \
   libgstreamer1.0-dev \
@@ -672,6 +673,12 @@ For tests:
 ```bash
 make test
 ```
+
+The source-format tests encode and decode real H.264 frames, so the development
+runtime also needs `avdec_h264` from GStreamer's libav plugin (`gstreamer1.0-libav`
+on Debian/Ubuntu, included above). Check it with `gst-inspect-1.0 avdec_h264`.
+This decoder is a test dependency; the producer's runtime pipeline and static
+distribution do not decode the transmitted video.
 
 The repository also ships Docker-based static packaging targets for Linux:
 

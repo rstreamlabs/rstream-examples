@@ -36,12 +36,25 @@ operating systems or networks.
   stale history, discovery outages and disabled persistence. Update existing
   README/guide sections and provide one CLI-backed producer configuration.
 
-## Added: optional source format adaptation
+## In progress: optional source format adaptation
 
 Resolution and frame-rate adaptation is a general-purpose WebRTC technique.
 [Libwebrtc's adaptation model](https://webrtc.googlesource.com/src/+/HEAD/video/g3doc/adaptation.md)
 separates resource observations, adaptation decisions and restrictions applied
 by a source. Follow that separation without attempting to recreate libwebrtc.
+
+The optional source-control interface and named GStreamer capsfilter adapter
+are implemented at the source layer. Real x264/avdec_h264 checks cover in-place
+resolution/frame-rate changes for capture-cap negotiation and scale/frame-drop
+pipelines, including a fractional rate on restart. The controller confirms
+encoded key-frame caps, distinguishes requested/observed/pending state, rejects
+overlapping requests, and cancels observation waits on stop/close. Tests cover
+timeouts, late observations, concurrent snapshots and native callback release.
+Existing application configurations still use bitrate-only control: YAML
+profiles, the independent format policy/worker, HTTP/UI state, negotiated codec
+limits and WebRTC/MediaMTX qualification remain to be integrated. Native decoder
+checks do not prove transport timestamp continuity, real-time cadence, latency,
+CPU improvement, arbitrary hardware support or AV1 format-switching support.
 
 1. Define optional format profiles with bitrate ceiling, dimensions and frame
    rate. Existing bitrate-only configurations must remain unchanged. Expose
@@ -134,6 +147,10 @@ Chromium and WebKit at desktop, narrow mobile and landscape sizes. The Firefox
 fixture still fails during ICE connectivity before expansion; qualification is
 pending and that failure remains a failing gate. Updated screenshots have been
 presented; the refined layout still awaits visual acceptance.
+The subsequent spacing refinement uses 8px between related controls/text and
+16px between groups, with full-width quality descriptions beneath the controls.
+Chromium and WebKit playback/layout checks were repeated and pass. The known
+Firefox ICE fixture failure remains; fresh mobile captures await acceptance.
 
 All changed UI/UX must be presented to the user as actual desktop and mobile
 screenshots in the conversation and explicitly validated. Include quality

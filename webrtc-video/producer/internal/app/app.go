@@ -62,6 +62,7 @@ func New(cfg config.Config) (*App, error) {
 		cfg.Media.SinkName,
 		cfg.InitialBitrateKbps(),
 		logger,
+		nil,
 	)
 	turn, err := turnprovider.NewProvider(cfg, provisioningClient)
 	if err != nil {

@@ -3,6 +3,7 @@ module github.com/rstreamlabs/rstream-examples/webrtc-video/producer
 go 1.26.6
 
 require (
+	github.com/go-gst/go-glib v1.4.0
 	github.com/go-gst/go-gst v1.4.0
 	github.com/pion/ice/v4 v4.4.1
 	github.com/pion/interceptor v0.1.47
@@ -21,7 +22,6 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/eclipse-keypont/crypto11 v1.6.8 // indirect
-	github.com/go-gst/go-glib v1.4.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/johnstarich/go/dns v0.2.5 // indirect
