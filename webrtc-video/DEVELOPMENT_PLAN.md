@@ -243,6 +243,21 @@ UDP limits are restored and owned containers removed. Investigate repair timing
 and transition behavior before claiming network qualification; latency and
 resource comparisons remain separate work.
 
+The repair-timing review reproduced two deterministic defects: retry deadlines
+were frozen at the RTT when the previous packet was sent, allowing premature
+retries after an RTT increase and unnecessarily delaying them after a decrease.
+Retries now compare the actual send time with the current smoothed RTT; bounded
+history survives later RTT increases. The fork's published revision `567a553`
+also exposes its existing transport-feedback RTT to an optional pacer observer,
+so repair timing no longer waits solely for periodic receiver reports. A real
+estimator/pacer regression fails with the previous pin and passes with the new
+one. Both modules use the same downloadable revision and pass checksum
+verification. Producer race, GCC and no-embedded-web suites, distributor race
+and separate MediaMTX 1.21.1 integration suites, and the fork's full race/lint
+checks pass. Live network measurements are still required to establish the
+effect on the retained transition failures. No queue, playout buffer, encoder
+ramp or acceptance threshold changed for this correction.
+
 The discovery configuration review additionally reproduced valid display names
 being rejected or changed when environment expansion encounters YAML quotes or
 backslashes. A literal scalar preserves those names; the real configuration

@@ -25,6 +25,7 @@ type minimumBitratePacer struct {
 }
 
 var _ gcc.Pacer = (*minimumBitratePacer)(nil)
+var _ gcc.RoundTripTimeObserver = (*minimumBitratePacer)(nil)
 
 func newMinimumBitratePacer(initialBitrate, minimumBitrate int) *minimumBitratePacer {
 	return newMinimumBitratePacerWithProtection(
@@ -153,6 +154,12 @@ func (p *minimumBitratePacer) observeRoundTripTime(roundTripTime time.Duration) 
 	if ok {
 		observer.observeRoundTripTime(roundTripTime)
 	}
+}
+
+// ObserveRoundTripTime receives GCC's transport-feedback RTT without waiting
+// for the next periodic receiver report. The delegate smooths/bounds samples.
+func (p *minimumBitratePacer) ObserveRoundTripTime(roundTripTime time.Duration) {
+	p.observeRoundTripTime(roundTripTime)
 }
 
 func (p *minimumBitratePacer) recoveryKeyFrameDelay() time.Duration {

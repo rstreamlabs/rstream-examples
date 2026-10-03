@@ -911,7 +911,7 @@ func (p *tokenBucketPacer) reserveRetransmissionAt(
 	if _, exists := p.pendingRetransmissions[key]; exists {
 		return retransmissionAlreadyPending
 	}
-	if eligibleAt, exists := p.recentRetransmissions[key]; exists && now.Before(eligibleAt) {
+	if sentAt, exists := p.recentRetransmissions[key]; exists && now.Sub(sentAt) < p.retransmissionMinimumIntervalLocked() {
 		return retransmissionRecentlySent
 	}
 	delete(p.recentRetransmissions, key)
@@ -928,7 +928,7 @@ func (p *tokenBucketPacer) releaseRetransmission(key retransmissionKey) {
 func (p *tokenBucketPacer) markRetransmissionSent(key retransmissionKey, sentAt time.Time) {
 	p.retransmissionMu.Lock()
 	delete(p.pendingRetransmissions, key)
-	p.recentRetransmissions[key] = sentAt.Add(p.retransmissionMinimumIntervalLocked())
+	p.recentRetransmissions[key] = sentAt
 	p.retransmissionMu.Unlock()
 }
 
@@ -966,8 +966,11 @@ func (p *tokenBucketPacer) pruneRetransmissionsLocked(now time.Time) {
 	if now.Before(p.nextRetransmissionPrune) {
 		return
 	}
-	for key, eligibleAt := range p.recentRetransmissions {
-		if !now.Before(eligibleAt) {
+	// Keep send times across RTT increases; a deadline computed at send time
+	// would permit premature retries when a path becomes congested. Retention
+	// is bounded by the largest RTT accepted by observeRoundTripTime.
+	for key, sentAt := range p.recentRetransmissions {
+		if now.Sub(sentAt) >= maximumObservedRTT+retransmissionSafetyMargin {
 			delete(p.recentRetransmissions, key)
 		}
 	}

@@ -640,6 +640,36 @@ func TestTokenBucketPacerSmoothsAndBoundsObservedRTT(t *testing.T) {
 	}
 }
 
+func TestTokenBucketPacerRetryUsesCurrentRTT(t *testing.T) {
+	for _, test := range []struct {
+		name                       string
+		initial, observed, elapsed time.Duration
+		want                       retransmissionReservation
+	}{
+		{"increasing RTT", 60 * time.Millisecond, 540 * time.Millisecond, 70 * time.Millisecond, retransmissionRecentlySent},
+		{"decreasing RTT", 500 * time.Millisecond, 100 * time.Millisecond, 460 * time.Millisecond, retransmissionReserved},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			pacer := newTokenBucketPacer(10_000_000, 1, 16)
+			t.Cleanup(func() {
+				if err := pacer.Close(); err != nil {
+					t.Error(err)
+				}
+			})
+			key := retransmissionKey{ssrc: 11, originalSequence: 123}
+			start := time.Unix(100, 0)
+			pacer.observeRoundTripTime(test.initial)
+			pacer.reserveRetransmissionAt(key, start)
+			pacer.markRetransmissionSent(key, start)
+			pacer.observeRoundTripTime(test.observed)
+			if got := pacer.reserveRetransmissionAt(key, start.Add(test.elapsed)); got != test.want {
+				t.Fatalf("reservation = %v, want %v with current RTT %v", got, test.want, pacer.retransmissionRTT())
+			}
+			pacer.releaseRetransmission(key)
+		})
+	}
+}
+
 func TestTokenBucketPacerDoesNotThrottleAnUnsentRetransmission(t *testing.T) {
 	pacer := newTokenBucketPacer(10_000_000, 1, 16)
 	t.Cleanup(func() {
@@ -675,7 +705,7 @@ func TestTokenBucketPacerPrunesCompletedRetransmissionWindows(t *testing.T) {
 		pacer.markRetransmissionSent(key, start)
 	}
 	trigger := retransmissionKey{ssrc: 11, originalSequence: 129}
-	if got := pacer.reserveRetransmissionAt(trigger, start.Add(2*time.Second)); got != retransmissionReserved {
+	if got := pacer.reserveRetransmissionAt(trigger, start.Add(maximumObservedRTT+retransmissionSafetyMargin)); got != retransmissionReserved {
 		t.Fatalf("prune-trigger reservation = %v, want reserved", got)
 	}
 	pacer.retransmissionMu.Lock()
@@ -685,6 +715,29 @@ func TestTokenBucketPacerPrunesCompletedRetransmissionWindows(t *testing.T) {
 		t.Fatalf("retained completed retransmission windows = %d, want 0", recent)
 	}
 	pacer.releaseRetransmission(trigger)
+}
+
+func TestTokenBucketPacerRetainsSendTimesAcrossRTTIncreases(t *testing.T) {
+	pacer := newTokenBucketPacer(10_000_000, 1, 16)
+	t.Cleanup(func() {
+		if err := pacer.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	start := time.Unix(100, 0)
+	key := retransmissionKey{ssrc: 11, originalSequence: 123}
+	pacer.observeRoundTripTime(time.Millisecond)
+	pacer.reserveRetransmissionAt(key, start)
+	pacer.markRetransmissionSent(key, start)
+	trigger := retransmissionKey{ssrc: 11, originalSequence: 124}
+	pacer.reserveRetransmissionAt(trigger, start.Add(time.Second))
+	pacer.releaseRetransmission(trigger)
+	for range 8 {
+		pacer.observeRoundTripTime(10 * time.Second)
+	}
+	if got := pacer.reserveRetransmissionAt(key, start.Add(1500*time.Millisecond)); got != retransmissionRecentlySent {
+		t.Fatalf("reservation after RTT increase = %v, want recently sent", got)
+	}
 }
 
 func TestTokenBucketPacerRepairsLossBeforeAReceiverReorderWindowCanOverflow(t *testing.T) {

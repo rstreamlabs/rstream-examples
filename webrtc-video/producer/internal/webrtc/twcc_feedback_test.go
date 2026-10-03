@@ -1,13 +1,63 @@
 package webrtc
 
 import (
+	"encoding/binary"
 	"testing"
+	"time"
 
 	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/pkg/gcc"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 )
+
+func TestAssociatedEstimatorFeedsTransportRTTToRetransmissionPacer(t *testing.T) {
+	pacer := newMinimumBitratePacer(5_000_000, 500_000)
+	underlying, err := gcc.NewSendSideBWE(gcc.SendSideBWEPacer(pacer))
+	if err != nil {
+		t.Fatal(err)
+	}
+	estimator := &associatedStreamBandwidthEstimator{SendSideBWE: underlying, pacer: pacer}
+	t.Cleanup(func() {
+		if err := estimator.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	sent := make(chan uint16, 1)
+	writer := estimator.AddStream(&interceptor.StreamInfo{
+		SSRC:                42,
+		RTPHeaderExtensions: []interceptor.RTPHeaderExtension{{URI: transportCCHeaderExtensionURI, ID: 1}},
+	}, interceptor.RTPWriterFunc(func(header *rtp.Header, payload []byte, _ interceptor.Attributes) (int, error) {
+		sent <- binary.BigEndian.Uint16(header.GetExtension(1))
+		return header.MarshalSize() + len(payload), nil
+	}))
+	if _, err := writer.Write(&rtp.Header{SSRC: 42, SequenceNumber: 1}, []byte{1}, nil); err != nil {
+		t.Fatal(err)
+	}
+	var sequence uint16
+	select {
+	case sequence = <-sent:
+	case <-time.After(time.Second):
+		t.Fatal("pacer did not send the test packet")
+	}
+	feedback := &rtcp.TransportLayerCC{
+		BaseSequenceNumber: sequence, PacketStatusCount: 1,
+		PacketChunks: []rtcp.PacketStatusChunk{&rtcp.RunLengthChunk{
+			Type: rtcp.TypeTCCRunLengthChunk, PacketStatusSymbol: rtcp.TypeTCCPacketReceivedSmallDelta, RunLength: 1,
+		}},
+		RecvDeltas: []*rtcp.RecvDelta{{Type: rtcp.TypeTCCPacketReceivedSmallDelta, Delta: 1000}},
+	}
+	if err := estimator.WriteRTCP([]rtcp.Packet{feedback}, nil); err != nil {
+		t.Fatal(err)
+	}
+	delegate := pacer.delegate.(*tokenBucketPacer)
+	delegate.retransmissionMu.Lock()
+	samples := delegate.retransmissionRoundTripSamples
+	delegate.retransmissionMu.Unlock()
+	if samples != 1 {
+		t.Fatalf("RTT observations after transport feedback = %d, want 1", samples)
+	}
+}
 
 func TestTrimTransportCCPaddingPreservesTheReportedStatuses(t *testing.T) {
 	feedback := transportCCFeedbackWithPadding()
