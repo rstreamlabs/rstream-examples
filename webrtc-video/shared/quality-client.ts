@@ -32,6 +32,30 @@ export type QualityState = {
   sourceFormat?: QualityFormatState;
 };
 
+// Describe confirmed encoder caps, independently of the selected policy and
+// measured playback cadence. Never present a requested profile as observed.
+export function sourceFormatDescription(state: QualityState): string | null {
+  const format = state.sourceFormat;
+  if (!format) return null;
+  if (!format.activeEncoders)
+    return "Source format applies when streaming starts.";
+  const observed = format.profiles.filter(
+    (profile) => profile.observedEncoders > 0,
+  );
+  let description = "Source format awaiting confirmation.";
+  if (observed.length > 1) {
+    description = "Source formats vary between active connections.";
+  } else if (observed.length === 1 && !format.unconfirmedEncoders) {
+    const profile = observed[0];
+    const fps =
+      Math.round(
+        (profile.frameRate.numerator / profile.frameRate.denominator) * 100,
+      ) / 100;
+    description = `Source format: ${profile.width} × ${profile.height} · ${fps} fps.`;
+  }
+  return format.pendingEncoders ? `${description} Updating…` : description;
+}
+
 const count = (value: unknown, maximum: number) =>
   Number.isSafeInteger(value) &&
   (value as number) >= 0 &&

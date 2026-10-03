@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { ChevronDown } from "lucide-react"
 import {
   QualityClient,
+  sourceFormatDescription,
   type QualityState,
 } from "../../../shared/quality-client"
 
@@ -44,6 +45,9 @@ export function QualitySelector({
     }
   }, [deviceId])
   if (!state) return null
+  const formatDescription = sourceFormatDescription(state)
+  const formatFailed = (state.sourceFormat?.failedUpdates ?? 0) > 0
+  const formatPending = (state.sourceFormat?.pendingEncoders ?? 0) > 0
   return (
     <div className="source-quality min-w-0 text-sm">
       <label className="flex min-w-0 items-center gap-3">
@@ -52,7 +56,7 @@ export function QualitySelector({
         <span className="relative min-w-0 flex-1 sm:max-w-56">
           <select
             aria-label="Source quality"
-            title="Source quality — applies to all viewers"
+            title={`Source quality — applies to all viewers${formatDescription ? `. ${formatDescription}` : ""}`}
             className="h-10 w-full cursor-pointer appearance-none truncate rounded-md border border-input bg-background pl-3 pr-10 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
             value={state.selected}
             disabled={busy || !!error}
@@ -82,7 +86,11 @@ export function QualitySelector({
           />
         </span>
       </label>
-      {!compact || state.failedUpdates > 0 || error ? (
+      {!compact ||
+      state.failedUpdates > 0 ||
+      formatFailed ||
+      formatPending ||
+      error ? (
         <div className="source-quality-details grid gap-2">
           {!compact ? (
             <p className="text-xs text-muted-foreground">
@@ -97,6 +105,17 @@ export function QualitySelector({
                 ? `–${state.maxAppliedBitrateKbps / 1000}`
                 : ""}{" "}
               Mbit/s.
+            </p>
+          ) : null}
+          {formatDescription && !error && (!compact || formatPending) ? (
+            <p role="status" className="text-xs text-muted-foreground">
+              {formatDescription}
+            </p>
+          ) : null}
+          {formatFailed ? (
+            <p className="text-xs text-destructive">
+              A source format change was not confirmed. Check producer
+              diagnostics.
             </p>
           ) : null}
           {state.failedUpdates > 0 ? (

@@ -182,6 +182,7 @@ try {
       platform: options.platform,
       waitForVideo,
       observeSustainedPlayback,
+      outputDirectory: dirname(options.output),
     })
     events.push({
       name: "quality-passed",
@@ -257,6 +258,22 @@ try {
       observedAt: elapsed(startedAt),
       width: fallback.width,
     })
+    if (process.env.RSTREAM_QUALIFICATION_SOURCE_FORMATS === "1") {
+      const quality = await qualifyQualityControls({
+        context,
+        page,
+        platform: options.platform,
+        waitForVideo,
+        observeSustainedPlayback,
+        outputDirectory: dirname(options.output),
+        direct: true,
+      })
+      events.push({
+        name: "direct-source-formats-passed",
+        observedAt: elapsed(startedAt),
+        ...quality,
+      })
+    }
   }
   await drainBrowserEvents(page, browserEvents)
   await exec("docker", ["start", options.container])

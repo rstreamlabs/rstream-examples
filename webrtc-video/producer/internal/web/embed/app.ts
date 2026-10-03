@@ -1,4 +1,7 @@
-import { QualityClient } from "../../../../shared/quality-client";
+import {
+  QualityClient,
+  sourceFormatDescription,
+} from "../../../../shared/quality-client";
 import { z } from "zod";
 
 import { WHEPClient } from "../../../../shared/whep-client";
@@ -675,6 +678,7 @@ void loadInfo()
 const qualityPanel = requiredHTMLElement("quality-panel");
 const qualitySelect = requiredSelectElement("quality-select");
 const qualityStatus = requiredHTMLElement("quality-status");
+const qualityFormat = requiredHTMLElement("quality-format");
 let qualityChanging = false;
 const qualityClient = new QualityClient({
   url: () => endpoint("/api/quality").toString(),
@@ -691,6 +695,12 @@ const qualityClient = new QualityClient({
     );
     qualitySelect.value = quality.selected;
     qualitySelect.disabled = qualityChanging;
+    const format = sourceFormatDescription(quality);
+    qualityFormat.hidden = format === null;
+    qualityFormat.textContent =
+      format === null
+        ? ""
+        : `${format}${quality.sourceFormat?.failedUpdates ? " A source format change was not confirmed; check producer diagnostics." : ""}`;
     qualityStatus.textContent =
       quality.failedUpdates > 0
         ? "Encoder update failures reported; check producer diagnostics."
@@ -701,6 +711,7 @@ const qualityClient = new QualityClient({
   onError: (error) => {
     qualitySelect.disabled = true;
     qualityStatus.textContent = error.message;
+    qualityFormat.hidden = true;
   },
 });
 qualitySelect.addEventListener("change", () => {

@@ -14,6 +14,18 @@ case "${quality}" in
 1) producer_config="config.provisioning.quality.h264.yaml" ;;
 *) printf 'RSTREAM_QUALIFICATION_QUALITY must be 0 or 1\n' >&2; exit 1 ;;
 esac
+source_formats="${RSTREAM_QUALIFICATION_SOURCE_FORMATS:-0}"
+case "${source_formats}" in
+0) ;;
+1)
+  if [[ "${quality}" != 1 ]]; then
+    printf 'Source-format qualification requires RSTREAM_QUALIFICATION_QUALITY=1\n' >&2
+    exit 1
+  fi
+  producer_config="config.provisioning.source-formats.h264.yaml"
+  ;;
+*) printf 'RSTREAM_QUALIFICATION_SOURCE_FORMATS must be 0 or 1\n' >&2; exit 1 ;;
+esac
 postgres_image="postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193"
 
 if [[ -z "${output_directory}" ]]; then

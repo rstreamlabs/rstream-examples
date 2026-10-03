@@ -4,6 +4,7 @@ import { setTimeout as delay } from "node:timers/promises"
 import {
   QualityClient,
   parseQualityState,
+  sourceFormatDescription,
 } from "../../shared/quality-client.ts"
 
 const version = "a".repeat(32) + ":0"
@@ -123,6 +124,62 @@ test("optional source formats preserve observed/requested state and reject incon
     mutate(invalid)
     assert.throws(() => parseQualityState(invalid))
   }
+})
+
+test("source format text uses confirmed caps rather than a newly selected profile", () => {
+  assert.equal(sourceFormatDescription(state), null)
+  const current = {
+    ...state,
+    selected: "high",
+    sourceFormat: {
+      activeEncoders: 1,
+      pendingEncoders: 1,
+      unconfirmedEncoders: 0,
+      profiles: [
+        {
+          id: "small",
+          width: 640,
+          height: 360,
+          frameRate: { numerator: 30000, denominator: 1001 },
+          observedEncoders: 1,
+          requestedEncoders: 0,
+        },
+        {
+          id: "large",
+          width: 1280,
+          height: 720,
+          frameRate: { numerator: 30, denominator: 1 },
+          observedEncoders: 0,
+          requestedEncoders: 1,
+        },
+      ],
+    },
+  }
+  assert.equal(
+    sourceFormatDescription(current),
+    "Source format: 640 × 360 · 29.97 fps. Updating…",
+  )
+  current.sourceFormat.pendingEncoders = 0
+  current.sourceFormat.profiles[0].observedEncoders = 0
+  current.sourceFormat.unconfirmedEncoders = 1
+  assert.equal(
+    sourceFormatDescription(current),
+    "Source format awaiting confirmation.",
+  )
+  current.sourceFormat.activeEncoders = 0
+  assert.equal(
+    sourceFormatDescription(current),
+    "Source format applies when streaming starts.",
+  )
+  current.sourceFormat.activeEncoders = 2
+  current.sourceFormat.profiles.forEach((profile) => {
+    profile.observedEncoders = 1
+  })
+  current.sourceFormat.unconfirmedEncoders = 0
+  assert.equal(
+    sourceFormatDescription(current),
+    "Source formats vary between active connections.",
+  )
 })
 
 test("quality client discovers modes and sends source version on selection", async () => {
