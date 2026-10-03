@@ -113,13 +113,21 @@ SDP advertised level 3.1 in seven bundled synthetic configurations. Browser
 receive offers observed in Chromium, Firefox and WebKit advertise level 3.1.
 Bundled H.264 pipelines now use 720p30 with explicit encoded level 3.1 caps.
 Fixed pipelines also check the receiver envelope before answering; the format
-profile path keeps its finer per-profile bounds. Tests check actual SPS/decoded
+profile path checks both declared level and per-profile bounds. Tests check actual SPS/decoded
 frames and real Pion negotiation, including rejection of level-4 senders by
 level-3.1 receivers and acceptance by compatible receivers. A custom 1080p
 level-4 pipeline still encodes/decodes in the native test. The full producer
 race suite passes. Historical 1080p network evidence remains unchanged and is
 identified as historical; it never proves current-profile or SDP conformance.
-Fresh direct/MediaMTX browser and network qualification remains required.
+Live qualification at `0bc9637` passes the provisioned rstream tunnel, two
+MediaMTX readers sharing one encoder, Low/Medium/High/Auto selection, stale-write
+409 rejection, deliberate distributor failure, direct fallback and MediaMTX
+recovery. The browser reports 1280×720 through all three playback observations.
+Measured MediaMTX ingress is 0.928/3.825/8.823 Mbit/s for Low/Medium/High on the
+unshaped path; the browser diagnostics gate reports no unexpected events.
+This is not a latency, impaired-network or physical-camera qualification.
+Native MediaMTX, forced-relay and network-impairment qualification of the current
+profile remains required.
 
 ## Cross-cutting latency and resource criteria
 
