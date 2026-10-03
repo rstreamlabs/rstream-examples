@@ -129,6 +129,32 @@ This is not a latency, impaired-network or physical-camera qualification.
 Native MediaMTX qualification of the current profile passes as described below.
 Forced-relay and network-impairment qualification remains required.
 
+### Current-profile source congestion investigation
+
+At clean revision `7cbb3c1`, three 720p30 adaptive MediaMTX runs limit only the
+producer-to-adapter path to 5 Mbit/s. Two fail continuity: the encoder recovers
+too aggressively while the link remains limited, causing secondary freezes.
+All three pass host/runtime integrity and recover their initial target after
+the limit is removed. These are genuine retained failures, not host exclusions.
+
+The existing Pion interceptor fork has a local candidate at `7516c4b` that
+bounds both multiplicative delay recovery and the combined loss/delay increase
+by observed throughput. Decreases remain immediate. Regression tests reproduce
+both defects before correction; the full interceptor race suite passes. This
+follows the receive-rate bound in
+[libwebrtc's rate controller](https://webrtc.googlesource.com/src/+/main/modules/remote_bitrate_estimator/aimd_rate_control.cc),
+without adding another encoder ramp or changing the sample's loss-hold settings.
+
+Three diagnostic runs with that exact candidate and identical images pass the
+unchanged gates. During the 15-second capacity phase they decode 25.5–26.4 fps;
+initial transition freezes total 2.061–2.099s, with no later freezes or decoded
+frame drops. Recovery reaches 7.57–8 Mbit/s from an 8 Mbit/s baseline. The first,
+incomplete correction remains a failed run with a secondary 0.842s freeze.
+The sample dependency is still pinned to its existing published revision;
+these local-override runs are explicitly non-publishable. Sustained congestion,
+dependency integration and fresh qualification of the resulting clean sample
+remain required. None of these results measures capture-to-display latency.
+
 ## Cross-cutting latency and resource criteria
 
 - Compare changes against the current path at equal source content and network
