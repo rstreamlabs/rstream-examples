@@ -10,14 +10,22 @@ import {
 } from "node:crypto"
 import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs"
 import { createServer } from "node:net"
-import { networkInterfaces, tmpdir } from "node:os"
+import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { setTimeout as delay } from "node:timers/promises"
 import { generateMediaMTXKeys } from "./generate-mediamtx-key.mjs"
 import { Client } from "pg"
 import { qualifyFullPage } from "./full-page.browser.mjs"
+import { launchBrowserContext } from "./browser-context.mjs"
 
 const root = resolve(import.meta.dirname, "..")
+const configuredPort = process.env.RSTREAM_ACCESS_TEST_PORT
+assert.ok(
+  configuredPort === undefined ||
+    (/^[1-9][0-9]{0,4}$/.test(configuredPort) &&
+      Number(configuredPort) <= 65535),
+  "RSTREAM_ACCESS_TEST_PORT must be a TCP port from 1 through 65535",
+)
 const runtime = mkdtempSync(join(tmpdir(), "rstream-video-access-"))
 const name = `rstream-video-access-${randomUUID()}`
 const docker = (...args) =>
@@ -54,7 +62,10 @@ async function stop() {
 }
 async function unusedPort() {
   const server = createServer()
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve))
+  await new Promise((resolve, reject) => {
+    server.once("error", reject)
+    server.listen(Number(configuredPort ?? 0), "127.0.0.1", resolve)
+  })
   const port = server.address().port
   await new Promise((resolve) => server.close(resolve))
   return port
@@ -788,11 +799,12 @@ try {
           chromium,
           { executablePath: process.env.RSTREAM_DISCOVERY_BROWSER },
         ],
+        ["recording-firefox", firefox, {}],
         ["recording-webkit", webkit, {}],
       ]) {
-        const browser = await type.launch({ ...options, headless: true })
+        const browser = await launchBrowserContext(type, options)
         try {
-          const context = await browser.newContext()
+          const { context } = browser
           await context.addCookies([
             {
               name: "next-auth.session-token",
@@ -835,41 +847,18 @@ try {
     }
     if (process.env.RSTREAM_FULL_PAGE_BROWSERS === "1") {
       const failures = []
-      const loopback = Object.entries(networkInterfaces()).find(
-        ([, addresses]) =>
-          addresses?.some(
-            (address) => address.internal && address.family === "IPv4",
-          ),
-      )?.[0]
-      assert.ok(
-        loopback,
-        "The local media fixture requires a loopback interface",
-      )
       for (const [name, type, options] of [
         [
           "chromium",
           chromium,
           { executablePath: process.env.RSTREAM_DISCOVERY_BROWSER },
         ],
-        [
-          "firefox",
-          firefox,
-          {
-            // Keep this same-machine media fixture on loopback, independent of
-            // LAN permissions, VPN routes and mDNS. This only configures the
-            // disposable test profile, never the application or a user's browser.
-            firefoxUserPrefs: {
-              "media.peerconnection.ice.loopback": true,
-              "media.peerconnection.ice.force_interface": loopback,
-              "media.peerconnection.ice.obfuscate_host_addresses": false,
-            },
-          },
-        ],
+        ["firefox", firefox, {}],
         ["webkit", webkit, {}],
       ]) {
-        const browser = await type.launch({ ...options, headless: true })
+        const browser = await launchBrowserContext(type, options)
         try {
-          const context = await browser.newContext()
+          const { context } = browser
           await context.addCookies([
             {
               name: "next-auth.session-token",

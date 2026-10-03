@@ -664,7 +664,7 @@ portrait/landscape layout and source disappearance. `RSTREAM_METRICS_BROWSER=1`
 also checks distribution indicators and recovery after a metrics outage. It does not replace network
 qualification or testing on physical mobile devices.
 `RSTREAM_RECORDING_BROWSER=1` additionally requires FFmpeg and checks real MP4
-decoding in Chromium/WebKit, replay navigation, gaps, expiry, index outages,
+decoding in Chromium/Firefox/WebKit, replay navigation, gaps, expiry, index outages,
 visibility cancellation and return to the same live session. The recording
 index and media service are controlled fixtures in this UI check; the native
 MediaMTX recording test above covers actual recording and retention.
@@ -672,6 +672,14 @@ The disposable Firefox profile permits loopback ICE, selects the local loopback
 interface and disables address obfuscation for this same-machine fixture. User
 browser profiles are untouched. A failed connection is reported as a failed
 qualification; successful layout checks alone do not establish media playback.
+For a separate Linux Firefox test host, set `RSTREAM_FIREFOX_WS_ENDPOINT` to
+an owned Playwright browser endpoint with the same Playwright version as the
+platform lockfile. `RSTREAM_ACCESS_TEST_PORT` optionally fixes the application's
+loopback port, so a TCP port forward can give that browser access to the test
+application at the same URL. Keep the browser endpoint and forwarded port
+private. This uses real WebRTC media without a browser HTTP proxy, which can
+restrict Firefox's UDP candidates. The default remains local browsers and
+automatically allocated application ports.
 
 With the rstream credentials in `.env.local`, Docker, and Chrome installed, run
 the complete distribution and quality paths:

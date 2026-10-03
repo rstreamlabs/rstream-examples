@@ -64,6 +64,50 @@ test("completed quality responses require a browser JSON-body observation, not j
     ])
 })
 
+test("recording index aborts require complete browser JSON, never headers or unrelated reads", () => {
+  const url = "http://localhost:3000/api/devices/camera/recordings"
+  const diagnostic = {
+    at: 1000,
+    type: "request-failed",
+    message: `GET ${url} net::ERR_ABORTED`,
+    phase: "quality-started",
+  }
+  const body = {
+    name: "recording-index-response-read",
+    method: "GET",
+    url,
+    at: 990,
+    status: 200,
+  }
+  assert.deepEqual(unexpectedBrowserDiagnostics([diagnostic], [], [body]), [])
+  assert.deepEqual(
+    unexpectedBrowserDiagnostics([diagnostic], [{ ...body, observedAt: 990 }]),
+    [diagnostic],
+  )
+  for (const event of [
+    { ...body, name: "quality-response-read" },
+    { ...body, method: "POST" },
+    { ...body, status: 503 },
+    { ...body, at: 3000 },
+    { ...body, at: NaN },
+    { ...body, url: `${url}/playback?start=now` },
+    { ...body, url: url.replace("camera", "another") },
+  ])
+    assert.deepEqual(unexpectedBrowserDiagnostics([diagnostic], [], [event]), [
+      diagnostic,
+    ])
+  for (const message of [
+    `GET ${url} net::ERR_TIMED_OUT`,
+    `GET ${url} net::ERR_FAILED`,
+    `POST ${url} net::ERR_ABORTED`,
+  ]) {
+    const failure = { ...diagnostic, message }
+    assert.deepEqual(unexpectedBrowserDiagnostics([failure], [], [body]), [
+      failure,
+    ])
+  }
+})
+
 test("metrics outage diagnostics require the matching 503 and deliberate stopped phase", () => {
   const url = "http://localhost:3000/api/devices/camera/metrics"
   const response = { method: "GET", url, status: 503, observedAt: 1000 }

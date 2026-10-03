@@ -126,8 +126,8 @@ recovery. The browser reports 1280×720 through all three playback observations.
 Measured MediaMTX ingress is 0.928/3.825/8.823 Mbit/s for Low/Medium/High on the
 unshaped path; the browser diagnostics gate reports no unexpected events.
 This is not a latency, impaired-network or physical-camera qualification.
-Native MediaMTX, forced-relay and network-impairment qualification of the current
-profile remains required.
+Native MediaMTX qualification of the current profile passes as described below.
+Forced-relay and network-impairment qualification remains required.
 
 ## Cross-cutting latency and resource criteria
 
@@ -183,12 +183,12 @@ Source quality is hidden during replay and controls remain below the picture.
 Closing replay cancels its media load; unmounting or hiding the page also
 cancels index reads. Returning to a visible page restores replay paused;
 expiry and unavailable indexes have
-explicit states. Browser checks pass in Chromium and WebKit for actual MP4
+explicit states. Browser checks pass in Chromium, Firefox and WebKit for actual MP4
 decoding, contiguous clips, stop-at-gap behavior, keyboard seeking, responsive
 layouts, expiry, index outage/recovery, visibility cancellation and return to the
 same live video/MediaStream without renegotiation. These checks use controlled
 recording responses; native MediaMTX storage and playback are covered separately.
-The platform's 167 unit checks, TypeScript check and production build pass, as
+The platform's 172 unit checks, TypeScript check and production build pass, as
 do the real PostgreSQL/Next.js route/access checks. Fresh desktop/mobile captures
 have been presented and the user has accepted the replay presentation in normal
 and full-page layouts.
@@ -214,8 +214,10 @@ media requests do not reliably settle Playwright's `response.finished()`,
 and Docker cannot copy a tmpfs through `docker cp`. The harness observes
 actual private-fetch release and copies bounded bytes inside the container.
 This qualifies live continuity on the tested path, not capture-to-display
-latency or recording CPU/memory overhead. Those measurements and Firefox
-application-level replay qualification remain.
+latency or recording CPU/memory overhead. Those measurements remain.
+Application-level replay now also passes in Firefox 155 on Linux with the same
+controlled-media UI checks; the local macOS Firefox ICE fixture failure remains
+documented separately below.
 
 MediaMTX 1.21.1 is undergoing final live qualification. The release binary and
 container image are pinned/verified; JWT/session/metrics, browser-origin checks,
@@ -226,7 +228,21 @@ readers; the producer negotiates it without a production-code change. Native
 source pacing remains fixed and FlexFEC stays on the adaptive adapter path.
 The initial capability guard correctly failed on this change; current native
 qualification explicitly requires upstream RTX, while downstream remains NACK
-and TWCC. Live native distribution and recording-storage regressions remain.
+and TWCC. Three live native-distribution runs at clean revision `02faff8` pass
+with identical images: no decoded-frame loss or freezes, one producer session,
+upstream RTX/NACK/TWCC and complete source teardown. Sampled producer CPU peaks
+range from 0.349 to 0.373 core and MediaMTX from 0.045 to 0.050 core on this test
+host; these are not hardware-independent budgets or capture-latency measures.
+
+The first 1.21.1 recording regression at `02faff8` passes the storage-fault
+subtest: 30 fps throughout, maximum presentation gap 66.7ms, a decodable closed
+segment after 6.868s, index recovery after 302.484s and private MP4 release 43ms
+after return-to-live. Quality selection, direct fallback and distributor recovery
+also pass. The overall run nevertheless fails its diagnostics gate on two
+Chromium index requests reported as aborted despite 200 headers. The harness
+now observes complete parsed index bodies and correlates exact URL/method/time,
+as it already does for quality JSON; headers alone, timeouts and unrelated
+requests still fail. A fresh full run is required; the failed run is retained.
 
 Provide optional short-retention recording and authenticated playback, keeping
 WebRTC as the live path. MediaMTX 1.20 supports recording and HTTP playback;
@@ -248,19 +264,22 @@ including mobile layouts, and present the new view for approval.
 The requested refinement places controls below the image in both layouts,
 keeps quality left-aligned, uses accessible icon-only expand/exit buttons and
 keeps the mobile controls on one line with a consistently spaced select chevron.
-These layout changes are implemented locally. Real-media UI checks pass in
-Chromium and WebKit at desktop, narrow mobile and landscape sizes. The Firefox
-fixture still fails during ICE connectivity before expansion; qualification is
-pending and that failure remains a failing gate. Updated screenshots have been
-presented; the refined layout still awaits visual acceptance.
-The subsequent spacing refinement uses 8px between related controls/text and
-16px between groups, with full-width quality descriptions beneath the controls.
-Chromium and WebKit playback/layout checks were repeated and pass. The known
-Firefox ICE fixture failure remains; fresh mobile captures await acceptance.
-The same 8px vertical spacing now covers wrapped device headers and player
-error/retry controls, including full-page error padding. Chromium responsive
-playback checks and the real PostgreSQL/Next.js access suite pass after this
-refinement; it does not resolve the separate Firefox qualification issue.
+These layout changes are implemented locally. Related controls/text use 8px
+spacing, with 16px between groups and full-width quality descriptions below the
+controls. The same 8px spacing covers wrapped device headers and player error /
+retry controls, including full-page error padding. Real-media UI checks pass in
+Chromium and WebKit on macOS and Firefox 155 on Linux at desktop, narrow mobile
+and landscape sizes, including full-page replay and return to the original live
+MediaStream. Updated screenshots have been presented; visual acceptance of the
+quality/format/metrics refinements remains separate from accepted replay controls.
+
+The initial macOS Firefox fixture still fails ICE, including a minimal media
+pair without the application. Preparing preferences before startup did not fix
+the full test. Linux Firefox passes with direct TCP access to the test application;
+Playwright's HTTP forwarding proxy restricted UDP candidates and is not used.
+The optional remote-browser endpoint and fixed application port make this
+qualification reproducible without changing application code or user profiles.
+Failed local/proxy runs are retained, not classified as successful or skipped.
 
 All changed UI/UX must be presented to the user as actual desktop and mobile
 screenshots in the conversation and explicitly validated. Include quality

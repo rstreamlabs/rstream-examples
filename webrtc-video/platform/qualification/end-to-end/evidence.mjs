@@ -25,7 +25,29 @@ export function unexpectedBrowserDiagnostics(
     (diagnostic) =>
       !expectedBrowserDiagnostic(diagnostic, signalingResponses) &&
       !intentionalQualityCancellation(diagnostic, browserEvents) &&
+      !completedRecordingIndexRead(diagnostic, browserEvents) &&
       !intentionalRecordingCancellation(diagnostic, browserEvents),
+  )
+}
+
+function completedRecordingIndexRead(diagnostic, events) {
+  if (diagnostic.type !== "request-failed" || !Number.isFinite(diagnostic.at))
+    return false
+  const match =
+    /^GET (https?:\/\/\S+\/api\/devices\/[^/?\s]+\/recordings) net::ERR_ABORTED$/.exec(
+      diagnostic.message,
+    )
+  if (!match) return false
+  // As for quality JSON, require the complete parsed body in the browser.
+  // A 200 header or an arbitrary abort never establishes successful delivery.
+  return events.some(
+    (event) =>
+      event.name === "recording-index-response-read" &&
+      event.method === "GET" &&
+      event.url === match[1] &&
+      event.status === 200 &&
+      Number.isFinite(event.at) &&
+      Math.abs(event.at - diagnostic.at) <= 1000,
   )
 }
 

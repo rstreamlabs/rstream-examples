@@ -70,20 +70,44 @@ try {
       }
       return originalFetch(input, init).then((response) => {
         if (
-          /\/api\/devices\/[^/]+\/quality$/.test(url) &&
+          /\/api\/devices\/[^/]+\/(quality|recordings)$/.test(url) &&
           response.status === 200
         ) {
           void response
             .clone()
             .json()
             .then((body) => {
+              if (init?.signal?.aborted) return
               if (
+                /\/quality$/.test(url) &&
                 Array.isArray(body.modes) &&
                 typeof body.version === "string" &&
                 body.modes.some((mode) => mode.id === body.selected)
               ) {
                 window.__rstreamQualificationEvents.push({
                   name: "quality-response-read",
+                  at: Date.now(),
+                  url: new URL(url, window.location.href).href,
+                  method: init?.method ?? "GET",
+                  status: response.status,
+                })
+              } else if (
+                /\/recordings$/.test(url) &&
+                Number.isFinite(Date.parse(body.windowStart)) &&
+                Number.isFinite(Date.parse(body.windowEnd)) &&
+                Number.isFinite(body.maximumClipSeconds) &&
+                body.maximumClipSeconds > 0 &&
+                body.maximumClipSeconds <= 30 &&
+                Array.isArray(body.spans) &&
+                body.spans.length <= 256 &&
+                body.spans.every(
+                  (span) =>
+                    Number.isFinite(Date.parse(span.start)) &&
+                    Date.parse(span.end) > Date.parse(span.start),
+                )
+              ) {
+                window.__rstreamQualificationEvents.push({
+                  name: "recording-index-response-read",
                   at: Date.now(),
                   url: new URL(url, window.location.href).href,
                   method: init?.method ?? "GET",

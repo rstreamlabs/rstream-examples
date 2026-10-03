@@ -445,27 +445,31 @@ export async function qualifyFullPage({
       `PASS: ${name} full-page playback continuity, same tab, keyboard/focus, scroll restoration, responsive layouts and source loss`,
     )
   } catch (error) {
-    await capture("failure")
+    // Preserve the actual failure if navigation/disconnection also prevents
+    // diagnostics or a screenshot from being collected.
+    await capture("failure").catch(() => {})
     console.error(
       name,
-      await page.evaluate(() => ({
-        text: document.body.innerText,
-        source: window.__fullPageSource?.peer.connectionState,
-        ice: window.__fullPageSource?.peer.iceConnectionState,
-        localCandidates:
-          window.__fullPageSource?.peer.localDescription?.sdp.match(
-            /a=candidate:/g,
-          )?.length ?? 0,
-        remoteCandidates:
-          window.__fullPageSource?.peer.remoteDescription?.sdp.match(
-            /a=candidate:/g,
-          )?.length ?? 0,
-        video: document.querySelector("video") && {
-          ready: document.querySelector("video").readyState,
-          time: document.querySelector("video").currentTime,
-          paused: document.querySelector("video").paused,
-        },
-      })),
+      await page
+        .evaluate(() => ({
+          text: document.body.innerText,
+          source: window.__fullPageSource?.peer.connectionState,
+          ice: window.__fullPageSource?.peer.iceConnectionState,
+          localCandidates:
+            window.__fullPageSource?.peer.localDescription?.sdp.match(
+              /a=candidate:/g,
+            )?.length ?? 0,
+          remoteCandidates:
+            window.__fullPageSource?.peer.remoteDescription?.sdp.match(
+              /a=candidate:/g,
+            )?.length ?? 0,
+          video: document.querySelector("video") && {
+            ready: document.querySelector("video").readyState,
+            time: document.querySelector("video").currentTime,
+            paused: document.querySelector("video").paused,
+          },
+        }))
+        .catch(() => ({ unavailable: true })),
       { sessions, errors, signaling },
     )
     throw error
