@@ -1,7 +1,7 @@
 // Real rstream tunnel publication, Next.js routes and isolated PostgreSQL.
 // Only GitHub membership is mocked; OAuth sign-in itself is not qualified here.
 import assert from "node:assert/strict"
-import { execFileSync, spawn } from "node:child_process"
+import { execFileSync, spawn, spawnSync } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import {
   chmodSync,
@@ -62,6 +62,7 @@ let origin,
 let producerSequence = 0
 let result
 let stage = "setup"
+let playback = null
 const command = (file, args, options = {}) =>
   execFileSync(file, args, {
     encoding: "utf8",
@@ -163,7 +164,14 @@ async function startNext(remember) {
 function stopProducer() {
   if (!producerStarted) return
   docker("stop", "--time", "10", producerName)
-  const log = docker("logs", producerName)
+  const logs = spawnSync("docker", ["logs", producerName], {
+    encoding: "utf8",
+    timeout: 10000,
+    maxBuffer: 4 * 1024 * 1024,
+  })
+  if (logs.error || logs.status !== 0)
+    throw new Error("Could not collect producer logs")
+  const log = logs.stdout + logs.stderr
   // Keep raw logs in the private runtime until sanitized in final cleanup.
   writeFileSync(join(runtime, `producer-${producerSequence}.log`), log, {
     mode: 0o600,
@@ -211,6 +219,108 @@ async function device(actor = "alice") {
   const result = await request(actor, "/api/devices")
   assert.equal(result.status, 200, "inventory request must succeed")
   return result.body.devices.find((value) => value.id === deviceID)
+}
+async function qualifyPlayback() {
+  const executablePath = process.env.RSTREAM_DISCOVERY_BROWSER
+  if (!executablePath) return null
+  const { chromium } = require("playwright-core")
+  const browser = await chromium.launch({ executablePath, headless: true })
+  const stopOnAbort = () => {
+    void browser.close().catch(() => {})
+  }
+  abort.signal.addEventListener("abort", stopOnAbort, { once: true })
+  try {
+    abort.signal.throwIfAborted()
+    const context = await browser.newContext()
+    await context.addCookies([
+      { name: "next-auth.session-token", value: sessions.bob, url: origin },
+    ])
+    await context.addInitScript(() => {
+      const NativePeer = window.RTCPeerConnection
+      window.__discoveryPeers = []
+      window.RTCPeerConnection = class extends NativePeer {
+        constructor(...args) {
+          super(...args)
+          window.__discoveryPeers.push(this)
+        }
+      }
+    })
+    const page = await context.newPage()
+    let pageErrors = 0
+    page.on("pageerror", () => pageErrors++)
+    await page.goto(origin, { waitUntil: "domcontentloaded", timeout: 30000 })
+    await page.waitForFunction(
+      () => {
+        const video = document.querySelector("video")
+        return (
+          video?.readyState >= 2 &&
+          video.videoWidth === 1280 &&
+          video.videoHeight === 720
+        )
+      },
+      undefined,
+      { timeout: 45000 },
+    )
+    const sample = () =>
+      page.evaluate(async () => {
+        const peer = window.__discoveryPeers.find(
+          (value) => value.connectionState === "connected",
+        )
+        if (!peer) throw new Error("No connected discovery viewer")
+        const reports = [...(await peer.getStats()).values()]
+        const inbound = reports.find(
+          (value) => value.type === "inbound-rtp" && value.kind === "video",
+        )
+        const transport = reports.find(
+          (value) =>
+            value.type === "transport" && value.selectedCandidatePairId,
+        )
+        const pair = reports.find(
+          (value) => value.id === transport?.selectedCandidatePairId,
+        )
+        const local = reports.find(
+          (value) => value.id === pair?.localCandidateId,
+        )
+        const remote = reports.find(
+          (value) => value.id === pair?.remoteCandidateId,
+        )
+        return {
+          at: performance.now(),
+          framesDecoded: inbound?.framesDecoded ?? 0,
+          width: inbound?.frameWidth,
+          height: inbound?.frameHeight,
+          localCandidateType: local?.candidateType,
+          remoteCandidateType: remote?.candidateType,
+        }
+      })
+    const before = await sample()
+    await delay(3000, undefined, { signal: abort.signal })
+    const after = await sample()
+    const framesPerSecond =
+      ((after.framesDecoded - before.framesDecoded) * 1000) /
+      (after.at - before.at)
+    assert.ok(
+      framesPerSecond >= 24,
+      "Discovered producer must sustain at least 24 decoded fps",
+    )
+    assert.equal(after.width, 1280)
+    assert.equal(after.height, 720)
+    assert.equal(pageErrors, 0)
+    const quality = await request("alice", `/api/devices/${deviceID}/quality`)
+    assert.equal(quality.status, 200)
+    assert.equal(quality.body.activeEncoders, 1)
+    return {
+      framesPerSecond,
+      width: after.width,
+      height: after.height,
+      localCandidateType: after.localCandidateType,
+      remoteCandidateType: after.remoteCandidateType,
+      activeEncoders: quality.body.activeEncoders,
+    }
+  } finally {
+    abort.signal.removeEventListener("abort", stopOnAbort)
+    await browser.close()
+  }
 }
 const safetyTimer = setTimeout(() => process.emit("SIGTERM"), 8 * 60 * 1000)
 const abort = new AbortController()
@@ -426,6 +536,18 @@ try {
     "low",
   )
   gates.sourceControlAndConcurrentSelection = true
+  stage = "direct playback from discovered producer"
+  playback = await qualifyPlayback()
+  if (playback) {
+    const closedAt = performance.now()
+    await until("encoder stops after viewer closure", async () => {
+      const quality = await request("alice", `/api/devices/${deviceID}/quality`)
+      return quality.status === 200 && quality.body.activeEncoders === 0
+    })
+    playback.encoderStoppedAfterBrowserClosureMilliseconds =
+      performance.now() - closedAt
+    gates.directPlaybackAndEncoderLifecycle = true
+  }
   stopProducer()
   await until("offline history", async () => (await device())?.online === false)
   assert.equal(
@@ -485,7 +607,7 @@ try {
       command("git", ["status", "--porcelain"], { cwd: root }) !== "",
     image: docker("image", "inspect", "--format", "{{.Id}}", image),
     githubMembership: "fixture",
-    mediaPlayback: "not exercised",
+    mediaPlayback: playback ?? "not exercised",
     nextBuild: readFileSync(join(root, ".next/BUILD_ID"), "utf8").trim(),
   }
 } catch (error) {

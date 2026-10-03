@@ -664,6 +664,13 @@ reconnection/rename, offline history and live-only inventory. It cleans up its
 containers and private context. Only GitHub membership responses are substituted;
 rstream APIs, tunnel publication and producer HTTP controls are real. This check
 does not exercise video playback or an organization's actual OAuth/SSO policy.
+Optionally set `RSTREAM_DISCOVERY_BROWSER` to a Chrome/Chromium executable to
+include direct playback from the discovered producer, decoded 720p frame cadence
+and encoder shutdown after the viewer closes. This does not force a relay path
+or qualify MediaMTX distribution. First prepare adequate Linux UDP socket limits
+as described in the [distribution prerequisites](../distributor/README.md#technical-qualification).
+Abrupt browser closure can use the producer's bounded ICE recovery grace period
+before it stops the encoder; the result records this elapsed time.
 
 To additionally exercise full-page viewing in Chromium, Firefox and WebKit:
 

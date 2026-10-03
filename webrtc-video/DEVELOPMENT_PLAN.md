@@ -45,7 +45,13 @@ behavior. Offline history cannot authorize source control or viewer credentials.
 Inventory/control reads leave the encoder idle. Only GitHub membership is
 substituted; actual OAuth/SSO approval and discovery-backed MediaMTX playback are
 not established by this check. Its scoped temporary tunnel, containers and
-private CLI context are removed on completion.
+private CLI context are removed on completion. The non-playback check passes at
+clean revision `ce9fef5`. An optional Chromium path additionally opens the actual
+discovered producer, observes 720p decoded-frame progress, and checks one active
+encoder followed by shutdown after browser closure. Its first run passes with a
+browser relay candidate and 30.94 fps; the changed harness still requires its
+clean-revision repeat. This short functional observation does not establish
+capture-to-display latency or impaired-network performance.
 
 ## In progress: optional source format adaptation
 
