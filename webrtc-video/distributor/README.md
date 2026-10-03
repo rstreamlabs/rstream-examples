@@ -299,6 +299,16 @@ bitrate/device count. For sustained server use, prefer an appropriately sized
 quota-limited disk volume and monitor recording errors/free space. Keep media
 storage separate from logs and the system filesystem.
 
+**Full storage temporarily disables history.** MediaMTX 1.20 can leave incomplete
+fMP4 segments after `ENOSPC`; its playback index rejects the whole requested
+interval if any segment cannot be parsed. Freeing space lets recording resume,
+but history can remain unavailable until those files expire. With the bundled
+five-minute retention, allow up to another cleaner interval (2.5 minutes).
+Next.js reports this as unavailable, keeps live viewing independent and retries
+the index. It does not delete segments or claim a complete history during the
+fault. Prevent saturation with sufficient capacity and monitoring; this optional
+history is not an archival recording service.
+
 Next.js exposes only the configured recent window and proxies bounded MP4
 clips; see the [platform API and local setup](../platform/README.md#optional-recent-recordings).
 Live video continues to use WebRTC. Qualify disk activity, full-volume behavior

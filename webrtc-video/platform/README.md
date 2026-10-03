@@ -710,6 +710,12 @@ volume. It checks real replay through the platform, two readers sharing one
 encoder, and live-session preservation. It deliberately fills only that owned
 512 MiB tmpfs, requires an actual recorder `ENOSPC` failure, checks presented
 frame cadence before/during/after the fault, then releases the filler and waits
-for new recorded segments. Partial observations are retained in `recording.json`.
+for new recorded segments. It requires `ffprobe` to decode a newly closed segment
+within 30 seconds after freeing space. MediaMTX can leave incomplete files that
+make its entire playback index unavailable: the test separately requires index
+recovery within eight minutes (five-minute retention, 2.5-minute cleaner interval
+and polling margin), while keeping the same live frame-rate and gap gates
+throughout. No recorded file is deleted to accelerate recovery. Partial
+observations and both recovery times are retained in `recording.json`.
 This fault test does not measure capture-to-display latency or compare recording
 overhead against a recording-disabled baseline.

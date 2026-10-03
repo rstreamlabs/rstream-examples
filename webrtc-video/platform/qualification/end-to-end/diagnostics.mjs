@@ -50,7 +50,15 @@ function stoppedObservationDiagnostic(diagnostic, responses) {
   // History polling continues while live viewing falls back to the producer;
   // MediaMTX remains deliberately stopped throughout these phases too.
   if (match[2] === "recordings")
-    phases.push("direct-fallback-playing", "direct-source-formats-passed")
+    phases.push(
+      "direct-fallback-playing",
+      "direct-source-formats-passed",
+      // Native MediaMTX rejects an index containing a partial ENOSPC segment.
+      // The recording test independently requires eventual retention recovery
+      // and uninterrupted live frames throughout this bounded fault interval.
+      "recording-storage-full",
+      "recording-storage-recovering",
+    )
   if (!phases.includes(diagnostic.phase)) return false
   // The observation client discards the unavailable response body. An aborted
   // body is expected only after this same GET actually received a 503 during

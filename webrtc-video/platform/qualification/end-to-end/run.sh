@@ -35,6 +35,10 @@ case "${recording}" in
     exit 1
   fi
   recording_enabled=true
+  if ! command -v ffprobe >/dev/null; then
+    printf 'ffprobe is required for recording recovery qualification\n' >&2
+    exit 1
+  fi
   ;;
 *) printf 'RSTREAM_QUALIFICATION_RECORDING must be 0 or 1\n' >&2; exit 1 ;;
 esac

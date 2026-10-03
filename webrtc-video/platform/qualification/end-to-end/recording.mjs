@@ -49,12 +49,12 @@ export async function qualifyRecording({
       await response.dispose()
     }
   }
-  const until = async (check, label, timeout = 30000) => {
+  const until = async (check, label, timeout = 30000, interval = 500) => {
     const end = Date.now() + timeout
     while (Date.now() < end) {
       const value = await check()
       if (value) return value
-      await delay(500)
+      await delay(interval)
     }
     throw new Error(`Recording qualification deadline: ${label}`)
   }
@@ -90,7 +90,42 @@ export async function qualifyRecording({
     assert.equal(inventory.status, 200)
     assert.equal(inventory.body.devices.length, 1)
     const device = inventory.body.devices[0].id
+    assert.match(device, /^[0-9a-f-]{36}$/)
     const base = `/api/devices/${device}`
+    const recordingDirectory = `/recordings/devices/${device}`
+    const segments = async () => {
+      const { stdout } = await docker(
+        "exec",
+        container,
+        "find",
+        recordingDirectory,
+        "-maxdepth",
+        "1",
+        "-type",
+        "f",
+        "-name",
+        "*.mp4",
+        "-exec",
+        "stat",
+        "-c",
+        "%n %s",
+        "{}",
+        "+",
+      )
+      return stdout
+        .trim()
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => {
+          const match =
+            /^(.*\/\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-\d{6}\.mp4) (\d+)$/.exec(
+              line,
+            )
+          assert.ok(match && match[1].startsWith(`${recordingDirectory}/`))
+          return { path: match[1], bytes: Number(match[2]) }
+        })
+        .sort((a, b) => a.path.localeCompare(b.path))
+    }
     const index = async () => {
       const response = await read(`${base}/recordings`)
       assert.equal(
@@ -303,19 +338,92 @@ export async function qualifyRecording({
       ).stdout.trim(),
       "true false",
     )
+    result.segmentsAfterFault = await segments()
+    const oldSegments = new Set(
+      result.segmentsAfterFault.map((segment) => segment.path),
+    )
     await docker("exec", container, "rm", filler)
     filling = false
     const releasedAt = Date.now()
-    mark("recording-storage-recovering")
-    const recovered = await until(async () => {
-      const value = await index()
-      return (
-        value.spans.some((span) => Date.parse(span.end) > releasedAt + 1000) &&
-        value
+    // MediaMTX 1.20 leaves incomplete segments after ENOSPC and rejects the
+    // entire index until they expire. Distinguish recorder recovery from index
+    // recovery; never delete native segments to make the fault appear repaired.
+    // This bound covers the bundled 5m retention + 2.5m cleaner interval + 30s
+    // scheduling/polling margin. Do not silently use it with another config.
+    const recordingConfig = (
+      await docker("exec", container, "cat", "/etc/rstream/mediamtx.yml")
+    ).stdout
+    assert.match(recordingConfig, /^  recordDeleteAfter: 5m$/m)
+    const environment = JSON.parse(
+      (await docker("inspect", "--format", "{{json .Config.Env}}", container))
+        .stdout,
+    )
+    assert.ok(
+      !environment.some((entry) =>
+        entry.startsWith("MTX_PATHDEFAULTS_RECORDDELETEAFTER="),
+      ),
+    )
+    result.indexRecoveryBudgetMilliseconds = 480000
+    result.unavailableIndexPolls = 0
+    await observe("storage-recovering", 0, async () => {
+      const segment = await until(
+        async () => {
+          const current = await segments()
+          // A later segment proves the candidate is no longer being written.
+          return current
+            .slice(0, -1)
+            .find((entry) => !oldSegments.has(entry.path) && entry.bytes > 1024)
+        },
+        "recorder writes a new complete segment",
+        30000,
+        1000,
       )
-    }, "new recording after space is released")
-    result.recoveredSpans = recovered.spans
-    result.recoveryMilliseconds = Date.now() - releasedAt
+      const local = join(outputDirectory, "recovered-segment.mp4")
+      await docker("cp", `${container}:${segment.path}`, local)
+      const probe = await exec(
+        "ffprobe",
+        [
+          "-v",
+          "error",
+          "-count_frames",
+          "-show_entries",
+          "stream=codec_name,width,height,nb_read_frames",
+          "-of",
+          "json",
+          local,
+        ],
+        { timeout: 15000, maxBuffer: 1024 * 1024 },
+      )
+      assert.equal(probe.stderr, "")
+      const video = JSON.parse(probe.stdout).streams[0]
+      assert.equal(video.codec_name, "h264")
+      assert.equal(video.width, 1280)
+      assert.equal(video.height, 720)
+      assert.ok(Number(video.nb_read_frames) >= 30)
+      result.recorderRecoveryMilliseconds = Date.now() - releasedAt
+      assert.ok(result.recorderRecoveryMilliseconds <= 30000)
+      result.recoveredSegment = { ...segment, ...video }
+      const recovered = await until(
+        async () => {
+          const response = await read(`${base}/recordings`)
+          if (response.status === 503) {
+            result.unavailableIndexPolls++
+            return false
+          }
+          assert.equal(response.status, 200)
+          return (
+            response.body.spans.some(
+              (span) => Date.parse(span.end) > releasedAt + 1000,
+            ) && response.body
+          )
+        },
+        "recording index recovers within retention and cleanup bound",
+        result.indexRecoveryBudgetMilliseconds - (Date.now() - releasedAt),
+        5000,
+      )
+      result.recoveredSpans = recovered.spans
+      result.indexRecoveryMilliseconds = Date.now() - releasedAt
+    })
     result.after = await storage()
     assert.ok(result.after.availableKiB > 0)
     await observe("recovered", 10000)

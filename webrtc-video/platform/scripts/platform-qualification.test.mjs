@@ -139,7 +139,7 @@ test("native recording cancellation requires the observed return-to-live action 
     ])
 })
 
-test("recording outage diagnostics stay scoped to the deliberate server outage, including direct fallback", () => {
+test("recording outage diagnostics stay scoped to deliberate server or storage faults", () => {
   const url = "http://localhost:3000/api/devices/camera/recordings"
   const response = { method: "GET", url, status: 503, observedAt: 1000 }
   const diagnostic = {
@@ -148,10 +148,17 @@ test("recording outage diagnostics stay scoped to the deliberate server outage, 
     phase: "direct-fallback-playing",
     observedAt: 1001,
   }
-  assert.equal(expectedBrowserDiagnostic(diagnostic, [response]), true)
+  for (const phase of [
+    "direct-fallback-playing",
+    "recording-storage-full",
+    "recording-storage-recovering",
+  ])
+    assert.equal(
+      expectedBrowserDiagnostic({ ...diagnostic, phase }, [response]),
+      true,
+    )
   for (const phase of [
     "recording-baseline",
-    "recording-storage-full",
     "recording-recovered",
     "mediamtx-recovered",
   ])
