@@ -109,19 +109,27 @@ input {
 .video-player {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .video-player-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  gap: 0.75rem;
+  gap: 0.5rem 0.75rem;
 }
 
 .video-player-toolbar .source-quality {
+  display: contents;
+}
+
+.video-player-toolbar .source-quality > label {
   grid-column: 1;
   grid-row: 1;
+}
+
+.video-player-toolbar .source-quality-details {
+  grid-column: 1 / -1;
 }
 
 .video-player-toolbar .video-player-expand {
@@ -156,9 +164,9 @@ input {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   flex: none;
   align-items: start;
-  gap: 0.75rem 1.5rem;
-  padding: 0.75rem max(1rem, env(safe-area-inset-right))
-    max(0.75rem, env(safe-area-inset-bottom))
+  gap: 0.5rem 1.5rem;
+  padding: 0.5rem max(1rem, env(safe-area-inset-right))
+    max(0.5rem, env(safe-area-inset-bottom))
     max(1rem, env(safe-area-inset-left));
   border-top: 1px solid var(--border);
 }

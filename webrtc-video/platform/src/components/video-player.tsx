@@ -255,7 +255,7 @@ export function VideoPlayer({
         </div>
       ) : null}
       {distributor && !expanded ? (
-        <div className="space-y-1">
+        <div className="space-y-2">
           <p className="text-xs text-muted-foreground" aria-live="polite">
             Distribution path:{" "}
             <span className="font-medium text-foreground">

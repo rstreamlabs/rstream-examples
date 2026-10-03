@@ -124,8 +124,8 @@ export default async function Page() {
 
 function PageFooter({ account }: { account?: string }) {
   return (
-    <footer className="flex flex-col gap-3 border-t border-border pt-5 text-sm text-muted-foreground lg:flex-row lg:items-center lg:justify-between">
-      <div className="flex min-w-0 flex-col gap-1 lg:flex-row lg:items-center lg:gap-5">
+    <footer className="flex flex-col gap-4 border-t border-border pt-4 text-sm text-muted-foreground lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:gap-5">
         <p className="lg:whitespace-nowrap">Powered by rstream tunnels.</p>
         {account ? (
           <p className="break-all lg:truncate lg:break-normal">
@@ -133,7 +133,7 @@ function PageFooter({ account }: { account?: string }) {
           </p>
         ) : null}
       </div>
-      <div className="flex flex-col gap-1 lg:flex-row lg:items-center lg:gap-5 lg:whitespace-nowrap">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-5 lg:whitespace-nowrap">
         <a
           href={GITHUB_URL}
           target="_blank"

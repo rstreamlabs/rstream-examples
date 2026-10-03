@@ -100,7 +100,7 @@ export function DistributionMetrics({ deviceId }: { deviceId: string }) {
   const rate = (value: number) => `${(value / 1_000_000).toFixed(1)} Mbit/s`
   return (
     <p
-      className="distribution-metrics flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"
+      className="distribution-metrics flex flex-wrap gap-x-3 gap-y-2 text-xs text-muted-foreground"
       title={`MediaMTX observation: ${metrics.sampledAt}`}
     >
       <span>

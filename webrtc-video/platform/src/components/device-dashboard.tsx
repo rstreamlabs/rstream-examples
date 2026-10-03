@@ -155,7 +155,7 @@ export function DeviceDashboard({
     }
   }
   return (
-    <div className="grid min-w-0 gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
+    <div className="grid min-w-0 gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
       <section className="min-w-0 space-y-4">
         {discovered ? (
           <p className="text-sm text-muted-foreground">
@@ -200,7 +200,7 @@ export function DeviceDashboard({
         </div>
       </section>
       <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card p-4 sm:p-5">
-        <div className="min-w-0 space-y-5">
+        <div className="min-w-0 space-y-4">
           <SelectedDeviceHeader
             device={active}
             unavailable={inventoryUnavailable}
@@ -248,12 +248,12 @@ function SelectedDeviceHeader({
     <div className="flex min-h-[56px] min-w-0 flex-wrap items-center justify-between gap-3">
       {device ? (
         <>
-          <div className="min-w-0">
+          <div className="min-w-0 space-y-2">
             <p className="text-sm text-muted-foreground">Selected device</p>
             <h2 className="break-words text-2xl font-semibold text-foreground">
               {device.name}
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {unavailable ? "Live status unavailable" : presenceLabel(device)}
             </p>
           </div>
@@ -460,12 +460,12 @@ function DeviceRow({
           onSelect()
         }}
       >
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 space-y-2">
           <p className="truncate font-medium text-foreground">{device.name}</p>
-          <p className="mt-1 truncate text-xs text-muted-foreground">
+          <p className="truncate text-xs text-muted-foreground">
             {device.tunnelName}
           </p>
-          <p className="mt-1 truncate text-xs text-muted-foreground">
+          <p className="truncate text-xs text-muted-foreground">
             {unavailable ? "Live status unavailable" : presenceLabel(device)}
           </p>
         </div>

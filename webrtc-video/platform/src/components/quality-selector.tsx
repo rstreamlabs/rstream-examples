@@ -45,7 +45,7 @@ export function QualitySelector({
   }, [deviceId])
   if (!state) return null
   return (
-    <div className="source-quality min-w-0 space-y-1 text-sm">
+    <div className="source-quality min-w-0 text-sm">
       <label className="flex min-w-0 items-center gap-3">
         <span className="hidden shrink-0 sm:inline">Source quality</span>
         <span className="shrink-0 sm:hidden">Quality</span>
@@ -82,31 +82,35 @@ export function QualitySelector({
           />
         </span>
       </label>
-      {!compact ? (
-        <p className="text-xs text-muted-foreground">
-          Applies to all viewers of this device. The source can reduce its
-          bitrate when the uplink is congested.
-        </p>
-      ) : null}
-      {state.activeEncoders > 0 && !compact ? (
-        <p className="text-xs text-muted-foreground">
-          Encoder target: {state.minAppliedBitrateKbps / 1000}
-          {state.minAppliedBitrateKbps !== state.maxAppliedBitrateKbps
-            ? `–${state.maxAppliedBitrateKbps / 1000}`
-            : ""}{" "}
-          Mbit/s.
-        </p>
-      ) : null}
-      {state.failedUpdates > 0 ? (
-        <p className="text-xs text-destructive">
-          The encoder reported quality update failures. Check producer
-          diagnostics.
-        </p>
-      ) : null}
-      {error ? (
-        <p role="status" className="text-xs text-destructive">
-          {error}
-        </p>
+      {!compact || state.failedUpdates > 0 || error ? (
+        <div className="source-quality-details grid gap-2">
+          {!compact ? (
+            <p className="text-xs text-muted-foreground">
+              Applies to all viewers of this device. The source can reduce its
+              bitrate when the uplink is congested.
+            </p>
+          ) : null}
+          {state.activeEncoders > 0 && !compact ? (
+            <p className="text-xs text-muted-foreground">
+              Encoder target: {state.minAppliedBitrateKbps / 1000}
+              {state.minAppliedBitrateKbps !== state.maxAppliedBitrateKbps
+                ? `–${state.maxAppliedBitrateKbps / 1000}`
+                : ""}{" "}
+              Mbit/s.
+            </p>
+          ) : null}
+          {state.failedUpdates > 0 ? (
+            <p className="text-xs text-destructive">
+              The encoder reported quality update failures. Check producer
+              diagnostics.
+            </p>
+          ) : null}
+          {error ? (
+            <p role="status" className="text-xs text-destructive">
+              {error}
+            </p>
+          ) : null}
+        </div>
       ) : null}
     </div>
   )
