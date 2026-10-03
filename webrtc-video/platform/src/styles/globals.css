@@ -203,7 +203,7 @@ input {
 
 .video-player[data-expanded="true"] .video-player-error {
   flex: none;
-  padding: 0.75rem 1rem max(0.75rem, env(safe-area-inset-bottom));
+  padding: 0.5rem 1rem max(0.5rem, env(safe-area-inset-bottom));
 }
 
 @media (max-width: 639px) {

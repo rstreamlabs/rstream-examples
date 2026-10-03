@@ -245,7 +245,7 @@ function SelectedDeviceHeader({
   unavailable: boolean
 }) {
   return (
-    <div className="flex min-h-[56px] min-w-0 flex-wrap items-center justify-between gap-3">
+    <div className="flex min-h-[56px] min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
       {device ? (
         <>
           <div className="min-w-0 space-y-2">

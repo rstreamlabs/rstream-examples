@@ -188,7 +188,7 @@ export function VideoPlayer({
           autoPlay
         />
         {phase === "playing" ? null : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background">
             {phase === "blocked" ? (
               <Button type="button" size="sm" onClick={playCurrentStream}>
                 Play stream
@@ -238,7 +238,7 @@ export function VideoPlayer({
         </Button>
       </div>
       {error ? (
-        <div className="video-player-error flex flex-wrap items-center gap-3">
+        <div className="video-player-error flex flex-wrap items-center gap-x-3 gap-y-2">
           <p className="text-sm text-destructive">{error}</p>
           <Button
             type="button"

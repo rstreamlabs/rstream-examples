@@ -192,6 +192,10 @@ The subsequent spacing refinement uses 8px between related controls/text and
 16px between groups, with full-width quality descriptions beneath the controls.
 Chromium and WebKit playback/layout checks were repeated and pass. The known
 Firefox ICE fixture failure remains; fresh mobile captures await acceptance.
+The same 8px vertical spacing now covers wrapped device headers and player
+error/retry controls, including full-page error padding. Chromium responsive
+playback checks and the real PostgreSQL/Next.js access suite pass after this
+refinement; it does not resolve the separate Firefox qualification issue.
 
 All changed UI/UX must be presented to the user as actual desktop and mobile
 screenshots in the conversation and explicitly validated. Include quality
