@@ -94,6 +94,19 @@ configs in mind.
 
 The H.264 profiles use `videotestsrc`, `videoconvert`, `x264enc`, `h264parse`, and `appsink`. The AV1 profiles use `av1enc` and `av1parse` on top of the same structure.
 
+The bundled H.264 profiles use 720p30 and explicitly constrain the encoded
+stream to level 3.1, matching their SDP and the browser receive offers tested
+with this sample. Earlier 1080p profiles emitted level 4 while announcing 3.1.
+The producer now checks the receiver's level and maximum bitrate before
+answering, including fixed pipelines without optional format control.
+Custom 1080p30 pipelines remain possible with a matching level 4 encoder/SDP
+configuration and receivers that advertise sufficient capacity on every leg.
+`level-asymmetry-allowed=1` does not grant additional receive capacity;
+see [RFC 6184, section 8.2.2](https://www.rfc-editor.org/rfc/rfc6184#section-8.2.2).
+Keep custom encoded caps within the declared limits; the producer does not
+rewrite arbitrary pipelines or infer camera capabilities from pipeline text.
+The reference MediaMTX adapter currently advertises level 3.1 on both legs.
+
 ### macOS
 
 ```bash
@@ -651,13 +664,17 @@ The main settings are:
 - `webrtc.adaptive.twccGCC.changeThresholdPct` and `decreaseThresholdPct`, which keep small estimator fluctuations from reconfiguring the encoder while preserving the available pacing headroom; startup validation rejects a decrease threshold that the configured FlexFEC ratio cannot safely absorb
 - `webrtc.adaptive.twccGCC.maxIncreaseLossPct`, which prevents a delayed estimator increase from raising the encoder target while measured packet loss is still above the configured recovery threshold
 
-#### Reference operating envelope
+#### Historical 1080p operating envelope
 
-The reference settings form one coherent 1080p30 qualification profile. Its
+The evidence at revision `ca8a308` used one coherent 1080p30 transport profile. Its
 limits were exercised together across the direct and relay matrices; changing
 the codec, frame cadence, resolution, CPU budget, or network envelope calls for
 a new qualification run. Each report records the Git revision that produced
 the result, so the measured trade-offs remain tied to an exact implementation.
+Those records do not establish H.264 level conformance: that revision announced
+level 3.1 while producing level 4. Current browser examples use 720p30 and require
+fresh network qualification; the historical measurements below are retained
+without relabeling them as results for the new profile.
 
 | Setting                |                                                       Reference value | Reason and trade-off                                                                                                                                                                                                                                                                                                                                                                     |
 | ---------------------- | --------------------------------------------------------------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

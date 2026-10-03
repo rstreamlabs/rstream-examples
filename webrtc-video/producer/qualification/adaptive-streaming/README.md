@@ -5,6 +5,14 @@ bandwidth, latency, and packet loss. It compares a managed rstream TURN path
 with an isolated direct reference, then moves the active producer between two
 interfaces to qualify Trickle ICE and ICE restart on the recovered session.
 
+The current bundled H.264 source is 1280×720 at 30 fps, explicitly bounded to
+level 3.1 in both the encoder and SDP. The manifest expects that resolution;
+stale prepared 1080p runtimes are rejected. Historical evidence at `ca8a308`
+used 1920×1080 and remains unchanged. It is a transport/playback record for
+that revision, not proof of the current profile or H.264 level conformance.
+Compare revisions at identical source settings. Frame-rate, freeze, QP,
+queue, recovery and network-loss gates are unchanged.
+
 ## What the harness measures
 
 For QUIC signaling, first prepare adequate UDP socket limits on the Linux

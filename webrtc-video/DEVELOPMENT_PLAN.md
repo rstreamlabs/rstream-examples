@@ -108,13 +108,18 @@ support or AV1 format-switching support.
    Only claim support for tested pipelines. Document the optional mechanism in
    the existing guides without any application-specific hardware references.
 
-Prerequisite under investigation: the existing 1080p30 x264 sample produces
-an SPS with level 4 (`42c028`, confirmed with GStreamer 1.28.6), while the
-configured SDP uses level 3.1 (`42e01f`). Audit actual offer/answer receive
-capabilities and source limits under RFC 6184 before enabling format upgrades.
-Changing the advertised level alone does not establish that a receiver can
-decode it; retain this as an open compatibility issue until negotiated limits
-and real decoded output are checked on direct and MediaMTX paths.
+The H.264 compatibility audit reproduced level-4 SPS output (`42c028`) while
+SDP advertised level 3.1 in seven bundled synthetic configurations. Browser
+receive offers observed in Chromium, Firefox and WebKit advertise level 3.1.
+Bundled H.264 pipelines now use 720p30 with explicit encoded level 3.1 caps.
+Fixed pipelines also check the receiver envelope before answering; the format
+profile path keeps its finer per-profile bounds. Tests check actual SPS/decoded
+frames and real Pion negotiation, including rejection of level-4 senders by
+level-3.1 receivers and acceptance by compatible receivers. A custom 1080p
+level-4 pipeline still encodes/decodes in the native test. The full producer
+race suite passes. Historical 1080p network evidence remains unchanged and is
+identified as historical; it never proves current-profile or SDP conformance.
+Fresh direct/MediaMTX browser and network qualification remains required.
 
 ## Cross-cutting latency and resource criteria
 

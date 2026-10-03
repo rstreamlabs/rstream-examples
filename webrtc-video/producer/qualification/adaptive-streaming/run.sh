@@ -853,6 +853,13 @@ fi
 record_setup_milestone runtime-prepared
 
 effective_config_path="${runtime_directory}/${path_kind}-config.yaml"
+# This matrix qualifies the current bundled browser profile. Reject an old
+# prepared 1080p runtime rather than attributing its results to the 720p source.
+if ! grep -Fq 'width=1280,height=720,framerate=30/1' "${effective_config_path}" ||
+   ! grep -Fq 'level=(string)3.1' "${effective_config_path}"; then
+  printf 'qualification requires the current 720p30 H264 level 3.1 reference pipeline\n' >&2
+  exit 1
+fi
 initial_bitrate_kbps="$(sed -nE 's/^[[:space:]]*initialBitrateKbps:[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' "${effective_config_path}")"
 minimum_bitrate_kbps="$(sed -nE 's/^[[:space:]]*minBitrateKbps:[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' "${effective_config_path}")"
 maximum_bitrate_kbps="$(sed -nE 's/^[[:space:]]*maxBitrateKbps:[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' "${effective_config_path}")"
@@ -1011,8 +1018,8 @@ jq -n \
     },
     video: {
       codec: "H264",
-      width: 1920,
-      height: 1080,
+      width: 1280,
+      height: 720,
       framesPerSecond: 30,
       playoutDelayHintSeconds: $playout_delay_hint,
       adaptive: {

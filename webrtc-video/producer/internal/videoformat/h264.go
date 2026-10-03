@@ -53,7 +53,7 @@ func H264Bounds(fmtp string, receiver bool) (H264Limits, error) {
 	}
 	profile, err := hex.DecodeString(parameters["profile-level-id"])
 	if err != nil || len(profile) != 3 || parameters["packetization-mode"] != "1" {
-		return H264Limits{}, errors.New("source format control requires explicit H264 profile-level-id and packetization-mode=1")
+		return H264Limits{}, errors.New("H264 requires explicit profile-level-id and packetization-mode=1")
 	}
 	limits, err := h264Level(profile[1], profile[2])
 	if err != nil {
@@ -101,6 +101,15 @@ func H264Bounds(fmtp string, receiver bool) (H264Limits, error) {
 	// The total encoder target is bounded by the VCL rate; this is conservative
 	// relative to the higher NAL rate allowance, even with in-band headers.
 	return limits, nil
+}
+
+// AcceptsEnvelope checks a fixed pipeline whose only declared size/rate bound
+// is its configured H264 level. Source-format profiles also use Allows to
+// validate their dimensions/rate. Neither method rewrites a receiver's offer or
+// treats level-asymmetry-allowed as extra decoding capacity.
+func (l H264Limits) AcceptsEnvelope(sender H264Limits, bitrateKbps int) bool {
+	return bitrateKbps > 0 && int64(bitrateKbps) <= min(l.BitrateKbps, sender.BitrateKbps) &&
+		sender.Macroblocks <= l.Macroblocks && sender.MacroblocksPerSecond <= l.MacroblocksPerSecond
 }
 
 func h264Level(constraints, level byte) (H264Limits, error) {

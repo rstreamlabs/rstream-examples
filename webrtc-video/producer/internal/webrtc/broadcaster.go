@@ -20,6 +20,7 @@ import (
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/logs"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/media"
 	turnprovider "github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/turn"
+	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/videoformat"
 	"github.com/rstreamlabs/rstream-go"
 )
 
@@ -158,6 +159,7 @@ type Session struct {
 	formatWorker              *adaptation.FormatWorker
 	formatConfig              *config.SourceFormatConfig
 	formatBitrateLimit        int
+	videoBitrateLimit         int
 	close                     sync.Once
 	closed                    chan struct{}
 	lifecycleMu               sync.Mutex
@@ -318,18 +320,19 @@ func (b *Broadcaster) OpenSession(ctx context.Context) (*Session, error) {
 	}
 	samples, unsubscribe := source.Subscribe()
 	session := &Session{
-		id:            sessionID,
-		logger:        b.logger,
-		pc:            peerConnection,
-		track:         track,
-		sender:        sender,
-		unsubscribe:   unsubscribe,
-		release:       release,
-		estimator:     estimator,
-		encoder:       encoderController,
-		closed:        make(chan struct{}),
-		mediaReady:    make(chan struct{}),
-		receiverReady: make(chan struct{}),
+		id:                sessionID,
+		logger:            b.logger,
+		pc:                peerConnection,
+		track:             track,
+		sender:            sender,
+		unsubscribe:       unsubscribe,
+		release:           release,
+		estimator:         estimator,
+		encoder:           encoderController,
+		closed:            make(chan struct{}),
+		mediaReady:        make(chan struct{}),
+		receiverReady:     make(chan struct{}),
+		videoBitrateLimit: b.cfg.MaximumVideoBitrateKbps(),
 		writeNativeTrackProbe: func() error {
 			return track.WriteSample(rtcmedia.Sample{
 				Data:     []byte(nativeMediaMTXTrackProbe),
@@ -550,6 +553,9 @@ func (s *Session) SetEncoderTargetBitrateKbps(value int) error {
 	if s.encoder == nil {
 		return errors.New("dynamic encoder control is unavailable")
 	}
+	if value > s.videoBitrateLimit {
+		return errors.New("encoder target exceeds the configured session bitrate limit")
+	}
 	return s.encoder.SetTargetBitrateKbps(value)
 }
 
@@ -694,19 +700,29 @@ func (s *Session) createAnswer(ctx context.Context, offer string, gatherComplete
 	}); err != nil {
 		return "", fmt.Errorf("failed to apply the remote offer: %w", err)
 	}
-	if s.formatConfig != nil {
+	if strings.EqualFold(s.track.Codec().MimeType, webrtc.MimeTypeH264) {
 		matched := false
 		for _, codec := range s.sender.GetParameters().Codecs {
 			if strings.EqualFold(codec.MimeType, webrtc.MimeTypeH264) {
-				if err := config.ValidateSourceFormatBounds(*s.formatConfig, s.formatBitrateLimit, codec.SDPFmtpLine, true); err != nil {
-					return "", fmt.Errorf("receiver cannot accept configured source profiles: %w", err)
+				if s.formatConfig != nil {
+					if err := config.ValidateSourceFormatBounds(*s.formatConfig, s.formatBitrateLimit, codec.SDPFmtpLine, true); err != nil {
+						return "", fmt.Errorf("receiver cannot accept configured source profiles: %w", err)
+					}
+				}
+				sender, err := videoformat.H264Bounds(s.track.Codec().SDPFmtpLine, false)
+				if err != nil {
+					return "", fmt.Errorf("invalid configured H264 sender: %w", err)
+				}
+				receiver, err := videoformat.H264Bounds(codec.SDPFmtpLine, true)
+				if err != nil || !receiver.AcceptsEnvelope(sender, s.videoBitrateLimit) {
+					return "", errors.New("receiver cannot accept the configured H264 level and maximum bitrate")
 				}
 				matched = true
 				break
 			}
 		}
 		if !matched {
-			return "", errors.New("receiver did not negotiate H264 source format support")
+			return "", errors.New("receiver did not negotiate H264 support")
 		}
 	}
 	answer, err := s.pc.CreateAnswer(nil)

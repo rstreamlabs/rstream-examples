@@ -46,6 +46,12 @@ The implementation is split by responsibility:
 
 ## Qualified reference path
 
+The following results belong to the historical `ca8a308` 1080p30 revision.
+Current H.264 browser examples use 720p30 with matching level 3.1 encoder/SDP
+limits; the earlier examples produced level 4 while advertising 3.1. The
+historical matrix remains useful as a transport record, but does not establish
+codec conformance or qualify the revised source profile.
+
 ![Adaptive 1080p30 response under controlled congestion](./producer/qualification/evidence/ca8a308/direct-reference/adaptive-bitrate.svg)
 
 The selected matrix contains three direct and three forced-rstream-relay runs
