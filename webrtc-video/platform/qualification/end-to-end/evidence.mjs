@@ -24,7 +24,29 @@ export function unexpectedBrowserDiagnostics(
   return diagnostics.filter(
     (diagnostic) =>
       !expectedBrowserDiagnostic(diagnostic, signalingResponses) &&
-      !intentionalQualityCancellation(diagnostic, browserEvents),
+      !intentionalQualityCancellation(diagnostic, browserEvents) &&
+      !intentionalRecordingCancellation(diagnostic, browserEvents),
+  )
+}
+
+function intentionalRecordingCancellation(diagnostic, events) {
+  if (
+    diagnostic.type !== "request-failed" ||
+    diagnostic.phase !== "recording-return-live-requested" ||
+    !Number.isFinite(diagnostic.at)
+  )
+    return false
+  const match =
+    /^GET (https?:\/\/\S+\/api\/devices\/[^/?\s]+\/recordings\/playback\?\S+) net::ERR_ABORTED$/.exec(
+      diagnostic.message,
+    )
+  if (!match) return false
+  return events.some(
+    (event) =>
+      event.name === "recording-return-live-requested" &&
+      event.url === match[1] &&
+      Number.isFinite(event.at) &&
+      Math.abs(event.at - diagnostic.at) <= 1000,
   )
 }
 

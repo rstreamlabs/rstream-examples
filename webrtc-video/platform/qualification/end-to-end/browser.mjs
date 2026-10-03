@@ -34,6 +34,7 @@ try {
     ignoreHTTPSErrors: false,
     viewport: { height: 900, width: 1440 },
   })
+  context.setDefaultTimeout(30000)
   await context.addCookies([
     {
       httpOnly: true,

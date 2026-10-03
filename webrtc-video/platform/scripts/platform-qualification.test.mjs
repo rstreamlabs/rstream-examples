@@ -107,6 +107,38 @@ test("metrics outage diagnostics require the matching 503 and deliberate stopped
   }
 })
 
+test("native recording cancellation requires the observed return-to-live action for that exact media URL", () => {
+  const url =
+    "http://localhost:3000/api/devices/camera/recordings/playback?start=2026-10-03T12%3A00%3A00Z&duration=10"
+  const diagnostic = {
+    type: "request-failed",
+    message: `GET ${url} net::ERR_ABORTED`,
+    phase: "recording-return-live-requested",
+    at: 1000,
+  }
+  const event = { name: "recording-return-live-requested", url, at: 990 }
+  assert.deepEqual(unexpectedBrowserDiagnostics([diagnostic], [], [event]), [])
+  for (const events of [
+    [],
+    [{ ...event, url: url + "0" }],
+    [{ ...event, at: 4000 }],
+    [{ ...event, name: "recording-baseline" }],
+  ])
+    assert.deepEqual(unexpectedBrowserDiagnostics([diagnostic], [], events), [
+      diagnostic,
+    ])
+  for (const changed of [
+    { ...diagnostic, phase: "recording-baseline" },
+    {
+      ...diagnostic,
+      message: diagnostic.message.replace("ERR_ABORTED", "ERR_FAILED"),
+    },
+  ])
+    assert.deepEqual(unexpectedBrowserDiagnostics([changed], [], [event]), [
+      changed,
+    ])
+})
+
 test("recording outage diagnostics stay scoped to the deliberate server outage, including direct fallback", () => {
   const url = "http://localhost:3000/api/devices/camera/recordings"
   const response = { method: "GET", url, status: 503, observedAt: 1000 }

@@ -164,7 +164,6 @@ export async function qualifyRecording({
     )
     const response = await request.response()
     assert.equal(response.status(), 200)
-    assert.equal(await response.finished(), null)
     result.replay = {
       status: response.status(),
       width: 1280,
@@ -172,9 +171,41 @@ export async function qualifyRecording({
       duration: Number(new URL(request.url()).searchParams.get("duration")),
     }
     assert.ok(result.replay.duration > 0 && result.replay.duration <= 30)
+    // A paused native player can suspend download before EOF. Return live
+    // first, then require the old media request to finish or cancel promptly.
+    mark("recording-return-live-requested")
+    await page.evaluate(() => {
+      window.__rstreamQualificationEvents.push({
+        name: "recording-return-live-requested",
+        at: Date.now(),
+        url: document.querySelector('video[aria-label="Recorded video"]')
+          .currentSrc,
+      })
+    })
     await page
       .getByRole("button", { name: "Return to live", exact: true })
       .click()
+    let deadline
+    try {
+      const finished = await Promise.race([
+        response.finished(),
+        new Promise((_, reject) => {
+          deadline = setTimeout(
+            () =>
+              reject(
+                new Error(
+                  "Old recording request did not finish after returning live",
+                ),
+              ),
+            5000,
+          )
+        }),
+      ])
+      if (finished) assert.match(finished.message, /ERR_ABORTED/)
+      result.replay.requestReleased = true
+    } finally {
+      clearTimeout(deadline)
+    }
     await page.waitForFunction(
       () => !document.querySelector('video[aria-label="Live video"]').paused,
     )
