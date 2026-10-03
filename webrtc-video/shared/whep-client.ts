@@ -257,7 +257,18 @@ export class WHEPClient {
     return this.sessionHeaders.get(name);
   }
 
-  close() {
+  close(options: { pageHide?: boolean } = {}) {
+    if (options.pageHide && !this.closed) {
+      // Navigation may discard pending promise continuations. Start the bounded
+      // keepalive DELETE synchronously, using the last valid session credential.
+      if (this.sessionURL) {
+        void this.deleteRemoteSession(
+          this.sessionURL,
+          AbortSignal.timeout(this.closeTimeoutMs),
+        );
+      }
+      this.peer.close();
+    }
     if (!this.closePromise) {
       this.closePromise = this.performClose();
     }

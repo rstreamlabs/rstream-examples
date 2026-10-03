@@ -45,7 +45,15 @@ func (b *Broadcaster) SelectQuality(ctx context.Context, mode, version string) (
 		return adaptation.QualityState{}, err
 	}
 	b.mu.Lock()
-	defer b.mu.Unlock()
+	state, err := b.selectQualityLocked(ctx, mode, version)
+	b.mu.Unlock()
+	if err == nil {
+		b.logger.Info("Source quality selected: %s", mode)
+	}
+	return state, err
+}
+
+func (b *Broadcaster) selectQualityLocked(ctx context.Context, mode, version string) (adaptation.QualityState, error) {
 	if b.closed {
 		return adaptation.QualityState{}, errors.New("producer is shutting down")
 	}
@@ -60,7 +68,6 @@ func (b *Broadcaster) SelectQuality(ctx context.Context, mode, version string) (
 			session.adaptive.QualityChanged()
 		}
 	}
-	b.logger.Info("Source quality selected: %s", mode)
 	return b.qualityStateLocked()
 }
 

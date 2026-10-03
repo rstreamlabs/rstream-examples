@@ -100,7 +100,7 @@ export class QualityClient {
   stop() {
     this.stopped = true;
     this.generation++;
-    this.request?.abort();
+    this.request?.abort(new Error("Source quality client stopped"));
     this.clearTimer();
   }
 
@@ -132,7 +132,7 @@ export class QualityClient {
   }
 
   private async perform(selection?: { mode: string; version: string }) {
-    this.request?.abort();
+    this.request?.abort(new Error("Source quality request superseded"));
     const controller = new AbortController();
     this.request = controller;
     const generation = ++this.generation;

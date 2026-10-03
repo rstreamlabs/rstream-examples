@@ -7,6 +7,34 @@ import {
   unexpectedBrowserDiagnostics,
 } from "../qualification/end-to-end/evidence.mjs"
 
+test("quality aborts require a matching intentional cancellation, never a timeout", () => {
+  const url = "http://localhost:3000/api/devices/camera/quality"
+  const diagnostic = {
+    at: 1000,
+    type: "request-failed",
+    message: `GET ${url} net::ERR_ABORTED`,
+    phase: "quality-started",
+  }
+  const event = {
+    name: "quality-request-aborted",
+    method: "GET",
+    url,
+    at: 990,
+    reason: "Error: Source quality request superseded",
+  }
+  assert.deepEqual(unexpectedBrowserDiagnostics([diagnostic], [], [event]), [])
+  for (const events of [
+    [],
+    [{ ...event, reason: "Error: Source quality request timed out." }],
+    [{ ...event, url: `${url}-other` }],
+    [{ ...event, at: 3000 }],
+  ]) {
+    assert.deepEqual(unexpectedBrowserDiagnostics([diagnostic], [], events), [
+      diagnostic,
+    ])
+  }
+})
+
 test("platform qualification accepts only diagnostics caused by deliberate transitions", () => {
   const accepted = [
     {

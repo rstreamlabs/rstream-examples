@@ -1585,6 +1585,50 @@ test("WHEP terminal signaling remains contained when its observer throws", async
   await client.close()
 })
 
+test("page navigation starts one keepalive DELETE synchronously despite an in-flight PATCH", async () => {
+  const peer = new FakePeer()
+  let patchStarted = false,
+    deletions = 0
+  const client = new WHEPClient({
+    endpoint: "https://edge.example/whep?rstream.token=edge-token",
+    iceServers: [],
+    authorization: "",
+    onError: assert.fail,
+    onTrack: () => {},
+    peerFactory: () => peer,
+    fetch: async (_url, init) => {
+      if (init.method === "POST")
+        return response(initialAnswer, 201, {
+          "Content-Type": "application/sdp",
+          ETag: '"generation-1"',
+          Location: "/whep/navigation",
+        })
+      if (init.method === "PATCH") {
+        patchStarted = true
+        return new Promise((_resolve, reject) =>
+          init.signal.addEventListener(
+            "abort",
+            () => reject(init.signal.reason),
+            { once: true },
+          ),
+        )
+      }
+      assert.equal(init.method, "DELETE")
+      assert.equal(init.keepalive, true)
+      deletions++
+      return response(null, 200)
+    },
+  })
+  await client.start()
+  await eventually(() => patchStarted)
+  const closed = client.close({ pageHide: true })
+  assert.equal(deletions, 1)
+  assert.equal(peer.closed, true)
+  await closed
+  await client.close({ pageHide: true })
+  assert.equal(deletions, 1)
+})
+
 class FakePeer {
   closed = false
   configuration = { iceServers: [] }

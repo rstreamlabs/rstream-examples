@@ -112,7 +112,18 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
       },
     })
     void controller.start().catch(fail)
+    const onPageHide = () => {
+      void controller.stop({ pageHide: true })
+      playbackMonitor?.stop()
+    }
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted && isCurrent()) setRetryKey((value) => value + 1)
+    }
+    window.addEventListener("pagehide", onPageHide)
+    window.addEventListener("pageshow", onPageShow)
     return () => {
+      window.removeEventListener("pagehide", onPageHide)
+      window.removeEventListener("pageshow", onPageShow)
       if (isCurrent()) {
         sessionRef.current += 1
       }

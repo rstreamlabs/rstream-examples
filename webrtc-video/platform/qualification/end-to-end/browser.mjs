@@ -55,6 +55,8 @@ try {
           () => {
             window.__rstreamQualificationEvents.push({
               name: "quality-request-aborted",
+              at: Date.now(),
+              url: new URL(url, window.location.href).href,
               method: init.method,
               started,
               observedAt: performance.now(),
@@ -130,6 +132,7 @@ try {
   })
   page.on("requestfailed", (request) => {
     diagnostics.push({
+      at: Date.now(),
       message: sanitize(
         `${request.method()} ${request.url()} ${request.failure()?.errorText ?? "failed"}`,
       ),
@@ -283,6 +286,7 @@ try {
   unexpectedDiagnostics = unexpectedBrowserDiagnostics(
     diagnostics,
     signalingResponses,
+    browserEvents,
   )
   if (unexpectedDiagnostics.length > 0) {
     throw new Error(
@@ -304,6 +308,7 @@ try {
   unexpectedDiagnostics = unexpectedBrowserDiagnostics(
     diagnostics,
     signalingResponses,
+    browserEvents,
   )
   await writeResult(options.output, {
     browserEvents,

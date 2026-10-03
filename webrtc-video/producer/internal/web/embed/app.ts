@@ -611,7 +611,7 @@ async function start() {
   }
 }
 
-function stop(expectedSessionID?: number) {
+function stop(expectedSessionID?: number, pageHide = false) {
   if (expectedSessionID !== undefined && !isCurrentSession(expectedSessionID)) {
     return;
   }
@@ -627,7 +627,7 @@ function stop(expectedSessionID?: number) {
   const client = state.client;
   state.client = null;
   if (client) {
-    void client.close();
+    void client.close({ pageHide });
   }
   const stream = video.srcObject;
   if (stream instanceof MediaStream) {
@@ -657,8 +657,11 @@ disconnectButton.addEventListener("click", () => {
 
 clearLogButton.addEventListener("click", resetLog);
 
-window.addEventListener("beforeunload", () => {
-  stop();
+window.addEventListener("pagehide", () => {
+  stop(undefined, true);
+});
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) window.location.reload();
 });
 
 resetLog();
