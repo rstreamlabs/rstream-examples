@@ -28,6 +28,7 @@
     "typecheck": "npm run check-types",
     "verify": "npm run test && npm run build",
     "test:access": "node scripts/organization-database.integration.mjs && node scripts/access-routes.integration.mjs",
+    "test:discovery-live": "node scripts/live-discovery.integration.mjs",
     "test:mediamtx-recording": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/mediamtx-recording.integration.mjs"
   },
   "dependencies": {

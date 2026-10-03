@@ -646,6 +646,25 @@ organization's OAuth approval or SSO policy. It covers cross-account access,
 shared inventory, owner lock timeouts, nonmembers, watch-token scope, and the
 server-side prohibition on direct fallback.
 
+To check discovery against a real rstream project, configure the application
+credentials and project endpoint in `.env.local`, build the application, then run:
+
+```bash
+docker build --file ../producer/qualification/adaptive-streaming/Dockerfile \
+  --tag rstream-video-discovery:qualification ..
+RSTREAM_DISCOVERY_PRODUCER_IMAGE=rstream-video-discovery:qualification \
+  npm run test:discovery-live -- /path/to/empty/discovery-evidence
+```
+
+This finite check creates an isolated database and a temporary, token-protected
+producer tunnel in that project, using a private CLI context and a short-lived
+token limited to that tunnel name. It checks discovery without enrollment,
+shared source-quality controls, stale-selection rejection, stable identity after
+reconnection/rename, offline history and live-only inventory. It cleans up its
+containers and private context. Only GitHub membership responses are substituted;
+rstream APIs, tunnel publication and producer HTTP controls are real. This check
+does not exercise video playback or an organization's actual OAuth/SSO policy.
+
 To additionally exercise full-page viewing in Chromium, Firefox and WebKit:
 
 ```bash

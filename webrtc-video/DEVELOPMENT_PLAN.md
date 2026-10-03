@@ -20,7 +20,7 @@ operating systems or networks.
   and checks never-started, playing, stopped and end-of-stream lifecycles;
   the producer's full Go race suite passes with the fix.
 
-## Implemented: project discovery; live-engine qualification pending
+## Implemented: project discovery
 
 - Separate access (`user` / `organization`) from inventory (`managed` /
   `discovered`). Discovery requires organization access and an explicit project.
@@ -35,6 +35,17 @@ operating systems or networks.
 - Test real migrations/routes, concurrent observations, reconnect/rename,
   stale history, discovery outages and disabled persistence. Update existing
   README/guide sections and provide one CLI-backed producer configuration.
+
+The live-engine integration check passes with an actual CLI-backed producer,
+real project APIs and producer HTTP controls, production Next.js routes and an
+isolated PostgreSQL database. It verifies shared inventory without enrollment,
+nonmember denial, source-wide preset selection and stale-write rejection,
+reconnection/rename with a stable device ID, and history versus live-only
+behavior. Offline history cannot authorize source control or viewer credentials.
+Inventory/control reads leave the encoder idle. Only GitHub membership is
+substituted; actual OAuth/SSO approval and discovery-backed MediaMTX playback are
+not established by this check. Its scoped temporary tunnel, containers and
+private CLI context are removed on completion.
 
 ## In progress: optional source format adaptation
 
@@ -178,9 +189,16 @@ race suite. Group formation still uses its first send time, following the
 separation in
 [libwebrtc's inter-arrival calculation](https://webrtc.googlesource.com/src/+/a09331a6038bb6191c7662680d8928940463a099/modules/congestion_controller/goog_cc/inter_arrival_delta.cc).
 The qualification collector now retains bounded frame-callback and event-loop
-timing diagnostics to investigate residual pauses. Live qualification of this
-candidate remains pending; these corrections do not prove the prior 0.202s
-freeze's cause.
+timing diagnostics to investigate residual pauses. At sample revision `96826ad`,
+three further 60-second capacity runs decode 29.07–29.12 fps with no secondary
+freeze during the constrained phase. Initial disruption totals 1.925–2.016s.
+Two runs pass all gates; one fails because of a 0.210s recovery-phase freeze.
+That event coincides with a 184.1ms JavaScript timer delay; the affected frame's
+receive timestamp precedes the display pause. This supports receiver execution
+delay as a contributor, without establishing its underlying cause. The failed
+run and series verdict remain unchanged. The other runs' maximum timer delays
+are 3.0/3.8ms. These results do not establish the earlier 0.202s freeze's cause,
+and the local dependency override is still not integrated or publishable.
 
 ## Cross-cutting latency and resource criteria
 
