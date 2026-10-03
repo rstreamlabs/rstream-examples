@@ -12,6 +12,7 @@ import { MediaMTXTokenService } from "../src/lib/video-distributor-token.ts"
 
 const issuer = "rstream-webrtc-video-platform-integration"
 const audience = "rstream-mediamtx-integration"
+const allowedOrigin = "https://platform.example"
 const deviceID = "fd8c2b34-1da2-4c71-8f38-343af59c0a11"
 const path = `devices/${deviceID}`
 const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 })
@@ -71,6 +72,7 @@ metricsAddress: 127.0.0.1:${metricsPort}
 pprof: false
 webrtc: true
 webrtcAddress: 127.0.0.1:${httpPort}
+webrtcAllowOrigins: [${allowedOrigin}]
 webrtcLocalUDPAddress: 127.0.0.1:${icePort}
 webrtcLocalTCPAddress: ""
 webrtcIPsFromInterfaces: false
@@ -124,6 +126,26 @@ try {
     ttlSeconds: 1,
   })
   const base = `http://127.0.0.1:${httpPort}/${path}`
+  // POST requests must be checked by the server even without a preflight.
+  // A valid path-scoped credential does not authorize an unrelated web origin.
+  for (const origin of [
+    "https://untrusted.invalid",
+    "http://platform.example",
+    "https://platform.example.untrusted.invalid",
+    "null",
+  ]) {
+    assert.equal(await exchange(`${base}/whep`, read, "recvonly", origin), 403)
+    assert.equal(
+      await exchange(`${base}/whip`, publish, "sendonly", origin),
+      403,
+    )
+    await assertFileRemainsMissing(onDemandMarker)
+  }
+  assert.equal(
+    await exchange(`${base}/whep`, "", "recvonly", allowedOrigin),
+    401,
+  )
+  await assertFileRemainsMissing(onDemandMarker)
   assert.equal(await exchange(`${base}/whep`), 401)
   await assertFileRemainsMissing(onDemandMarker)
   assert.equal(await exchange(`${base}/whep`, expired), 401)
@@ -138,7 +160,10 @@ try {
   })
   assert.equal(await exchange(`${base}/whep`, wrongPath), 401)
   await assertFileRemainsMissing(onDemandMarker)
-  assert.equal(await exchange(`${base}/whep`, read), 400)
+  assert.equal(
+    await exchange(`${base}/whep`, read, "recvonly", allowedOrigin),
+    400,
+  )
   await waitForFile(onDemandMarker)
   // A fresh reader avoids the two-second cache and exercises the actual path
   // exposition while the on-demand source is starting, without starting a viewer.
@@ -185,7 +210,7 @@ try {
     wrongPath: { delete: 200, patch: 204 },
   })
   process.stdout.write(
-    "MediaMTX authenticated session creation and bound lifecycle requests to opaque resource URLs.\n",
+    "MediaMTX enforced browser origins, authenticated session creation and bound lifecycle requests to opaque resource URLs.\n",
   )
 } catch (error) {
   process.stderr.write(logs.join(""))
@@ -229,21 +254,26 @@ function shellQuote(value) {
   return `'${value.replaceAll("'", `'"'"'`)}'`
 }
 
-async function exchange(url, token = "", direction = "recvonly") {
-  const session = await createSession(url, token, direction)
+async function exchange(url, token = "", direction = "recvonly", origin) {
+  const session = await createSession(url, token, direction, origin)
   if (session.status === 201 && session.location) {
     assert.equal(await deleteSession(session.location, token), 200)
   }
   return session.status
 }
 
-async function createSession(url, token = "", direction = "recvonly") {
+async function createSession(url, token = "", direction = "recvonly", origin) {
   const headers = {
     Accept: "application/sdp",
     "Content-Type": "application/sdp",
   }
   if (token) {
     headers.Authorization = `Bearer ${token}`
+  }
+  if (origin !== undefined) {
+    headers.Origin = origin
+    // Node fetch does not emit the browser's fetch-site metadata itself.
+    headers["Sec-Fetch-Site"] = "cross-site"
   }
   const response = await fetch(url, {
     body: offer(direction),

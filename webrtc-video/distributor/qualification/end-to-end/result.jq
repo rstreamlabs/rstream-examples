@@ -298,7 +298,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
         $native_source_profile[0].required and
         $native_source_profile[0].activeSessions == 1 and
         $native_source_profile[0].createdSessions == 1 and
-        $native_source_profile[0].negotiated == {twcc: 1, nack: 1, rtx: 0, flexfec: 0} and
+        $native_source_profile[0].negotiated == {twcc: 1, nack: 1, rtx: 1, flexfec: 0} and
         $native_source_profile[0].fixedSourcePacing == {adaptiveUpdates: 0, adaptiveFailures: 0, queueDrops: 0, mediaFrameDrops: 0} and
         $native_source_profile[0].activeAfterTeardown == 0
       else

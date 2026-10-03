@@ -95,6 +95,34 @@ type counterOfferSource struct {
 	patches atomic.Uint32
 }
 
+// Installed closest to the transport, after the sender's NACK cache has seen
+// the primary packet. This proves real RTX repair, not just advertised SDP.
+type sourcePacketLoss struct {
+	interceptor.NoOp
+	sequence      atomic.Uint32
+	dropped       atomic.Bool
+	retransmitted atomic.Uint32
+}
+
+func (d *sourcePacketLoss) NewInterceptor(string) (interceptor.Interceptor, error) {
+	return d, nil
+}
+
+func (d *sourcePacketLoss) BindLocalStream(info *interceptor.StreamInfo, writer interceptor.RTPWriter) interceptor.RTPWriter {
+	return interceptor.RTPWriterFunc(func(header *rtp.Header, payload []byte, attributes interceptor.Attributes) (int, error) {
+		target := d.sequence.Load()
+		if target != 0 && strings.EqualFold(info.MimeType, webrtc.MimeTypeH264) {
+			if header.SSRC == info.SSRC && uint32(header.SequenceNumber) == target && d.dropped.CompareAndSwap(false, true) {
+				return header.MarshalSize() + len(payload), nil
+			}
+			if header.SSRC == info.SSRCRetransmission && len(payload) >= 2 && uint32(payload[0])<<8|uint32(payload[1]) == target {
+				d.retransmitted.Add(1)
+			}
+		}
+		return writer.Write(header, payload, attributes)
+	})
+}
+
 func TestMediaMTXRunOnDemandUsesOneBridgeAndRepairsFlexFEC(t *testing.T) {
 	mediaMTX := mediaMTXExecutable(t)
 	source := newSourceHarness(t)
@@ -181,7 +209,8 @@ func TestMediaMTXRunOnDemandWaitsForDelayedSourceBeforePublishing(t *testing.T) 
 
 func TestMediaMTXNativeWHEPSourceSharesOneOnDemandSession(t *testing.T) {
 	mediaMTX := mediaMTXExecutable(t)
-	source := newSourceHarness(t)
+	loss := &sourcePacketLoss{}
+	source := newSourceHarnessWithFlexFEC(t, false, loss)
 	server := httptest.NewServer(http.HandlerFunc(source.serveHTTP))
 	defer server.Close()
 	sourceURL := "whep://" + strings.TrimPrefix(server.URL, "http://") + "/whep"
@@ -197,6 +226,7 @@ func TestMediaMTXNativeWHEPSourceSharesOneOnDemandSession(t *testing.T) {
 	second := newViewer(t)
 	defer second.close()
 	waitSignal(t, source.connected, "native WHEP source peer connection")
+	loss.sequence.Store(uint32(stopSourceWarmup(t, source)) + 10)
 	firstSequence, lastSequence := writeSourcePackets(t, source, 99)
 	assertMarkers(t, first.markers, firstSequence, lastSequence)
 	assertMarkers(t, second.markers, firstSequence, lastSequence)
@@ -210,8 +240,11 @@ func TestMediaMTXNativeWHEPSourceSharesOneOnDemandSession(t *testing.T) {
 	if !strings.Contains(offer, "transport-wide-cc-extensions") || !strings.Contains(offer, " transport-cc") {
 		t.Fatalf("native source offer did not negotiate TWCC:\n%s", offer)
 	}
-	if strings.Contains(strings.ToLower(offer), "rtx/90000") || strings.Contains(strings.ToLower(offer), "flexfec-03/90000") {
+	if !strings.Contains(strings.ToLower(offer), "rtx/90000") || strings.Contains(strings.ToLower(offer), "flexfec-03/90000") {
 		t.Fatalf("native source repair capability changed; requalify the profile comparison:\n%s", offer)
+	}
+	if !loss.dropped.Load() || loss.retransmitted.Load() == 0 || source.nacks.Load() == 0 {
+		t.Fatalf("native RTX repair not exercised: dropped=%t retransmitted=%d NACKs=%d", loss.dropped.Load(), loss.retransmitted.Load(), source.nacks.Load())
 	}
 	if strings.Contains(offer, "a=rtcp-mux-only") || strings.Contains(offer, "a=msid:") {
 		t.Fatalf("native WHEP conformance changed; requalify the strict producer profile:\n%s", offer)
@@ -425,9 +458,9 @@ func newSourceHarnessWithDelay(t *testing.T, delay time.Duration) *sourceHarness
 	return harness
 }
 
-func newSourceHarnessWithFlexFEC(t *testing.T, flexFEC bool) *sourceHarness {
+func newSourceHarnessWithFlexFEC(t *testing.T, flexFEC bool, factories ...interceptor.Factory) *sourceHarness {
 	t.Helper()
-	peer, track, sender := newSender(t, flexFEC)
+	peer, track, sender := newSender(t, flexFEC, factories...)
 	harness := &sourceHarness{
 		peer:       peer,
 		track:      track,
@@ -517,11 +550,14 @@ func (s *sourceHarness) stopWarmup() {
 	s.warmupStopOnce.Do(func() { close(s.warmupStop) })
 }
 
-func newSender(t *testing.T, flexFEC bool) (*webrtc.PeerConnection, *webrtc.TrackLocalStaticRTP, *webrtc.RTPSender) {
+func newSender(t *testing.T, flexFEC bool, factories ...interceptor.Factory) (*webrtc.PeerConnection, *webrtc.TrackLocalStaticRTP, *webrtc.RTPSender) {
 	t.Helper()
 	mediaEngine := &webrtc.MediaEngine{}
 	registerSenderCodec(t, mediaEngine)
 	registry := &interceptor.Registry{}
+	for _, factory := range factories {
+		registry.Add(factory)
+	}
 	if flexFEC {
 		requireNoError(t, webrtc.ConfigureFlexFEC03(
 			webrtc.PayloadType(media.FlexFECPayloadType),

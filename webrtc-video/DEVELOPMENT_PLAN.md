@@ -217,9 +217,16 @@ This qualifies live continuity on the tested path, not capture-to-display
 latency or recording CPU/memory overhead. Those measurements and Firefox
 application-level replay qualification remain.
 
-MediaMTX 1.21.1 is a pending dependency update. Its verified release binary
-passes the existing JWT/session/metrics integration check; image pinning,
-origin checks and media/recording regressions must pass before adoption.
+MediaMTX 1.21.1 is undergoing final live qualification. The release binary and
+container image are pinned/verified; JWT/session/metrics, browser-origin checks,
+the bridge race integration suite, real MP4 decoding in Chromium/Firefox/WebKit
+and native retention checks pass. Native WHEP now advertises RTX. A deliberate
+primary-packet loss proves actual RTX retransmission and delivery to both
+readers; the producer negotiates it without a production-code change. Native
+source pacing remains fixed and FlexFEC stays on the adaptive adapter path.
+The initial capability guard correctly failed on this change; current native
+qualification explicitly requires upstream RTX, while downstream remains NACK
+and TWCC. Live native distribution and recording-storage regressions remain.
 
 Provide optional short-retention recording and authenticated playback, keeping
 WebRTC as the live path. MediaMTX 1.20 supports recording and HTTP playback;

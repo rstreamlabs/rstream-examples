@@ -628,7 +628,7 @@ if [[ "${distribution_mode}" == mediamtx-native ]]; then
     || ! grep -Eq '^rstream_video_producer_whep_initial_requests_total\{outcome="created"\} 1$' "${output_directory}/producer-metrics-native-active.prom" \
     || ! grep -Eq '^rstream_video_producer_transport_negotiated_sessions\{feature="twcc"\} 1$' "${output_directory}/producer-metrics-native-active.prom" \
     || ! grep -Eq '^rstream_video_producer_transport_negotiated_sessions\{feature="nack"\} 1$' "${output_directory}/producer-metrics-native-active.prom" \
-    || ! grep -Eq '^rstream_video_producer_transport_negotiated_sessions\{feature="rtx"\} 0$' "${output_directory}/producer-metrics-native-active.prom" \
+    || ! grep -Eq '^rstream_video_producer_transport_negotiated_sessions\{feature="rtx"\} 1$' "${output_directory}/producer-metrics-native-active.prom" \
     || ! grep -Eq '^rstream_video_producer_transport_negotiated_sessions\{feature="flexfec"\} 0$' "${output_directory}/producer-metrics-native-active.prom" \
     || ! grep -Eq '^rstream_video_producer_adaptive_bitrate_updates_total\{outcome="applied"\} 0$' "${output_directory}/producer-metrics-native-active.prom" \
     || ! grep -Eq '^rstream_video_producer_adaptive_bitrate_updates_total\{outcome="failed"\} 0$' "${output_directory}/producer-metrics-native-active.prom" \
@@ -642,7 +642,7 @@ if [[ "${distribution_mode}" == mediamtx-native ]]; then
     required: true,
     activeSessions: 1,
     createdSessions: 1,
-    negotiated: {twcc: 1, nack: 1, rtx: 0, flexfec: 0},
+    negotiated: {twcc: 1, nack: 1, rtx: 1, flexfec: 0},
     fixedSourcePacing: {adaptiveUpdates: 0, adaptiveFailures: 0, queueDrops: 0, mediaFrameDrops: 0},
     activeAfterTeardown: null
   }' >"${output_directory}/native-source-profile.json"

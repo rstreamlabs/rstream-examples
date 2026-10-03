@@ -298,7 +298,7 @@ signed by the named distributor instance. It returns producer WHEP,
 distributor WHIP, and TURN material only for a known device with an online
 tunnel.
 
-MediaMTX 1.20 [refreshes a remote JWKS at most once per hour](https://github.com/bluenviron/mediamtx/blob/v1.20.0/internal/auth/manager.go).
+MediaMTX 1.21.1 [refreshes a remote JWKS at most once per hour](https://github.com/bluenviron/mediamtx/blob/v1.21.1/internal/auth/manager.go).
 Rotate the access
 key in two phases so that every instance learns the next key before it signs a
 token. Keep the current private key active, add the next public JWK to
@@ -311,10 +311,10 @@ Private keys are never placed in the additional set.
 The [distributor README](../distributor/) documents the combined image,
 MediaMTX environment, ICE reachability, profile differences, and qualification
 gates. Native MediaMTX WHEP pull is retained as an explicit reduced-feature
-profile. The rstream producer accepts MediaMTX 1.20's narrower offer only when
+profile. The rstream producer accepts MediaMTX 1.21.1's narrower offer only when
 that compatibility profile is enabled; strict producer profiles remain strict.
-Native pull negotiates NACK and TWCC, but not the adapter's source-side
-RTX/FlexFEC repair or dynamic source resolver.
+Native pull negotiates NACK/RTX and TWCC, but does not provide FlexFEC,
+adaptive source encoding or the dynamic source resolver.
 
 ### Run the complete local MediaMTX stack
 
@@ -531,7 +531,7 @@ index requests coalesce for two seconds, with at most 128 cached devices and
 32 waiters per read. Capacity must account for the number of application
 processes and for replay traffic passing through Next.js.
 
-The native MediaMTX integration check requires `mediamtx` 1.20.0, FFmpeg,
+The native MediaMTX integration check requires `mediamtx` 1.21.1, FFmpeg,
 FFprobe and the Playwright Chromium/Firefox/WebKit runtimes:
 
 ```bash

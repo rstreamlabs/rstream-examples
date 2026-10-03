@@ -28,7 +28,7 @@ IDs, display names and optional offline inventory history.
 | Profile               | Device uplinks | Producer leg                                      | Viewer leg                     | Use it when                                                         |
 | --------------------- | -------------: | ------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------- |
 | Direct                | one per viewer | TWCC, NACK/RTX, FlexFEC, bounded pacer            | same end-to-end session        | one viewer needs the shortest path and end-to-end adaptation        |
-| MediaMTX native pull  |     one shared | NACK and negotiated TWCC with fixed source pacing | MediaMTX NACK and TWCC         | a static source accepts the reduced MediaMTX 1.20 offer             |
+| MediaMTX native pull  |     one shared | NACK/RTX and TWCC with fixed source pacing | MediaMTX NACK and TWCC         | a static source accepts the reduced MediaMTX 1.21.1 offer             |
 | MediaMTX with adapter |     one shared | TWCC, NACK/RTX, FlexFEC, bounded pacer            | independent MediaMTX NACK/TWCC | a product needs dynamic sources, complete source repair and fan-out |
 
 The native profile is intentionally retained as an interoperability option. It
@@ -36,10 +36,11 @@ removes the adapter when its smaller feature set and static source contract are
 enough. The producer must opt into the bounded MediaMTX-native offer profile;
 strict profiles do not relax their WHEP validation. Draft 04 requires
 `rtcp-mux-only` and one common `msid` on the active media sections; MediaMTX
-1.20 emits neither in its source offer and its player does not complete a `406`
+1.21.1 emits neither in its source offer and its player does not complete a `406`
 counter-offer exchange. The opt-in accepts only those two known differences,
-continues to require BUNDLE and RTCP multiplexing, and disables RTX, FlexFEC,
-and adaptive source encoding for that session. The adapter profile keeps the
+continues to require BUNDLE and RTCP multiplexing, and keeps fixed source
+encoding/pacing for that session. RTX is negotiated when offered (including
+MediaMTX 1.21.1); FlexFEC is absent. The adapter profile keeps the
 strict producer contract and is the reference product path.
 
 MediaMTX exposure is independent of these profiles. A public deployment gives
@@ -73,9 +74,9 @@ paths:
 This profile is deliberately static: MediaMTX receives one source URL in its
 configuration and pulls it on first demand. It is useful for a small fixed
 deployment, but it does not provide the platform's per-device resolver or
-automatic direct fallback. The producer fixes pacing for this native source
-session because MediaMTX 1.20 does not negotiate the RTX/FlexFEC profile used
-by the adaptive adapter leg.
+automatic direct fallback. The sample retains fixed encoding and pacing for
+this native source session. Adaptive encoding, optional source presets and
+FlexFEC use the adapter profile; RTX alone does not enable these features.
 
 The adapter terminates source repair before publishing a fresh downstream RTP
 flow. Source transport-wide sequence numbers never cross into the MediaMTX
@@ -124,7 +125,7 @@ still needs a measured aggregate admission boundary.
 ## Build the combined image
 
 The official MediaMTX image is distroless and cannot execute `runOnDemand`
-commands. The supplied image copies the pinned MediaMTX 1.20 binary and the Go
+commands. The supplied image copies the pinned MediaMTX 1.21.1 binary and the Go
 adapter into an unprivileged Alpine runtime with a shell and CA roots. Both
 processes still run in one container.
 
@@ -233,7 +234,7 @@ path, or other query parameters. Static deployments use the same contract:
 place the rstream token in `RSTREAM_SOURCE_URL` and use
 `RSTREAM_SOURCE_AUTHORIZATION` only when the producer itself requires a bearer.
 
-MediaMTX 1.20 validates the JWT when it creates a WHEP or WHIP session. In this
+MediaMTX 1.21.1 validates the JWT when it creates a WHEP or WHIP session. In this
 implementation, the returned resource URL then acts as an opaque capability:
 PATCH and DELETE are bound to its random session identifier and do not
 revalidate a later JWT.
@@ -289,7 +290,7 @@ the on-demand source lifecycle. Codec changes and interruptions can split the
 available time spans.
 
 **Retention is not a byte quota.** MediaMTX cleans periodically (half the
-configured retention interval in version 1.20), and segments can exceed their
+configured retention interval in version 1.21.1), and segments can exceed their
 minimum duration while waiting for a key frame. Use a dedicated filesystem with
 an enforced quota or a size-limited temporary volume. Size it for the aggregate
 bitrate of simultaneously active devices, cleanup delay and key-frame overhead.
@@ -299,7 +300,7 @@ bitrate/device count. For sustained server use, prefer an appropriately sized
 quota-limited disk volume and monitor recording errors/free space. Keep media
 storage separate from logs and the system filesystem.
 
-**Full storage temporarily disables history.** MediaMTX 1.20 can leave incomplete
+**Full storage temporarily disables history.** MediaMTX 1.21.1 can leave incomplete
 fMP4 segments after `ENOSPC`; its playback index rejects the whole requested
 interval if any segment cannot be parsed. Freeing space lets recording resume,
 but history can remain unavailable until those files leave the requested window
@@ -339,7 +340,7 @@ go test -race -tags=integration ./internal/bridge
 make qualify-fanout OUT=/tmp/rstream-video-distributor
 ```
 
-The integration suite starts the real MediaMTX 1.20 binary. It proves that two
+The integration suite starts the real MediaMTX 1.21.1 binary. It proves that two
 viewers create one source WHEP session, injects and repairs a missing H.264 RTP
 packet with FlexFEC, then repeats with the first FEC packet suppressed and
 requires RTX recovery. Every viewer must receive the complete ordered range.
@@ -347,8 +348,9 @@ The source offer and both viewer sessions must also negotiate transport-wide
 congestion control, and the source harness must receive TWCC feedback.
 The suite also reads the live MediaMTX path metrics, closes the source after the
 last viewer, restarts without stale state, and recovers after a rejected source
-negotiation. A separate native-pull test locks the capability difference that
-makes the two profiles explicit.
+negotiation. A separate native-pull test drops a primary packet, requires an
+actual RTX retransmission and delivery to both readers, and locks the remaining
+capability differences that make the two profiles explicit.
 
 The fan-out qualification runs three independent passes with a real
 constrained-baseline H.264 GOP at approximately 8 Mbit/s. It requires constant
