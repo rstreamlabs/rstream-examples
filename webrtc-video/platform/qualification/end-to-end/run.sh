@@ -68,6 +68,10 @@ if [[ -e "${output_directory}" ]] && [[ -n "$(find "${output_directory}" -mindep
 fi
 mkdir -p "${output_directory}"
 output_directory="$(cd "${output_directory}" && pwd -P)"
+# The local helper's Node env-file resolves against its working directory.
+# Use the same platform/.env.local that was checked above, even when this
+# runner is invoked by absolute path from another directory.
+cd "${platform_directory}"
 
 revision="$(git -C "${repository_directory}" rev-parse HEAD)"
 revision_short="${revision:0:12}"
