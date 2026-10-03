@@ -34,6 +34,17 @@ decoded resolution, frame rate, freeze time, and decode cost. These signals are
 complementary: QP measures compression pressure, while receiver statistics
 measure transport and playback continuity.
 
+Each sample also includes bounded `framePresentation` diagnostics from
+`requestVideoFrameCallback`: callback gaps, available receive/decode/presentation
+timestamps, and a 100ms JavaScript timer's scheduling delay. Gaps above 100ms and
+timer delays above 50ms retain their surrounding timestamps, with at most 128
+events between samples and an explicit omitted-event count. These observations
+help distinguish receiver scheduling from media-delivery pauses; they do not
+change continuity gates or independently establish the cause of a freeze.
+Missing browser metadata remains `null`. Media time and receiver timestamps do
+not establish source capture-to-display latency. The probe runs only in the
+qualification browser and is stopped before session teardown.
+
 The harness also samples UDP counters once per second inside both isolated
 Linux network namespaces: the producer container and the receiver browser. A
 local receive-buffer drop or a send rejection outside a shaped phase

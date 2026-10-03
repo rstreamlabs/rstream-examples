@@ -14,6 +14,7 @@ import { readPhase } from "./lib/phase.mjs";
 import { PathStability, pathMatchesPolicy } from "./lib/path.mjs";
 import { redactError, redactSensitiveText } from "./lib/redaction.mjs";
 import { negotiatedVideoCodecs } from "./lib/sdp-codecs.mjs";
+import { installFrameDiagnostics } from "./lib/frame-diagnostics.mjs";
 
 const argumentsByName = parseArguments(process.argv.slice(2));
 const requestedURL = argumentsByName.get("url") || "";
@@ -371,6 +372,7 @@ try {
     });
   });
   let initialSample = null;
+  await page.evaluate(installFrameDiagnostics);
   let pathStable = false;
   const pathStability = new PathStability(3000, pathScope);
   const pathDeadline = performance.now() + 30_000;
@@ -467,6 +469,9 @@ try {
   throw normalized;
 } finally {
   if (page) {
+    await page
+      .evaluate(() => window.__rstreamFrameDiagnostics?.stop())
+      .catch(() => {});
     await page.click("#disconnect").catch(() => {});
     await page
       .waitForFunction(
@@ -692,6 +697,7 @@ async function collectSample(activePage) {
       delayThresholdMilliseconds: bandwidth?.delayThresholdMs ?? null,
       estimatedPlayoutTimestamp: inbound?.estimatedPlayoutTimestamp ?? null,
       framesDecoded: inbound?.framesDecoded || 0,
+      framePresentation: window.__rstreamFrameDiagnostics?.drain() ?? null,
       framesDropped: inbound?.framesDropped || 0,
       framesPerSecond: inbound?.framesPerSecond || 0,
       frameHeight: inbound?.frameHeight || 0,

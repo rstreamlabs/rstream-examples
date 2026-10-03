@@ -155,6 +155,33 @@ these local-override runs are explicitly non-publishable. Sustained congestion,
 dependency integration and fresh qualification of the resulting clean sample
 remain required. None of these results measures capture-to-display latency.
 
+The 60-second capacity extension at sample revision `ecafac3` rejects that
+candidate: two secondary freezes total 1.332s. A further deterministic regression
+finds that continuous traffic can remain in one arrival group indefinitely,
+preventing delay measurements. Local fork revision `5dea212` corrects the burst
+comparison, bounds compressed bursts to 100ms and ignores missing-packet arrival
+timestamps. The full interceptor race suite passes. Three 60-second diagnostic
+runs then decode 29.06–29.21 fps with no decoded-frame drops. Two pass all gates;
+one fails because of a secondary 0.202s freeze, without an accompanying measured
+loss or retransmission increase. Its cause remains unresolved; the series remains
+failed. Initial transition freezes total 1.956–2.007s. Runtime and socket-buffer
+checks pass, but they do not establish absence of host scheduling delays. The
+original failures and all local-override artifacts are retained. Reproducible
+dependency integration and fresh qualification are still required.
+
+Local fork revision `121cf80` additionally compares completed send and arrival
+edges when calculating inter-group delay. A deterministic constant-delay test
+previously produced false +2/-3/+4ms measurements as sender bursts varied in
+length. Another regression verifies that packet reordering cannot move the
+group's maximum send time backwards. Both now pass, as does the full interceptor
+race suite. Group formation still uses its first send time, following the
+separation in
+[libwebrtc's inter-arrival calculation](https://webrtc.googlesource.com/src/+/a09331a6038bb6191c7662680d8928940463a099/modules/congestion_controller/goog_cc/inter_arrival_delta.cc).
+The qualification collector now retains bounded frame-callback and event-loop
+timing diagnostics to investigate residual pauses. Live qualification of this
+candidate remains pending; these corrections do not prove the prior 0.202s
+freeze's cause.
+
 ## Cross-cutting latency and resource criteria
 
 - Compare changes against the current path at equal source content and network
