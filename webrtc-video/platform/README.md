@@ -684,6 +684,8 @@ MEDIAMTX_ALLOW_DIRECT_FALLBACK=false RSTREAM_QUALIFICATION_QUALITY=1 \
   ./qualification/end-to-end/run.sh /path/to/empty/required-media-evidence public
 RSTREAM_QUALIFICATION_QUALITY=1 RSTREAM_QUALIFICATION_SOURCE_FORMATS=1 \
   ./qualification/end-to-end/run.sh /path/to/empty/source-format-evidence public
+RSTREAM_QUALIFICATION_QUALITY=1 RSTREAM_QUALIFICATION_RECORDING=1 \
+  ./qualification/end-to-end/run.sh /path/to/empty/recording-evidence public
 ```
 
 The quality run changes all four modes through the actual device tunnel while
@@ -702,3 +704,12 @@ including partial observations on failure. Set `RSTREAM_UI_CAPTURE_DIRECTORY`
 to retain desktop/mobile screenshots of normal and full-page viewing. This
 manual-profile check does not qualify automatic format adaptation under network
 impairment or measure capture-to-display latency or CPU savings.
+
+The recording variant enables the local helper's bounded temporary recording
+volume. It checks real replay through the platform, two readers sharing one
+encoder, and live-session preservation. It deliberately fills only that owned
+512 MiB tmpfs, requires an actual recorder `ENOSPC` failure, checks presented
+frame cadence before/during/after the fault, then releases the filler and waits
+for new recorded segments. Partial observations are retained in `recording.json`.
+This fault test does not measure capture-to-display latency or compare recording
+overhead against a recording-disabled baseline.

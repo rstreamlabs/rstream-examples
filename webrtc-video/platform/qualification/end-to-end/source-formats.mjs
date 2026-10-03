@@ -65,7 +65,7 @@ export async function beginFormatObservation(page, expected) {
           state.longestGapMilliseconds,
           performance.now() - previousAt,
         )
-        return state
+        return { ...state, durationMilliseconds: performance.now() - started }
       },
     }
   }, expected)

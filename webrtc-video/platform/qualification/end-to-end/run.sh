@@ -26,6 +26,18 @@ case "${source_formats}" in
   ;;
 *) printf 'RSTREAM_QUALIFICATION_SOURCE_FORMATS must be 0 or 1\n' >&2; exit 1 ;;
 esac
+recording="${RSTREAM_QUALIFICATION_RECORDING:-0}"
+case "${recording}" in
+0) recording_enabled=false ;;
+1)
+  if [[ "${quality}" != 1 ]]; then
+    printf 'Recording qualification requires RSTREAM_QUALIFICATION_QUALITY=1\n' >&2
+    exit 1
+  fi
+  recording_enabled=true
+  ;;
+*) printf 'RSTREAM_QUALIFICATION_RECORDING must be 0 or 1\n' >&2; exit 1 ;;
+esac
 postgres_image="postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193"
 
 if [[ -z "${output_directory}" ]]; then
@@ -195,6 +207,7 @@ POSTGRES_PRISMA_DIRECT_URL="${database_url}" \
   "${platform_directory}/scripts/run-local-mediamtx.mjs" \
     --exposure "${exposure}" \
     --next-mode production \
+    --recording "${recording_enabled}" \
     --state-file "${state_file}" >"${stack_log}" 2>&1 &
 stack_pid=$!
 for _ in $(seq 1 240); do

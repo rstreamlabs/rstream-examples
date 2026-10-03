@@ -1,5 +1,5 @@
 export function expectedBrowserDiagnostic(diagnostic, signalingResponses = []) {
-  if (stoppedMetricsDiagnostic(diagnostic, signalingResponses)) return true
+  if (stoppedObservationDiagnostic(diagnostic, signalingResponses)) return true
   if (successfulNoContentAbort(diagnostic, signalingResponses)) {
     return true
   }
@@ -30,15 +30,10 @@ export function expectedBrowserDiagnostic(diagnostic, signalingResponses = []) {
   return false
 }
 
-function stoppedMetricsDiagnostic(diagnostic, responses) {
-  if (
-    !new Set(["mediamtx-stop-requested", "mediamtx-stopped"]).has(
-      diagnostic.phase,
-    ) ||
-    !Number.isFinite(diagnostic.observedAt)
-  )
-    return false
-  const path = "https?:\\/\\/\\S+\\/api\\/devices\\/[^/?\\s]+\\/metrics"
+function stoppedObservationDiagnostic(diagnostic, responses) {
+  if (!Number.isFinite(diagnostic.observedAt)) return false
+  const path =
+    "https?:\\/\\/\\S+\\/api\\/devices\\/[^/?\\s]+\\/(metrics|recordings)"
   const pattern =
     diagnostic.type === "http-error"
       ? new RegExp(`^GET (${path}) 503$`)
@@ -51,7 +46,13 @@ function stoppedMetricsDiagnostic(diagnostic, responses) {
           : null
   const match = pattern?.exec(diagnostic.message)
   if (!match) return false
-  // The metrics client discards the unavailable response body. An aborted
+  const phases = ["mediamtx-stop-requested", "mediamtx-stopped"]
+  // History polling continues while live viewing falls back to the producer;
+  // MediaMTX remains deliberately stopped throughout these phases too.
+  if (match[2] === "recordings")
+    phases.push("direct-fallback-playing", "direct-source-formats-passed")
+  if (!phases.includes(diagnostic.phase)) return false
+  // The observation client discards the unavailable response body. An aborted
   // body is expected only after this same GET actually received a 503 during
   // the deliberately stopped-server phase; arbitrary timeouts still fail.
   return responses.some(
@@ -70,7 +71,7 @@ function successfulNoContentAbort(diagnostic, signalingResponses) {
     !diagnostic.message.endsWith(" net::ERR_ABORTED") ||
     !(
       isWHEPRequest(diagnostic.message) ||
-      /^GET https?:\/\/\S+\/api\/devices\/[^/?\s]+\/quality net::ERR_ABORTED$/.test(
+      /^GET https?:\/\/\S+\/api\/devices\/[^/?\s]+\/(quality|recordings) net::ERR_ABORTED$/.test(
         diagnostic.message,
       )
     ) ||

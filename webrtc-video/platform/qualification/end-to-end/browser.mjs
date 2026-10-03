@@ -6,6 +6,7 @@ import { promisify } from "node:util"
 
 import { chromium } from "playwright-core"
 import { qualifyQualityControls } from "./quality.mjs"
+import { qualifyRecording } from "./recording.mjs"
 
 import {
   drainBrowserEvents,
@@ -136,7 +137,7 @@ try {
     const request = response.request()
     if (
       isWHEPSignalingRequest(request) ||
-      /\/api\/devices\/[^/]+\/(quality|metrics)$/.test(
+      /\/api\/devices\/[^/]+\/(quality|metrics|recordings)$/.test(
         new URL(request.url()).pathname,
       )
     ) {
@@ -212,6 +213,32 @@ try {
     .getByText("Source ready", { exact: true })
     .waitFor({ timeout: 10000 })
   events.at(-1).metricsReady = true
+  if (process.env.RSTREAM_QUALIFICATION_RECORDING === "1") {
+    const sessionsBefore = signalingResponses.filter(
+      (response) =>
+        response.method === "POST" && /\/whep(?:[/?]|$)/.test(response.url),
+    ).length
+    const recording = await qualifyRecording({
+      context,
+      page,
+      platform: options.platform,
+      container: options.container,
+      waitForVideo,
+      outputDirectory: dirname(options.output),
+      mark: (name) => events.push({ name, observedAt: elapsed(startedAt) }),
+    })
+    const sessionsAfter = signalingResponses.filter(
+      (response) =>
+        response.method === "POST" && /\/whep(?:[/?]|$)/.test(response.url),
+    ).length
+    if (sessionsAfter !== sessionsBefore)
+      throw new Error("Recording fault reconnected the live viewer")
+    events.push({
+      name: "recording-passed",
+      observedAt: elapsed(startedAt),
+      ...recording,
+    })
+  }
   events.push({
     name: "mediamtx-stop-requested",
     observedAt: elapsed(startedAt),

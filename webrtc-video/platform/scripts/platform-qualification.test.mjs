@@ -107,6 +107,63 @@ test("metrics outage diagnostics require the matching 503 and deliberate stopped
   }
 })
 
+test("recording outage diagnostics stay scoped to the deliberate server outage, including direct fallback", () => {
+  const url = "http://localhost:3000/api/devices/camera/recordings"
+  const response = { method: "GET", url, status: 503, observedAt: 1000 }
+  const diagnostic = {
+    type: "http-error",
+    message: `GET ${url} 503`,
+    phase: "direct-fallback-playing",
+    observedAt: 1001,
+  }
+  assert.equal(expectedBrowserDiagnostic(diagnostic, [response]), true)
+  for (const phase of [
+    "recording-baseline",
+    "recording-storage-full",
+    "recording-recovered",
+    "mediamtx-recovered",
+  ])
+    assert.equal(
+      expectedBrowserDiagnostic({ ...diagnostic, phase }, [response]),
+      false,
+    )
+  for (const records of [
+    [],
+    [{ ...response, method: "POST" }],
+    [{ ...response, status: 200 }],
+    [{ ...response, observedAt: 4000 }],
+  ])
+    assert.equal(expectedBrowserDiagnostic(diagnostic, records), false)
+  for (const path of ["metrics", "quality", "recordings/playback?start=x"])
+    assert.equal(
+      expectedBrowserDiagnostic(
+        {
+          ...diagnostic,
+          message: diagnostic.message.replace("recordings", path),
+        },
+        [{ ...response, url: url.replace("recordings", path) }],
+      ),
+      false,
+    )
+})
+
+test("disabled recording abort requires matching 204 headers, never an unavailable service", () => {
+  const url = "http://localhost:3000/api/devices/camera/recordings"
+  const diagnostic = {
+    type: "request-failed",
+    message: `GET ${url} net::ERR_ABORTED`,
+    phase: "navigation-started",
+    observedAt: 1001,
+  }
+  const response = { method: "GET", url, status: 204, observedAt: 1000 }
+  assert.equal(expectedBrowserDiagnostic(diagnostic, [response]), true)
+  assert.equal(
+    expectedBrowserDiagnostic(diagnostic, [{ ...response, status: 503 }]),
+    false,
+  )
+  assert.equal(expectedBrowserDiagnostic(diagnostic, []), false)
+})
+
 test("platform qualification accepts only diagnostics caused by deliberate transitions", () => {
   const accepted = [
     {
