@@ -19,7 +19,11 @@ func (b *Broadcaster) qualityStateLocked() (adaptation.QualityState, error) {
 	if err != nil {
 		return state, err
 	}
+	state.SourceFormat = adaptation.NewQualityFormatState(b.cfg.Media.Format)
 	for _, session := range b.sessions {
+		if session.formatWorker != nil {
+			state.SourceFormat.Add(session.formatWorker.Snapshot())
+		}
 		if session.adaptive == nil {
 			continue
 		}
@@ -67,6 +71,9 @@ func (b *Broadcaster) selectQualityLocked(ctx context.Context, mode, version str
 		if session.adaptive != nil {
 			session.adaptive.QualityChanged()
 		}
+		if session.formatWorker != nil {
+			session.formatWorker.QualityChanged()
+		}
 	}
 	return b.qualityStateLocked()
 }
@@ -75,6 +82,27 @@ func (b *Broadcaster) newSource() (media.Source, error) {
 	source, err := b.sourceFactory.New()
 	if err != nil {
 		return nil, err
+	}
+	if b.cfg.Media.Format != nil {
+		if _, ok := sourceEncoderController(source); !ok {
+			_ = source.Close()
+			return nil, errors.New("source format adaptation requires a controllable encoder")
+		}
+		controllable, ok := source.(media.FormatControllableSource)
+		if !ok {
+			_ = source.Close()
+			return nil, errors.New("source format profiles require a controllable source")
+		}
+		controller, ok := controllable.FormatController()
+		if !ok || controller == nil {
+			_ = source.Close()
+			return nil, errors.New("source format controller is unavailable")
+		}
+		initial, _ := b.cfg.Media.Format.Profile(b.cfg.Media.Format.Default)
+		if controller.Snapshot().Requested != initial.Format {
+			_ = source.Close()
+			return nil, errors.New("source caps must match media.format.default before starting the pipeline")
+		}
 	}
 	limit := b.quality.Limit()
 	if limit > 0 {

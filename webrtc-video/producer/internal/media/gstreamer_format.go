@@ -170,7 +170,7 @@ func (c *gstreamerFormatController) ApplyFormat(ctx context.Context, requested S
 	if err := ctx.Err(); err != nil {
 		return c.Snapshot(), err
 	}
-	format, err := requested.normalized()
+	format, err := requested.Normalize()
 	if err != nil {
 		return c.Snapshot(), err
 	}
@@ -266,7 +266,8 @@ func (c *gstreamerFormatController) submit(ctx context.Context, format SourceFor
 		name  string
 		value any
 	}{
-		{"width", format.Width}, {"height", format.Height},
+		{"width", format.Width},
+		{"height", format.Height},
 		{"framerate", gst.Fraction(format.FrameRate.Numerator, format.FrameRate.Denominator)},
 	} {
 		if err := structure.SetValue(field.name, field.value); err != nil {
@@ -319,5 +320,5 @@ func formatFromCaps(caps *gst.Caps) (SourceFormat, error) {
 	if !widthOK || !heightOK || !rateOK || fps == nil {
 		return SourceFormat{}, errors.New("video sample has invalid dimensions or frame rate")
 	}
-	return (SourceFormat{Width: w, Height: h, FrameRate: FrameRate{fps.Num(), fps.Denom()}}).normalized()
+	return (SourceFormat{Width: w, Height: h, FrameRate: FrameRate{Numerator: fps.Num(), Denominator: fps.Denom()}}).Normalize()
 }

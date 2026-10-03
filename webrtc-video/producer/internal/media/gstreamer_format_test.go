@@ -48,7 +48,7 @@ func TestGStreamerFormatChangesDecodeWithoutRestart(t *testing.T) {
 			if !ok {
 				t.Fatal("explicit capsfilter did not enable format control")
 			}
-			initial := SourceFormat{640, 360, FrameRate{30, 1}}
+			initial := SourceFormat{Width: 640, Height: 360, FrameRate: FrameRate{Numerator: 30, Denominator: 1}}
 			if _, err := controller.ApplyFormat(context.Background(), initial); !errors.Is(err, ErrSourceNotRunning) {
 				t.Fatalf("format change before start: %v", err)
 			}
@@ -58,7 +58,7 @@ func TestGStreamerFormatChangesDecodeWithoutRestart(t *testing.T) {
 			if err := source.Start(context.Background()); err != nil {
 				t.Fatal(err)
 			}
-			for _, target := range []SourceFormat{initial, {320, 180, FrameRate{15, 1}}, {480, 270, FrameRate{24, 1}}, initial} {
+			for _, target := range []SourceFormat{initial, {Width: 320, Height: 180, FrameRate: FrameRate{Numerator: 15, Denominator: 1}}, {Width: 480, Height: 270, FrameRate: FrameRate{Numerator: 24, Denominator: 1}}, initial} {
 				state, err := controller.ApplyFormat(context.Background(), target)
 				if err != nil {
 					t.Fatalf("apply %s: %v (%+v)", target, err, state)
@@ -164,13 +164,13 @@ func TestGStreamerFormatTransitionCancellationAndSerialization(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			done := make(chan error, 1)
-			target := SourceFormat{320, 180, FrameRate{15, 1}}
+			target := SourceFormat{Width: 320, Height: 180, FrameRate: FrameRate{Numerator: 15, Denominator: 1}}
 			go func() {
 				_, err := controller.ApplyFormat(ctx, target)
 				done <- err
 			}()
 			waitForFormatState(t, controller, func(state SourceFormatState) bool { return state.Pending })
-			if _, err := controller.ApplyFormat(context.Background(), SourceFormat{640, 360, FrameRate{30, 1}}); !errors.Is(err, ErrFormatBusy) {
+			if _, err := controller.ApplyFormat(context.Background(), SourceFormat{Width: 640, Height: 360, FrameRate: FrameRate{Numerator: 30, Denominator: 1}}); !errors.Is(err, ErrFormatBusy) {
 				t.Fatalf("concurrent transition was not rejected: %v", err)
 			}
 			// Slow format confirmation must not hold the bitrate controller's lock.
@@ -241,18 +241,22 @@ func waitForFormatState(t *testing.T, controller SourceFormatController, ready f
 
 func TestSourceFormatValidationAndFractionNormalization(t *testing.T) {
 	for _, invalid := range []SourceFormat{
-		{}, {321, 180, FrameRate{30, 1}}, {320, 181, FrameRate{30, 1}},
-		{16386, 180, FrameRate{30, 1}}, {320, 180, FrameRate{1, 0}},
-		{320, 180, FrameRate{241, 1}}, {320, 180, FrameRate{-1, 1}},
-		{320, 180, FrameRate{1000001, 1000001}},
+		{},
+		{Width: 321, Height: 180, FrameRate: FrameRate{Numerator: 30, Denominator: 1}},
+		{Width: 320, Height: 181, FrameRate: FrameRate{Numerator: 30, Denominator: 1}},
+		{Width: 16386, Height: 180, FrameRate: FrameRate{Numerator: 30, Denominator: 1}},
+		{Width: 320, Height: 180, FrameRate: FrameRate{Numerator: 1, Denominator: 0}},
+		{Width: 320, Height: 180, FrameRate: FrameRate{Numerator: 241, Denominator: 1}},
+		{Width: 320, Height: 180, FrameRate: FrameRate{Numerator: -1, Denominator: 1}},
+		{Width: 320, Height: 180, FrameRate: FrameRate{Numerator: 1000001, Denominator: 1000001}},
 	} {
-		if _, err := invalid.normalized(); err == nil {
+		if _, err := invalid.Normalize(); err == nil {
 			t.Errorf("accepted invalid source format %s", invalid)
 		}
 	}
-	for _, rate := range []FrameRate{{30, 1}, {30000, 1001}, {15, 1}} {
-		format := SourceFormat{320, 180, FrameRate{rate.Numerator * 2, rate.Denominator * 2}}
-		normalized, err := format.normalized()
+	for _, rate := range []FrameRate{{Numerator: 30, Denominator: 1}, {Numerator: 30000, Denominator: 1001}, {Numerator: 15, Denominator: 1}} {
+		format := SourceFormat{Width: 320, Height: 180, FrameRate: FrameRate{Numerator: rate.Numerator * 2, Denominator: rate.Denominator * 2}}
+		normalized, err := format.Normalize()
 		if err != nil || normalized.FrameRate != rate {
 			t.Errorf("normalized %s to %s: %v", format, normalized, err)
 		}
@@ -299,7 +303,7 @@ func TestGStreamerFormatStopRestartAndConcurrentSnapshots(t *testing.T) {
 		if err := source.Start(context.Background()); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := controller.ApplyFormat(context.Background(), SourceFormat{320, 180, FrameRate{30000, 1001}}); err != nil {
+		if _, err := controller.ApplyFormat(context.Background(), SourceFormat{Width: 320, Height: 180, FrameRate: FrameRate{Numerator: 30000, Denominator: 1001}}); err != nil {
 			t.Fatal(err)
 		}
 		if err := source.Stop(); err != nil {

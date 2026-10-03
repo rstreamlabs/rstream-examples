@@ -24,6 +24,7 @@ type QualityState struct {
 	MinAppliedBitrateKbps int                    `json:"minAppliedBitrateKbps"`
 	MaxAppliedBitrateKbps int                    `json:"maxAppliedBitrateKbps"`
 	FailedUpdates         uint64                 `json:"failedUpdates"`
+	SourceFormat          *QualityFormatState    `json:"sourceFormat,omitempty"`
 }
 
 // QualityPolicy is device-wide and survives on-demand source lifecycles.
@@ -103,4 +104,26 @@ func (p *QualityPolicy) Limit() int {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.limitLocked()
+}
+
+// SourceProfile separates the source-format decision from the bitrate lock.
+// Manual bitrate-only presets retain the configured default source format.
+func (p *QualityPolicy) SourceProfile(fallback string) (profile string, manual bool) {
+	if p == nil {
+		return "", false
+	}
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	if p.selected == "auto" {
+		return "", false
+	}
+	for _, mode := range p.modes {
+		if mode.ID == p.selected {
+			if mode.SourceProfile != "" {
+				return mode.SourceProfile, true
+			}
+			return fallback, true
+		}
+	}
+	return fallback, true
 }

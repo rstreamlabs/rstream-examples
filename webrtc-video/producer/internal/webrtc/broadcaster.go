@@ -24,29 +24,30 @@ import (
 )
 
 type SessionStats struct {
-	Codec                     string                 `json:"codec"`
-	TWCCEnabled               bool                   `json:"twccEnabled"`
-	TWCCNegotiated            bool                   `json:"twccNegotiated"`
-	NACKEnabled               bool                   `json:"nackEnabled"`
-	NACKNegotiated            bool                   `json:"nackNegotiated"`
-	RTXEnabled                bool                   `json:"rtxEnabled"`
-	RTXNegotiated             bool                   `json:"rtxNegotiated"`
-	FlexFECEnabled            bool                   `json:"flexFECEnabled"`
-	FlexFECNegotiated         bool                   `json:"flexFECNegotiated"`
-	AdaptiveBackend           config.AdaptiveBackend `json:"adaptiveBackend"`
-	AdaptiveActive            bool                   `json:"adaptiveActive"`
-	EstimatedBitrateBps       int                    `json:"estimatedBitrateBps"`
-	EncoderTargetBitrateKbps  int                    `json:"encoderTargetBitrateKbps"`
-	LastAppliedBitrateKbps    int                    `json:"lastAppliedBitrateKbps"`
-	AdaptiveBitrateUpdates    uint64                 `json:"adaptiveBitrateUpdates"`
-	AdaptiveBitrateFailures   uint64                 `json:"adaptiveBitrateFailures"`
-	RecoveryKeyFrameRequests  uint64                 `json:"recoveryKeyFrameRequests"`
-	RecoveryKeyFrameCoalesced uint64                 `json:"recoveryKeyFrameCoalesced"`
-	RecoveryKeyFrameFailures  uint64                 `json:"recoveryKeyFrameFailures"`
-	RTCPKeyFrameRequests      uint64                 `json:"rtcpKeyFrameRequests"`
-	RTCPMalformedFeedback     uint64                 `json:"rtcpMalformedFeedback"`
-	Bandwidth                 *BandwidthStats        `json:"bandwidth,omitempty"`
-	ICEPath                   *ICEPathStats          `json:"icePath,omitempty"`
+	Codec                     string                   `json:"codec"`
+	TWCCEnabled               bool                     `json:"twccEnabled"`
+	TWCCNegotiated            bool                     `json:"twccNegotiated"`
+	NACKEnabled               bool                     `json:"nackEnabled"`
+	NACKNegotiated            bool                     `json:"nackNegotiated"`
+	RTXEnabled                bool                     `json:"rtxEnabled"`
+	RTXNegotiated             bool                     `json:"rtxNegotiated"`
+	FlexFECEnabled            bool                     `json:"flexFECEnabled"`
+	FlexFECNegotiated         bool                     `json:"flexFECNegotiated"`
+	AdaptiveBackend           config.AdaptiveBackend   `json:"adaptiveBackend"`
+	AdaptiveActive            bool                     `json:"adaptiveActive"`
+	EstimatedBitrateBps       int                      `json:"estimatedBitrateBps"`
+	EncoderTargetBitrateKbps  int                      `json:"encoderTargetBitrateKbps"`
+	LastAppliedBitrateKbps    int                      `json:"lastAppliedBitrateKbps"`
+	AdaptiveBitrateUpdates    uint64                   `json:"adaptiveBitrateUpdates"`
+	AdaptiveBitrateFailures   uint64                   `json:"adaptiveBitrateFailures"`
+	RecoveryKeyFrameRequests  uint64                   `json:"recoveryKeyFrameRequests"`
+	RecoveryKeyFrameCoalesced uint64                   `json:"recoveryKeyFrameCoalesced"`
+	RecoveryKeyFrameFailures  uint64                   `json:"recoveryKeyFrameFailures"`
+	RTCPKeyFrameRequests      uint64                   `json:"rtcpKeyFrameRequests"`
+	RTCPMalformedFeedback     uint64                   `json:"rtcpMalformedFeedback"`
+	Bandwidth                 *BandwidthStats          `json:"bandwidth,omitempty"`
+	ICEPath                   *ICEPathStats            `json:"icePath,omitempty"`
+	SourceFormat              *media.SourceFormatState `json:"sourceFormat,omitempty"`
 }
 
 type ICEPathStats struct {
@@ -154,6 +155,9 @@ type Session struct {
 	estimator                 bandwidthEstimator
 	encoder                   media.EncoderController
 	adaptive                  *adaptation.Controller
+	formatWorker              *adaptation.FormatWorker
+	formatConfig              *config.SourceFormatConfig
+	formatBitrateLimit        int
 	close                     sync.Once
 	closed                    chan struct{}
 	lifecycleMu               sync.Mutex
@@ -432,6 +436,27 @@ func (b *Broadcaster) OpenSession(ctx context.Context) (*Session, error) {
 			}
 		})
 	}
+	if b.cfg.Media.Format != nil {
+		controllable := source.(media.FormatControllableSource) // Checked by newSource.
+		formatController, _ := controllable.FormatController()
+		worker, err := adaptation.NewFormatWorker(*b.cfg.Media.Format, formatController, b.quality, func() int {
+			if session.adaptive == nil {
+				return 0
+			}
+			snapshot := session.adaptive.Snapshot()
+			// The estimate can exceed the encoder target while an increase is
+			// held after loss. Do not raise source cost ahead of that recovery.
+			return min(snapshot.EstimatedBitrateBps, snapshot.EncoderTargetBitrateKbps*1000)
+		}, b.logger)
+		if err != nil {
+			releaseSource = false
+			session.Close("source format initialization failed")
+			return nil, err
+		}
+		session.formatWorker = worker
+		session.formatConfig = b.cfg.Media.Format
+		session.formatBitrateLimit = b.cfg.WebRTC.Adaptive.TWCCGCC.MaxBitrateKbps
+	}
 	b.mu.Lock()
 	if b.closed {
 		b.mu.Unlock()
@@ -669,6 +694,21 @@ func (s *Session) createAnswer(ctx context.Context, offer string, gatherComplete
 	}); err != nil {
 		return "", fmt.Errorf("failed to apply the remote offer: %w", err)
 	}
+	if s.formatConfig != nil {
+		matched := false
+		for _, codec := range s.sender.GetParameters().Codecs {
+			if strings.EqualFold(codec.MimeType, webrtc.MimeTypeH264) {
+				if err := config.ValidateSourceFormatBounds(*s.formatConfig, s.formatBitrateLimit, codec.SDPFmtpLine, true); err != nil {
+					return "", fmt.Errorf("receiver cannot accept configured source profiles: %w", err)
+				}
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return "", errors.New("receiver did not negotiate H264 source format support")
+		}
+	}
 	answer, err := s.pc.CreateAnswer(nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create the answer: %w", err)
@@ -703,6 +743,9 @@ func (s *Session) recordTransportNegotiation() {
 	adaptive := negotiation.twcc && s.adaptive != nil && !s.mediaMTXNative.Load()
 	if adaptive {
 		s.adaptive.Start()
+		if s.formatWorker != nil {
+			s.formatWorker.Start()
+		}
 	}
 	s.updateStats(func(stats *SessionStats) {
 		stats.TWCCNegotiated = negotiation.twcc
@@ -762,6 +805,9 @@ func (s *Session) Close(reason string) {
 		}
 		if s.adaptive != nil {
 			s.adaptive.Close()
+		}
+		if s.formatWorker != nil {
+			s.formatWorker.Close()
 		}
 		if s.pc != nil {
 			_ = s.pc.Close()
@@ -883,6 +929,10 @@ func (s *Session) StatsSnapshot() SessionStats {
 	stats.RTCPKeyFrameRequests = s.rtcpKeyFrameRequests.Load()
 	stats.RTCPMalformedFeedback = s.rtcpMalformedFeedback.Load()
 	stats.Bandwidth = snapshotBandwidthStats(s.estimator)
+	if s.formatWorker != nil {
+		format := s.formatWorker.Snapshot()
+		stats.SourceFormat = &format
+	}
 	if s.adaptive == nil {
 		return stats
 	}

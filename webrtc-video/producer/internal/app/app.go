@@ -57,12 +57,20 @@ func New(cfg config.Config) (*App, error) {
 			return nil, err
 		}
 	}
+	var formatControl *media.GStreamerFormatConfig
+	if cfg.Media.Format != nil {
+		timings, err := cfg.Media.Format.Timings()
+		if err != nil {
+			return nil, err
+		}
+		formatControl = &media.GStreamerFormatConfig{CapsFilter: cfg.Media.Format.CapsFilter, TransitionTimeout: timings.Transition}
+	}
 	sourceFactory := media.NewGStreamerFactory(
 		cfg.Media.Pipeline,
 		cfg.Media.SinkName,
 		cfg.InitialBitrateKbps(),
 		logger,
-		nil,
+		formatControl,
 	)
 	turn, err := turnprovider.NewProvider(cfg, provisioningClient)
 	if err != nil {

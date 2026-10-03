@@ -15,9 +15,10 @@ type QualityConfig struct {
 }
 
 type QualityPreset struct {
-	ID          string `yaml:"id" json:"id"`
-	Label       string `yaml:"label" json:"label"`
-	BitrateKbps int    `yaml:"bitrateKbps" json:"bitrateKbps"`
+	ID            string `yaml:"id" json:"id"`
+	Label         string `yaml:"label" json:"label"`
+	BitrateKbps   int    `yaml:"bitrateKbps" json:"bitrateKbps"`
+	SourceProfile string `yaml:"sourceProfile" json:"sourceProfile,omitempty"`
 }
 
 var qualityID = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)

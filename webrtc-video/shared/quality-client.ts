@@ -1,4 +1,26 @@
-export type QualityMode = { id: string; label: string; bitrateKbps: number };
+export type QualityMode = {
+  id: string;
+  label: string;
+  bitrateKbps: number;
+  sourceProfile?: string;
+};
+export type QualityFormatProfile = {
+  id: string;
+  width: number;
+  height: number;
+  frameRate: { numerator: number; denominator: number };
+  requestedEncoders: number;
+  observedEncoders: number;
+};
+export type QualityFormatState = {
+  defaultProfile: string;
+  adaptive: boolean;
+  activeEncoders: number;
+  pendingEncoders: number;
+  unconfirmedEncoders: number;
+  failedUpdates: number;
+  profiles: QualityFormatProfile[];
+};
 export type QualityState = {
   modes: QualityMode[];
   selected: string;
@@ -7,16 +29,71 @@ export type QualityState = {
   minAppliedBitrateKbps: number;
   maxAppliedBitrateKbps: number;
   failedUpdates: number;
+  sourceFormat?: QualityFormatState;
 };
+
+const count = (value: unknown, maximum: number) =>
+  Number.isSafeInteger(value) &&
+  (value as number) >= 0 &&
+  (value as number) <= maximum;
+const profileID = (value: unknown): value is string =>
+  typeof value === "string" && /^[a-z][a-z0-9-]{0,31}$/.test(value);
+
+function validSourceFormat(value: QualityFormatState): boolean {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    !profileID(value.defaultProfile) ||
+    typeof value.adaptive !== "boolean" ||
+    !count(value.activeEncoders, 100_000) ||
+    !count(value.pendingEncoders, value.activeEncoders) ||
+    !count(value.unconfirmedEncoders, value.activeEncoders) ||
+    !count(value.failedUpdates, Number.MAX_SAFE_INTEGER) ||
+    !Array.isArray(value.profiles) ||
+    value.profiles.length < 1 ||
+    value.profiles.length > 16 ||
+    !value.profiles.every((profile) => {
+      const rate = profile?.frameRate;
+      return (
+        profile &&
+        profileID(profile.id) &&
+        profile.id !== "auto" &&
+        count(profile.width, 16384) &&
+        profile.width >= 2 &&
+        profile.width % 2 === 0 &&
+        count(profile.height, 16384) &&
+        profile.height >= 2 &&
+        profile.height % 2 === 0 &&
+        rate &&
+        count(rate.numerator, 1_000_000) &&
+        rate.numerator > 0 &&
+        count(rate.denominator, 1_000_000) &&
+        rate.denominator > 0 &&
+        rate.numerator <= 240 * rate.denominator &&
+        count(profile.requestedEncoders, value.activeEncoders) &&
+        count(profile.observedEncoders, value.activeEncoders)
+      );
+    }) ||
+    new Set(value.profiles.map((profile) => profile.id)).size !==
+      value.profiles.length ||
+    !value.profiles.some((profile) => profile.id === value.defaultProfile)
+  )
+    return false;
+  return (
+    value.profiles.reduce(
+      (sum, profile) => sum + profile.requestedEncoders,
+      0,
+    ) <= value.activeEncoders &&
+    value.profiles.reduce((sum, profile) => sum + profile.observedEncoders, 0) +
+      value.unconfirmedEncoders ===
+      value.activeEncoders
+  );
+}
 
 export function parseQualityState(value: unknown): QualityState {
   if (!value || typeof value !== "object")
     throw new Error("Invalid source quality response.");
   const state = value as QualityState;
-  const count = (value: unknown, maximum: number) =>
-    Number.isSafeInteger(value) &&
-    (value as number) >= 0 &&
-    (value as number) <= maximum;
   if (
     !Array.isArray(state.modes) ||
     state.modes.length < 2 ||
@@ -24,8 +101,7 @@ export function parseQualityState(value: unknown): QualityState {
     !state.modes.every(
       (mode) =>
         mode &&
-        typeof mode.id === "string" &&
-        /^[a-z][a-z0-9-]{0,31}$/.test(mode.id) &&
+        profileID(mode.id) &&
         typeof mode.label === "string" &&
         mode.label.length > 0 &&
         mode.label.length <= 80 &&
@@ -43,6 +119,20 @@ export function parseQualityState(value: unknown): QualityState {
     state.minAppliedBitrateKbps > state.maxAppliedBitrateKbps
   )
     throw new Error("Invalid source quality response.");
+  if (
+    (state.sourceFormat !== undefined &&
+      !validSourceFormat(state.sourceFormat)) ||
+    state.modes.some(
+      (mode) =>
+        mode.sourceProfile !== undefined &&
+        (mode.id === "auto" ||
+          !profileID(mode.sourceProfile) ||
+          !state.sourceFormat?.profiles.some(
+            (profile) => profile.id === mode.sourceProfile,
+          )),
+    )
+  )
+    throw new Error("Invalid source format response.");
   return state;
 }
 

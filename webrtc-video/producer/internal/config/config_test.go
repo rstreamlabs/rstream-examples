@@ -163,6 +163,8 @@ func TestReferenceConfigsAreValid(t *testing.T) {
 	configs := []string{
 		"config.h264.yaml",
 		"config.provisioning.h264.yaml",
+		"config.provisioning.quality.h264.yaml",
+		"config.provisioning.source-formats.h264.yaml",
 		"config.test-pattern.h264.twcc-gcc.yaml",
 		"config.test-pattern.h264.twcc-gcc-flexfec.yaml",
 		"config.av1.yaml",

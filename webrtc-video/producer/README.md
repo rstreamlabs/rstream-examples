@@ -234,10 +234,9 @@ require a pipeline, hardware, and uplink qualified for that rate.
 
 Each preset is a ceiling on the adaptive encoder target. It excludes RTP/RTCP,
 retransmission, and FEC overhead; actual network traffic can exceed this value.
-Resolution and frame rate remain defined by the pipeline. The congestion loop
+Without `media.format`, resolution and frame rate remain defined by the pipeline. The congestion loop
 continues protecting the uplink and may reduce the actual rate. Auto restores
-that loop's full configured range. Presets change neither resolution nor frame
-rate. They require TWCC/GCC adaptation and a controllable encoder; the reduced
+that loop's full configured range. Presets require TWCC/GCC adaptation and a controllable encoder; the reduced
 native MediaMTX offer profile cannot enable them. Use the custom adapter when
 presets and MediaMTX are needed together.
 
@@ -265,6 +264,116 @@ loopback IP; the local control endpoint also validates the Host header. An
 edge-authenticated standalone viewer needs a token that permits `/api/quality`.
 Platform viewer tokens deliberately do not carry that permission: the platform
 proxies control using a separate server-held token.
+
+### Optional source resolution and frame rate
+
+`config.provisioning.source-formats.h264.yaml` adds three source profiles to
+the existing quality controls: 640×360 at 15 fps, 960×540 at 24 fps and 1280×720
+at 30 fps. It uses the same provisioning credentials and custom MediaMTX
+adapter as the bitrate-only example. This is a separate, opt-in configuration;
+existing profiles keep their current pipeline and bitrate-only behavior.
+
+For CLI-backed discovery, retain the `tunnel` configuration from
+`config.discovery.h264.yaml` and copy the `media`, `quality` and `webrtc`
+sections from the format example. This preserves the project context, token
+authentication and device labels while keeping the pipeline, bitrate range
+and negotiated codec limits consistent.
+
+The relevant configuration is:
+
+```yaml
+media:
+  # The pipeline must explicitly contain this named raw-video capsfilter.
+  format:
+    capsFilter: source_format
+    default: large
+    transitionTimeout: 3s
+    profiles:
+      - id: small
+        width: 640
+        height: 360
+        frameRate: { numerator: 15, denominator: 1 }
+        minBitrateKbps: 500
+      - id: large
+        width: 1280
+        height: 720
+        frameRate: { numerator: 30, denominator: 1 }
+        minBitrateKbps: 3000
+    adaptive:
+      enabled: false
+      downHold: 3s
+      upHold: 15s
+      minDwell: 10s
+      upHeadroomPct: 30
+quality:
+  presets:
+    - id: low
+      label: Low
+      bitrateKbps: 1000
+      sourceProfile: small
+    - id: high
+      label: High
+      bitrateKbps: 6000
+      sourceProfile: large
+```
+
+Use the full example for its pipeline, SDP and 500–6000 kbit/s adaptive range.
+`media.format.default` must match the initial caps. Each preset can reference
+a profile; a preset without `sourceProfile` uses the default format. With
+`adaptive.enabled: false`, Auto restores that default and automatic bitrate
+control. Selection remains source-wide and asynchronous. Opening a new source
+starts with the default caps and reapplies the selected profile after transport
+negotiation. Changing quality while idle does not start a source.
+
+Set `media.format.adaptive.enabled: true` only after qualifying manual changes
+with the target pipeline. In Auto, profiles are ordered by increasing
+`minBitrateKbps`, within the encoder's adaptive range. A sustained shortfall can
+skip to a lower profile; an upgrade advances one profile after sustained
+headroom. The independent worker uses the lesser of the bandwidth estimate and
+the applied encoder target, so a loss-related bitrate hold also delays a format
+upgrade. The defaults above require three seconds of downshift evidence,
+fifteen seconds of upgrade evidence, 30% headroom, and ten seconds between
+confirmed automatic transitions. Manual selections bypass those automatic
+holds; congestion control continues beneath the selected bitrate ceiling.
+An automatic ladder can also run without a `quality` section, leaving the UI
+selector hidden. These thresholds describe bandwidth, not CPU load or visual
+quality measurements; tune them against the source content and hardware.
+
+The GStreamer adapter changes only the explicitly named `capsfilter`. It never
+rewrites a pipeline or inserts converters. A source capable of renegotiating
+capture caps can reduce its output directly. For a fixed source, insert
+`videoscale ! videorate drop-only=true` before the named filter; the source
+continues producing its original pixels, so capture cost is not reduced.
+Confirm that the chosen scaler, encoder and memory layout support live
+renegotiation. Dimensions must be even, and frame rates are rational numbers
+(for example, `30000/1001`). Existing queues and low-latency encoder options
+remain under the operator's control.
+
+The optional `media.SourceFormatController` Go interface is the integration
+point for a custom capture implementation. It serializes transitions, honors
+cancellation, and distinguishes requested, pending and observed formats. The
+GStreamer implementation confirms a new format only after an encoded key frame
+with matching caps. Cancellation or a timeout stops waiting; a native request
+already submitted can still take effect and is then reported as a late
+observation. Slow format changes run separately from the bitrate loop, with
+bounded deadlines and retry backoff.
+
+`GET /api/quality` includes an optional `sourceFormat` summary when profiles
+and quality presets are configured. It contains bounded per-profile requested
+and observed encoder counts, pending/unconfirmed counts and failure counts;
+session diagnostics also expose the individual source state. An accepted PUT
+does not mean that capture has already changed. Observed frame rate describes
+encoded caps, not measured browser playback cadence.
+
+Configured format control currently requires H.264, strict TWCC/GCC WHEP
+negotiation, and an explicit `profile-level-id` with packetization mode 1.
+All profiles and the maximum encoder target must fit both configured and
+negotiated receive limits. The new example explicitly caps H.264 at level 3.1;
+raising SDP limits alone does not give a receiver additional capabilities.
+AV1 and the native MediaMTX pull profile retain their existing behavior without
+this optional format control. Native encode/decode, policy, lifecycle and
+negotiation tests cover the mechanism; end-to-end transition latency, RTP
+continuity, CPU savings and additional hardware still require qualification.
 
 ### Producer metrics
 

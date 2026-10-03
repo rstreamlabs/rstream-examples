@@ -39,6 +39,92 @@ test("quality contract rejects malformed, unbounded and ambiguous capabilities",
     assert.throws(() => parseQualityState(value))
 })
 
+test("optional source formats preserve observed/requested state and reject inconsistent counts", () => {
+  const formatState = {
+    ...structuredClone(state),
+    sourceFormat: {
+      defaultProfile: "small",
+      adaptive: false,
+      activeEncoders: 2,
+      pendingEncoders: 1,
+      unconfirmedEncoders: 1,
+      failedUpdates: 0,
+      profiles: [
+        {
+          id: "small",
+          width: 640,
+          height: 360,
+          frameRate: { numerator: 30000, denominator: 1001 },
+          requestedEncoders: 2,
+          observedEncoders: 1,
+        },
+      ],
+    },
+  }
+  formatState.modes[1].sourceProfile = "small"
+  assert.deepEqual(parseQualityState(formatState), formatState)
+  for (const mutate of [
+    (s) => {
+      s.sourceFormat = null
+    },
+    (s) => {
+      delete s.sourceFormat
+    },
+    (s) => {
+      s.sourceFormat.profiles = []
+    },
+    (s) => {
+      s.sourceFormat.profiles.push(s.sourceFormat.profiles[0])
+    },
+    (s) => {
+      s.sourceFormat.profiles[0].width = 641
+    },
+    (s) => {
+      s.sourceFormat.profiles[0].height = 16386
+    },
+    (s) => {
+      s.sourceFormat.profiles[0].frameRate.denominator = 0
+    },
+    (s) => {
+      s.sourceFormat.profiles[0].frameRate.numerator = 1_000_001
+    },
+    (s) => {
+      s.sourceFormat.profiles[0].frameRate = { numerator: 241, denominator: 1 }
+    },
+    (s) => {
+      s.sourceFormat.profiles[0].requestedEncoders = 3
+    },
+    (s) => {
+      s.sourceFormat.profiles[0].observedEncoders = 2
+    },
+    (s) => {
+      s.sourceFormat.unconfirmedEncoders = 0
+    },
+    (s) => {
+      s.sourceFormat.pendingEncoders = 3
+    },
+    (s) => {
+      s.sourceFormat.defaultProfile = "missing"
+    },
+    (s) => {
+      s.sourceFormat.failedUpdates = Infinity
+    },
+    (s) => {
+      s.sourceFormat.adaptive = "yes"
+    },
+    (s) => {
+      s.modes[1].sourceProfile = "unknown"
+    },
+    (s) => {
+      s.modes[0].sourceProfile = "small"
+    },
+  ]) {
+    const invalid = structuredClone(formatState)
+    mutate(invalid)
+    assert.throws(() => parseQualityState(invalid))
+  }
+})
+
 test("quality client discovers modes and sends source version on selection", async () => {
   const observed = [],
     calls = []

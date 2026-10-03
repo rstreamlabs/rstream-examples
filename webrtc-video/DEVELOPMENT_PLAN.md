@@ -50,11 +50,21 @@ pipelines, including a fractional rate on restart. The controller confirms
 encoded key-frame caps, distinguishes requested/observed/pending state, rejects
 overlapping requests, and cancels observation waits on stop/close. Tests cover
 timeouts, late observations, concurrent snapshots and native callback release.
-Existing application configurations still use bitrate-only control: YAML
-profiles, the independent format policy/worker, HTTP/UI state, negotiated codec
-limits and WebRTC/MediaMTX qualification remain to be integrated. Native decoder
-checks do not prove transport timestamp continuity, real-time cadence, latency,
-CPU improvement, arbitrary hardware support or AV1 format-switching support.
+Existing application configurations still use bitrate-only control. An opt-in
+YAML example now connects source profiles to quality presets, and a separate
+worker implements manual selection plus an optional bandwidth ladder with
+hysteresis/dwell. Tests cover coalescing, cancellation, bounded retries and
+continued bitrate response while a format change waits. Source initialization
+errors release resources once. Real Pion offer/answer tests enforce H.264
+frame-size, processing-rate and bitrate receive limits, including multiple
+offered payload types; receiver-only extensions cannot raise sender limits.
+The API distinguishes requested/observed/pending state using bounded per-profile
+counts, validated by both shared readers. The configured GStreamer preset path
+changes actual encoded caps between 360p15, 540p24 and 720p30 and restores Auto.
+Additional UI presentation and WebRTC/MediaMTX qualification remain pending.
+Native decoder checks do not prove transport timestamp continuity, real-time
+cadence, latency, CPU improvement, arbitrary hardware support or AV1
+format-switching support.
 
 1. Define optional format profiles with bitrate ceiling, dimensions and frame
    rate. Existing bitrate-only configurations must remain unchanged. Expose

@@ -191,9 +191,10 @@ type WebRTCTWCCGCCBackendConfig struct {
 }
 
 type MediaConfig struct {
-	Pipeline string    `yaml:"pipeline"`
-	SinkName string    `yaml:"sinkName"`
-	Mode     MediaMode `yaml:"mode"`
+	Pipeline string              `yaml:"pipeline"`
+	SinkName string              `yaml:"sinkName"`
+	Mode     MediaMode           `yaml:"mode"`
+	Format   *SourceFormatConfig `yaml:"format"`
 }
 
 type LoggingConfig struct {
@@ -490,7 +491,10 @@ func (c Config) Validate() error {
 			return errors.New("media pipeline must include av1parse when webrtc video mimeType is video/AV1")
 		}
 	}
-	return c.validateQuality()
+	if err := c.validateQuality(); err != nil {
+		return err
+	}
+	return c.validateSourceFormat()
 }
 
 func (c Config) HasLocalTunnelAuthPolicy() bool {
@@ -748,8 +752,10 @@ func stringPtr(value string) *string {
 	return &value
 }
 
-var tunnelLabelKey = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$`)
-var discoveredDeviceID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+var (
+	tunnelLabelKey     = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$`)
+	discoveredDeviceID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+)
 
 func (c Config) validateTunnelLabels() error {
 	labels := c.Tunnel.Labels
