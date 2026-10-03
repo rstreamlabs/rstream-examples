@@ -36,7 +36,7 @@ const (
 	metricsObservationInterval        = time.Second
 	packetQueueCapacity               = 256
 	maxRTPPacketBytes                 = 65535
-	baseWorkerCount                   = 6
+	baseWorkerCount                   = 7
 )
 
 var ErrWorkerShutdownTimeout = errors.New("worker shutdown timed out")
@@ -530,6 +530,9 @@ func forward(
 	startWorker(results, "source media reader", func() error {
 		return readSourceMedia(workerCtx, incoming.track, events)
 	})
+	startWorker(results, "source RTCP reader", func() error {
+		return readSourceRTCP(workerCtx, incoming.receiver)
+	})
 	if decoder != nil {
 		startWorker(results, "source FlexFEC reader", func() error {
 			return readSourceFEC(workerCtx, incoming.receiver, events, options.dropFirstFEC)
@@ -821,6 +824,21 @@ func sendPacket(ctx context.Context, packets chan<- repair.Packet, packet repair
 		return ctx.Err()
 	case packets <- packet:
 		return nil
+	}
+}
+
+// Pion processes incoming Sender Reports through the receiver's RTCP reader.
+// Without this worker, Receiver Reports cannot echo LSR/DLSR and the producer
+// never observes source RTT. Closing the source peer during supervised shutdown
+// interrupts a blocked read. Reports stay on this congestion domain.
+func readSourceRTCP(ctx context.Context, receiver *webrtc.RTPReceiver) error {
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if _, _, err := receiver.ReadRTCP(); err != nil {
+			return fmt.Errorf("read source RTCP: %w", err)
+		}
 	}
 }
 

@@ -53,6 +53,7 @@ type sourceHarness struct {
 	nacks          atomic.Uint32
 	plis           atomic.Uint32
 	twcc           atomic.Uint32
+	timedReports   atomic.Uint32
 	nextSequence   atomic.Uint32
 	warmupWrites   atomic.Uint32
 	warmupDelay    time.Duration
@@ -117,6 +118,7 @@ func TestMediaMTXRunOnDemandUsesOneBridgeAndRepairsFlexFEC(t *testing.T) {
 	assertMarkers(t, first.markers, firstSequence, lastSequence)
 	assertMarkers(t, second.markers, firstSequence, lastSequence)
 	waitCounter(t, &source.twcc, "source TWCC feedback")
+	waitCounter(t, &source.timedReports, "source Receiver Report with Sender Report timing")
 	assertMediaMTXPathMetrics(t, 2)
 	if source.posts.Load() != 1 {
 		t.Fatalf("source WHEP POSTs = %d, want 1 for two viewers", source.posts.Load())
@@ -442,7 +444,13 @@ func newSourceHarnessWithFlexFEC(t *testing.T, flexFEC bool) *sourceHarness {
 				return
 			}
 			for _, packet := range packets {
-				switch packet.(type) {
+				switch value := packet.(type) {
+				case *rtcp.ReceiverReport:
+					for _, report := range value.Reports {
+						if report.SSRC == uint32(sender.GetParameters().Encodings[0].SSRC) && report.LastSenderReport != 0 && report.Delay != 0 {
+							harness.timedReports.Add(1)
+						}
+					}
 				case *rtcp.TransportLayerNack:
 					harness.nacks.Add(1)
 				case *rtcp.PictureLossIndication:
