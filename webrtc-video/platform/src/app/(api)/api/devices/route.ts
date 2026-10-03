@@ -10,11 +10,14 @@ import { withError } from "@/lib/error"
 import { withUser } from "@/lib/next-auth"
 
 const GET = withError(
-  withUser(async (_request: NextRequest, user) => {
+  withUser(async (request: NextRequest, user) => {
     const res: ListDevicesResponse = {
-      devices: await deviceViews(user.access),
+      devices: await deviceViews(user.access, request.signal),
     }
-    return Response.json(res, { status: 200 })
+    return Response.json(res, {
+      status: 200,
+      headers: { "Cache-Control": "no-store" },
+    })
   }),
 )
 

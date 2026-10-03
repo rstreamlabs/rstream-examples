@@ -17,7 +17,11 @@ For shared organization deployments, configure the platform with
 `MEDIAMTX_ALLOW_DIRECT_FALLBACK=false`. This prevents a distributor outage from
 opening separate direct device sessions. Optional source presets are configured
 on the producer and apply to the single upstream, hence to all MediaMTX readers.
-They do not create separate renditions or downstream adaptation.
+They do not create separate renditions or downstream adaptation. Organizations
+may also select `DEVICE_INVENTORY_MODE=discovered` and publish labeled sources
+with `config.discovery.h264.yaml`; the adapter resolves their current project
+tunnel without a provisioning secret. The platform README covers stable device
+IDs, display names and optional offline inventory history.
 
 ## Delivery profiles
 

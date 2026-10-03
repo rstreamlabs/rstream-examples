@@ -1,3 +1,4 @@
+import { requireManagedInventory } from "@/lib/devices"
 import { deviceOwnerWhere } from "@/lib/device-access"
 import { HTTPError } from "@/lib/error"
 import { type NextRequest } from "next/server"
@@ -11,6 +12,7 @@ type RouteContext = {
 
 const DELETE = withError(
   withUser(async (_request: NextRequest, user, context: RouteContext) => {
+    requireManagedInventory()
     const { device } = await context.params
     const deleted = await prisma.device.deleteMany({
       where: {

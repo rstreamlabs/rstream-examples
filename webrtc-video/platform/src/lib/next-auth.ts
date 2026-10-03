@@ -1,3 +1,4 @@
+import { deviceInventoryConfig } from "@/lib/device-inventory"
 import "server-only"
 
 import { getServerSession } from "next-auth/next"
@@ -16,6 +17,7 @@ import {
 } from "@/lib/github-membership"
 
 const membershipVerifier = new GitHubMembershipVerifier()
+deviceInventoryConfig()
 const accessConfig = deviceAccessConfig()
 
 export const authOptions: NextAuthOptions = {

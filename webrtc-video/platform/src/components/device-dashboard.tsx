@@ -30,6 +30,7 @@ import { useMemo } from "react"
 import { useRstream } from "@rstreamlabs/react/hooks"
 import { useState } from "react"
 import { VideoPlayer } from "@/components/video-player"
+import { listDevicesResponseSchema } from "@/lib/validations/device"
 import { watchPayloadSchema } from "@/lib/validations/device"
 
 type DeviceWithStatus = DeviceView & {
@@ -45,13 +46,21 @@ const OFFLINE_GRACE_MS = 2500
 
 export function DeviceDashboard({
   initialDevices,
+  inventoryMode = "managed",
+  initialInventoryError = null,
 }: {
   initialDevices: DeviceView[]
+  inventoryMode?: "managed" | "discovered"
+  initialInventoryError?: string | null
 }) {
+  const discovered = inventoryMode === "discovered"
+  const [inventoryUnavailable, setInventoryUnavailable] = useState(
+    Boolean(initialInventoryError),
+  )
   const [devices, setDevices] = useState(initialDevices)
   const [manualActiveId, setManualActiveId] = useState<string | null>(null)
   const [watch, setWatch] = useState<WatchPayload | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(initialInventoryError)
   const apiUrl = useAppOrigin()
   const watchOptions = useMemo(() => rstreamWatchOptions(watch), [watch])
   const rstream = useRstream(watchOptions)
@@ -63,22 +72,68 @@ export function DeviceDashboard({
   const visibleDevices = useMemo(() => {
     const withStatus = devices.map((device) => ({
       ...device,
-      online: onlineIds.has(device.id),
+      online:
+        !inventoryUnavailable &&
+        (discovered ? device.online : onlineIds.has(device.id)),
     }))
     return sortDevices(withStatus)
-  }, [devices, onlineIds])
+  }, [devices, onlineIds, discovered, inventoryUnavailable])
   const manualActive = manualActiveId
     ? visibleDevices.find((device) => device.id === manualActiveId)
     : null
   const active = manualActive ?? visibleDevices[0] ?? null
   useEffect(() => {
+    if (discovered) return
+    let stopped = false
     void fetchWatch()
       .then((payload) => {
+        if (stopped) return
         setWatch(payload)
         setError(null)
       })
-      .catch((err) => setError(errorMessage(err)))
-  }, [])
+      .catch((err) => {
+        if (!stopped) setError(errorMessage(err))
+      })
+    return () => {
+      stopped = true
+    }
+  }, [discovered])
+  useEffect(() => {
+    if (!discovered) return
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const refresh = async () => {
+      try {
+        const response = await fetch("/api/devices", {
+          cache: "no-store",
+          signal: AbortSignal.any([
+            controller.signal,
+            AbortSignal.timeout(15000),
+          ]),
+        })
+        const body = await responseJSON(response)
+        if (!response.ok) throw new Error(apiErrorSchema.parse(body).error)
+        const next = listDevicesResponseSchema.parse(body)
+        if (!controller.signal.aborted) {
+          setDevices(next.devices)
+          setInventoryUnavailable(false)
+          setError(null)
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setInventoryUnavailable(true)
+          setError(`Live inventory cannot be confirmed. ${errorMessage(err)}`)
+        }
+      } finally {
+        if (!controller.signal.aborted) timer = setTimeout(refresh, 5000)
+      }
+    }
+    void refresh()
+    return () => {
+      controller.abort()
+      clearTimeout(timer)
+    }
+  }, [discovered])
   async function removeDevice(deviceId: string) {
     try {
       const response = await fetch(`/api/devices/${deviceId}`, {
@@ -102,13 +157,19 @@ export function DeviceDashboard({
   return (
     <div className="grid min-w-0 gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
       <section className="min-w-0 space-y-4">
-        <DeviceDialog
-          apiUrl={apiUrl}
-          onCreated={(created) => {
-            setDevices((current) => [created.device, ...current])
-            setManualActiveId(created.device.id)
-          }}
-        />
+        {discovered ? (
+          <p className="text-sm text-muted-foreground">
+            Devices appear automatically when they connect.
+          </p>
+        ) : (
+          <DeviceDialog
+            apiUrl={apiUrl}
+            onCreated={(created) => {
+              setDevices((current) => [created.device, ...current])
+              setManualActiveId(created.device.id)
+            }}
+          />
+        )}
         {error ? (
           <p className="text-sm font-semibold text-destructive">{error}</p>
         ) : null}
@@ -124,10 +185,15 @@ export function DeviceDashboard({
                 key={device.id}
                 active={active?.id === device.id}
                 device={device}
+                unavailable={inventoryUnavailable}
                 onRemove={() => removeDevice(device.id)}
                 onSelect={() => setManualActiveId(device.id)}
               />
             ))
+          ) : discovered ? (
+            <p className="text-sm text-muted-foreground">
+              No video devices found.
+            </p>
           ) : (
             <DeviceListSkeleton />
           )}
@@ -135,18 +201,25 @@ export function DeviceDashboard({
       </section>
       <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card p-4 sm:p-5">
         <div className="min-w-0 space-y-5">
-          <SelectedDeviceHeader device={active} />
+          <SelectedDeviceHeader
+            device={active}
+            unavailable={inventoryUnavailable}
+          />
           {active?.online ? (
             <VideoPlayer deviceId={active.id} />
           ) : (
             <EmptyState
               copy={
-                active
-                  ? "Run the producer command for this device."
-                  : "Add a device to get started."
+                inventoryUnavailable
+                  ? "Waiting for device inventory to recover."
+                  : discovered
+                    ? "Waiting for the video source to connect."
+                    : active
+                      ? "Run the producer command for this device."
+                      : "Add a device to get started."
               }
               action={
-                active ? (
+                active && !discovered ? (
                   <CopyPromptButton
                     prompt={producerSetupPrompt({ device: active, apiUrl })}
                   />
@@ -160,7 +233,13 @@ export function DeviceDashboard({
   )
 }
 
-function SelectedDeviceHeader({ device }: { device: DeviceWithStatus | null }) {
+function SelectedDeviceHeader({
+  device,
+  unavailable,
+}: {
+  device: DeviceWithStatus | null
+  unavailable: boolean
+}) {
   return (
     <div className="flex min-h-[56px] min-w-0 flex-wrap items-center justify-between gap-3">
       {device ? (
@@ -171,23 +250,21 @@ function SelectedDeviceHeader({ device }: { device: DeviceWithStatus | null }) {
               {device.name}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {presenceLabel(device)}
+              {unavailable ? "Live status unavailable" : presenceLabel(device)}
             </p>
           </div>
           <Badge
             className="shrink-0"
             tone={device.online ? "online" : "offline"}
           >
-            {device.online ? "Online" : "Offline"}
+            {unavailable ? "Unknown" : device.online ? "Online" : "Offline"}
           </Badge>
         </>
       ) : (
         <>
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-28" />
-            <Skeleton className="h-7 w-44" />
-          </div>
-          <Skeleton className="h-8 w-16" />
+          <h2 className="text-xl font-semibold text-muted-foreground">
+            No device selected
+          </h2>
         </>
       )}
     </div>
@@ -348,11 +425,13 @@ function DeviceDialog({
 }
 
 function DeviceRow({
+  unavailable,
   active,
   device,
   onRemove,
   onSelect,
 }: {
+  unavailable: boolean
   active: boolean
   device: DeviceWithStatus
   onRemove: () => Promise<void>
@@ -383,16 +462,18 @@ function DeviceRow({
             {device.tunnelName}
           </p>
           <p className="mt-1 truncate text-xs text-muted-foreground">
-            {presenceLabel(device)}
+            {unavailable ? "Live status unavailable" : presenceLabel(device)}
           </p>
         </div>
         <Badge className="shrink-0" tone={device.online ? "online" : "offline"}>
-          {device.online ? "Online" : "Offline"}
+          {unavailable ? "Unknown" : device.online ? "Online" : "Offline"}
         </Badge>
       </Button>
-      <div className="flex items-center justify-end border-t border-border px-3 py-2">
-        <DeleteDeviceDialog device={device} onConfirm={onRemove} />
-      </div>
+      {device.inventory === "managed" ? (
+        <div className="flex items-center justify-end border-t border-border px-3 py-2">
+          <DeleteDeviceDialog device={device} onConfirm={onRemove} />
+        </div>
+      ) : null}
     </div>
   )
 }

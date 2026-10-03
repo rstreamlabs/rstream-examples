@@ -88,3 +88,17 @@ model Device {
   @@index([userId])
   @@map("devices")
 }
+
+// Observed project inventory, independent of provisioned devices and secrets.
+model DiscoveredDevice {
+  projectId String
+  deviceId String
+  name String
+  tunnelName String
+  firstSeenAt DateTime @default(now())
+  lastSeenAt DateTime
+
+  @@id([projectId, deviceId])
+  @@index([projectId, lastSeenAt])
+  @@map("discovered_devices")
+}

@@ -1,10 +1,9 @@
 import { type NextRequest } from "next/server"
 import { z } from "zod"
 import { withUser } from "@/lib/next-auth"
-import { deviceOwnerWhere } from "@/lib/device-access"
+import { findSourceDevice } from "@/lib/devices"
 import { qualityEndpoint } from "@/lib/devices"
 import { HTTPError, readJSON, withError } from "@/lib/error"
-import prisma from "@/lib/prisma"
 import { parseQualityState } from "@/lib/quality-client"
 
 const selectionSchema = z
@@ -18,9 +17,7 @@ type RouteContext = { params: Promise<{ device: string }> }
 const handle = withError(
   withUser(async (request: NextRequest, user, context: RouteContext) => {
     const { device: id } = await context.params
-    const device = await prisma.device.findFirst({
-      where: { id, ...deviceOwnerWhere(user.access) },
-    })
+    const device = await findSourceDevice(id, user.access, request.signal)
     if (!device) throw new HTTPError(404, "Device not found")
     const selection =
       request.method === "PUT"

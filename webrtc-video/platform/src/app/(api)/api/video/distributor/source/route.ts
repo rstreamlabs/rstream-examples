@@ -7,7 +7,7 @@ import { type NextRequest } from "next/server"
 import { readJSON } from "@/lib/error"
 import { videoDistributorMode } from "@/lib/video-distributor"
 import { withError } from "@/lib/error"
-import prisma from "@/lib/prisma"
+import { findSourceDevice } from "@/lib/devices"
 
 const POST = withError(async (request: NextRequest) => {
   if (videoDistributorMode() !== "mediamtx") {
@@ -28,7 +28,7 @@ const POST = withError(async (request: NextRequest) => {
   } catch {
     throw new HTTPError(400, "Invalid media path.")
   }
-  const device = await prisma.device.findUnique({ where: { id: deviceID } })
+  const device = await findSourceDevice(deviceID, undefined, request.signal)
   if (!device) {
     throw new HTTPError(404, "Device not found.")
   }

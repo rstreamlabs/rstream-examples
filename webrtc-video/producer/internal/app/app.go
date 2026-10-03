@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"net/http"
 	"sync"
@@ -314,7 +315,7 @@ func (a *App) resolveTunnelOpenOptions(ctx context.Context) (tunnel.OpenOptions,
 			Provisioned: true,
 		}, nil
 	}
-	return tunnel.OpenOptions{}, nil
+	return tunnel.OpenOptions{Labels: maps.Clone(a.cfg.Tunnel.Labels)}, nil
 }
 
 func (a *App) setTunnelInfo(tunnelManager tunnelManager) {

@@ -8,9 +8,12 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	goyaml "gopkg.in/yaml.v3"
 )
@@ -105,6 +108,7 @@ type WebWHEPConfig struct {
 }
 
 type TunnelConfig struct {
+	Labels       map[string]string        `yaml:"labels"`
 	Enabled      bool                     `yaml:"enabled"`
 	Name         string                   `yaml:"name"`
 	Auth         TunnelAuthConfig         `yaml:"auth"`
@@ -331,6 +335,9 @@ func (c Config) Validate() error {
 		return err
 	}
 	if _, err := c.TunnelProvisioningTimeout(); err != nil {
+		return err
+	}
+	if err := c.validateTunnelLabels(); err != nil {
 		return err
 	}
 	provisioningMode := c.TunnelProvisioningMode()
@@ -739,4 +746,39 @@ func (c Config) TunnelReconnectInterval() (time.Duration, error) {
 
 func stringPtr(value string) *string {
 	return &value
+}
+
+var tunnelLabelKey = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$`)
+var discoveredDeviceID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+
+func (c Config) validateTunnelLabels() error {
+	labels := c.Tunnel.Labels
+	if len(labels) > 16 {
+		return errors.New("tunnel.labels supports at most 16 labels")
+	}
+	if len(labels) > 0 && c.TunnelProvisioningMode() != TunnelProvisioningModeLocal {
+		return errors.New("tunnel.labels is only configurable in local provisioning mode")
+	}
+	for key, value := range labels {
+		if !tunnelLabelKey.MatchString(key) || value == "" || strings.TrimSpace(value) != value || len(value) > 256 || !utf8.ValidString(value) {
+			return errors.New("tunnel.labels requires valid keys and nonempty UTF-8 values of at most 256 bytes without surrounding whitespace")
+		}
+		for _, r := range value {
+			if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+				return errors.New("tunnel.labels values must not contain control or format characters")
+			}
+		}
+	}
+	if labels["inventory"] == "discovered" {
+		if !c.Tunnel.Enabled || !c.Tunnel.Auth.Token || c.Tunnel.Auth.Rstream {
+			return errors.New("discovered inventory requires an enabled tunnel with token authentication only")
+		}
+		if labels["app"] != "webrtc-video-platform" || !discoveredDeviceID.MatchString(labels["device"]) {
+			return errors.New("discovered inventory requires app=webrtc-video-platform and a stable lowercase device UUID")
+		}
+		if len(labels["device-name"]) > 80 {
+			return errors.New("device-name must be at most 80 UTF-8 bytes")
+		}
+	}
+	return nil
 }

@@ -1,3 +1,4 @@
+import { deviceInventoryConfig } from "@/lib/device-inventory"
 import { HTTPError } from "@/lib/error"
 import { DeviceDashboard } from "@/components/device-dashboard"
 import { deviceViews } from "@/lib/devices"
@@ -12,6 +13,11 @@ const GITHUB_URL =
   "https://github.com/rstreamlabs/rstream-examples/tree/main/webrtc-video/platform"
 
 export default async function Page() {
+  const inventoryMode = deviceInventoryConfig().mode
+  const description =
+    inventoryMode === "discovered"
+      ? "View live video from your connected devices in one shared workspace."
+      : "Provision devices, issue short-lived viewer access, and stream through rstream tunnels from a Next.js app."
   let user
   try {
     user = await getServerUser()
@@ -53,8 +59,7 @@ export default async function Page() {
               Next.js WebRTC video platform.
             </h1>
             <p className="max-w-2xl text-base leading-8 text-muted-foreground sm:text-lg">
-              Provision devices, issue short-lived viewer access, and stream
-              through rstream tunnels from a Next.js app.
+              {description}
             </p>
             <SignInButton />
           </div>
@@ -63,7 +68,17 @@ export default async function Page() {
       </main>
     )
   }
-  const devices = await deviceViews(user.access)
+  let devices: Awaited<ReturnType<typeof deviceViews>> = []
+  let inventoryError: string | null = null
+  try {
+    devices = await deviceViews(user.access)
+  } catch (error) {
+    if (inventoryMode !== "discovered") throw error
+    inventoryError =
+      error instanceof HTTPError
+        ? error.message
+        : "Device inventory is unavailable. Retry shortly."
+  }
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-8 sm:px-6 lg:px-10">
       <header className="border-b border-border pb-8">
@@ -86,8 +101,7 @@ export default async function Page() {
             Next.js WebRTC video platform.
           </h1>
           <p className="max-w-3xl text-base leading-8 text-muted-foreground sm:text-lg">
-            Provision devices, issue short-lived viewer access, and stream
-            through rstream tunnels from a Next.js app.
+            {description}
           </p>
         </div>
       </header>
@@ -97,7 +111,11 @@ export default async function Page() {
             Shared organization devices. Changes apply to all members.
           </p>
         ) : null}
-        <DeviceDashboard initialDevices={devices} />
+        <DeviceDashboard
+          initialDevices={devices}
+          inventoryMode={inventoryMode}
+          initialInventoryError={inventoryError}
+        />
       </section>
       <PageFooter account={user.email ?? user.name ?? user.id} />
     </main>

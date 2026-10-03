@@ -35,7 +35,9 @@ The implementation is split by responsibility:
   the adaptive media loop and producer-side OpenMetrics exporter.
 - [`platform/`](./platform/) is the Next.js product layer. It provisions
   devices, issues scoped producer and viewer access, and exposes live tunnel
-  state without proxying the media session.
+  state without proxying the media session. It supports personal or shared
+  organization access and, for organizations, automatic discovery of labeled
+  project tunnels with optional inventory history.
 - [`distributor/`](./distributor/) is the optional MediaMTX backend. It opens
   one strict producer WHEP session on first demand and republishes a repaired
   H.264 stream for any number of viewers.

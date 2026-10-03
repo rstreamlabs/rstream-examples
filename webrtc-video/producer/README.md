@@ -11,6 +11,14 @@ Treat this repository as a reference base rather than a fixed product. The profi
 For a guided walkthrough of the architecture and the `rstream-go` integration,
 see [Build Adaptive Real-Time Video Streaming with WebRTC and rstream](https://rstream.io/guides/build-device-to-browser-webrtc-streaming-with-rstream).
 
+For a shared organization platform with an existing rstream CLI setup,
+[`config.discovery.h264.yaml`](./config.discovery.h264.yaml) publishes a stable
+`device` UUID and optional `device-name` label instead of obtaining a device
+secret. See the [platform inventory configuration](../platform/README.md#select-managed-or-discovered-inventory).
+Keep the UUID across reconnects; the name may change. Other local profiles may
+also set `tunnel.labels`. Remote provisioning owns its labels and rejects local
+label overrides.
+
 ## One media core, three delivery paths
 
 This Go codebase is the device-side foundation for the complete video series.

@@ -1,8 +1,14 @@
 // Real Next.js routes and PostgreSQL; only upstream GitHub/engine HTTP is mocked.
 import assert from "node:assert/strict"
 import { execFileSync, spawn } from "node:child_process"
-import { generateKeyPairSync, randomUUID } from "node:crypto"
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs"
+import {
+  createPrivateKey,
+  generateKeyPairSync,
+  randomUUID,
+  randomBytes,
+  sign,
+} from "node:crypto"
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs"
 import { createServer } from "node:net"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
@@ -148,6 +154,8 @@ try {
     GITHUB_CLIENT_SECRET: "qualification",
     GITHUB_ORGANIZATION: "acme",
     DEMO_CLEANUP_ENABLED: "false",
+    DEVICE_INVENTORY_MODE: "managed",
+    DEVICE_DISCOVERY_HISTORY_ENABLED: "true",
     RSTREAM_CLIENT_ID: "qualification",
     RSTREAM_CLIENT_SECRET: privateKey,
     RSTREAM_PROJECT_ENDPOINT: "",
@@ -177,15 +185,30 @@ try {
     ["exec", "-i", name, "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1"],
     { input: sql, stdio: ["pipe", "pipe", "pipe"] },
   )
+  const inventoryPath = join(runtime, "inventory.json")
+  const setInventory = (value) =>
+    writeFileSync(inventoryPath, JSON.stringify(value))
+  setInventory([])
   writeFileSync(
     join(runtime, "upstreams.mjs"),
-    `const original=globalThis.fetch.bind(globalThis);globalThis.fetch=async(input,init)=>{
+    `import { readFileSync } from 'node:fs';
+ const inventoryPath=${JSON.stringify(inventoryPath)};
+ const original=globalThis.fetch.bind(globalThis);globalThis.fetch=async(input,init)=>{
  const request=new Request(input,init),url=new URL(request.url);
  if(url.hostname==='api.github.com'){
   const actor=request.headers.get('authorization')?.split('member-')[1];
   return Response.json({state:actor==='outsider'?'pending':'active',organization:{id:42,login:'acme'},user:{id:actor==='alice'?7:actor==='bob'?8:9}});
  }
- if(url.hostname==='engine.qualification.invalid')return Response.json([]);
+ if(url.hostname==='engine.qualification.invalid'){
+  const inventory=JSON.parse(readFileSync(inventoryPath,'utf8'));
+  if(inventory.error)throw new Error('simulated engine outage');
+  return Response.json(inventory);
+ }
+ if(url.hostname==='video.qualification.invalid'){
+  const claims=JSON.stringify(JSON.parse(Buffer.from(url.searchParams.get('rstream.token').split('.')[1],'base64url').toString()));
+  if(!claims.includes('^/api/quality$')||!claims.includes('"inventory":"discovered"'))throw new Error('incorrect source control credential scope');
+  return Response.json({modes:[{id:'auto',label:'Auto',bitrateKbps:0},{id:'low',label:'Low',bitrateKbps:1000}],selected:'auto',version:'0123456789abcdef0123456789abcdef:1',activeEncoders:1,minAppliedBitrateKbps:1000,maxAppliedBitrateKbps:1000,failedUpdates:0});
+ }
  if(url.hostname==='127.0.0.1'||url.hostname==='localhost')return original(input,init);
  throw new Error('External access is disabled in route qualification');
 };`,
@@ -400,6 +423,357 @@ try {
       )
     ).status,
     503,
+  )
+  // Project-native discovery never needs a provisioned Device or secret.
+  const discoveryID = randomUUID()
+  const discoveryTunnel = {
+    id: "discovery-tunnel-1",
+    client_id: "discovery-producer",
+    project_id: "qualification-project",
+    status: "online",
+    protocol: "http",
+    publish: true,
+    token_auth: true,
+    host: "video.qualification.invalid",
+    name: "video-session-1",
+    labels: {
+      app: "webrtc-video-platform",
+      inventory: "discovered",
+      device: discoveryID,
+      "device-name": "Front camera",
+    },
+  }
+  baseEnvironment.DEVICE_INVENTORY_MODE = "discovered"
+  setInventory([discoveryTunnel])
+  origin = await start("organization")
+  const discovered = await request(origin, "alice", "/api/devices")
+  assert.equal(discovered.status, 200)
+  assert.equal(discovered.body.devices.length, 1)
+  assert.equal(discovered.body.devices[0].name, "Front camera")
+  assert.equal(discovered.body.devices[0].secretPrefix, null)
+  assert.equal(discovered.body.devices[0].inventory, "discovered")
+  assert.equal(discovered.body.devices[0].online, true)
+  assert.deepEqual(
+    (await request(origin, "bob", "/api/devices")).body.devices.map(
+      (d) => d.id,
+    ),
+    [discoveryID],
+  )
+  assert.equal((await request(origin, "outsider", "/api/devices")).status, 403)
+  assert.equal(
+    (await request(origin, "bob", "/api/devices", { name: "Cannot enroll" }))
+      .status,
+    409,
+  )
+  assert.equal(
+    (
+      await request(
+        origin,
+        "bob",
+        `/api/devices/${discoveryID}`,
+        null,
+        "DELETE",
+      )
+    ).status,
+    409,
+  )
+  const deniedProvisioning = await fetch(`${origin}/api/devices/tunnel`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${shared.body.secret}` },
+    signal: AbortSignal.timeout(10000),
+  })
+  assert.equal(deniedProvisioning.status, 409)
+  await deniedProvisioning.arrayBuffer()
+  assert.equal(
+    (await request(origin, "alice", `/api/devices/${discoveryID}/quality`))
+      .status,
+    200,
+  )
+  async function resolveDiscoveredSource(
+    path = `devices/${discoveryID}`,
+    signedPath = path,
+  ) {
+    const header = Buffer.from(
+      JSON.stringify({
+        alg: "EdDSA",
+        typ: "JWT",
+        kid: JSON.parse(baseEnvironment.MEDIAMTX_SOURCE_RESOLVER_JWKS).keys[0]
+          .kid,
+      }),
+    ).toString("base64url")
+    const now = Math.floor(Date.now() / 1000)
+    const payload = Buffer.from(
+      JSON.stringify({
+        aud: "rstream-video-source-resolver",
+        iss: "rstream-video-distributor",
+        sub: "qualification",
+        path: signedPath,
+        purpose: "signaling",
+        iat: now,
+        nbf: now - 5,
+        exp: now + 20,
+        jti: randomBytes(16).toString("base64url"),
+      }),
+    ).toString("base64url")
+    const input = `${header}.${payload}`
+    const key = createPrivateKey({
+      key: Buffer.from(
+        baseEnvironment.RSTREAM_SOURCE_RESOLVER_PRIVATE_KEY_BASE64,
+        "base64",
+      ),
+      type: "pkcs8",
+      format: "der",
+    })
+    const authorization = `Bearer ${input}.${sign(null, Buffer.from(input), key).toString("base64url")}`
+    const response = await fetch(`${origin}/api/video/distributor/source`, {
+      method: "POST",
+      headers: {
+        Authorization: authorization,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ path, purpose: "signaling" }),
+      signal: AbortSignal.timeout(10000),
+    })
+    return { status: response.status, body: await response.json() }
+  }
+  const resolvedSource = await resolveDiscoveredSource()
+  assert.equal(resolvedSource.status, 200)
+  const sourceURL = new URL(resolvedSource.body.url)
+  assert.equal(sourceURL.pathname, "/whep")
+  const sourceClaims = JSON.stringify(
+    decode(sourceURL.searchParams.get("rstream.token")),
+  )
+  assert.match(sourceClaims, /"inventory":"discovered"/)
+  assert.match(sourceClaims, /discovery-tunnel-1/)
+  assert.doesNotMatch(sourceClaims, /api\/quality/)
+  assert.equal(
+    (
+      await resolveDiscoveredSource(
+        `devices/${discoveryID}`,
+        `devices/${randomUUID()}`,
+      )
+    ).status,
+    401,
+  )
+  const discoveredWatch = await request(origin, "alice", "/api/rstream/watch")
+  const discoveryClaims = JSON.stringify(
+    decode(discoveredWatch.body.auth.token),
+  )
+  assert.match(discoveryClaims, /"inventory":"discovered"/)
+  assert.doesNotMatch(discoveryClaims, /"organization"|"user"/)
+  assert.equal(
+    (
+      await request(
+        origin,
+        "bob",
+        `/api/devices/${personal.body.device.id}/quality`,
+      )
+    ).status,
+    404,
+  )
+  const renamed = {
+    ...discoveryTunnel,
+    id: "discovery-tunnel-2",
+    labels: { ...discoveryTunnel.labels, "device-name": "Rear camera" },
+  }
+  setInventory([renamed])
+  await Promise.all(
+    Array.from({ length: 8 }, async () => {
+      const listed = await request(origin, "bob", "/api/devices")
+      assert.equal(listed.status, 200)
+      assert.equal(listed.body.devices.length, 1)
+      assert.equal(listed.body.devices[0].id, discoveryID)
+      assert.equal(listed.body.devices[0].name, "Rear camera")
+    }),
+  )
+  if (process.env.RSTREAM_DISCOVERY_BROWSER) {
+    const { chromium } = await import("playwright-core")
+    const browser = await chromium.launch({
+      executablePath: process.env.RSTREAM_DISCOVERY_BROWSER,
+      headless: true,
+    })
+    try {
+      const context = await browser.newContext()
+      await context.addCookies([
+        { name: "next-auth.session-token", value: sessions.bob, url: origin },
+      ])
+      const page = await context.newPage()
+      await page.goto(origin)
+      await page
+        .getByRole("heading", { name: "Rear camera", exact: true })
+        .waitFor()
+      assert.equal(
+        await page
+          .getByRole("button", {
+            name: /Add device|Create device/,
+            exact: false,
+          })
+          .count(),
+        0,
+      )
+      assert.equal(
+        await page
+          .getByRole("button", { name: "Delete Rear camera", exact: true })
+          .count(),
+        0,
+      )
+      setInventory([
+        {
+          ...renamed,
+          labels: { ...renamed.labels, "device-name": "Inspection camera" },
+        },
+      ])
+      await page
+        .getByRole("heading", { name: "Inspection camera", exact: true })
+        .waitFor({ timeout: 15000 })
+      setInventory({ error: true })
+      await page
+        .getByText("Live inventory cannot be confirmed.", { exact: false })
+        .waitFor({ timeout: 15000 })
+      assert.ok((await page.getByText("Unknown", { exact: true }).count()) > 0)
+      setInventory([])
+      await page
+        .getByText("Live inventory cannot be confirmed.", { exact: false })
+        .waitFor({ state: "hidden", timeout: 15000 })
+      assert.ok((await page.getByText("Offline", { exact: true }).count()) > 0)
+      if (process.env.RSTREAM_UI_CAPTURE_DIRECTORY) {
+        const directory = resolve(process.env.RSTREAM_UI_CAPTURE_DIRECTORY)
+        mkdirSync(directory, { recursive: true })
+        await page.setViewportSize({ width: 1440, height: 1100 })
+        await page.screenshot({
+          path: join(directory, "discovery-desktop.png"),
+          fullPage: true,
+        })
+        await page.setViewportSize({ width: 390, height: 844 })
+        await page.screenshot({
+          path: join(directory, "discovery-mobile.png"),
+          fullPage: true,
+        })
+      }
+      await context.close()
+      console.log(
+        "PASS: discovery browser hydration, live rename, unavailable/recovery state and hidden provisioning controls",
+      )
+    } finally {
+      await browser.close()
+    }
+    setInventory([renamed])
+  }
+  // A late poll must not replace newer metadata or observation timestamps.
+  const historyDB = new Client({ connectionString: db })
+  await historyDB.connect()
+  try {
+    await historyDB.query(
+      `UPDATE discovered_devices SET name='Newer observation', "lastSeenAt"=now()+interval '1 minute' WHERE "deviceId"=$1`,
+      [discoveryID],
+    )
+    assert.equal(
+      (await request(origin, "bob", "/api/devices")).body.devices[0].name,
+      "Newer observation",
+    )
+    const count = await historyDB.query(
+      "SELECT count(*)::int AS count FROM discovered_devices",
+    )
+    assert.equal(count.rows[0].count, 1)
+  } finally {
+    await historyDB.end()
+  }
+  setInventory([discoveryTunnel, renamed])
+  assert.equal((await request(origin, "bob", "/api/devices")).status, 409)
+  assert.equal(
+    (await request(origin, "bob", `/api/devices/${discoveryID}/quality`))
+      .status,
+    409,
+  )
+  setInventory({ error: true })
+  assert.equal((await request(origin, "bob", "/api/devices")).status, 503)
+  setInventory([])
+  const offline = await request(origin, "bob", "/api/devices")
+  assert.equal(offline.body.devices[0].online, false)
+  assert.ok(offline.body.devices[0].lastSeenAt)
+  assert.equal(
+    (await request(origin, "bob", `/api/devices/${discoveryID}/quality`))
+      .status,
+    404,
+  )
+  assert.equal(
+    (await request(origin, "bob", `/api/devices/${discoveryID}/viewer`, {}))
+      .status,
+    404,
+  )
+  assert.equal(
+    (await resolveDiscoveredSource()).status,
+    404,
+    "history alone cannot authorize a MediaMTX source",
+  )
+  baseEnvironment.DEVICE_DISCOVERY_HISTORY_ENABLED = "false"
+  origin = await start("organization")
+  assert.equal(
+    (await request(origin, "bob", "/api/devices")).body.devices.length,
+    0,
+  )
+  if (
+    process.env.RSTREAM_DISCOVERY_BROWSER &&
+    process.env.RSTREAM_UI_CAPTURE_DIRECTORY
+  ) {
+    const { chromium } = await import("playwright-core")
+    const browser = await chromium.launch({
+      executablePath: process.env.RSTREAM_DISCOVERY_BROWSER,
+      headless: true,
+    })
+    try {
+      const context = await browser.newContext({
+        viewport: { width: 1440, height: 1100 },
+      })
+      await context.addCookies([
+        { name: "next-auth.session-token", value: sessions.bob, url: origin },
+      ])
+      const page = await context.newPage()
+      await page.goto(origin)
+      await page
+        .getByRole("heading", { name: "No device selected", exact: true })
+        .waitFor()
+      await page.screenshot({
+        path: join(
+          resolve(process.env.RSTREAM_UI_CAPTURE_DIRECTORY),
+          "discovery-empty.png",
+        ),
+        fullPage: true,
+      })
+    } finally {
+      await browser.close()
+    }
+  }
+  const ephemeral = {
+    ...renamed,
+    labels: { ...renamed.labels, device: randomUUID() },
+  }
+  setInventory([ephemeral])
+  assert.equal(
+    (await request(origin, "bob", "/api/devices")).body.devices[0].id,
+    ephemeral.labels.device,
+  )
+  const readOnlyHistory = new Client({ connectionString: db })
+  await readOnlyHistory.connect()
+  try {
+    const count = await readOnlyHistory.query(
+      "SELECT count(*)::int AS count FROM discovered_devices",
+    )
+    assert.equal(
+      count.rows[0].count,
+      1,
+      "live-only discovery must not write device history",
+    )
+  } finally {
+    await readOnlyHistory.end()
+  }
+  setInventory([{ ...ephemeral, project_id: "another-project" }])
+  assert.equal(
+    (await request(origin, "bob", "/api/devices")).body.devices.length,
+    0,
+  )
+  console.log(
+    "PASS: project discovery, display names, concurrent history, stale observations, live-only inventory, outages and access scoping",
   )
   console.log(
     "PASS: real Next.js user isolation, shared organization inventory, nonmember denial, mutation origin and signed watch-token scope",

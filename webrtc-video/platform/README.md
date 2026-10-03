@@ -42,7 +42,7 @@ the MediaMTX WHEP endpoint has its own public HTTPS origin or is published by
 an authenticated rstream tunnel. Neither choice changes the producer, the
 viewer contract, or the path-scoped MediaMTX authorization.
 
-The producer receives only two product-level values:
+In the default managed inventory, the producer receives only two product-level values:
 
 ```bash
 API_URL=http://localhost:3000
@@ -151,7 +151,8 @@ own expiry; an already established media session is not forcibly disconnected
 when membership changes. This is admission control, not immediate revocation of
 active media. Stop the affected source/session when immediate eviction is needed.
 
-All active members see, create, delete, and control the same devices. Inventory,
+With `DEVICE_INVENTORY_MODE=managed` (the default), all active members see,
+create, delete, and control the same devices. Inventory,
 provisioning, viewer authorization, and watch labels use GitHub's stable numeric
 organization ID. `createdById` records who created a device; deleting that account
 does not delete the shared device. There is no separate administrator role.
@@ -167,6 +168,79 @@ deadline. Idle transactions terminate after ten seconds. Migration connections
 use the separate direct URL and do not inherit these application limits.
 Request-rate quotas are bounded per process, so deployments with several replicas
 should also apply their own shared ingress rate limits.
+
+### Select managed or discovered inventory
+
+| Access         | Inventory    | Device registration                                                                       |
+| -------------- | ------------ | ----------------------------------------------------------------------------------------- |
+| `user`         | `managed`    | Each account creates devices and receives a provisioning secret.                          |
+| `organization` | `managed`    | Members share provisioned devices.                                                        |
+| `organization` | `discovered` | Existing project credentials publish labeled video tunnels; devices appear automatically. |
+
+For producers already using the rstream CLI, add:
+
+```bash
+DEVICE_INVENTORY_MODE="discovered"
+RSTREAM_PROJECT_ID="your-project-id"
+DEVICE_DISCOVERY_HISTORY_ENABLED="true"
+```
+
+Keep `RSTREAM_PROJECT_ENDPOINT` configured for engine/TURN resolution; its
+resolved project must match the explicit ID. Personal access with discovery is
+rejected. Database accounts and sessions remain in use. With history enabled,
+the platform remembers stable UUIDs, names and first/last observed presence in a
+separate project-scoped table. Setting history to `false` lists only connected
+devices and neither reads nor writes that table; it does not erase existing
+history. Neither setting changes the managed inventory. Restart after changing
+configuration and apply migrations before starting the application.
+
+The discovery contract is a published HTTP tunnel with token authentication,
+with these labels:
+
+```yaml
+labels:
+  app: webrtc-video-platform
+  inventory: discovered
+  device: 85a6703e-04de-42b6-93ac-c3b70c4cab51
+  device-name: Front camera
+```
+
+Generate a different lowercase UUID once for each device and retain it across
+restarts. `device-name` is optional, accepts up to 80 UTF-8 bytes without control
+characters and may change without changing identity. Without it, the UI uses
+`Device <UUID prefix>`. Concurrent tunnels with the same UUID are rejected;
+unrelated HTTP/WebTTY tunnels are ignored. Labels describe devices inside the
+configured project; restrict who can publish tunnels in that project.
+
+On a producer whose CLI context already selects that project and credentials:
+
+```bash
+cd webrtc-video/producer
+make build-no-web
+export VIDEO_DEVICE_ID="85a6703e-04de-42b6-93ac-c3b70c4cab51" # replace once per device
+export VIDEO_DEVICE_NAME="Front camera"
+./webrtc-video-producer -config ./config.discovery.h264.yaml
+```
+
+This configuration includes optional bitrate presets and a test-pattern pipeline.
+Replace the pipeline for real capture. It uses local rstream credentials for the
+tunnel and TURN; no `API_URL`, `DEVICE_SECRET` or prior device registration is
+needed. The platform still issues narrowly scoped viewer/control credentials.
+Direct and adaptive MediaMTX delivery use the same discovery contract.
+
+The dashboard refreshes discovery five seconds after each completed request and
+aborts pending work when unmounted. It shows a distinct unavailable state if the
+engine cannot be queried. History records the last successful observation, not
+an exact disconnect time; signed provisioning webhooks do not update discovery
+history. Every playback/control admission resolves the current project tunnel,
+so an old database row cannot authorize an offline or replacement endpoint.
+Creation, provisioning and deletion actions are disabled in discovery mode.
+
+The sample bounds discovery to 100 live labeled tunnels and 1000 remembered
+UUIDs per project; exceeding a limit produces an explicit error instead of a
+partial inventory. Archive obsolete history administratively if required.
+Concurrent database updates preserve the newest observation and have bounded
+lock/query waits.
 
 ### Select the distribution backend
 
@@ -398,6 +472,7 @@ for validation and the HTTP contract.
 ## Public and internal deployment profiles
 
 Keep the public Vercel demo on `DEVICE_ACCESS_MODE=user`,
+`DEVICE_INVENTORY_MODE=managed`,
 `VIDEO_DISTRIBUTOR=direct`, and its existing database. For the internal deployment,
 use organization mode, a separate database/OAuth application/secrets, and
 `VIDEO_DISTRIBUTOR=mediamtx` with `MEDIAMTX_ALLOW_DIRECT_FALLBACK=false`.

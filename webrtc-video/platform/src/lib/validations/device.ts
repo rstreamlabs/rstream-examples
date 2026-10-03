@@ -4,7 +4,8 @@ import { z } from "zod"
 export const deviceViewSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
-  secretPrefix: z.string().min(1),
+  inventory: z.enum(["managed", "discovered"]).default("managed"),
+  secretPrefix: z.string().min(1).nullable(),
   tunnelName: z.string().min(1),
   online: z.boolean(),
   onlineSince: z.string().nullable(),
