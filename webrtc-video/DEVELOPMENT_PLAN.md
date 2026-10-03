@@ -273,9 +273,11 @@ Further review reproduced a separate transport-feedback parser defect in the
 fork: an unknown/evicted packet neither consumed its receive delta nor stayed
 out of the loss samples. This shifts later arrival timestamps and manufactures
 loss. Regression tests cover run-length, status-vector and multiple-chunk
-feedback. A local correction consumes every received delta while returning
+feedback. Fork revision `418b2a2` consumes every received delta while returning
 only known send-history entries, preserves wire sequence advancement and
-rejects missing deltas. It is not yet pinned by the sample. The existing
+rejects missing deltas. Its full Go 1.24.6 race suite and golangci-lint 2.10.1
+checks pass; it is published on the draft review branch but is not yet pinned
+by the sample. The existing
 250-packet history also needs qualification against the number of packets in
 flight under congestion before another integrated network run; do not simply
 substitute an unbounded history or increase media queues.
