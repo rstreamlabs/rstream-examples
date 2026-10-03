@@ -33,12 +33,17 @@ function successfulNoContentAbort(diagnostic, signalingResponses) {
   if (
     diagnostic.type !== "request-failed" ||
     !diagnostic.message.endsWith(" net::ERR_ABORTED") ||
-    !isWHEPRequest(diagnostic.message) ||
+    !(
+      isWHEPRequest(diagnostic.message) ||
+      /^GET https?:\/\/\S+\/api\/devices\/[^/?\s]+\/quality net::ERR_ABORTED$/.test(
+        diagnostic.message,
+      )
+    ) ||
     !Number.isFinite(diagnostic.observedAt)
   ) {
     return false
   }
-  const match = /^(POST|PATCH|DELETE) (\S+) net::ERR_ABORTED$/.exec(
+  const match = /^(GET|POST|PATCH|DELETE) (\S+) net::ERR_ABORTED$/.exec(
     diagnostic.message,
   )
   if (!match) {

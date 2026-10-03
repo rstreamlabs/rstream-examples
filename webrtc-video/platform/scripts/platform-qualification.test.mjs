@@ -232,6 +232,29 @@ test("platform qualification accepts a WHEP abort only after the same request re
   }
 })
 
+test("quality without presets accepts only a correlated, completed 204 response", () => {
+  const url = "https://platform.example/api/devices/device-id/quality"
+  const diagnostic = {
+    type: "request-failed",
+    message: `GET ${url} net::ERR_ABORTED`,
+    observedAt: 2010,
+    phase: "mediamtx-playing",
+  }
+  const response = { method: "GET", url, status: 204, observedAt: 2000 }
+  assert.deepEqual(unexpectedBrowserDiagnostics([diagnostic], [response]), [])
+  for (const responses of [
+    [],
+    [{ ...response, status: 200 }],
+    [{ ...response, method: "PUT" }],
+    [{ ...response, observedAt: 0 }],
+    [{ ...response, url: `${url}/another` }],
+  ]) {
+    assert.deepEqual(unexpectedBrowserDiagnostics([diagnostic], responses), [
+      diagnostic,
+    ])
+  }
+})
+
 test("platform qualification tolerates an unavailable page while writing failure evidence", async () => {
   const events = []
   await drainBrowserEvents(undefined, events)

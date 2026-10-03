@@ -18,6 +18,22 @@ export async function qualifyQualityControls({
   assert.equal(devices.length, 1)
   const endpoint = new URL(`/api/devices/${devices[0].id}/quality`, platform)
     .href
+  // The local harness exposes this listener only on loopback. Measure actual
+  // encoded media reaching MediaMTX, independently of the producer's target.
+  const mediaCounter = async () => {
+    const response = await fetch("http://127.0.0.1:9998/metrics", {
+      signal: AbortSignal.timeout(3000),
+    })
+    assert.equal(response.status, 200)
+    const prefix = `paths_inbound_bytes{name="devices/${devices[0].id}",state="ready"} `
+    const line = (await response.text())
+      .split("\n")
+      .find((line) => line.startsWith(prefix))
+    assert.ok(line, "MediaMTX source byte counter must be present")
+    const bytes = Number(line.slice(prefix.length))
+    assert.ok(Number.isFinite(bytes) && bytes >= 0)
+    return { bytes, at: performance.now() }
+  }
   const read = async () => {
     const response = await context.request.get(endpoint, { timeout: 10_000 })
     assert.equal(response.status(), 200)
@@ -76,6 +92,9 @@ export async function qualifyQualityControls({
         mode,
         { timeout: 15_000 },
       )
+      // Allow queued pre-change packets to drain before the rate observation.
+      await delay(2000)
+      const before = await mediaCounter()
       const playback = await Promise.all(
         [page, other].map((viewer) =>
           observeSustainedPlayback(viewer, {
@@ -84,13 +103,25 @@ export async function qualifyQualityControls({
           }),
         ),
       )
+      const after = await mediaCounter()
+      const receivedKbps =
+        ((after.bytes - before.bytes) * 8) / (after.at - before.at)
+      assert.ok(
+        receivedKbps > 0 && receivedKbps <= ceiling * 1.5,
+        `Received ${receivedKbps.toFixed(0)} kbps for ${mode} ceiling ${ceiling}`,
+      )
       measurements.push({
         mode,
         ceiling,
         applied: state.maxAppliedBitrateKbps,
+        receivedKbps,
         framesPerSecond: playback.map((value) => value.framesPerSecond),
       })
     }
+    assert.ok(
+      measurements[2].receivedKbps > measurements[0].receivedKbps * 2,
+      "High must produce measurably more encoded media than low on the uncongested test path",
+    )
     // Delayed concurrent writes must not silently replace another viewer's choice.
     const stale = await context.request.put(endpoint, {
       headers: { Origin: new URL(platform).origin },
