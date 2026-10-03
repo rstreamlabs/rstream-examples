@@ -191,8 +191,35 @@ recording responses; native MediaMTX storage and playback are covered separately
 The platform's 167 unit checks, TypeScript check and production build pass, as
 do the real PostgreSQL/Next.js route/access checks. Fresh desktop/mobile captures
 have been presented and the user has accepted the replay presentation in normal
-and full-page layouts. Full-volume behavior, production-path live resource
-impact and Firefox application-level replay qualification remain.
+and full-page layouts.
+
+The clean revision `73764aa` passes real provisioned-source recording/replay,
+return to the same live session, a full 512 MiB recording tmpfs, and subsequent
+MediaMTX outage/direct fallback/recovery. Two readers share one encoder. During
+the 20-second storage fault and 307-second recovery, presented cadence remains
+30 fps; the largest presentation gap is 66.7ms, with no media/RTP timestamp
+regression or stream replacement. A new closed segment decodes within 11.226s
+after space is freed; the full index recovers after 307.221s. The private MP4
+request releases its server admission slot 44ms after return-to-live.
+
+This exposed a native MediaMTX limit: ENOSPC leaves incomplete segments, and
+the index remains unavailable while one is included in its requested window.
+Recovery occurs when the window excludes them or retention removes them.
+The original immediate-index-recovery run remains a failure; the documented
+fault contract now distinguishes a 30-second recorder recovery bound from an
+eight-minute index bound (5m retention + 2.5m cleanup interval + margin), with
+unchanged live frame-rate/gap gates throughout. No native segment is removed
+by the qualification. Earlier harness failures are retained: paused Chromium
+media requests do not reliably settle Playwright's `response.finished()`,
+and Docker cannot copy a tmpfs through `docker cp`. The harness observes
+actual private-fetch release and copies bounded bytes inside the container.
+This qualifies live continuity on the tested path, not capture-to-display
+latency or recording CPU/memory overhead. Those measurements and Firefox
+application-level replay qualification remain.
+
+MediaMTX 1.21.1 is a pending dependency update. Its verified release binary
+passes the existing JWT/session/metrics integration check; image pinning,
+origin checks and media/recording regressions must pass before adoption.
 
 Provide optional short-retention recording and authenticated playback, keeping
 WebRTC as the live path. MediaMTX 1.20 supports recording and HTTP playback;

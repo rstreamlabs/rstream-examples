@@ -302,7 +302,8 @@ storage separate from logs and the system filesystem.
 **Full storage temporarily disables history.** MediaMTX 1.20 can leave incomplete
 fMP4 segments after `ENOSPC`; its playback index rejects the whole requested
 interval if any segment cannot be parsed. Freeing space lets recording resume,
-but history can remain unavailable until those files expire. With the bundled
+but history can remain unavailable until those files leave the requested window
+or retention removes them. With the bundled
 five-minute retention, allow up to another cleaner interval (2.5 minutes).
 Next.js reports this as unavailable, keeps live viewing independent and retries
 the index. It does not delete segments or claim a complete history during the
