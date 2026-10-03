@@ -258,6 +258,28 @@ checks pass. Live network measurements are still required to establish the
 effect on the retained transition failures. No queue, playout buffer, encoder
 ramp or acceptance threshold changed for this correction.
 
+The [targeted repeat series at clean revision `788b2e1`](./distributor/qualification/evidence/788b2e1/rtt-summary.json)
+uses identical images and three runs of each affected profile. Five of nine
+runs pass, so the series remains **failed**. Direct and source capacity each
+pass twice; their third runs decode 23.78 and 23.45 fps respectively, and the
+source run accumulates 3.095s of freezes. Direct delay/jitter/loss passes once;
+the other runs accumulate 0.387s and 0.497s of freezes. Every run passes runtime
+and host-integrity checks and recovers the 8 Mbit/s source target. UDP limits
+are restored and owned containers removed. The RTT correction is supported by
+its deterministic regressions, but this series does not establish stable
+network behavior or a causal improvement over the earlier random-loss runs.
+
+Further review reproduced a separate transport-feedback parser defect in the
+fork: an unknown/evicted packet neither consumed its receive delta nor stayed
+out of the loss samples. This shifts later arrival timestamps and manufactures
+loss. Regression tests cover run-length, status-vector and multiple-chunk
+feedback. A local correction consumes every received delta while returning
+only known send-history entries, preserves wire sequence advancement and
+rejects missing deltas. It is not yet pinned by the sample. The existing
+250-packet history also needs qualification against the number of packets in
+flight under congestion before another integrated network run; do not simply
+substitute an unbounded history or increase media queues.
+
 The discovery configuration review additionally reproduced valid display names
 being rejected or changed when environment expansion encounters YAML quotes or
 backslashes. A literal scalar preserves those names; the real configuration
