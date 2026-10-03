@@ -3,8 +3,10 @@
 import { QualitySelector } from "@/components/quality-selector"
 import { type RefObject } from "react"
 import { useEffect } from "react"
+import { useLayoutEffect } from "react"
 import { useRef } from "react"
 import { useState } from "react"
+import { Maximize2, Minimize2 } from "lucide-react"
 
 import { apiErrorSchema } from "@/lib/validations/device"
 import { Button } from "@/components/ui/button"
@@ -19,14 +21,25 @@ import {
   viewerRequestSignal,
 } from "@/lib/viewer-session"
 import { WHEPClient, type WHEPCloseResult } from "@/lib/whep-client"
+import { containExpandedPlayer } from "@/lib/player-expansion"
 
 type VideoDistributor = {
   allowLegacyWildcardETag: boolean
 }
 
 // sessionRef guards against React Strict Mode remounts and stale callbacks.
-export function VideoPlayer({ deviceId }: { deviceId: string }) {
+export function VideoPlayer({
+  deviceId,
+  deviceName,
+}: {
+  deviceId: string
+  deviceName: string
+}) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const playerRef = useRef<HTMLDivElement>(null)
+  const expandRef = useRef<HTMLButtonElement>(null)
+  const scrollBeforeExpansion = useRef({ x: 0, y: 0 })
+  const [expanded, setExpanded] = useState(false)
   const sessionRef = useRef(0)
   const [phase, setPhase] = useState<ViewerPhase>("connecting")
   const [distributor, setDistributor] = useState<
@@ -35,6 +48,15 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
   const [mediaMTXFallback, setMediaMTXFallback] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [retryKey, setRetryKey] = useState(0)
+  useLayoutEffect(() => {
+    if (!expanded || !playerRef.current || !expandRef.current) return
+    return containExpandedPlayer(
+      playerRef.current,
+      expandRef.current,
+      () => setExpanded(false),
+      scrollBeforeExpansion.current,
+    )
+  }, [expanded])
   useEffect(() => {
     const session = sessionRef.current + 1
     sessionRef.current = session
@@ -148,9 +170,15 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
     }
   }
   return (
-    <div className="space-y-3">
-      <QualitySelector key={deviceId} deviceId={deviceId} />
-      <div className="relative aspect-video overflow-hidden rounded-lg border border-foreground/20 bg-background">
+    <div
+      ref={playerRef}
+      className="video-player"
+      data-expanded={expanded}
+      role={expanded ? "dialog" : undefined}
+      aria-modal={expanded ? true : undefined}
+      aria-label={expanded ? `${deviceName} — full page video` : undefined}
+    >
+      <div className="video-player-picture">
         <video
           ref={videoRef}
           className="h-full w-full object-contain"
@@ -176,8 +204,40 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
           </div>
         )}
       </div>
+      <div className="video-player-toolbar">
+        <p className="video-player-name" hidden={!expanded} title={deviceName}>
+          {deviceName}
+        </p>
+        <QualitySelector
+          key={deviceId}
+          deviceId={deviceId}
+          compact={expanded}
+        />
+        <Button
+          ref={expandRef}
+          type="button"
+          variant="outline"
+          size="icon"
+          className="video-player-expand ml-auto shrink-0"
+          aria-label={expanded ? "Exit full page" : "Full page"}
+          title={expanded ? "Exit full page (Esc)" : "Full page"}
+          aria-expanded={expanded}
+          onClick={() => {
+            // Capture before the layout change removes the player from normal
+            // flow and the browser can clamp the page's scroll offset.
+            if (!expanded)
+              scrollBeforeExpansion.current = {
+                x: window.scrollX,
+                y: window.scrollY,
+              }
+            setExpanded((value) => !value)
+          }}
+        >
+          {expanded ? <Minimize2 aria-hidden /> : <Maximize2 aria-hidden />}
+        </Button>
+      </div>
       {error ? (
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="video-player-error flex flex-wrap items-center gap-3">
           <p className="text-sm text-destructive">{error}</p>
           <Button
             type="button"
@@ -193,7 +253,7 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
           </Button>
         </div>
       ) : null}
-      {distributor ? (
+      {distributor && !expanded ? (
         <p className="text-xs text-muted-foreground" aria-live="polite">
           Distribution path:{" "}
           <span className="font-medium text-foreground">

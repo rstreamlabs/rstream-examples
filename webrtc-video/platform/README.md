@@ -448,6 +448,14 @@ or the MediaMTX adapter owns that feedback loop, never both at once.
 
 ## Optional source quality
 
+The player's **Full page** button expands the video inside the current tab,
+keeping the same WebRTC session. Controls sit below the image in both layouts;
+the compact full-page toolbar retains the quality selector when presets are
+available. The expand/exit controls use icons with accessible labels and tooltips.
+Use **Exit full page** or Escape to restore the
+dashboard and its scroll position. This layout works without the browser's
+native Fullscreen API; browser tabs and address bars remain browser-controlled.
+
 Use `../producer/config.provisioning.quality.h264.yaml` to advertise Low
 (1 Mbit/s), Medium (4 Mbit/s), High (10 Mbit/s), and Auto. Presets are bitrate
 ceilings; congestion control can reduce the encoder target below the selected
@@ -541,6 +549,25 @@ sessions and substitutes GitHub/engine HTTP responses; it does not certify a rea
 organization's OAuth approval or SSO policy. It covers cross-account access,
 shared inventory, owner lock timeouts, nonmembers, watch-token scope, and the
 server-side prohibition on direct fallback.
+
+To additionally exercise full-page viewing in Chromium, Firefox and WebKit:
+
+```bash
+npx playwright-core install firefox webkit
+RSTREAM_DISCOVERY_BROWSER=/path/to/chrome \
+RSTREAM_FULL_PAGE_BROWSERS=1 \
+RSTREAM_UI_CAPTURE_DIRECTORY=/path/to/ui-evidence \
+  node scripts/access-routes.integration.mjs
+```
+
+This browser check uses a local synthetic WebRTC source and the real application
+UI. It checks session continuity, keyboard/focus handling, scroll restoration,
+portrait/landscape layout and source disappearance. It does not replace network
+qualification or testing on physical mobile devices.
+The disposable Firefox profile permits loopback ICE, selects the local loopback
+interface and disables address obfuscation for this same-machine fixture. User
+browser profiles are untouched. A failed connection is reported as a failed
+qualification; successful layout checks alone do not establish media playback.
 
 With the rstream credentials in `.env.local`, Docker, and Chrome installed, run
 the complete distribution and quality paths:

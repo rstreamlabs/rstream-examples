@@ -206,7 +206,11 @@ export function DeviceDashboard({
             unavailable={inventoryUnavailable}
           />
           {active?.online ? (
-            <VideoPlayer deviceId={active.id} />
+            <VideoPlayer
+              key={active.id}
+              deviceId={active.id}
+              deviceName={active.name}
+            />
           ) : (
             <EmptyState
               copy={

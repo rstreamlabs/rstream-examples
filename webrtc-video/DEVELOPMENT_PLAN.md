@@ -16,7 +16,7 @@ operating systems or networks.
 - MediaMTX source RTCP consumption: sender reports must reach Pion's report
   interceptor so the producer receives usable round-trip measurements.
 
-## In progress: project discovery
+## Implemented: project discovery; live-engine qualification pending
 
 - Separate access (`user` / `organization`) from inventory (`managed` /
   `discovered`). Discovery requires organization access and an explicit project.
@@ -99,6 +99,20 @@ authorization, clear live/history navigation and tests that disk activity does
 not harm live latency. Recording stays disabled by default.
 
 ## Visual acceptance
+
+The initial discovered-inventory desktop/mobile presentation was accepted.
+Add same-tab full-page viewing with discreet controls, preserved playback,
+keyboard/focus handling and restored scroll position. Use a layout expansion
+independent of the native Fullscreen API; verify Chromium, Firefox and WebKit,
+including mobile layouts, and present the new view for approval.
+The requested refinement places controls below the image in both layouts,
+keeps quality left-aligned, uses accessible icon-only expand/exit buttons and
+keeps the mobile controls on one line with a consistently spaced select chevron.
+These layout changes are implemented locally. Real-media UI checks pass in
+Chromium and WebKit at desktop, narrow mobile and landscape sizes. The Firefox
+fixture still fails during ICE connectivity before expansion; qualification is
+pending and that failure remains a failing gate. Updated screenshots have been
+presented; the refined layout still awaits visual acceptance.
 
 All changed UI/UX must be presented to the user as actual desktop and mobile
 screenshots in the conversation and explicitly validated. Include quality

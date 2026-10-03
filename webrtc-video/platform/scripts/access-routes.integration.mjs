@@ -10,11 +10,12 @@ import {
 } from "node:crypto"
 import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs"
 import { createServer } from "node:net"
-import { tmpdir } from "node:os"
+import { networkInterfaces, tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { setTimeout as delay } from "node:timers/promises"
 import { generateMediaMTXKeys } from "./generate-mediamtx-key.mjs"
 import { Client } from "pg"
+import { qualifyFullPage } from "./full-page.browser.mjs"
 
 const root = resolve(import.meta.dirname, "..")
 const runtime = mkdtempSync(join(tmpdir(), "rstream-video-access-"))
@@ -587,7 +588,69 @@ try {
     }),
   )
   if (process.env.RSTREAM_DISCOVERY_BROWSER) {
-    const { chromium } = await import("playwright-core")
+    const { chromium, firefox, webkit } = await import("playwright-core")
+    if (process.env.RSTREAM_FULL_PAGE_BROWSERS === "1") {
+      const failures = []
+      const loopback = Object.entries(networkInterfaces()).find(
+        ([, addresses]) =>
+          addresses?.some(
+            (address) => address.internal && address.family === "IPv4",
+          ),
+      )?.[0]
+      assert.ok(
+        loopback,
+        "The local media fixture requires a loopback interface",
+      )
+      for (const [name, type, options] of [
+        [
+          "chromium",
+          chromium,
+          { executablePath: process.env.RSTREAM_DISCOVERY_BROWSER },
+        ],
+        [
+          "firefox",
+          firefox,
+          {
+            // Keep this same-machine media fixture on loopback, independent of
+            // LAN permissions, VPN routes and mDNS. This only configures the
+            // disposable test profile, never the application or a user's browser.
+            firefoxUserPrefs: {
+              "media.peerconnection.ice.loopback": true,
+              "media.peerconnection.ice.force_interface": loopback,
+              "media.peerconnection.ice.obfuscate_host_addresses": false,
+            },
+          },
+        ],
+        ["webkit", webkit, {}],
+      ]) {
+        const browser = await type.launch({ ...options, headless: true })
+        try {
+          const context = await browser.newContext()
+          await context.addCookies([
+            {
+              name: "next-auth.session-token",
+              value: sessions.bob,
+              url: origin,
+            },
+          ])
+          await qualifyFullPage({
+            context,
+            origin,
+            name,
+            directory: process.env.RSTREAM_UI_CAPTURE_DIRECTORY,
+          })
+        } catch (error) {
+          failures.push(error)
+        } finally {
+          await browser.close()
+        }
+      }
+      if (failures.length)
+        throw new AggregateError(
+          failures,
+          "Full-page browser qualification failed",
+        )
+    }
     const browser = await chromium.launch({
       executablePath: process.env.RSTREAM_DISCOVERY_BROWSER,
       headless: true,
