@@ -70,6 +70,14 @@ by a source. Follow that separation without attempting to recreate libwebrtc.
    Only claim support for tested pipelines. Document the optional mechanism in
    the existing guides without any application-specific hardware references.
 
+Prerequisite under investigation: the existing 1080p30 x264 sample produces
+an SPS with level 4 (`42c028`, confirmed with GStreamer 1.28.6), while the
+configured SDP uses level 3.1 (`42e01f`). Audit actual offer/answer receive
+capabilities and source limits under RFC 6184 before enabling format upgrades.
+Changing the advertised level alone does not establish that a receiver can
+decode it; retain this as an open compatibility issue until negotiated limits
+and real decoded output are checked on direct and MediaMTX paths.
+
 ## Cross-cutting latency and resource criteria
 
 - Compare changes against the current path at equal source content and network
