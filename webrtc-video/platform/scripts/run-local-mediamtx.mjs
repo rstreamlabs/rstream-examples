@@ -493,6 +493,7 @@ async function runLocalMediaMTX() {
     await runCommand("npm", ["run", "clean"], { cwd: platformDirectory })
     const platformEnvironment = {
       ...process.env,
+      MEDIAMTX_METRICS_URL: "http://127.0.0.1:9998/metrics",
       MEDIAMTX_JWT_ADDITIONAL_JWKS: '{"keys":[]}',
       MEDIAMTX_JWT_AUDIENCE: audience,
       MEDIAMTX_JWT_ISSUER: issuer,

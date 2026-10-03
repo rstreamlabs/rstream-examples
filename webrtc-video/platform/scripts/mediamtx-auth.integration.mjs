@@ -6,6 +6,8 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { spawn } from "node:child_process"
 
+import { MediaMTXMetricsReader } from "../src/lib/mediamtx-metrics.ts"
+
 import { MediaMTXTokenService } from "../src/lib/video-distributor-token.ts"
 
 const issuer = "rstream-webrtc-video-platform-integration"
@@ -33,6 +35,7 @@ const jwksAddress = jwks.address()
 assert(jwksAddress && typeof jwksAddress !== "string")
 const httpPort = await availableTCPPort()
 const icePort = await availableUDPPort()
+const metricsPort = await availableTCPPort()
 const directory = await mkdtemp(join(tmpdir(), "rstream-mediamtx-auth-"))
 const config = join(directory, "mediamtx.yml")
 const onDemandMarker = join(directory, "on-demand-started")
@@ -54,7 +57,8 @@ authMethod: jwt
 authJWTJWKS: http://127.0.0.1:${jwksAddress.port}/jwks
 authJWTIssuer: ${issuer}
 authJWTAudience: ${audience}
-authJWTExclude: []
+authJWTExclude:
+  - action: metrics
 rtsp: false
 rtmp: false
 hls: false
@@ -62,7 +66,8 @@ srt: false
 moq: false
 playback: false
 api: false
-metrics: false
+metrics: true
+metricsAddress: 127.0.0.1:${metricsPort}
 pprof: false
 webrtc: true
 webrtcAddress: 127.0.0.1:${httpPort}
@@ -90,6 +95,15 @@ mediaMTX.stdout.on("data", (chunk) => logs.push(String(chunk)))
 mediaMTX.stderr.on("data", (chunk) => logs.push(String(chunk)))
 try {
   await waitForHTTP(httpPort, mediaMTX)
+  const metrics = new MediaMTXMetricsReader({
+    endpoint: `http://127.0.0.1:${metricsPort}/metrics`,
+  })
+  const absent = await metrics.read(path, AbortSignal.timeout(5000))
+  assert.equal(absent.state, "idle")
+  assert.equal(absent.readers, 0)
+  assert.equal(absent.inboundBitsPerSecond, null)
+  await assertFileRemainsMissing(onDemandMarker)
+
   const read = tokens.sign({
     action: "read",
     path,
@@ -126,6 +140,13 @@ try {
   await assertFileRemainsMissing(onDemandMarker)
   assert.equal(await exchange(`${base}/whep`, read), 400)
   await waitForFile(onDemandMarker)
+  // A fresh reader avoids the two-second cache and exercises the actual path
+  // exposition while the on-demand source is starting, without starting a viewer.
+  const starting = await new MediaMTXMetricsReader({
+    endpoint: `http://127.0.0.1:${metricsPort}/metrics`,
+  }).read(path, AbortSignal.timeout(5000))
+  assert.equal(starting.state, "idle")
+  assert.equal(starting.readers, 0)
   assert.equal(await exchange(`${base}/whip`, read, "sendonly"), 401)
   assert.equal(await exchange(`${base}/whip`, publish, "sendonly"), 201)
   const wrongPathPublish = tokens.sign({

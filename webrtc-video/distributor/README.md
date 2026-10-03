@@ -259,6 +259,12 @@ readiness, reader count, and inbound/outbound bytes:
 GET http://127.0.0.1:9998/metrics?type=paths&path=devices/<device-id>
 ```
 
+To show a scoped summary in the Next.js player, configure its server-side
+`MEDIAMTX_METRICS_URL` with this private `/metrics` endpoint. Next.js authorizes
+the device before reading readiness, reader count and byte counters. It derives
+rates from consecutive observations and does not expose this listener or the
+administrative API to the browser. Scraping never starts an on-demand source.
+
 Keep device identity in scrape-target labels rather than adding session or
 viewer identifiers in application metrics. The adapter's structured shutdown
 log distinguishes received recovery packets, repairs delivered before the

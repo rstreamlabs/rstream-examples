@@ -118,7 +118,10 @@ async function request(
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(10000),
   })
-  return { status: response.status, body: await response.json() }
+  return {
+    status: response.status,
+    body: response.status === 204 ? null : await response.json(),
+  }
 }
 try {
   docker(
@@ -163,6 +166,7 @@ try {
     RSTREAM_PROJECT_ID: "qualification-project",
     RSTREAM_ENGINE: "engine.qualification.invalid:443",
     VIDEO_DISTRIBUTOR: "direct",
+    MEDIAMTX_METRICS_URL: "",
     NEXT_TELEMETRY_DISABLED: "1",
   }
   execFileSync(join(root, "node_modules/.bin/prisma"), ["migrate", "deploy"], {
@@ -205,6 +209,12 @@ try {
   if(inventory.error)throw new Error('simulated engine outage');
   return Response.json(inventory);
  }
+ if(url.hostname==='metrics.qualification.invalid'){
+  if(url.searchParams.get('type')!=='paths')throw new Error('Unscoped metrics scrape');
+  const path=url.searchParams.get('path');
+  const labels='name="'+path+'",state="ready"';
+  return new Response('paths{'+labels+'} 1\\npaths_readers{'+labels+',readerType="webRTCSession"} 2\\npaths_inbound_bytes{'+labels+'} 1000\\npaths_outbound_bytes{'+labels+'} 2000\\n', {headers:{'Content-Type':'text/plain'}});
+ }
  if(url.hostname==='video.qualification.invalid'){
   const claims=JSON.stringify(JSON.parse(Buffer.from(url.searchParams.get('rstream.token').split('.')[1],'base64url').toString()));
   if(!claims.includes('^/api/quality$')||!claims.includes('"inventory":"discovered"'))throw new Error('incorrect source control credential scope');
@@ -230,6 +240,26 @@ try {
     name: "Camera",
   })
   assert.equal(personal.status, 201)
+  assert.equal(
+    (
+      await request(
+        origin,
+        "alice",
+        `/api/devices/${personal.body.device.id}/metrics`,
+      )
+    ).status,
+    204,
+  )
+  assert.equal(
+    (
+      await request(
+        origin,
+        "bob",
+        `/api/devices/${personal.body.device.id}/metrics`,
+      )
+    ).status,
+    404,
+  )
   assert.equal(
     (await request(origin, "bob", "/api/devices")).body.devices.length,
     0,
@@ -397,12 +427,74 @@ try {
     MEDIAMTX_PUBLIC_URL: "",
     MEDIAMTX_TUNNEL_NAME: "qualification-media",
     MEDIAMTX_ALLOW_DIRECT_FALLBACK: "false",
+    MEDIAMTX_METRICS_URL: "http://metrics.qualification.invalid/metrics",
   }
+  origin = await start("user")
+  assert.equal(
+    (
+      await request(
+        origin,
+        "alice",
+        `/api/devices/${personal.body.device.id}/metrics`,
+      )
+    ).status,
+    200,
+  )
+  assert.equal(
+    (
+      await request(
+        origin,
+        "bob",
+        `/api/devices/${personal.body.device.id}/metrics`,
+      )
+    ).status,
+    404,
+    "A warm metrics cache never bypasses ownership",
+  )
   origin = await start("organization")
   const requiredMedia = await request(origin, "alice", "/api/devices", {
     name: "Required media",
   })
   assert.equal(requiredMedia.status, 201)
+  const mediaMetrics = await request(
+    origin,
+    "alice",
+    `/api/devices/${requiredMedia.body.device.id}/metrics`,
+  )
+  assert.equal(mediaMetrics.status, 200)
+  assert.equal(mediaMetrics.body.readers, 2)
+  assert.equal(mediaMetrics.body.inboundBitsPerSecond, null)
+  assert.deepEqual(
+    Object.keys(mediaMetrics.body).sort(),
+    [
+      "state",
+      "readers",
+      "inboundBitsPerSecond",
+      "outboundBitsPerSecond",
+      "sampledAt",
+      "intervalMs",
+    ].sort(),
+  )
+  assert.equal(
+    (
+      await request(
+        origin,
+        "bob",
+        `/api/devices/${requiredMedia.body.device.id}/metrics`,
+      )
+    ).status,
+    200,
+  )
+  assert.equal(
+    (
+      await request(
+        origin,
+        "outsider",
+        `/api/devices/${requiredMedia.body.device.id}/metrics`,
+      )
+    ).status,
+    403,
+  )
   assert.equal(
     (
       await request(
@@ -449,6 +541,16 @@ try {
   origin = await start("organization")
   const discovered = await request(origin, "alice", "/api/devices")
   assert.equal(discovered.status, 200)
+  assert.equal(
+    (await request(origin, "alice", `/api/devices/${discoveryID}/metrics`))
+      .status,
+    200,
+  )
+  assert.equal(
+    (await request(origin, "outsider", `/api/devices/${discoveryID}/metrics`))
+      .status,
+    403,
+  )
   assert.equal(discovered.body.devices.length, 1)
   assert.equal(discovered.body.devices[0].name, "Front camera")
   assert.equal(discovered.body.devices[0].secretPrefix, null)
@@ -535,7 +637,10 @@ try {
       body: JSON.stringify({ path, purpose: "signaling" }),
       signal: AbortSignal.timeout(10000),
     })
-    return { status: response.status, body: await response.json() }
+    return {
+      status: response.status,
+      body: response.status === 204 ? null : await response.json(),
+    }
   }
   const resolvedSource = await resolveDiscoveredSource()
   assert.equal(resolvedSource.status, 200)
@@ -589,6 +694,27 @@ try {
   )
   if (process.env.RSTREAM_DISCOVERY_BROWSER) {
     const { chromium, firefox, webkit } = await import("playwright-core")
+    if (process.env.RSTREAM_METRICS_BROWSER === "1") {
+      const browser = await chromium.launch({
+        executablePath: process.env.RSTREAM_DISCOVERY_BROWSER,
+        headless: true,
+      })
+      try {
+        const context = await browser.newContext()
+        await context.addCookies([
+          { name: "next-auth.session-token", value: sessions.bob, url: origin },
+        ])
+        await qualifyFullPage({
+          context,
+          origin,
+          name: "metrics-chromium",
+          directory: process.env.RSTREAM_UI_CAPTURE_DIRECTORY,
+          observeDistribution: true,
+        })
+      } finally {
+        await browser.close()
+      }
+    }
     if (process.env.RSTREAM_FULL_PAGE_BROWSERS === "1") {
       const failures = []
       const loopback = Object.entries(networkInterfaces()).find(
@@ -749,11 +875,22 @@ try {
     409,
   )
   setInventory({ error: true })
+  assert.equal(
+    (await request(origin, "bob", `/api/devices/${discoveryID}/metrics`))
+      .status,
+    503,
+    "A warm cache never bypasses live discovery",
+  )
   assert.equal((await request(origin, "bob", "/api/devices")).status, 503)
   setInventory([])
   const offline = await request(origin, "bob", "/api/devices")
   assert.equal(offline.body.devices[0].online, false)
   assert.ok(offline.body.devices[0].lastSeenAt)
+  assert.equal(
+    (await request(origin, "bob", `/api/devices/${discoveryID}/metrics`))
+      .status,
+    404,
+  )
   assert.equal(
     (await request(origin, "bob", `/api/devices/${discoveryID}/quality`))
       .status,

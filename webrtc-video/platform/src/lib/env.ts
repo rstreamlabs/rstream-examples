@@ -44,6 +44,7 @@ const rstreamEnvSchema = z
     VIDEO_DISTRIBUTOR: z.enum(["direct", "mediamtx"]).default("direct"),
     MEDIAMTX_EXPOSURE: z.enum(["public", "rstream"]).default("rstream"),
     MEDIAMTX_PUBLIC_URL: optionalUrlSchema,
+    MEDIAMTX_METRICS_URL: optionalUrlSchema,
     MEDIAMTX_TUNNEL_NAME: optionalStringSchema,
     MEDIAMTX_SOURCE_RESOLVER_JWKS: optionalStringSchema,
     MEDIAMTX_SOURCE_RESOLVER_ISSUER: z
@@ -92,6 +93,26 @@ const rstreamEnvSchema = z
         message:
           "TURN_CREDENTIAL_TTL_SECONDS must be from 90 through 3600 seconds.",
       })
+    }
+    if (env.MEDIAMTX_METRICS_URL) {
+      const url = new URL(env.MEDIAMTX_METRICS_URL)
+      if (
+        env.VIDEO_DISTRIBUTOR !== "mediamtx" ||
+        env.MEDIAMTX_METRICS_URL.length > 2048 ||
+        !["http:", "https:"].includes(url.protocol) ||
+        url.username ||
+        url.password ||
+        url.search ||
+        url.hash ||
+        !url.pathname.endsWith("/metrics")
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["MEDIAMTX_METRICS_URL"],
+          message:
+            "MEDIAMTX_METRICS_URL requires VIDEO_DISTRIBUTOR=mediamtx and an HTTP(S) metrics endpoint without credentials, query or fragment.",
+        })
+      }
     }
     if (env.VIDEO_DISTRIBUTOR !== "mediamtx") {
       return

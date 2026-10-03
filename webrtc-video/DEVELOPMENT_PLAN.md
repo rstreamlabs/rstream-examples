@@ -80,7 +80,16 @@ by a source. Follow that separation without attempting to recreate libwebrtc.
 - Preserve demand-driven source startup/shutdown and one upstream for shared
   viewing. Do not enable persistent transmission implicitly.
 
-## Added: MediaMTX observability
+## In progress: MediaMTX observability
+
+The private, authorized metrics reader and API are implemented, including
+coalescing, cancellation, bounded resources and conservative rate baselines.
+Route/database tests verify authorization before cached reads; a real MediaMTX
+check verifies absent/not-ready paths and that scraping does not start a source.
+The normal player shows a compact indicator row. Browser checks cover measured
+values, outage/recovery without interrupting playback, and hiding the row in
+full-page mode. Desktop/mobile screenshots have been presented; visual
+acceptance and final live-distribution qualification remain pending.
 
 Use the existing metrics endpoint to provide bounded, read-only source readiness,
 reader count and ingress/egress rates. Scope returned values to the authorized

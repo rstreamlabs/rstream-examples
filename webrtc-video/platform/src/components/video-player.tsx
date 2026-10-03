@@ -1,5 +1,6 @@
 "use client"
 
+import { DistributionMetrics } from "@/components/distribution-metrics"
 import { QualitySelector } from "@/components/quality-selector"
 import { type RefObject } from "react"
 import { useEffect } from "react"
@@ -254,15 +255,20 @@ export function VideoPlayer({
         </div>
       ) : null}
       {distributor && !expanded ? (
-        <p className="text-xs text-muted-foreground" aria-live="polite">
-          Distribution path:{" "}
-          <span className="font-medium text-foreground">
-            {distributor === "mediamtx" ? "MediaMTX" : "Direct"}
-            {distributor === "direct" && mediaMTXFallback
-              ? " (MediaMTX fallback)"
-              : ""}
-          </span>
-        </p>
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground" aria-live="polite">
+            Distribution path:{" "}
+            <span className="font-medium text-foreground">
+              {distributor === "mediamtx" ? "MediaMTX" : "Direct"}
+              {distributor === "direct" && mediaMTXFallback
+                ? " (MediaMTX fallback)"
+                : ""}
+            </span>
+          </p>
+          {distributor === "mediamtx" ? (
+            <DistributionMetrics key={deviceId} deviceId={deviceId} />
+          ) : null}
+        </div>
       ) : null}
     </div>
   )

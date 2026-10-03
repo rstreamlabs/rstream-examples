@@ -16,6 +16,7 @@ const mediaMTXEnvironment = {
 }
 const managedNames = [
   "MEDIAMTX_EXPOSURE",
+  "MEDIAMTX_METRICS_URL",
   "MEDIAMTX_JWT_PRIVATE_KEY_BASE64",
   "MEDIAMTX_PUBLIC_URL",
   "MEDIAMTX_SOURCE_RESOLVER_JWKS",
@@ -127,6 +128,39 @@ test("public MediaMTX endpoints require protected transport", () => {
       MEDIAMTX_PUBLIC_URL: "http://localhost:8889",
     },
     () => assert.equal(rstreamEnvResult().success, true),
+  )
+})
+
+test("MediaMTX metrics are optional, server-only and reject ambiguous configuration", () => {
+  const base = {
+    ...mediaMTXEnvironment,
+    MEDIAMTX_EXPOSURE: "public",
+    MEDIAMTX_PUBLIC_URL: "https://media.example",
+  }
+  for (const value of [
+    "",
+    "http://127.0.0.1:9998/metrics",
+    "http://mediamtx.internal:9998/metrics",
+    "https://private.example/prefix/metrics",
+  ]) {
+    withEnvironment({ ...base, MEDIAMTX_METRICS_URL: value }, () =>
+      assert.equal(rstreamEnvResult().success, true),
+    )
+  }
+  for (const value of [
+    "ftp://private/metrics",
+    "https://user:secret@private/metrics",
+    "http://private/metrics?path=other",
+    "http://private/metrics#fragment",
+    "http://private/whep",
+  ]) {
+    withEnvironment({ ...base, MEDIAMTX_METRICS_URL: value }, () =>
+      assert.equal(rstreamEnvResult().success, false),
+    )
+  }
+  withEnvironment(
+    { ...baseEnvironment, MEDIAMTX_METRICS_URL: "http://private/metrics" },
+    () => assert.equal(rstreamEnvResult().success, false),
   )
 })
 

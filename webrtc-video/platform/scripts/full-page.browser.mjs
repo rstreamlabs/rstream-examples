@@ -5,7 +5,13 @@ import { join } from "node:path"
 
 // Local, real WebRTC media exercises layout continuity independently of the
 // external engine. Transport/network qualification remains a separate harness.
-export async function qualifyFullPage({ context, origin, directory, name }) {
+export async function qualifyFullPage({
+  context,
+  origin,
+  directory,
+  name,
+  observeDistribution = false,
+}) {
   // A real local STUN responder keeps ICE gathering deterministic without
   // depending on a public service or waiting for a deliberately dead URI.
   const stun = createSocket("udp4")
@@ -38,14 +44,35 @@ export async function qualifyFullPage({ context, origin, directory, name }) {
   const signaling = []
   page.on("pageerror", (error) => errors.push(error.message))
   let sessions = 0
+  let metricsAvailable = true
+  if (observeDistribution)
+    await page.route("**/api/devices/*/metrics", (route) => {
+      if (!metricsAvailable)
+        return route.fulfill({
+          status: 503,
+          json: { error: "Distribution metrics are unavailable" },
+        })
+      return route.fulfill({
+        json: {
+          state: "ready",
+          readers: 2,
+          inboundBitsPerSecond: 920000,
+          outboundBitsPerSecond: 1840000,
+          sampledAt: new Date().toISOString(),
+          intervalMs: 5000,
+        },
+      })
+    })
   await page.route("**/api/devices/*/viewer", (route) =>
     route.fulfill({
       json: {
         allowDirectFallback: false,
         distributor: {
-          kind: "direct",
+          kind: observeDistribution ? "mediamtx" : "direct",
           whep: `${origin}/__qualification/whep`,
-          authorization: "",
+          authorization: observeDistribution
+            ? "Bearer local-synthetic-source"
+            : "",
           expiresAt: new Date(Date.now() + 300000).toISOString(),
         },
         turn: {
@@ -186,7 +213,7 @@ export async function qualifyFullPage({ context, origin, directory, name }) {
     await mkdir(directory, { recursive: true })
     await page.screenshot({
       path: join(directory, `${name}-${suffix}.png`),
-      fullPage: suffix.startsWith("inline"),
+      fullPage: suffix.startsWith("inline") || suffix === "metrics-unavailable",
     })
   }
   try {
@@ -242,7 +269,32 @@ export async function qualifyFullPage({ context, origin, directory, name }) {
       )
     }
     await assertControls()
+    if (observeDistribution) {
+      await page.getByText("Source: 0.9 Mbit/s", { exact: true }).waitFor()
+      assert.match(
+        await page.locator(".distribution-metrics").innerText(),
+        /2 readers/,
+      )
+      assert.match(
+        await page.locator(".distribution-metrics").innerText(),
+        /To readers: 1.8 Mbit\/s/,
+      )
+    }
     await capture("inline")
+    if (observeDistribution) {
+      metricsAvailable = false
+      await page
+        .getByText("Distribution metrics unavailable.", { exact: true })
+        .waitFor({ timeout: 10000 })
+      assert.equal(
+        await page.locator(".distribution-metrics").count(),
+        0,
+        "Never display stale metrics as current",
+      )
+      await capture("metrics-unavailable")
+      metricsAvailable = true
+      await page.locator(".distribution-metrics").waitFor({ timeout: 10000 })
+    }
     const assertExpanded = async () => {
       const dialog = page.getByRole("dialog")
       await dialog.waitFor()
@@ -284,6 +336,12 @@ export async function qualifyFullPage({ context, origin, directory, name }) {
         true,
       )
       await assertControls()
+      if (observeDistribution)
+        assert.equal(
+          await page.locator(".distribution-metrics").count(),
+          0,
+          "Full-page controls stay compact",
+        )
     }
     await page.evaluate(() => window.scrollTo(0, 160))
     const scrollBefore = await page.evaluate(() => window.scrollY)

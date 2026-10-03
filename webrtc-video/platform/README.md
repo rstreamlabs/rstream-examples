@@ -446,6 +446,35 @@ bounded pacer, NACK/RTX, and one-per-five FlexFEC protection qualified by the
 standalone producer. It admits one source session: the selected direct browser
 or the MediaMTX adapter owns that feedback loop, never both at once.
 
+## MediaMTX distribution metrics
+
+With `VIDEO_DISTRIBUTOR=mediamtx`, set `MEDIAMTX_METRICS_URL` to the private
+MediaMTX metrics endpoint reachable from the Next.js server, for example
+`http://127.0.0.1:9998/metrics` when both run on the same host. Leave it empty to
+disable this feature. `npm run mediamtx:local` configures the local endpoint
+automatically. Keep port 9998 on loopback or a private network; do not expose it
+through the public WHEP tunnel. The administrative API remains disabled.
+
+The normal player shows source readiness, total readers and the rates derived
+from MediaMTX path inbound/outbound byte counters. Outbound is the total across
+readers; these values are not encoder targets or a measurement of all network
+protocol overhead. Full-page viewing keeps only its compact controls.
+
+`GET /api/devices/<device-id>/metrics` authorizes every request before consulting
+the server cache. It returns 204 when disabled, 503 when unavailable, and never
+returns upstream URLs or raw metric labels. Initial rates are unknown; an
+observed counter reset, readiness change, failed scrape or gap over 15 seconds
+starts a new baseline. Rate samples are process-local, so a serverless cold start
+or another application replica also needs two observations.
+
+The browser polls every five seconds while the normal player is visible, with
+no overlapping requests. Server scrapes coalesce per device, including failures,
+for two seconds. A process retains at most 128 device observations and admits at
+most eight concurrent scrapes with 64 observers each. Each scrape has a
+three-second deadline and a 32 KiB response bound. Cancelling one observer does
+not interrupt another; cancelling the last observer stops the upstream request.
+No metrics request starts the video source or adds a producer connection.
+
 ## Optional source quality
 
 The player's **Full page** button expands the video inside the current tab,
@@ -556,13 +585,15 @@ To additionally exercise full-page viewing in Chromium, Firefox and WebKit:
 npx playwright-core install firefox webkit
 RSTREAM_DISCOVERY_BROWSER=/path/to/chrome \
 RSTREAM_FULL_PAGE_BROWSERS=1 \
+RSTREAM_METRICS_BROWSER=1 \
 RSTREAM_UI_CAPTURE_DIRECTORY=/path/to/ui-evidence \
   node scripts/access-routes.integration.mjs
 ```
 
 This browser check uses a local synthetic WebRTC source and the real application
 UI. It checks session continuity, keyboard/focus handling, scroll restoration,
-portrait/landscape layout and source disappearance. It does not replace network
+portrait/landscape layout and source disappearance. `RSTREAM_METRICS_BROWSER=1`
+also checks distribution indicators and recovery after a metrics outage. It does not replace network
 qualification or testing on physical mobile devices.
 The disposable Firefox profile permits loopback ICE, selects the local loopback
 interface and disables address obfuscation for this same-machine fixture. User
