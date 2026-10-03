@@ -55,4 +55,4 @@ require (
 	google.golang.org/protobuf v1.36.12 // indirect
 )
 
-replace github.com/pion/interceptor => github.com/rstreamlabs/pion-interceptor v0.1.48-0.20260822042700-f4a26c59b0fa
+replace github.com/pion/interceptor => github.com/rstreamlabs/pion-interceptor v0.1.48-0.20261003222120-7504ea00f203

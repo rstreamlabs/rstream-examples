@@ -210,6 +210,24 @@ run and series verdict remain unchanged. The other runs' maximum timer delays
 are 3.0/3.8ms. These results do not establish the earlier 0.202s freeze's cause,
 and the local dependency override is still not integrated or publishable.
 
+The combined correction is now published on the fork's review branch as `7504ea0`
+([draft PR #4](https://github.com/rstreamlabs/pion-interceptor/pull/4)). It includes
+the fork's existing test-dependency update and the adapter's existing hardened
+`Decoder03` commit `195b942`. An initial attempt to use the GCC-only fork revision
+did not compile the adapter because that decoder lived on a separate historical
+branch; the combined revision preserves its implementation and tests unchanged.
+The combined fork passes the full race suite with
+Go 1.24.6 and golangci-lint 2.10.1 with Go 1.25.6. Producer and distributor now
+pin the same downloadable pseudo-version, with module checksums; the producer's
+GCC regression target exercises the entire package, including the new cases.
+The producer's full race, GCC and no-embedded-web suites pass with that pin, as
+does the distributor's full race suite. Its separate `-race -tags=integration`
+suite also passes against the actual MediaMTX 1.21.1 binary, exercising native
+and adapter sessions, shared readers, FlexFEC/RTX repair and session recovery.
+Both module sets pass `go mod verify`.
+The earlier local-override evidence remains historical. Fresh qualification of
+these ordinary builds, without a private dependency replacement, is required.
+
 ## Cross-cutting latency and resource criteria
 
 - Compare changes against the current path at equal source content and network
