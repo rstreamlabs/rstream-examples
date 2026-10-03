@@ -219,7 +219,8 @@ Application-level replay now also passes in Firefox 155 on Linux with the same
 controlled-media UI checks; the local macOS Firefox ICE fixture failure remains
 documented separately below.
 
-MediaMTX 1.21.1 is undergoing final live qualification. The release binary and
+MediaMTX 1.21.1 passes native distribution and recording-storage qualification.
+The release binary and
 container image are pinned/verified; JWT/session/metrics, browser-origin checks,
 the bridge race integration suite, real MP4 decoding in Chromium/Firefox/WebKit
 and native retention checks pass. Native WHEP now advertises RTX. A deliberate
@@ -242,7 +243,17 @@ also pass. The overall run nevertheless fails its diagnostics gate on two
 Chromium index requests reported as aborted despite 200 headers. The harness
 now observes complete parsed index bodies and correlates exact URL/method/time,
 as it already does for quality JSON; headers alone, timeouts and unrelated
-requests still fail. A fresh full run is required; the failed run is retained.
+requests still fail. The failed run is retained.
+
+The fresh full run at clean revision `58a09c1` passes with no unexpected browser
+diagnostics. It covers quality selection, two readers sharing one encoder, real
+replay/return-to-live, bounded storage saturation, direct fallback and MediaMTX
+recovery. During full storage and index recovery, presentation remains near
+30 fps with a maximum 66.6ms gap; the final recovered observation is 29.2 fps
+with a maximum 216.7ms gap. A new closed segment decodes after 7.923s and the
+index recovers after 303.535s. The replay request has already released its
+server slot before return-to-live. This does not change the native incomplete-
+segment limitation or establish capture-to-display latency/resource overhead.
 
 Provide optional short-retention recording and authenticated playback, keeping
 WebRTC as the live path. MediaMTX 1.20 supports recording and HTTP playback;
