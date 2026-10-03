@@ -7,6 +7,8 @@ import { createServer } from "node:net"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { setTimeout as delay } from "node:timers/promises"
+import { generateMediaMTXKeys } from "./generate-mediamtx-key.mjs"
+import { Client } from "pg"
 
 const root = resolve(import.meta.dirname, "..")
 const runtime = mkdtempSync(join(tmpdir(), "rstream-video-access-"))
@@ -252,6 +254,26 @@ try {
   assert.match(personalClaims, /"user":"alice"/)
   assert.doesNotMatch(personalClaims, /"organization"/)
   origin = await start("organization")
+  const lock = new Client({
+    connectionString: baseEnvironment.POSTGRES_PRISMA_DIRECT_URL,
+  })
+  await lock.connect()
+  try {
+    await lock.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [
+      "organization:42",
+    ])
+    const startedAt = Date.now()
+    const blocked = await request(origin, "alice", "/api/devices", {
+      name: "Blocked creation",
+    })
+    assert.equal(blocked.status, 503)
+    assert.ok(
+      Date.now() - startedAt < 5000,
+      "owner lock must have a finite wait",
+    )
+  } finally {
+    await lock.end()
+  }
   assert.equal(
     (await request(origin, "alice", "/api/devices")).body.devices.length,
     0,
@@ -305,6 +327,42 @@ try {
       )
     ).status,
     200,
+  )
+  baseEnvironment = {
+    ...baseEnvironment,
+    ...generateMediaMTXKeys("qualification"),
+    VIDEO_DISTRIBUTOR: "mediamtx",
+    MEDIAMTX_EXPOSURE: "rstream",
+    MEDIAMTX_PUBLIC_URL: "",
+    MEDIAMTX_TUNNEL_NAME: "qualification-media",
+    MEDIAMTX_ALLOW_DIRECT_FALLBACK: "false",
+  }
+  origin = await start("organization")
+  const requiredMedia = await request(origin, "alice", "/api/devices", {
+    name: "Required media",
+  })
+  assert.equal(requiredMedia.status, 201)
+  assert.equal(
+    (
+      await request(
+        origin,
+        "bob",
+        `/api/devices/${requiredMedia.body.device.id}/viewer?distribution=direct`,
+        {},
+      )
+    ).status,
+    403,
+  )
+  assert.equal(
+    (
+      await request(
+        origin,
+        "bob",
+        `/api/devices/${requiredMedia.body.device.id}/viewer`,
+        {},
+      )
+    ).status,
+    503,
   )
   console.log(
     "PASS: real Next.js user isolation, shared organization inventory, nonmember denial, mutation origin and signed watch-token scope",

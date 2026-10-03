@@ -3,6 +3,27 @@ import test from "node:test"
 
 import { HTTPError, readJSON } from "../src/lib/error.ts"
 
+test("JSON body reads have a deadline and release stalled streams on cancellation", async () => {
+  for (const cancelled of [false, true]) {
+    let released = false
+    const abort = new AbortController()
+    const request = new Request("http://localhost/", {
+      method: "POST",
+      duplex: "half",
+      signal: abort.signal,
+      body: new ReadableStream({
+        cancel() {
+          released = true
+        },
+      }),
+    })
+    const result = readJSON(request, 128, 25)
+    if (cancelled) abort.abort()
+    await assert.rejects(result, httpStatus(cancelled ? 499 : 408))
+    assert.equal(released, true)
+  }
+})
+
 test("JSON reader accepts a bounded streaming body", async () => {
   const request = streamingRequest([
     new TextEncoder().encode('{"path":"devices/'),

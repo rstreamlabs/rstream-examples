@@ -90,6 +90,7 @@ export async function createDevice(
   try {
     const device = await prisma.$transaction(async (transaction) => {
       // Serialize inventory limits across processes and users of the same owner.
+      await transaction.$executeRaw`SET LOCAL lock_timeout = '3s'`
       const lockKey = `${access.kind}:${access.id}`
       await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))::text`
       const deviceCount = await transaction.device.count({ where: owner })
@@ -111,10 +112,33 @@ export async function createDevice(
   } catch (error) {
     if (hasPrismaCode(error, "P2002"))
       throw new HTTPError(409, "A device with this name already exists.")
-    if (hasPrismaCode(error, "P2028"))
+    if (hasPrismaCode(error, "P2028") || isDatabaseLockTimeout(error))
       throw new HTTPError(503, "Device inventory is busy. Retry shortly.")
     throw error
   }
+}
+
+function isDatabaseLockTimeout(error: unknown) {
+  if (
+    !hasPrismaCode(error, "P2010") ||
+    !error ||
+    typeof error !== "object" ||
+    !("meta" in error)
+  )
+    return false
+  const meta = error.meta
+  if (!meta || typeof meta !== "object") return false
+  if ("code" in meta && meta.code === "55P03") return true
+  const adapter = "driverAdapterError" in meta ? meta.driverAdapterError : null
+  if (!adapter || typeof adapter !== "object" || !("cause" in adapter))
+    return false
+  const cause = adapter.cause
+  return (
+    !!cause &&
+    typeof cause === "object" &&
+    "originalCode" in cause &&
+    cause.originalCode === "55P03"
+  )
 }
 
 function hasPrismaCode(err: unknown, code: string) {

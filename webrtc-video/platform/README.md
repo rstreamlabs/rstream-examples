@@ -446,3 +446,35 @@ Set `CRON_SECRET` and `DEMO_CLEANUP_ENABLED="true"` only for disposable demo dep
 - The local producer viewer can stay enabled for operator workflows, but the product viewer token does not allow access to `/`.
 - Unscoped rstream tokens are intentionally not issued by this sample.
 - The demo cleanup cron is disabled by default, protected by `CRON_SECRET`, and should only be enabled for disposable demo databases.
+
+## Validate changes
+
+```bash
+npm ci
+npm run verify
+npm run test:access
+```
+
+The access suite owns disposable PostgreSQL containers, applies both upgrade and
+fresh migrations, and exercises the production Next.js routes. It seeds test
+sessions and substitutes GitHub/engine HTTP responses; it does not certify a real
+organization's OAuth approval or SSO policy. It covers cross-account access,
+shared inventory, owner lock timeouts, nonmembers, watch-token scope, and the
+server-side prohibition on direct fallback.
+
+With the rstream credentials in `.env.local`, Docker, and Chrome installed, run
+the complete distribution and quality paths:
+
+```bash
+npm run qualify:distribution -- /path/to/empty/evidence-directory
+RSTREAM_QUALIFICATION_QUALITY=1 \
+  ./qualification/end-to-end/run.sh /path/to/empty/quality-evidence public
+MEDIAMTX_ALLOW_DIRECT_FALLBACK=false RSTREAM_QUALIFICATION_QUALITY=1 \
+  ./qualification/end-to-end/run.sh /path/to/empty/required-media-evidence public
+```
+
+The quality run changes all four modes through the actual device tunnel while
+two browser readers share one encoder, rejects a stale version, and exercises
+distributor failure/recovery. The required-MediaMTX variant also checks that
+explicit direct authorization is refused. Use a committed, clean checkout for
+publishable evidence. Each runner cleans up the resources it creates.

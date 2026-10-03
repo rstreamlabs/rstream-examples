@@ -19,6 +19,7 @@ const events = []
 const diagnostics = []
 const signalingResponses = []
 const browserEvents = []
+const requiredMediaMTX = process.env.MEDIAMTX_ALLOW_DIRECT_FALLBACK === "false"
 let unexpectedDiagnostics = []
 let browser
 let page
@@ -44,6 +45,27 @@ try {
   ])
   await context.addInitScript(() => {
     window.__rstreamQualificationEvents = []
+    const originalFetch = window.fetch.bind(window)
+    window.fetch = (input, init) => {
+      const url = input instanceof Request ? input.url : String(input)
+      if (/\/api\/devices\/[^/]+\/quality$/.test(url)) {
+        const started = performance.now()
+        init?.signal?.addEventListener(
+          "abort",
+          () => {
+            window.__rstreamQualificationEvents.push({
+              name: "quality-request-aborted",
+              method: init.method,
+              started,
+              observedAt: performance.now(),
+              reason: String(init.signal.reason),
+            })
+          },
+          { once: true },
+        )
+      }
+      return originalFetch(input, init)
+    }
     window.addEventListener("rstream:video-distributor-fallback", (event) => {
       window.__rstreamQualificationEvents.push({
         detail: event.detail,
@@ -84,7 +106,10 @@ try {
   })
   page.on("response", (response) => {
     const request = response.request()
-    if (isWHEPSignalingRequest(request)) {
+    if (
+      isWHEPSignalingRequest(request) ||
+      /\/api\/devices\/[^/]+\/quality$/.test(new URL(request.url()).pathname)
+    ) {
       signalingResponses.push({
         method: request.method(),
         observedAt: elapsed(startedAt),
@@ -157,30 +182,62 @@ try {
   await exec("docker", ["stop", "--timeout", "10", options.container])
   distributorStopped = true
   events.push({ name: "mediamtx-stopped", observedAt: elapsed(startedAt) })
-  await waitForText(
-    page,
-    "Distribution path: Direct (MediaMTX fallback)",
-    120_000,
-  )
-  await waitForVideo(page, 30_000)
-  const fallback = await observeSustainedPlayback(page, {
-    durationMilliseconds: 10_000,
-    label: "Distribution path: Direct (MediaMTX fallback)",
-  })
-  events.push({
-    decodedFrames: fallback.observedFrames,
-    framesPerSecond: fallback.framesPerSecond,
-    height: fallback.height,
-    longestStallMilliseconds: fallback.longestStallMilliseconds,
-    name: "direct-fallback-playing",
-    observedAt: elapsed(startedAt),
-    width: fallback.width,
-  })
+  if (requiredMediaMTX) {
+    const deadline = Date.now() + 15_000
+    while (Date.now() < deadline) {
+      if (
+        await page
+          .getByText("Distribution path: Direct", { exact: false })
+          .count()
+      )
+        throw new Error("Required MediaMTX switched to direct playback")
+      await page.waitForTimeout(250)
+    }
+    const inventory = await context.request.get(
+      new URL("/api/devices", options.platform).href,
+    )
+    const { devices } = await inventory.json()
+    const forcedDirect = await context.request.post(
+      new URL(
+        `/api/devices/${devices[0].id}/viewer?distribution=direct`,
+        options.platform,
+      ).href,
+      { headers: { Origin: new URL(options.platform).origin } },
+    )
+    if (forcedDirect.status() !== 403)
+      throw new Error(
+        "Required MediaMTX accepted explicit direct authorization",
+      )
+  } else {
+    await waitForText(
+      page,
+      "Distribution path: Direct (MediaMTX fallback)",
+      120_000,
+    )
+    await waitForVideo(page, 30_000)
+    const fallback = await observeSustainedPlayback(page, {
+      durationMilliseconds: 10_000,
+      label: "Distribution path: Direct (MediaMTX fallback)",
+    })
+    events.push({
+      decodedFrames: fallback.observedFrames,
+      framesPerSecond: fallback.framesPerSecond,
+      height: fallback.height,
+      longestStallMilliseconds: fallback.longestStallMilliseconds,
+      name: "direct-fallback-playing",
+      observedAt: elapsed(startedAt),
+      width: fallback.width,
+    })
+  }
   await drainBrowserEvents(page, browserEvents)
   await exec("docker", ["start", options.container])
   distributorStopped = false
   await waitForHealthyContainer(options.container)
-  events.push({ name: "mediamtx-restarted", observedAt: elapsed(startedAt) })
+  events.push({
+    name: "mediamtx-restarted",
+    observedAt: elapsed(startedAt),
+    requiredMediaMTXEnforced: requiredMediaMTX,
+  })
   events.push({
     name: "platform-reload-requested",
     observedAt: elapsed(startedAt),
@@ -206,6 +263,7 @@ try {
     (event) => event.name === "rstream:video-distributor-fallback",
   )
   if (
+    !requiredMediaMTX &&
     !fallbackEvents.some(
       (event) =>
         event.detail?.from === "mediamtx" && event.detail?.to === "direct",
@@ -215,6 +273,8 @@ try {
       "the browser did not report the MediaMTX-to-direct fallback",
     )
   }
+  if (requiredMediaMTX && fallbackEvents.length !== 0)
+    throw new Error("Required MediaMTX emitted a direct fallback")
   events.push({
     name: "browser-close-requested",
     observedAt: elapsed(startedAt),
