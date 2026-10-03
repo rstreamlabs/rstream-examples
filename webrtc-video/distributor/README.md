@@ -264,6 +264,19 @@ per device.
 
 ## Technical qualification
 
+Prepare the Linux host's UDP socket limits before live QUIC qualification:
+
+```bash
+sudo sysctl -w net.core.rmem_max=7500000 net.core.wmem_max=7500000
+```
+
+These are host settings, not producer configuration. With Docker Desktop, the
+relevant host is its Linux VM. Record existing values and restore them after a
+temporary experiment; the command does not persist across reboot. See the
+[quic-go buffer guidance](https://github.com/quic-go/quic-go/wiki/UDP-Buffer-Sizes).
+A socket-buffer warning fails the performance-environment gate even if video
+plays correctly. Do not suppress the warning to qualify an undersized host.
+
 ```bash
 go test ./...
 go test -race ./...

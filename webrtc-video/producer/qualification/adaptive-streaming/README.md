@@ -7,6 +7,11 @@ interfaces to qualify Trickle ICE and ICE restart on the recovered session.
 
 ## What the harness measures
 
+For QUIC signaling, first prepare adequate UDP socket limits on the Linux
+container host (the Linux VM when using Docker Desktop). The
+[distribution prerequisites](../../../distributor/README.md#technical-qualification)
+give the commands and explain how to preserve and restore temporary settings.
+
 Each run starts the exact producer source in an ephemeral Linux container and
 connects the same pinned headless Chromium image in its own container. Direct
 and relay therefore differ by network path, not browser version, host operating
