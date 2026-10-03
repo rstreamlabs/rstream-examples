@@ -12,8 +12,7 @@ entrypoint.
 
 The [Next.js platform guide](https://rstream.io/guides/integrate-webrtc-video-streaming-into-a-nextjs-platform-with-rstream)
 walks through this control plane. It follows the [adaptive producer](https://rstream.io/guides/build-device-to-browser-webrtc-streaming-with-rstream);
-the third guide, currently in preparation, adds the optional MediaMTX
-distribution backend.
+the [MediaMTX guide](https://rstream.io/guides/distribute-webrtc-video-with-mediamtx-and-rstream) adds the optional distribution backend.
 
 ## One media core across the video series
 
@@ -95,7 +94,7 @@ while MediaMTX and browser telemetry describe the second.
 Create the environment file:
 
 ```bash
-cp .env.example .env
+cp .env.example .env.local
 ```
 
 Fill the product values:
@@ -127,6 +126,44 @@ WATCH_TOKEN_TTL_SECONDS="120"
 
 The sample resolves the engine from `RSTREAM_PROJECT_ENDPOINT`. `RSTREAM_PROJECT_ID` is optional when an endpoint is configured; when present, it is used by the SDK as the default project scope for short-lived tunnel tokens. Application TURN credentials are derived locally from the public key published for the selected TURN realm. Leave `RSTREAM_TURN_KEYRING_BASE_URL` empty when that key is served by `RSTREAM_API_URL`; set it to a separate public HTTPS origin when an interactive access gateway protects the control-plane origin. The keyring request refuses redirects and validates the bounded DER key before using it.
 
+### Select personal or organization access
+
+`DEVICE_ACCESS_MODE=user` is the default. Each GitHub account owns a private
+inventory. For an internal installation, use:
+
+```bash
+DEVICE_ACCESS_MODE="organization"
+GITHUB_ORGANIZATION="your-github-organization"
+DEMO_CLEANUP_ENABLED="false"
+```
+
+Register a separate GitHub OAuth application with the internal deployment's
+`NEXTAUTH_URL/api/auth/callback/github` callback. Organization mode requests
+`read:org`: members must authorize that scope, and an organization administrator
+must approve the OAuth application if OAuth application restrictions are enabled.
+An invitation alone does not grant access: GitHub must report active membership.
+Existing users must sign out and authorize again after enabling this mode.
+
+Every protected operation rechecks membership through a bounded verifier, with
+at most 60 seconds of positive caching. Failed refreshes never extend cached
+membership. Previously issued short-lived credentials remain valid until their
+own expiry; an already established media session is not forcibly disconnected
+when membership changes. This is admission control, not immediate revocation of
+active media. Stop the affected source/session when immediate eviction is needed.
+
+All active members see, create, delete, and control the same devices. Inventory,
+provisioning, viewer authorization, and watch labels use GitHub's stable numeric
+organization ID. `createdById` records who created a device; deleting that account
+does not delete the shared device. There is no separate administrator role.
+
+Apply `npm run prisma:deploy` before starting the upgraded application. The
+migration keeps existing personal devices private and adds a database constraint
+requiring exactly one owner. Changing the environment switches the visible
+inventory; it does not copy or reassign devices. Restart the application after
+configuration changes. Device limits are serialized in PostgreSQL per owner;
+request-rate quotas are bounded per process, so deployments with several replicas
+should also apply their own shared ingress rate limits.
+
 ### Select the distribution backend
 
 Direct playback is the default and needs no MediaMTX configuration.
@@ -147,6 +184,8 @@ MEDIAMTX_JWT_ADDITIONAL_JWKS='{"keys":[]}'
 MEDIAMTX_JWT_ISSUER="rstream-webrtc-video-platform"
 MEDIAMTX_JWT_AUDIENCE="rstream-mediamtx"
 MEDIAMTX_TOKEN_TTL_SECONDS="300"
+# Disable direct fallback to preserve one shared device uplink during outages.
+MEDIAMTX_ALLOW_DIRECT_FALLBACK="false"
 ```
 
 Choose exactly one MediaMTX exposure. Use a public endpoint when MediaMTX
@@ -296,7 +335,7 @@ The sample always mints short-lived tokens with tunnel resources. Producer token
 Install dependencies, create the database, and start the app:
 
 ```bash
-npm install
+npm ci
 npm run prisma:migrate
 npm run dev
 ```
@@ -329,6 +368,39 @@ bounded pacer, NACK/RTX, and one-per-five FlexFEC protection qualified by the
 standalone producer. It admits one source session: the selected direct browser
 or the MediaMTX adapter owns that feedback loop, never both at once.
 
+## Optional source quality
+
+Use `../producer/config.provisioning.quality.h264.yaml` to advertise Low
+(1 Mbit/s), Medium (4 Mbit/s), High (10 Mbit/s), and Auto. Presets are bitrate
+ceilings; congestion control can reduce the encoder target below the selected
+ceiling. Auto restores the configured adaptive range. Resolution and frame rate
+stay defined by the device pipeline.
+
+The player discovers modes from `GET /api/devices/:id/quality`. Its selector is
+hidden for unconfigured devices and updates other viewers within five seconds.
+A change affects every viewer of the device, including MediaMTX readers. The
+platform checks ownership and membership, then forwards a bounded request through
+a token restricted to `/api/quality`. That token stays on the server. Browser
+viewer and adapter source tokens remain restricted to WHEP.
+
+Selections include an opaque version. A competing change returns `409` and is
+refreshed before another selection; it cannot silently overwrite a newer choice.
+The producer reports selected mode and applied encoder target separately. The
+selection survives idle/reconnect cycles in the running producer and resets to
+`quality.default` after process restart. See the [producer configuration](../producer/README.md#optional-source-quality-presets)
+for validation and the HTTP contract.
+
+## Public and internal deployment profiles
+
+Keep the public Vercel demo on `DEVICE_ACCESS_MODE=user`,
+`VIDEO_DISTRIBUTOR=direct`, and its existing database. For the internal deployment,
+use organization mode, a separate database/OAuth application/secrets, and
+`VIDEO_DISTRIBUTOR=mediamtx` with `MEDIAMTX_ALLOW_DIRECT_FALLBACK=false`.
+Use the adaptive adapter configuration from `../distributor`, plus the optional
+quality producer profile where needed. The two deployments have independent
+inventories and credentials. Server provisioning and DNS/TLS are separate
+operations; these settings do not deploy infrastructure.
+
 ## Demo Deployment
 
 The hosted demo is intended to run at:
@@ -359,7 +431,7 @@ For public demos, `vercel.json` registers a weekly cleanup job:
 }
 ```
 
-Set `CRON_SECRET` and `DEMO_CLEANUP_ENABLED="true"` only for disposable demo deployments. Vercel sends the cron secret as a Bearer token in the `Authorization` header when it invokes `/api/cron/cleanup`. The endpoint deletes demo users, accounts, sessions, device records, and verification tokens. It does not touch rstream project configuration.
+Set `CRON_SECRET` and `DEMO_CLEANUP_ENABLED="true"` only for disposable demo deployments. Vercel sends the cron secret as a Bearer token in the `Authorization` header when it invokes `/api/cron/cleanup`. Organization mode rejects this cleanup setting. In personal mode the endpoint deletes demo users, accounts, sessions, device records, and verification tokens. It does not touch rstream project configuration.
 
 ## Security Shape
 
@@ -368,7 +440,7 @@ Set `CRON_SECRET` and `DEMO_CLEANUP_ENABLED="true"` only for disposable demo dep
 - Producer tokens are short-lived and allow only tunnel creation for one device tunnel.
 - Producer TURN credentials are fetched from the product API when needed.
 - Viewer tokens are short-lived and allow only the WHEP resource required by the selected backend.
-- Dashboard watch tokens are short-lived and only list tunnels labelled for the signed-in user.
+- Dashboard watch tokens are short-lived and only list tunnels labelled for the current user or configured organization.
 - The webhook endpoint accepts only signed rstream lifecycle events and only updates devices carrying this sample's `app` and `device` labels.
 - Device creation and TURN credential issuance are bounded to keep the public sample from being used as an unmetered relay minting endpoint.
 - The local producer viewer can stay enabled for operator workflows, but the product viewer token does not allow access to `/`.

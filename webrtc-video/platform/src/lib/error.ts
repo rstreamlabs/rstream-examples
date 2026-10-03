@@ -24,7 +24,7 @@ function errorResponse(err: HTTPError): Response {
 }
 
 export async function readJSON(
-  request: Request,
+  request: Pick<Request, "body" | "headers"> & { signal?: AbortSignal },
   maximumBytes = defaultMaximumJSONBytes,
 ): Promise<unknown> {
   if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1) {
@@ -71,7 +71,7 @@ export async function readJSON(
     const text = new TextDecoder("utf-8", { fatal: true }).decode(body)
     return JSON.parse(text)
   } catch (error) {
-    if (error instanceof HTTPError || request.signal.aborted) {
+    if (error instanceof HTTPError || request.signal?.aborted) {
       throw error
     }
     throw new HTTPError(400, "Invalid JSON body.")

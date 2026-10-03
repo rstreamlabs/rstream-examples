@@ -5,6 +5,7 @@ import process from "node:process"
 import { promisify } from "node:util"
 
 import { chromium } from "playwright-core"
+import { qualifyQualityControls } from "./quality.mjs"
 
 import {
   drainBrowserEvents,
@@ -119,6 +120,23 @@ try {
   })
   await waitForText(page, "Distribution path: MediaMTX", 120_000)
   await waitForVideo(page, 30_000)
+  if (process.env.RSTREAM_QUALIFICATION_QUALITY === "1") {
+    events.push({ name: "quality-started", observedAt: elapsed(startedAt) })
+    const quality = await qualifyQualityControls({
+      context,
+      page,
+      platform: options.platform,
+      waitForVideo,
+      observeSustainedPlayback,
+    })
+    events.push({
+      name: "quality-passed",
+      observedAt: elapsed(startedAt),
+      ...quality,
+    })
+  } else if (await page.getByLabel("Source quality", { exact: true }).count()) {
+    throw new Error("Unconfigured producer exposed quality controls")
+  }
   const distributed = await observeSustainedPlayback(page, {
     durationMilliseconds: 20_000,
     label: "Distribution path: MediaMTX",

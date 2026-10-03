@@ -329,7 +329,7 @@ func TestAdaptiveBackendEnforcesBitrateBounds(t *testing.T) {
 	cfg.Media.Mode = MediaModePerViewer
 	cfg.WebRTC.Adaptive.Enabled = true
 	cfg.WebRTC.Adaptive.Backend = AdaptiveBackendTWCCGCC
-	cfg.WebRTC.Adaptive.TWCCGCC.MaxBitrateKbps = 9000
+	cfg.WebRTC.Adaptive.TWCCGCC.MaxBitrateKbps = MaxBitrateKbps + 1
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("expected maximum bitrate above supported range to fail validation")
 	}

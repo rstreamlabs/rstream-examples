@@ -7,7 +7,7 @@ import { withUser } from "@/lib/next-auth"
 const GET = withError(
   withUser(async (_request: NextRequest, user) => {
     const [token, resolvedEngine] = await Promise.all([
-      createWatchToken(user.id),
+      createWatchToken(user.access),
       engine(),
     ])
     return Response.json(
@@ -17,7 +17,7 @@ const GET = withError(
         },
         engine: resolvedEngine,
       },
-      { status: 200 },
+      { status: 200, headers: { "Cache-Control": "no-store" } },
     )
   }),
 )

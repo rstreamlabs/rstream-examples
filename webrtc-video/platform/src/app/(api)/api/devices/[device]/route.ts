@@ -1,3 +1,4 @@
+import { deviceOwnerWhere } from "@/lib/device-access"
 import { HTTPError } from "@/lib/error"
 import { type NextRequest } from "next/server"
 import { withError } from "@/lib/error"
@@ -14,7 +15,7 @@ const DELETE = withError(
     const deleted = await prisma.device.deleteMany({
       where: {
         id: device,
-        userId: user.id,
+        ...deviceOwnerWhere(user.access),
       },
     })
     if (deleted.count === 0) {

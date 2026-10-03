@@ -194,6 +194,66 @@ The configuration is split by responsibility:
 - `webrtc` controls codec settings, interceptors, adaptive bitrate, and viewer limits.
 - `media` controls the GStreamer pipeline itself and how pipelines are allocated across viewers.
 - `logging` controls verbosity.
+- `quality` optionally advertises source bitrate presets.
+
+### Optional source quality presets
+
+Presets are opt-in. Existing configurations and the public demo keep their
+current behavior and show no selector. Start with
+`config.provisioning.quality.h264.yaml` for the Next.js/MediaMTX adapter path,
+or add this section to an authenticated adaptive standalone profile:
+
+```yaml
+quality:
+  default: auto
+  presets:
+    - id: low
+      label: Low
+      bitrateKbps: 1000
+    - id: medium
+      label: Medium
+      bitrateKbps: 4000
+    - id: high
+      label: High
+      bitrateKbps: 10000
+```
+
+Configure `webrtc.adaptive.twccGCC.minBitrateKbps: 500` and
+`maxBitrateKbps: 10000` for this example. Every preset must fit that range.
+The supported maximum is 50000 kbit/s; the default remains 8000. Larger values
+require a pipeline, hardware, and uplink qualified for that rate.
+
+Each preset is a ceiling on the adaptive encoder target. The congestion loop
+continues protecting the uplink and may reduce the actual rate. Auto restores
+that loop's full configured range. Presets change neither resolution nor frame
+rate. They require TWCC/GCC adaptation and a controllable encoder; the reduced
+native MediaMTX offer profile cannot enable them. Use the custom adapter when
+presets and MediaMTX are needed together.
+
+The shared embedded and Next.js readers discover modes dynamically. Selection
+is device-wide, including future sessions in the running process, and defaults
+to Auto unless `quality.default` names another configured preset. Restarting the
+process restores that configured default. An idle producer retains the selected
+mode without starting a capture pipeline.
+
+The control API uses the existing HTTP surface:
+
+- `GET /api/quality` returns modes, `selected`, opaque `version`, active encoder
+  count, minimum/maximum applied target, and failed encoder update count.
+- An unconfigured producer returns `204` for discovery. Older binaries return
+  `404`; both readers also accept that response.
+- `PUT /api/quality` accepts exactly `{"mode":"low","version":"…"}`.
+  Read the version first. A concurrent or previous-process version returns `409`;
+  an unknown mode returns `400`. Successful selection accepts the policy change;
+  the applied target converges asynchronously and is reported separately.
+
+Request bodies are bounded, responses are not cached, and cross-origin mutations
+are rejected. Exposed presets require remote provisioning or authenticated
+rstream publication. With tunneling disabled, bind the server to a literal
+loopback IP; the local control endpoint also validates the Host header. An
+edge-authenticated standalone viewer needs a token that permits `/api/quality`.
+Platform viewer tokens deliberately do not carry that permission: the platform
+proxies control using a separate server-held token.
 
 ### Producer metrics
 

@@ -58,7 +58,8 @@ const (
 	DefaultReconnect             = "5s"
 	DefaultBitrateKbps           = 5000
 	MinBitrateKbps               = 500
-	MaxBitrateKbps               = 8000
+	MaxBitrateKbps               = 50000
+	DefaultMaxBitrateKbps        = 8000
 	RealTimePacingFactor         = 1.5
 	DefaultFlexFECMediaPackets   = 5
 	DefaultFlexFECRepairPackets  = 1
@@ -69,6 +70,7 @@ const (
 )
 
 type Config struct {
+	Quality QualityConfig `yaml:"quality"`
 	Server  ServerConfig  `yaml:"server"`
 	Metrics MetricsConfig `yaml:"metrics"`
 	Web     WebConfig     `yaml:"web"`
@@ -254,7 +256,7 @@ func Default() Config {
 				Backend: AdaptiveBackendTWCCGCC,
 				TWCCGCC: WebRTCTWCCGCCBackendConfig{
 					MinBitrateKbps:        2000,
-					MaxBitrateKbps:        MaxBitrateKbps,
+					MaxBitrateKbps:        DefaultMaxBitrateKbps,
 					UpdateInterval:        "1s",
 					ChangeThresholdPct:    10,
 					DecreaseThresholdPct:  5,
@@ -481,7 +483,7 @@ func (c Config) Validate() error {
 			return errors.New("media pipeline must include av1parse when webrtc video mimeType is video/AV1")
 		}
 	}
-	return nil
+	return c.validateQuality()
 }
 
 func (c Config) HasLocalTunnelAuthPolicy() bool {

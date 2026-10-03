@@ -1,3 +1,4 @@
+import { deviceOwnerWhere } from "@/lib/device-access"
 import { HTTPError } from "@/lib/error"
 import { type NextRequest } from "next/server"
 import { viewerPayload } from "@/lib/devices"
@@ -16,7 +17,7 @@ const POST = withError(
     const device = await prisma.device.findFirst({
       where: {
         id: deviceId,
-        userId: user.id,
+        ...deviceOwnerWhere(user.access),
       },
     })
     if (!device) {

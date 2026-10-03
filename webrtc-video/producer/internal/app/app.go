@@ -95,7 +95,9 @@ func New(cfg config.Config) (*App, error) {
 			return broadcaster.OpenSession(ctx)
 		},
 		web.ServerOptions{
-			Viewer: cfg.Web.Viewer.Enabled,
+			Viewer:        cfg.Web.Viewer.Enabled,
+			QualityState:  broadcaster.QualityState,
+			SelectQuality: broadcaster.SelectQuality,
 		},
 	)
 	instance.metrics = producerMetrics.NewHandler(cfg, sourceFactory, broadcaster, instance.web)
@@ -142,7 +144,7 @@ func (a *App) Run(ctx context.Context) error {
 			return fmt.Errorf("failed to listen on %s: %w", a.cfg.Server.Listen, err)
 		}
 		a.info.LocalURL = "http://" + localListener.Addr().String()
-		localServer = newHTTPServer(handler)
+		localServer = newHTTPServer(web.LocalHandler(handler))
 		a.logger.Info("Local URL: %s", a.info.LocalURL)
 	}
 	var metricsServerErrors <-chan error

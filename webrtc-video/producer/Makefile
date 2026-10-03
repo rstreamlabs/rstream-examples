@@ -16,6 +16,7 @@ GST_PKG_CONFIG_PACKAGES := \
 	gstreamer-app-1.0
 WEB_SOURCES := \
 	../shared/whep-client.ts \
+	../shared/quality-client.ts \
 	./internal/web/embed/app.ts \
 	./internal/web/embed/index.html \
 	./internal/web/embed/input.css \

@@ -30,6 +30,7 @@ export const createDeviceResponseSchema = z.object({
 })
 
 export const viewerPayloadSchema = z.object({
+  allowDirectFallback: z.boolean().default(true),
   distributor: z.discriminatedUnion("kind", [
     z.object({
       kind: z.literal("direct"),

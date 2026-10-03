@@ -69,6 +69,23 @@
         <section
           class="rounded-lg border border-[#171512]/15 bg-[#f9f7ef]/80 p-4 sm:p-5"
         >
+          <div id="quality-panel" hidden class="mb-4 space-y-2 text-sm">
+            <label for="quality-select">Source quality</label>
+            <select
+              id="quality-select"
+              class="ml-3 rounded-md border border-[#171512]/20 bg-[#f5f2e9] px-3 py-2"
+              disabled
+            ></select>
+            <p class="text-xs text-[#6b665c]">
+              Applies to all viewers. The source can reduce its bitrate when the
+              uplink is congested.
+            </p>
+            <p
+              id="quality-status"
+              role="status"
+              class="text-xs text-[#6b665c]"
+            ></p>
+          </div>
           <div
             id="video-stage"
             class="relative overflow-hidden rounded-md border border-[#171512]/20 bg-[#f5f2e9]"

@@ -8,6 +8,12 @@ repository_directory="$(git -C "${video_directory}" rev-parse --show-toplevel)"
 producer_directory="${video_directory}/producer"
 output_directory="${1:-}"
 exposure="${2:-public}"
+quality="${RSTREAM_QUALIFICATION_QUALITY:-0}"
+case "${quality}" in
+0) producer_config="config.provisioning.h264.yaml" ;;
+1) producer_config="config.provisioning.quality.h264.yaml" ;;
+*) printf 'RSTREAM_QUALIFICATION_QUALITY must be 0 or 1\n' >&2; exit 1 ;;
+esac
 postgres_image="postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193"
 
 if [[ -z "${output_directory}" ]]; then
@@ -211,7 +217,7 @@ docker run --detach \
   --tmpfs /tmp:rw,noexec,nosuid,size=64m \
   --env "API_URL=${platform_callback}" \
   --env "DEVICE_SECRET=${device_secret}" \
-  --mount "type=bind,source=${producer_directory}/config.provisioning.h264.yaml,target=/qualification/config.yaml,readonly" \
+  --mount "type=bind,source=${producer_directory}/${producer_config},target=/qualification/config.yaml,readonly" \
   "${producer_image}" -config /qualification/config.yaml >/dev/null
 producer_started=1
 

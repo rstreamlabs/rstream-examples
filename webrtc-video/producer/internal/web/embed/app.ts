@@ -1,3 +1,4 @@
+import { QualityClient } from "../../../../shared/quality-client";
 import { z } from "zod";
 
 import { WHEPClient } from "../../../../shared/whep-client";
@@ -667,3 +668,44 @@ void loadInfo()
   .catch((error: unknown) => {
     log(error instanceof Error ? error.message : "Failed to load the sample");
   });
+
+const qualityPanel = requiredHTMLElement("quality-panel");
+const qualitySelect = requiredSelectElement("quality-select");
+const qualityStatus = requiredHTMLElement("quality-status");
+let qualityChanging = false;
+const qualityClient = new QualityClient({
+  url: () => endpoint("/api/quality").toString(),
+  onState: (quality) => {
+    qualityPanel.hidden = quality === null;
+    if (!quality) return;
+    qualitySelect.replaceChildren(
+      ...quality.modes.map((mode) => {
+        const option = document.createElement("option");
+        option.value = mode.id;
+        option.textContent = `${mode.label}${mode.bitrateKbps ? ` · ${mode.bitrateKbps / 1000} Mbit/s max` : ""}`;
+        return option;
+      }),
+    );
+    qualitySelect.value = quality.selected;
+    qualitySelect.disabled = qualityChanging;
+    qualityStatus.textContent =
+      quality.failedUpdates > 0
+        ? "Encoder update failures reported; check producer diagnostics."
+        : quality.activeEncoders > 0
+          ? `Encoder target: ${quality.minAppliedBitrateKbps / 1000}${quality.minAppliedBitrateKbps !== quality.maxAppliedBitrateKbps ? `–${quality.maxAppliedBitrateKbps / 1000}` : ""} Mbit/s.`
+          : "Applies when streaming starts.";
+  },
+  onError: (error) => {
+    qualitySelect.disabled = true;
+    qualityStatus.textContent = error.message;
+  },
+});
+qualitySelect.addEventListener("change", () => {
+  qualityChanging = true;
+  qualitySelect.disabled = true;
+  void qualityClient.select(qualitySelect.value).finally(() => {
+    qualityChanging = false;
+  });
+});
+window.addEventListener("pagehide", () => qualityClient.stop(), { once: true });
+qualityClient.start();

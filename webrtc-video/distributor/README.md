@@ -9,9 +9,15 @@ process. Later viewers share that publisher; the final viewer leaving stops it.
 
 Direct WebRTC remains the default for one-to-one delivery. Distribution is a
 backend selected by the platform, not a fork of the capture or player code.
-This component is the reference implementation for the third guide in the
-producer and Next.js video series; that guide remains unpublished until its
-complete qualification record is ready.
+This component is the reference implementation for the
+[MediaMTX guide](https://rstream.io/guides/distribute-webrtc-video-with-mediamtx-and-rstream) in the producer and Next.js video series.
+
+For shared organization deployments, configure the platform with
+`DEVICE_ACCESS_MODE=organization`, `GITHUB_ORGANIZATION`, and
+`MEDIAMTX_ALLOW_DIRECT_FALLBACK=false`. This prevents a distributor outage from
+opening separate direct device sessions. Optional source presets are configured
+on the producer and apply to the single upstream, hence to all MediaMTX readers.
+They do not create separate renditions or downstream adaptation.
 
 ## Delivery profiles
 

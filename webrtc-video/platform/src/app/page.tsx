@@ -1,3 +1,4 @@
+import { HTTPError } from "@/lib/error"
 import { DeviceDashboard } from "@/components/device-dashboard"
 import { deviceViews } from "@/lib/devices"
 import { getServerUser } from "@/lib/next-auth"
@@ -11,7 +12,23 @@ const GITHUB_URL =
   "https://github.com/rstreamlabs/rstream-examples/tree/main/webrtc-video/platform"
 
 export default async function Page() {
-  const user = await getServerUser()
+  let user
+  try {
+    user = await getServerUser()
+  } catch (error) {
+    if (!(error instanceof HTTPError)) throw error
+    return (
+      <main className="mx-auto max-w-2xl space-y-6 px-6 py-16">
+        <h1 className="text-2xl font-semibold">
+          {error.status === 403
+            ? "Organization access required"
+            : "Access verification unavailable"}
+        </h1>
+        <p>{error.message}</p>
+        <SignOutButton />
+      </main>
+    )
+  }
   if (!user?.id) {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-8 sm:px-6 lg:px-10">
@@ -46,7 +63,7 @@ export default async function Page() {
       </main>
     )
   }
-  const devices = await deviceViews(user.id)
+  const devices = await deviceViews(user.access)
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-8 sm:px-6 lg:px-10">
       <header className="border-b border-border pb-8">
@@ -75,6 +92,11 @@ export default async function Page() {
         </div>
       </header>
       <section className="flex-1 py-8">
+        {user.access.kind === "organization" ? (
+          <p className="mb-4 text-sm text-muted-foreground">
+            Shared organization devices. Changes apply to all members.
+          </p>
+        ) : null}
         <DeviceDashboard initialDevices={devices} />
       </section>
       <PageFooter account={user.email ?? user.name ?? user.id} />

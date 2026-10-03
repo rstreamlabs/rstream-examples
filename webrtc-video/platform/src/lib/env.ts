@@ -37,6 +37,10 @@ const rstreamEnvSchema = z
     TURN_CREDENTIAL_TTL_SECONDS: secondsSchema("600"),
     VIEWER_TOKEN_TTL_SECONDS: secondsSchema("120"),
     WATCH_TOKEN_TTL_SECONDS: secondsSchema("120"),
+    MEDIAMTX_ALLOW_DIRECT_FALLBACK: z
+      .enum(["true", "false"])
+      .default("true")
+      .transform((value) => value === "true"),
     VIDEO_DISTRIBUTOR: z.enum(["direct", "mediamtx"]).default("direct"),
     MEDIAMTX_EXPOSURE: z.enum(["public", "rstream"]).default("rstream"),
     MEDIAMTX_PUBLIC_URL: optionalUrlSchema,
@@ -204,11 +208,14 @@ export function rstreamConfigMissingMessage(error: ZodError): string {
 }
 
 export function demoCleanupEnabled(): boolean {
-  return z
+  const enabled = z
     .enum(["true", "false", "1", "0"])
     .default("false")
     .transform((value) => value === "true" || value === "1")
     .parse(process.env.DEMO_CLEANUP_ENABLED)
+  if (enabled && process.env.DEVICE_ACCESS_MODE === "organization")
+    throw new Error("Demo cleanup cannot be enabled in organization mode.")
+  return enabled
 }
 
 export function rstreamWebhookSigningSecret(): string | null {

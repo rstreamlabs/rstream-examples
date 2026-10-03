@@ -185,6 +185,11 @@ export class ViewerSessionController<Resolution, Track = unknown> {
     }
   }
 
+  recoverCurrentBackend(cause: unknown) {
+    if (this.stopped || this.reconnecting || !this.currentBackend) return false
+    return this.scheduleRecovery(cause)
+  }
+
   excludeCurrentBackend(cause: unknown) {
     if (this.stopped || this.reconnecting || !this.currentBackend) {
       return false

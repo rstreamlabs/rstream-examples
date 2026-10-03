@@ -1,5 +1,6 @@
 "use client"
 
+import { QualitySelector } from "@/components/quality-selector"
 import { type RefObject } from "react"
 import { useEffect } from "react"
 import { useRef } from "react"
@@ -38,6 +39,7 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
     const session = sessionRef.current + 1
     sessionRef.current = session
     const isCurrent = () => sessionRef.current === session
+    let allowDirectFallback = true
     let playbackMonitor: ReturnType<typeof monitorPlayback> | null = null
     const setCurrentPhase = (nextPhase: ViewerPhase) => {
       if (isCurrent()) {
@@ -60,7 +62,7 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
       backend: (viewer) => viewer.distributor.kind,
       createClient: createViewerClient,
       excludeBackendAfterFailure: (backend) => {
-        const excluded = backend === "mediamtx"
+        const excluded = backend === "mediamtx" && allowDirectFallback
         if (excluded && isCurrent()) {
           setMediaMTXFallback(true)
           window.dispatchEvent(
@@ -95,13 +97,14 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
               const cause = new Error(
                 "MediaMTX playback stayed below the usable frame rate",
               )
-              controller.excludeCurrentBackend(cause)
+              controller.recoverCurrentBackend(cause)
             },
           )
         }
       },
       resolve: async (signal, excludedBackend) => {
         const viewer = await fetchViewer(deviceId, signal, excludedBackend)
+        allowDirectFallback = viewer.allowDirectFallback
         if (isCurrent()) {
           setDistributor(viewer.distributor.kind)
         }
@@ -135,6 +138,7 @@ export function VideoPlayer({ deviceId }: { deviceId: string }) {
   }
   return (
     <div className="space-y-3">
+      <QualitySelector key={deviceId} deviceId={deviceId} />
       <div className="relative aspect-video overflow-hidden rounded-lg border border-foreground/20 bg-background">
         <video
           ref={videoRef}

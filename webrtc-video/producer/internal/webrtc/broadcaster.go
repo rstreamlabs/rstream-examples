@@ -121,6 +121,7 @@ type BandwidthStats struct {
 }
 
 type Broadcaster struct {
+	quality        *adaptation.QualityPolicy
 	cfg            config.Config
 	logger         *logs.Logger
 	sourceFactory  media.Factory
@@ -216,11 +217,16 @@ const (
 var ErrSessionCapacity = errors.New("viewer session capacity exhausted")
 
 func NewBroadcaster(cfg config.Config, sourceFactory media.Factory, turn *turnprovider.Provider, logger *logs.Logger) (*Broadcaster, error) {
+	quality, err := adaptation.NewQualityPolicy(cfg)
+	if err != nil {
+		return nil, err
+	}
 	peerFactory, codec, err := newPeerConnectionFactory(cfg)
 	if err != nil {
 		return nil, err
 	}
 	return &Broadcaster{
+		quality:        quality,
 		cfg:            cfg,
 		logger:         logger,
 		sourceFactory:  sourceFactory,
@@ -1421,13 +1427,14 @@ func (b *Broadcaster) newAdaptiveController(
 			return adaptation.LossState{Average: loss, GuardActive: guardActive}
 		},
 		requestRecoveryKeyFrame,
+		b.quality,
 	), true
 }
 
 func (b *Broadcaster) acquireSource(ctx context.Context) (media.Source, func(), error) {
 	switch b.mediaMode {
 	case config.MediaModePerViewer:
-		source, err := b.sourceFactory.New()
+		source, err := b.newSource()
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1467,7 +1474,7 @@ func (b *Broadcaster) acquireSharedSource(ctx context.Context) (media.Source, fu
 	}
 	b.mu.Unlock()
 	var err error
-	source, err = b.sourceFactory.New()
+	source, err = b.newSource()
 	if err != nil {
 		return nil, nil, err
 	}
