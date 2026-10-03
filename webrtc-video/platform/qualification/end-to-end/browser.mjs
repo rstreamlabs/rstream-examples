@@ -136,7 +136,9 @@ try {
     const request = response.request()
     if (
       isWHEPSignalingRequest(request) ||
-      /\/api\/devices\/[^/]+\/quality$/.test(new URL(request.url()).pathname)
+      /\/api\/devices\/[^/]+\/(quality|metrics)$/.test(
+        new URL(request.url()).pathname,
+      )
     ) {
       signalingResponses.push({
         method: request.method(),
@@ -205,6 +207,11 @@ try {
     observedAt: elapsed(startedAt),
     width: distributed.width,
   })
+  await page
+    .locator(".distribution-metrics")
+    .getByText("Source ready", { exact: true })
+    .waitFor({ timeout: 10000 })
+  events.at(-1).metricsReady = true
   events.push({
     name: "mediamtx-stop-requested",
     observedAt: elapsed(startedAt),
@@ -212,6 +219,18 @@ try {
   await exec("docker", ["stop", "--timeout", "10", options.container])
   distributorStopped = true
   events.push({ name: "mediamtx-stopped", observedAt: elapsed(startedAt) })
+  await page.waitForFunction(
+    () =>
+      document.body.innerText.includes("Distribution metrics unavailable.") ||
+      document.body.innerText.includes(
+        "Distribution path: Direct (MediaMTX fallback)",
+      ),
+    null,
+    { timeout: 15000, polling: 250 },
+  )
+  if (await page.locator(".distribution-metrics").count())
+    throw new Error("Unavailable metrics retained old measured values")
+  events.at(-1).metricsUnavailableHandled = true
   if (requiredMediaMTX) {
     const deadline = Date.now() + 15_000
     while (Date.now() < deadline) {
@@ -304,6 +323,11 @@ try {
     observedAt: elapsed(startedAt),
     width: recovered.width,
   })
+  await page
+    .locator(".distribution-metrics")
+    .getByText("Source ready", { exact: true })
+    .waitFor({ timeout: 10000 })
+  events.at(-1).metricsRecovered = true
   await drainBrowserEvents(page, browserEvents)
   const fallbackEvents = browserEvents.filter(
     (event) => event.name === "rstream:video-distributor-fallback",

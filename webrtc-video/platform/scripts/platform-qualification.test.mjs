@@ -64,6 +64,49 @@ test("completed quality responses require a browser JSON-body observation, not j
     ])
 })
 
+test("metrics outage diagnostics require the matching 503 and deliberate stopped phase", () => {
+  const url = "http://localhost:3000/api/devices/camera/metrics"
+  const response = { method: "GET", url, status: 503, observedAt: 1000 }
+  for (const [type, message] of [
+    ["http-error", `GET ${url} 503`],
+    ["request-failed", `GET ${url} net::ERR_ABORTED`],
+    [
+      "console-error",
+      `${url}:0:0 Failed to load resource: the server responded with a status of 503 (Service Unavailable)`,
+    ],
+  ]) {
+    const diagnostic = {
+      type,
+      message,
+      phase: "mediamtx-stopped",
+      observedAt: 1001,
+    }
+    assert.equal(expectedBrowserDiagnostic(diagnostic, [response]), true)
+    for (const records of [
+      [],
+      [{ ...response, status: 200 }],
+      [{ ...response, url: `${url}-other` }],
+      [{ ...response, method: "PUT" }],
+      [{ ...response, observedAt: 3000 }],
+    ])
+      assert.equal(expectedBrowserDiagnostic(diagnostic, records), false)
+    for (const change of [
+      { phase: "mediamtx-playing" },
+      { phase: "mediamtx-recovered" },
+      { observedAt: NaN },
+      { message: message.replace("metrics", "quality") },
+      { message: message.replace("503", "500") },
+      { message: message.replace("ERR_ABORTED", "ERR_FAILED") },
+    ]) {
+      if (change.message === message) continue
+      assert.equal(
+        expectedBrowserDiagnostic({ ...diagnostic, ...change }, [response]),
+        false,
+      )
+    }
+  }
+})
+
 test("platform qualification accepts only diagnostics caused by deliberate transitions", () => {
   const accepted = [
     {

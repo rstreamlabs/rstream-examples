@@ -57,6 +57,16 @@ export async function beginFormatObservation(page, expected) {
     window.__sourceFormatObservation = {
       state,
       stop: () => video.cancelVideoFrameCallback(callback),
+      finish: () => {
+        state.streamReplaced ||=
+          video.srcObject !== stream ||
+          document.querySelector("video") !== video
+        state.longestGapMilliseconds = Math.max(
+          state.longestGapMilliseconds,
+          performance.now() - previousAt,
+        )
+        return state
+      },
     }
   }, expected)
 }
@@ -68,7 +78,7 @@ export async function finishFormatObservation(page) {
       throw new Error("Source format observation was not started")
     observation.stop()
     delete window.__sourceFormatObservation
-    return observation.state
+    return observation.finish()
   })
 }
 

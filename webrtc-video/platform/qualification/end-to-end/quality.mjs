@@ -169,6 +169,17 @@ export async function qualifyQualityControls({
       )
       assert.equal(state.failedUpdates, 0)
       if (sourceFormats) assert.equal(state.sourceFormat.failedUpdates, 0)
+      if (requested)
+        await Promise.all(
+          viewers.map((viewer) =>
+            viewer
+              .getByText(
+                `Source format: ${requested.width} × ${requested.height} · ${requested.frameRate.numerator / requested.frameRate.denominator} fps.`,
+                { exact: true },
+              )
+              .waitFor({ timeout: 15000 }),
+          ),
+        )
       await other?.waitForFunction(
         (mode) =>
           document.querySelector('select[aria-label="Source quality"]')

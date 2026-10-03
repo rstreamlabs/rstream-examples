@@ -1,4 +1,5 @@
 export function expectedBrowserDiagnostic(diagnostic, signalingResponses = []) {
+  if (stoppedMetricsDiagnostic(diagnostic, signalingResponses)) return true
   if (successfulNoContentAbort(diagnostic, signalingResponses)) {
     return true
   }
@@ -27,6 +28,40 @@ export function expectedBrowserDiagnostic(diagnostic, signalingResponses = []) {
     )
   }
   return false
+}
+
+function stoppedMetricsDiagnostic(diagnostic, responses) {
+  if (
+    !new Set(["mediamtx-stop-requested", "mediamtx-stopped"]).has(
+      diagnostic.phase,
+    ) ||
+    !Number.isFinite(diagnostic.observedAt)
+  )
+    return false
+  const path = "https?:\\/\\/\\S+\\/api\\/devices\\/[^/?\\s]+\\/metrics"
+  const pattern =
+    diagnostic.type === "http-error"
+      ? new RegExp(`^GET (${path}) 503$`)
+      : diagnostic.type === "request-failed"
+        ? new RegExp(`^GET (${path}) net::ERR_ABORTED$`)
+        : diagnostic.type === "console-error"
+          ? new RegExp(
+              `^(${path}):[0-9]+:[0-9]+ Failed to load resource: the server responded with a status of 503 \\(Service Unavailable\\)$`,
+            )
+          : null
+  const match = pattern?.exec(diagnostic.message)
+  if (!match) return false
+  // The metrics client discards the unavailable response body. An aborted
+  // body is expected only after this same GET actually received a 503 during
+  // the deliberately stopped-server phase; arbitrary timeouts still fail.
+  return responses.some(
+    (response) =>
+      response.method === "GET" &&
+      response.url === match[1] &&
+      response.status === 503 &&
+      Number.isFinite(response.observedAt) &&
+      Math.abs(response.observedAt - diagnostic.observedAt) <= 1000,
+  )
 }
 
 function successfulNoContentAbort(diagnostic, signalingResponses) {
