@@ -379,7 +379,20 @@ export async function qualifyRecording({
         1000,
       )
       const local = join(outputDirectory, "recovered-segment.mp4")
-      await docker("cp", `${container}:${segment.path}`, local)
+      // docker cp does not read a container's tmpfs mount. Read inside its
+      // mount namespace, with a bounded binary buffer and no shell expansion.
+      assert.ok(segment.bytes <= 64 * 1024 * 1024)
+      const media = await exec(
+        "docker",
+        ["exec", container, "cat", segment.path],
+        {
+          encoding: "buffer",
+          timeout: 15000,
+          maxBuffer: 64 * 1024 * 1024,
+        },
+      )
+      assert.equal(media.stdout.length, segment.bytes)
+      await writeFile(local, media.stdout, { mode: 0o600 })
       const probe = await exec(
         "ffprobe",
         [
