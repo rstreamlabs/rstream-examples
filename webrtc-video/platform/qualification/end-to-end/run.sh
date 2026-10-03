@@ -89,6 +89,12 @@ stack_pid=""
 mediamtx_container=""
 postgres_started=0
 producer_started=0
+recording_trace="${output_directory}/recording-requests.jsonl"
+stack_node_options="${NODE_OPTIONS:-}"
+if [[ "${recording}" == 1 ]]; then
+  observer_uri="$(node -e 'process.stdout.write(require("node:url").pathToFileURL(process.argv[1]).href)' "${script_directory}/recording-fetch-observer.mjs")"
+  stack_node_options="${stack_node_options} --import=${observer_uri}"
+fi
 
 cleanup() {
   local status=$?
@@ -208,6 +214,8 @@ SQL
 printf 'Starting Next.js and the MediaMTX adapter stack\n'
 POSTGRES_PRISMA_DIRECT_URL="${database_url}" \
   POSTGRES_PRISMA_POOL_URL="${database_url}" \
+  NODE_OPTIONS="${stack_node_options}" \
+  RSTREAM_QUALIFICATION_RECORDING_TRACE="${recording_trace}" \
   "${platform_directory}/scripts/run-local-mediamtx.mjs" \
     --exposure "${exposure}" \
     --next-mode production \
@@ -252,6 +260,7 @@ producer_started=1
 
 printf 'Running browser playback, fallback, and recovery gates\n'
 RSTREAM_QUALIFICATION_SESSION_TOKEN="${session_token}" \
+  RSTREAM_QUALIFICATION_RECORDING_TRACE="${recording_trace}" \
   node "${script_directory}/browser.mjs" \
   --platform "${platform}" \
   --container "${mediamtx_container}" \

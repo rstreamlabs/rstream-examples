@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { execFile } from "node:child_process"
-import { writeFile } from "node:fs/promises"
+import { readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { setTimeout as delay } from "node:timers/promises"
 import { promisify } from "node:util"
@@ -171,8 +171,10 @@ export async function qualifyRecording({
       duration: Number(new URL(request.url()).searchParams.get("duration")),
     }
     assert.ok(result.replay.duration > 0 && result.replay.duration <= 30)
-    // A paused native player can suspend download before EOF. Return live
-    // first, then require the old media request to finish or cancel promptly.
+    // Chromium does not reliably finish Playwright's media-request lifecycle
+    // after clearing a paused native player. Observe the real server slot
+    // instead; headers or a detached DOM element alone do not prove release.
+    const returningAt = Date.now()
     mark("recording-return-live-requested")
     await page.evaluate(() => {
       window.__rstreamQualificationEvents.push({
@@ -185,27 +187,37 @@ export async function qualifyRecording({
     await page
       .getByRole("button", { name: "Return to live", exact: true })
       .click()
-    let deadline
-    try {
-      const finished = await Promise.race([
-        response.finished(),
-        new Promise((_, reject) => {
-          deadline = setTimeout(
-            () =>
-              reject(
-                new Error(
-                  "Old recording request did not finish after returning live",
-                ),
-              ),
-            5000,
+    const mediaURL = new URL(request.url())
+    const released = await until(
+      async () => {
+        const events = (
+          await readFile(
+            process.env.RSTREAM_QUALIFICATION_RECORDING_TRACE,
+            "utf8",
           )
-        }),
-      ])
-      if (finished) assert.match(finished.message, /ERR_ABORTED/)
-      result.replay.requestReleased = true
-    } finally {
-      clearTimeout(deadline)
-    }
+        )
+          .trim()
+          .split("\n")
+          .map((line) => JSON.parse(line))
+        const opened = events.find(
+          (event) =>
+            event.phase === "opened" &&
+            event.path === `devices/${device}` &&
+            event.start === mediaURL.searchParams.get("start") &&
+            event.duration === result.replay.duration,
+        )
+        return (
+          opened &&
+          events.find(
+            (event) => event.phase === "released" && event.id === opened.id,
+          )
+        )
+      },
+      "server releases the old recording request after returning live",
+      5000,
+    )
+    result.replay.serverReleasedRelativeToReturnMilliseconds =
+      released.at - returningAt
     await page.waitForFunction(
       () => !document.querySelector('video[aria-label="Live video"]').paused,
     )
