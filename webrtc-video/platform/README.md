@@ -609,6 +609,8 @@ RSTREAM_QUALIFICATION_QUALITY=1 \
   ./qualification/end-to-end/run.sh /path/to/empty/quality-evidence public
 MEDIAMTX_ALLOW_DIRECT_FALLBACK=false RSTREAM_QUALIFICATION_QUALITY=1 \
   ./qualification/end-to-end/run.sh /path/to/empty/required-media-evidence public
+RSTREAM_QUALIFICATION_QUALITY=1 RSTREAM_QUALIFICATION_SOURCE_FORMATS=1 \
+  ./qualification/end-to-end/run.sh /path/to/empty/source-format-evidence public
 ```
 
 The quality run changes all four modes through the actual device tunnel while
@@ -617,3 +619,13 @@ MediaMTX, rejects a stale version, and exercises
 distributor failure/recovery. The required-MediaMTX variant also checks that
 explicit direct authorization is refused. Use a committed, clean checkout for
 publishable evidence. Each runner cleans up the resources it creates.
+
+The source-format variant uses the optional H.264 profile example and repeats
+360p15, 540p24 and 720p30 selections through MediaMTX and direct fallback. It
+checks observed encoder state, actual presented dimensions, frame cadence,
+transition gaps, media/RTP timestamp continuity and preservation of the video
+element and MediaStream. It writes per-transport transition observations,
+including partial observations on failure. Set `RSTREAM_UI_CAPTURE_DIRECTORY`
+to retain desktop/mobile screenshots of normal and full-page viewing. This
+manual-profile check does not qualify automatic format adaptation under network
+impairment or measure capture-to-display latency or CPU savings.

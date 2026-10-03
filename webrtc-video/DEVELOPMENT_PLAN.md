@@ -61,10 +61,25 @@ offered payload types; receiver-only extensions cannot raise sender limits.
 The API distinguishes requested/observed/pending state using bounded per-profile
 counts, validated by both shared readers. The configured GStreamer preset path
 changes actual encoded caps between 360p15, 540p24 and 720p30 and restores Auto.
-Additional UI presentation and WebRTC/MediaMTX qualification remain pending.
-Native decoder checks do not prove transport timestamp continuity, real-time
-cadence, latency, CPU improvement, arbitrary hardware support or AV1
-format-switching support.
+Both viewers now describe the confirmed source format; selecting a profile is
+not displayed as proof that the encoder applied it. Compact full-page controls
+remain on one row. Updated desktop/mobile screenshots await visual approval.
+At revision `13a9f01`, the real provisioned-tunnel/browser qualification passed
+nine selections through MediaMTX (two readers, one encoder) and nine in direct
+fallback. Presented frames reached each requested resolution in at most 1.307s
+through MediaMTX and 1.502s directly. The longest observed presentation gap was
+100ms and 284ms respectively, with no media/RTP timestamp regression or video /
+MediaStream replacement. Stable playback exceeded 80% of each configured frame
+rate. These transition times include the control request and are not
+capture-to-display latency measurements.
+The preceding run at `889dd50` completed the same format transitions but failed
+its final diagnostics gate: the harness did not correlate the expected metrics
+503 responses during the deliberate MediaMTX outage. It remains a failed run.
+The updated gate requires matching method, URL, response status, time and outage
+phase; the successful run also verifies metrics disappearance and recovery.
+Automatic-ladder network qualification, capture-to-display latency and CPU
+measurements remain pending. These checks do not establish arbitrary hardware
+support or AV1 format-switching support.
 
 1. Define optional format profiles with bitrate ceiling, dimensions and frame
    rate. Existing bitrate-only configurations must remain unchanged. Expose
@@ -123,8 +138,10 @@ Route/database tests verify authorization before cached reads; a real MediaMTX
 check verifies absent/not-ready paths and that scraping does not start a source.
 The normal player shows a compact indicator row. Browser checks cover measured
 values, outage/recovery without interrupting playback, and hiding the row in
-full-page mode. Desktop/mobile screenshots have been presented; visual
-acceptance and final live-distribution qualification remain pending.
+full-page mode. Real live-distribution qualification at `13a9f01` also verifies
+ready values, removal of stale values during a deliberate MediaMTX outage, and
+recovery after restart. Desktop/mobile screenshots have been presented; visual
+acceptance remains pending.
 
 Use the existing metrics endpoint to provide bounded, read-only source readiness,
 reader count and ingress/egress rates. Scope returned values to the authorized
