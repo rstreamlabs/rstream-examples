@@ -246,3 +246,24 @@ test("platform qualification tolerates an unavailable page while writing failure
   )
   assert.deepEqual(events, [])
 })
+
+test("required MediaMTX retries identify root WHEP console locations only during an intentional outage", () => {
+  const diagnostic = {
+    message:
+      "http://localhost:8889/devices/device-id/whep:0:0 Failed to load resource: net::ERR_CONNECTION_REFUSED",
+    phase: "mediamtx-stopped",
+    type: "console-error",
+  }
+  assert.equal(expectedBrowserDiagnostic(diagnostic), true)
+  assert.equal(
+    expectedBrowserDiagnostic({ ...diagnostic, phase: "mediamtx-playing" }),
+    false,
+  )
+  assert.equal(
+    expectedBrowserDiagnostic({
+      ...diagnostic,
+      message: diagnostic.message.replace("whep:0:0", "health:0:0"),
+    }),
+    false,
+  )
+})

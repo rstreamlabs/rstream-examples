@@ -104,7 +104,9 @@ function expectedStoppedMediaMTXDiagnostic(diagnostic) {
 }
 
 function isWHEPRequest(message) {
-  return /(?:^|\s)https?:\/\/[^\s]+\/[^\s]*whep(?:[/?]|\s|$)/.test(message)
+  return /(?:^|\s)https?:\/\/[^\s]+\/[^\s]*whep(?:[/?]|\s|$|:\d+:\d+(?:\s|$))/.test(
+    message,
+  )
 }
 
 function isViewerRequest(message) {
