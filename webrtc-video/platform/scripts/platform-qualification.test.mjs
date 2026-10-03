@@ -35,6 +35,35 @@ test("quality aborts require a matching intentional cancellation, never a timeou
   }
 })
 
+test("completed quality responses require a browser JSON-body observation, not just 200 headers", () => {
+  const url = "http://localhost:3000/api/devices/camera/quality"
+  const diagnostic = {
+    at: 1000,
+    type: "request-failed",
+    message: `GET ${url} net::ERR_ABORTED`,
+  }
+  const body = {
+    name: "quality-response-read",
+    method: "GET",
+    url,
+    at: 990,
+    status: 200,
+  }
+  assert.deepEqual(unexpectedBrowserDiagnostics([diagnostic], [], [body]), [])
+  assert.deepEqual(
+    unexpectedBrowserDiagnostics([diagnostic], [{ ...body, observedAt: 990 }]),
+    [diagnostic],
+  )
+  for (const event of [
+    { ...body, status: 503 },
+    { ...body, at: 3000 },
+    { ...body, url: `${url}-other` },
+  ])
+    assert.deepEqual(unexpectedBrowserDiagnostics([diagnostic], [], [event]), [
+      diagnostic,
+    ])
+})
+
 test("platform qualification accepts only diagnostics caused by deliberate transitions", () => {
   const accepted = [
     {

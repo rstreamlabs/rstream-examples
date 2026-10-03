@@ -36,6 +36,21 @@ function intentionalQualityCancellation(diagnostic, events) {
       diagnostic.message,
     )
   if (!match) return false
+  // Chromium can report ERR_ABORTED after a streamed JSON body was consumed.
+  // A 200 header alone is insufficient: require the browser's complete-body
+  // observation for this URL/method at the same time. Truncation/timeouts fail.
+  if (
+    events.some(
+      (event) =>
+        event.name === "quality-response-read" &&
+        event.method === "GET" &&
+        event.url === match[1] &&
+        event.status === 200 &&
+        Number.isFinite(event.at) &&
+        Math.abs(event.at - diagnostic.at) <= 1000,
+    )
+  )
+    return true
   return events.some(
     (event) =>
       event.name === "quality-request-aborted" &&

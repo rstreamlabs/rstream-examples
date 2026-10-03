@@ -66,7 +66,33 @@ try {
           { once: true },
         )
       }
-      return originalFetch(input, init)
+      return originalFetch(input, init).then((response) => {
+        if (
+          /\/api\/devices\/[^/]+\/quality$/.test(url) &&
+          response.status === 200
+        ) {
+          void response
+            .clone()
+            .json()
+            .then((body) => {
+              if (
+                Array.isArray(body.modes) &&
+                typeof body.version === "string" &&
+                body.modes.some((mode) => mode.id === body.selected)
+              ) {
+                window.__rstreamQualificationEvents.push({
+                  name: "quality-response-read",
+                  at: Date.now(),
+                  url: new URL(url, window.location.href).href,
+                  method: init?.method ?? "GET",
+                  status: response.status,
+                })
+              }
+            })
+            .catch(() => {})
+        }
+        return response
+      })
     }
     window.addEventListener("rstream:video-distributor-fallback", (event) => {
       window.__rstreamQualificationEvents.push({
