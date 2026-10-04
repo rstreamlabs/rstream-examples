@@ -14,7 +14,9 @@ COPY producer/qualification/adaptive-streaming/viewer.ts ./viewer.ts
 COPY producer/qualification/adaptive-streaming/sample-receiver-udp.mjs ./sample-receiver-udp.mjs
 COPY producer/qualification/adaptive-streaming/sample-host-cpu.sh /usr/local/bin/rstream-sample-host-cpu
 COPY producer/qualification/adaptive-streaming/lib ./lib
+COPY producer/qualification/adaptive-streaming/latency ./latency
 COPY shared /shared
 RUN ./node_modules/.bin/esbuild viewer.ts --bundle --format=esm --outfile=viewer.js
+RUN ./node_modules/.bin/esbuild latency/probe-entry.mjs --bundle --format=iife --outfile=latency-probe.js
 
 ENTRYPOINT ["node", "/qualification/collect.mjs"]

@@ -45,6 +45,69 @@ Missing browser metadata remains `null`. Media time and receiver timestamps do
 not establish source capture-to-display latency. The probe runs only in the
 qualification browser and is stopped before session teardown.
 
+### Optional pixel-based latency measurement
+
+The distributor's end-to-end runner supports `RSTREAM_DISTRIBUTOR_LATENCY_PROBE=true`
+for direct, custom-adapter and native MediaMTX paths. It selects the matching
+720p30 qualification profile in `latency/config.yaml`, which stamps a timestamp
+into a small patch of I420 pixels immediately before the encoder. The browser
+decodes that patch at most five times per second. This works across MediaMTX RTP
+timestamp rewriting and does not add a queue or change the public source profiles.
+The plugin and browser probe are built only into qualification images.
+
+Run from `webrtc-video/distributor`, after the normal socket-limit prerequisites:
+
+```bash
+RSTREAM_CONTEXT="<staging-context>" \
+RSTREAM_DISTRIBUTOR_MODE=mediamtx \
+RSTREAM_DISTRIBUTOR_LATENCY_PROBE=true \
+qualification/end-to-end/run.sh /tmp/rstream-video-latency
+```
+
+The producer and browser must share one Linux host clock. The runner compares
+hashes of their Linux boot identity; only hashes are retained. At every decoded
+marker the browser also checks its wall clock against its performance clock.
+Different hosts, clock jumps, negative or inconsistent latency, unreadable
+markers, missing observations and incomplete runs fail measurement validity.
+Each measured phase requires at least 50 samples and 95% readable markers.
+Warmup and measurement phases must last at least 15 seconds. The report keeps
+invalid measurements and never substitutes zero for absent data.
+
+`latency.json` contains median, p95, p99 and maximum latency, the clock and marker
+gates, sampling overhead, and separate phase summaries. The first and last
+collector snapshot of each phase are excluded from its steady summary because
+they can span a boundary; they remain in the overall distribution. Raw marker
+observations remain in `samples.jsonl`. These are measurements from the raw-frame
+stamp to the browser's **expected composition time**, excluding physical camera
+exposure, capture/scaling before the stamp and display scanout. They are not a
+glass-to-glass measurement or proof of latency on a different host/device.
+
+`RSTREAM_DISTRIBUTOR_PRODUCER_CONFIG` can select another producer profile. Its
+SHA-256 is recorded in the result. With latency enabled, a custom pipeline must
+place `rstreamlatencystamp` after its final scaling stage, immediately before
+the encoder, on I420 frames at least 288×64 pixels. A missing or subsequently
+scaled marker fails qualification. Compare probe-disabled and probe-enabled
+runs at otherwise identical settings before attributing CPU or latency changes
+to the media implementation. A valid measurement does not itself impose a
+latency target; the measured distribution must still be assessed for the use case.
+
+To verify the stamp survives H.264 encoding independently of WebRTC, compile
+`latency/gstlatencystamp.c` with the local GStreamer development package into an
+external artifact directory. For example, on Linux, from this directory:
+
+```bash
+latency_artifacts="$(mktemp -d)"
+cc -shared -fPIC -O2 -Wall -Wextra -Werror \
+  -o "${latency_artifacts}/libgstlatencystamp.so" latency/gstlatencystamp.c \
+  $(pkg-config --cflags --libs gstreamer-video-1.0)
+GST_PLUGIN_PATH="${latency_artifacts}" node latency/verify-marker.mjs
+```
+
+Use the `.dylib` extension when compiling on macOS. The check
+requires `gst-launch-1.0`, x264 and the libav decoder. It verifies timestamp/CRC
+integrity at 500 and 8000 kbit/s, corruption rejection, and removes its temporary
+decoded frames. Do not put compiled plugin binaries in the repository.
+
 The harness also samples UDP counters once per second inside both isolated
 Linux network namespaces: the producer container and the receiver browser. A
 local receive-buffer drop or a send rejection outside a shaped phase

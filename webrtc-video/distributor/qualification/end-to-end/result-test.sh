@@ -27,6 +27,7 @@ jq -n '{invalid_fec: 0, reorder_late: 0, reorder_skipped: 0, reorder_discarded: 
   >"${fixture_directory}/adapter.json"
 jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 0, transportBufferWarnings: 0}' >"${fixture_directory}/runtime-health.json"
 jq -n '{required: false}' >"${fixture_directory}/native-source-profile.json"
+jq -n '{enabled: false}' >"${fixture_directory}/latency.json"
 jq -nc '
   def sample(phase; elapsed; frames; bytes; target): {
     phase: phase,
@@ -137,12 +138,28 @@ render_result() {
   --argjson flexfec_media_packets 5 \
   --argjson flexfec_repair_packets 1 \
   --argjson playout_delay_hint_seconds 0.2 \
+  --arg producer_config_sha256 fixture \
+  --argjson latency_probe "${latency_probe:-false}" \
+  --slurpfile latency "${fixture_directory}/latency.json" \
   --slurpfile viewer_network "${network}" \
   --slurpfile source_network "${source_network}" \
   --slurpfile native_source_profile "${native_source_profile}" \
   -f "${script_directory}/result.jq" \
   "$1"
 }
+
+latency_probe=true
+render_result "${fixture_directory}/samples.jsonl" | jq -e '.gates.latencyMeasurement == false and .passed == false' >/dev/null
+for report in \
+  '{enabled: true, collectionComplete: false, measurementValid: true}' \
+  '{enabled: true, collectionComplete: true, measurementValid: false}'; do
+  jq -n "${report}" >"${fixture_directory}/latency.json"
+  render_result "${fixture_directory}/samples.jsonl" | jq -e '.gates.latencyMeasurement == false and .passed == false' >/dev/null
+done
+jq -n '{enabled: true, collectionComplete: true, measurementValid: true}' >"${fixture_directory}/latency.json"
+render_result "${fixture_directory}/samples.jsonl" | jq -e '.gates.latencyMeasurement == true and .passed == true and .profile.latencyProbe == true' >/dev/null
+latency_probe=false
+jq -n '{enabled: false}' >"${fixture_directory}/latency.json"
 
 render_result "${fixture_directory}/samples.jsonl" | jq -e '
     .functionalPassed == true and

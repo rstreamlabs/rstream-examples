@@ -421,6 +421,19 @@ loader regression covers quotes, backslashes, punctuation and UTF-8.
 
 ## Cross-cutting latency and resource criteria
 
+The optional qualification-only pixel timestamp probe is now maintained in
+`producer/qualification/adaptive-streaming/latency`, replacing its local proof
+of concept. It stamps I420 pixels immediately before encoding and reads a small
+crop at 5 Hz through browser frame callbacks. Reports retain raw observations,
+phase distributions, sampling overhead and invalid/incomplete runs. A shared
+Linux boot identity, wall/performance clock agreement and marker integrity are
+required. Its scope excludes camera exposure, capture/scaling before the stamp
+and physical display scanout. Production pipelines and buffering are unchanged.
+The 100-test harness suite, artifact sanitization and result/negative-gate tests
+pass; the plugin builds on Linux and macOS and survives actual H.264 encode /
+decode at 500 and 8000 kbit/s. Live direct/MediaMTX validation and instrumented
+versus uninstrumented resource comparison remain required before latency claims.
+
 - Compare changes against the current path at equal source content and network
   conditions. Measure time to first frame separately from capture-to-display
   latency, and report transition freezes and recovery time.

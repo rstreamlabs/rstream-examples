@@ -8,6 +8,7 @@ import {
 import { existsSync } from "node:fs";
 import { createServer } from "node:http";
 import process from "node:process";
+import { createHash } from "node:crypto";
 import { chromium } from "playwright-core";
 import { collectProducerOpenMetrics } from "./lib/openmetrics.mjs";
 import { readPhase } from "./lib/phase.mjs";
@@ -15,6 +16,7 @@ import { PathStability, pathMatchesPolicy } from "./lib/path.mjs";
 import { redactError, redactSensitiveText } from "./lib/redaction.mjs";
 import { negotiatedVideoCodecs } from "./lib/sdp-codecs.mjs";
 import { installFrameDiagnostics } from "./lib/frame-diagnostics.mjs";
+import { createLatencyReport } from "./latency/report.mjs";
 
 const argumentsByName = parseArguments(process.argv.slice(2));
 const requestedURL = argumentsByName.get("url") || "";
@@ -57,6 +59,28 @@ const browserExecutable =
   argumentsByName.get("browser-executable") ||
   process.env.BROWSER_EXECUTABLE_PATH ||
   defaultBrowserExecutable();
+const latencyMode = argumentsByName.get("latency-probe") || "disabled";
+if (!["enabled", "disabled"].includes(latencyMode)) {
+  throw new Error("latency-probe must be enabled or disabled");
+}
+const latencyEnabled = latencyMode === "enabled";
+let latencyClocks = null;
+if (latencyEnabled) {
+  if (process.platform !== "linux")
+    throw new Error("latency qualification requires a shared Linux host clock");
+  const producerBootHash = requiredArgument(
+    argumentsByName,
+    "producer-boot-hash",
+  );
+  if (!/^[a-f0-9]{64}$/.test(producerBootHash))
+    throw new Error("invalid producer boot hash");
+  const receiverBootHash = createHash("sha256")
+    .update(await readFile("/proc/sys/kernel/random/boot_id"))
+    .digest("hex");
+  if (producerBootHash !== receiverBootHash)
+    throw new Error("producer and collector must share a Linux host clock");
+  latencyClocks = { producerBootHash, receiverBootHash };
+}
 
 await mkdir(outputDirectory, { recursive: true });
 const samplesPath = `${outputDirectory}/samples.jsonl`;
@@ -67,6 +91,8 @@ const failurePath = `${outputDirectory}/collector-failure.json`;
 let browser;
 let page;
 let viewerServer;
+const latencySnapshots = [];
+let latencyReportWritten = false;
 
 try {
   let url = requestedURL;
@@ -373,6 +399,11 @@ try {
   });
   let initialSample = null;
   await page.evaluate(installFrameDiagnostics);
+  if (latencyEnabled) {
+    await page.evaluate(
+      await readFile(new URL("./latency-probe.js", import.meta.url), "utf8"),
+    );
+  }
   let pathStable = false;
   const pathStability = new PathStability(3000, pathScope);
   const pathDeadline = performance.now() + 30_000;
@@ -433,6 +464,11 @@ try {
     sample.elapsedMilliseconds = Math.round(performance.now() - startedAt);
     sample.phase = phase.name;
     sample.phaseStartedAt = phase.startedAt;
+    if (latencyEnabled) {
+      if (latencySnapshots.length >= 4096)
+        throw new Error("latency snapshot limit exceeded");
+      latencySnapshots.push({ phase: sample.phase, latency: sample.latency });
+    }
     await appendFile(samplesPath, `${JSON.stringify(sample)}\n`, "utf8");
     const connected =
       sample.peerConnectionState === "connected" &&
@@ -457,6 +493,15 @@ try {
       `collector reached its ${maximumDurationSeconds}s safety deadline before the scenario completed`,
     );
   }
+  if (latencyEnabled) {
+    const report = createLatencyReport(latencySnapshots, latencyClocks, true);
+    await writeJSONAtomic(`${outputDirectory}/latency.json`, report);
+    latencyReportWritten = true;
+    if (!report.measurementValid)
+      throw new Error(
+        "latency measurement failed its clock, marker or sampling gates",
+      );
+  }
 } catch (error) {
   const normalized = redactError(normalizeError(error));
   const pageContext = await collectFailureContext(page);
@@ -470,7 +515,10 @@ try {
 } finally {
   if (page) {
     await page
-      .evaluate(() => window.__rstreamFrameDiagnostics?.stop())
+      .evaluate(() => {
+        window.__rstreamFrameDiagnostics?.stop();
+        window.__rstreamLatencyProbe?.stop();
+      })
       .catch(() => {});
     await page.click("#disconnect").catch(() => {});
     await page
@@ -498,6 +546,12 @@ try {
   }
   if (viewerServer) {
     await closeServer(viewerServer).catch(() => {});
+  }
+  if (latencyEnabled && !latencyReportWritten) {
+    await writeJSONAtomic(
+      `${outputDirectory}/latency.json`,
+      createLatencyReport(latencySnapshots, latencyClocks, false),
+    ).catch(() => {});
   }
 }
 
@@ -698,6 +752,7 @@ async function collectSample(activePage) {
       estimatedPlayoutTimestamp: inbound?.estimatedPlayoutTimestamp ?? null,
       framesDecoded: inbound?.framesDecoded || 0,
       framePresentation: window.__rstreamFrameDiagnostics?.drain() ?? null,
+      latency: window.__rstreamLatencyProbe?.read() ?? null,
       framesDropped: inbound?.framesDropped || 0,
       framesPerSecond: inbound?.framesPerSecond || 0,
       frameHeight: inbound?.frameHeight || 0,

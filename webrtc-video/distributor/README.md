@@ -404,3 +404,11 @@ impairment cannot be enabled in one run because that would make the observed
 reaction causally ambiguous. The result records the selected network
 namespace, destination, traffic-control counters, TWCC response, encoder
 target, RTX/FlexFEC repair, decoded frame rate, freezes, and recovery.
+
+For pixel-based latency measurement on a shared Linux host, add
+`RSTREAM_DISTRIBUTOR_LATENCY_PROBE=true`. The optional
+`RSTREAM_DISTRIBUTOR_PRODUCER_CONFIG` selects a custom qualification profile;
+its digest is retained in the report. See the
+[measurement scope and clock/marker gates](../producer/qualification/adaptive-streaming/README.md#optional-pixel-based-latency-measurement)
+before interpreting these results. The probe is disabled by default and does
+not change production pipelines or the live player's buffering policy.

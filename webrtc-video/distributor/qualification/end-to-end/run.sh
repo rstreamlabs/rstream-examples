@@ -35,6 +35,8 @@ source_delay_milliseconds="${RSTREAM_DISTRIBUTOR_SOURCE_DELAY_MILLISECONDS:-0}"
 source_jitter_milliseconds="${RSTREAM_DISTRIBUTOR_SOURCE_JITTER_MILLISECONDS:-0}"
 source_queue_packets="${RSTREAM_DISTRIBUTOR_SOURCE_QUEUE_PACKETS:-256}"
 playout_delay_hint_seconds="${RSTREAM_DISTRIBUTOR_PLAYOUT_DELAY_HINT_SECONDS:-0}"
+latency_probe="${RSTREAM_DISTRIBUTOR_LATENCY_PROBE:-false}"
+producer_config="${RSTREAM_DISTRIBUTOR_PRODUCER_CONFIG:-}"
 output_directory="${1:-}"
 
 if [[ -z "${context_name}" ]]; then
@@ -57,6 +59,23 @@ true | false)
   exit 1
   ;;
 esac
+case "${latency_probe}" in
+true | false) ;;
+*)
+  printf 'RSTREAM_DISTRIBUTOR_LATENCY_PROBE must be true or false\n' >&2
+  exit 1
+  ;;
+esac
+if [[ -z "${producer_config}" ]]; then
+  producer_config="${producer_directory}/config.test-pattern.h264.twcc-gcc-flexfec.yaml"
+  if [[ "${latency_probe}" == true ]]; then
+    producer_config="${qualification_directory}/latency/config.yaml"
+  fi
+fi
+if [[ ! -f "${producer_config}" ]]; then
+  printf 'qualification producer configuration does not exist\n' >&2
+  exit 1
+fi
 if ! [[ "${duration_seconds}" =~ ^[0-9]+$ ]] || ((duration_seconds < 10 || duration_seconds > 300)); then
   printf 'RSTREAM_DISTRIBUTOR_QUALIFICATION_SECONDS must be from 10 through 300\n' >&2
   exit 1
@@ -67,6 +86,10 @@ if ! [[ "${warmup_seconds}" =~ ^[0-9]+$ ]] || ((warmup_seconds < 10 || warmup_se
 fi
 if ! [[ "${recovery_seconds}" =~ ^[0-9]+$ ]] || ((recovery_seconds < 15 || recovery_seconds > 300)); then
   printf 'RSTREAM_DISTRIBUTOR_RECOVERY_SECONDS must be from 15 through 300\n' >&2
+  exit 1
+fi
+if [[ "${latency_probe}" == true ]] && ((duration_seconds < 15 || warmup_seconds < 15)); then
+  printf 'latency qualification requires warmup and measurement phases of at least 15 seconds\n' >&2
   exit 1
 fi
 if ! [[ "${flexfec_media_packets}" =~ ^[0-9]+$ ]] ||
@@ -90,6 +113,7 @@ for command in docker git go jq node; do
     exit 1
   fi
 done
+producer_config_sha256="$(node -e 'process.stdout.write(require("node:crypto").createHash("sha256").update(require("node:fs").readFileSync(process.argv[1])).digest("hex"))' "${producer_config}")"
 if ! command -v "${rstream_cli}" >/dev/null; then
   printf 'required command not found: %s\n' "${rstream_cli}" >&2
   exit 1
@@ -383,7 +407,7 @@ RSTREAM_AUTHENTICATION_TOKEN="${qualification_token}" go -C "${producer_director
   -flex-fec=true \
   -flex-fec-media-packets "${flexfec_media_packets}" \
   -flex-fec-repair-packets "${flexfec_repair_packets}" \
-  -producer-config "${producer_directory}/config.test-pattern.h264.twcc-gcc-flexfec.yaml" \
+  -producer-config "${producer_config}" \
   -producer-turn-policy disabled \
   -tunnel-token-auth="${edge_auth}" \
   -output-directory "${runtime_directory}"
@@ -398,6 +422,7 @@ jq -n '{}' >"${output_directory}/adapter-result.json"
 jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 0, transportBufferWarnings: 0}' \
   >"${output_directory}/runtime-health.json"
 jq -n '{required: false}' >"${output_directory}/native-source-profile.json"
+jq -n '{enabled: false}' >"${output_directory}/latency.json"
 
 printf 'Building producer and browser images\n'
 docker build --provenance=false --file "${qualification_directory}/Dockerfile" --tag "${producer_image}" "${video_directory}"
@@ -425,6 +450,16 @@ docker run --detach \
   --mount "type=bind,source=${runtime_directory}/relay-config.yaml,target=/runtime/producer.yaml,readonly" \
   "${producer_image}" -config /runtime/producer.yaml >/dev/null
 producer_started=1
+latency_arguments=()
+if [[ "${latency_probe}" == true ]]; then
+  producer_boot_digest="$(docker exec "${producer_name}" sha256sum /proc/sys/kernel/random/boot_id)"
+  producer_boot_hash="${producer_boot_digest%% *}"
+  if ! [[ "${producer_boot_hash}" =~ ^[a-f0-9]{64}$ ]]; then
+    printf 'producer shared-clock identity is unavailable\n' >&2
+    exit 1
+  fi
+  latency_arguments=(--latency-probe enabled --producer-boot-hash "${producer_boot_hash}")
+fi
 
 source_base=""
 for _ in $(seq 1 90); do
@@ -582,6 +617,7 @@ docker run --detach \
   --browser-executable /usr/bin/chromium \
   --browser-sandbox disabled \
   --playout-delay-hint-seconds "${playout_delay_hint_seconds}" \
+  ${latency_arguments[@]+"${latency_arguments[@]}"} \
   --maximum-duration-seconds "${collector_maximum_duration_seconds}" >/dev/null
 browser_started=1
 
@@ -875,6 +911,9 @@ jq -s \
   --argjson flexfec_media_packets "${flexfec_media_packets}" \
   --argjson flexfec_repair_packets "${flexfec_repair_packets}" \
   --argjson playout_delay_hint_seconds "${playout_delay_hint_seconds}" \
+  --arg producer_config_sha256 "${producer_config_sha256}" \
+  --argjson latency_probe "${latency_probe}" \
+  --slurpfile latency "${output_directory}/latency.json" \
   --slurpfile viewer_network "${output_directory}/viewer-network.json" \
   --slurpfile source_network "${output_directory}/source-network.json" \
   --slurpfile native_source_profile "${output_directory}/native-source-profile.json" \

@@ -160,6 +160,8 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
       repairPackets: $flexfec_repair_packets
     },
     playoutDelayHintSeconds: $playout_delay_hint_seconds,
+    producerConfigSHA256: $producer_config_sha256,
+    latencyProbe: $latency_probe,
     acceptance: {
       capacityTransitionGraceMilliseconds: capacity_transition_grace_milliseconds,
       maximumCapacityTransitionFreezeSeconds: maximum_capacity_transition_freeze_seconds,
@@ -186,6 +188,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     }
   },
   images: {producer: $producer_image, distributor: (if $distributor_image == "" then null else $distributor_image end), browser: $browser_image},
+  latency: $latency[0],
   samples: length,
   framesDecoded: maximum("framesDecoded"),
   framesDropped: maximum("framesDropped"),
@@ -264,6 +267,10 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     steadyRecoveryFreezeDurationDeltaSeconds: phase_delta_after("recovery"; capacity_transition_grace_milliseconds; "totalFreezesDurationSeconds")
   }),
   gates: {
+    latencyMeasurement: (($latency_probe | not) or (
+      $latency[0].enabled == true and $latency[0].collectionComplete == true and
+      $latency[0].measurementValid == true
+    )),
     media: (maximum("framesDecoded") >= 150 and maximum("bytesReceived") > 0),
     playback: (maximum("freezeCount") == 0 and maximum("totalFreezesDurationSeconds") == 0),
     sourceFeedback: (maximum("twccFeedbackPackets") > 0 and ($mode == "mediamtx-native" or maximum("pacerSentFEC") > 0)),
