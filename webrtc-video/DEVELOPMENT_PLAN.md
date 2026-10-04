@@ -43,6 +43,14 @@ under investigation.
   `contracts.ts` and `ice-recovery.ts` before the dependency correction and
   verifies rebuilds afterward; the actual producer build passes. The guide's
   Go minimum and optional Node.js requirement match the producer README.
+- Disabled presets return HTTP 204. A minimal Chromium reproduction and the
+  actual shared quality client show that cancelling or abandoning Chromium's
+  empty response stream produces `net::ERR_ABORTED` despite successful headers.
+  The client now consumes its empty payload, retaining the request deadline and
+  stop cancellation. A unit regression fails before the change; all 175 platform
+  tests and TypeScript checks pass afterward. Three real Chromium polls change
+  from three aborted requests to three completed requests with the same hidden
+  quality UI state. This does not suppress genuine network failures.
 
 ## Implemented: project discovery
 
@@ -1138,8 +1146,15 @@ until the user approves it.
 - Verify all documented commands and default/public versus internal profiles.
   No production deployment or public-demo configuration change is included.
 - Complete the documented static Linux distribution builds. The audit finds
-  their GStreamer default still at 1.28.1 and x264 following the moving stable
-  branch. Review reproducible pins and update the stable toolchain; the
-  [current 1.28 release notes](https://gstreamer.freedesktop.org/releases/1.28/)
-  identify 1.28.7 as the latest maintenance release. Development/runtime
-  GStreamer checks do not substitute for these separately packaged builds.
+  their former GStreamer default at 1.28.1 and x264 following the moving stable
+  branch. Revision `605a55f` pins GStreamer 1.28.7, libaom 3.15.1 and an immutable
+  x264 commit, verifies both source archive digests and requires digests for
+  custom versions. Invalid inputs and a deliberately incorrect archive digest
+  are rejected before compilation. `make dist-linux-arm64` passes; the static
+  executable streams actual 720p H.264 and AV1 in a scratch filesystem, releases
+  its WHEP session and exits normally on SIGTERM. H.264 reaches 30 fps; AV1 reaches
+  only a median 8 fps on this machine, so this is functionality evidence, not AV1
+  performance acceptance. The AMD64 build and final rebuilt viewers remain to
+  qualify. The first ARM64 build started just before its unchanged source bytes
+  were committed; retain that provenance. Guide content builds successfully,
+  and all three documented netem commands pass on an isolated dummy interface.

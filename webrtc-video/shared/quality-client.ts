@@ -267,7 +267,11 @@ export class QualityClient {
         signal: controller.signal,
       });
       if (response.status === 204 || response.status === 404) {
-        await response.body?.cancel();
+        // HTTP 204 has no payload, but Chromium can expose an empty stream.
+        // Read its EOF: cancelling or abandoning it produces ERR_ABORTED in
+        // network diagnostics. The request deadline still bounds this await.
+        if (response.status === 204) await response.arrayBuffer();
+        else await response.body?.cancel();
         if (current()) {
           this.state = null;
           this.options.onState(null);

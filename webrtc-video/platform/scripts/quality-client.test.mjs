@@ -302,3 +302,79 @@ test("quality client treats missing optional capabilities without an error", asy
     client.stop()
   }
 })
+
+test("disabled quality completes an empty 204 stream without cancelling the request", async () => {
+  const observed = []
+  let cancelled = false
+  let completed = false
+  let closeTimer
+  // Chromium can expose an empty stream for 204 instead of a null body.
+  // Cancelling it before EOF produces a failed network request in DevTools.
+  const body = new ReadableStream({
+    start(controller) {
+      closeTimer = setTimeout(() => {
+        completed = true
+        controller.close()
+      }, 20)
+    },
+    cancel() {
+      cancelled = true
+      clearTimeout(closeTimer)
+    },
+  })
+  const response = new Response(null, { status: 204 })
+  Object.defineProperty(response, "body", { value: body })
+  Object.defineProperty(response, "arrayBuffer", {
+    value: () => new Response(body).arrayBuffer(),
+  })
+  const client = new QualityClient({
+    url: () => "https://device.example/api/quality",
+    onState: (value) => observed.push(value),
+    onError: assert.fail,
+    intervalMs: 60000,
+    fetch: async () => response,
+  })
+  client.start()
+  try {
+    await eventually(() => observed.length === 1)
+    assert.deepEqual(observed, [null])
+    assert.equal(cancelled, false)
+    assert.equal(completed, true)
+  } finally {
+    client.stop()
+    clearTimeout(closeTimer)
+  }
+})
+
+test("an unfinished 204 response is aborted at the quality request deadline", async () => {
+  const errors = []
+  let aborted = false
+  const client = new QualityClient({
+    url: () => "https://device.example/api/quality",
+    onState: assert.fail,
+    onError: (error) => errors.push(error),
+    intervalMs: 60000,
+    timeoutMs: 20,
+    fetch: async (_url, options) => ({
+      status: 204,
+      arrayBuffer: () =>
+        new Promise((_resolve, reject) => {
+          options.signal.addEventListener(
+            "abort",
+            () => {
+              aborted = true
+              reject(options.signal.reason)
+            },
+            { once: true },
+          )
+        }),
+    }),
+  })
+  client.start()
+  try {
+    await eventually(() => errors.length === 1)
+    assert.equal(aborted, true)
+  } finally {
+    client.stop()
+  }
+})
