@@ -679,7 +679,9 @@ reconnection/rename, offline history and live-only inventory. It cleans up its
 containers and private context. Only GitHub membership responses are substituted;
 rstream APIs, tunnel publication and producer HTTP controls are real. This check
 does not exercise video playback or an organization's actual OAuth/SSO policy.
-Optionally set `RSTREAM_DISCOVERY_BROWSER` to a Chrome/Chromium executable to
+Optionally run `npx playwright-core install chromium` and set
+`RSTREAM_DISCOVERY_BROWSER=bundled` to use the browser matched to the pinned
+Playwright package, or set it to an explicit Chrome/Chromium executable to
 include direct playback from the discovered producer, decoded 720p frame cadence
 and encoder shutdown after the viewer closes. Browser runs also retain
 navigation-to-first-presentation and authorization-to-first-presentation timings,
@@ -690,6 +692,9 @@ dashboard opening with an already running producer after previous membership
 and inventory requests, not OAuth sign-in or device process startup. Every
 viewer request still reads live inventory. The expected display time is
 a browser compositor estimate, not a physical display measurement.
+The runtime report retains the actual browser, Playwright and Node.js versions,
+including on failed measurements, so results from an older installed browser
+are not mistaken for the currently pinned browser.
 To exercise discovery with the
 adaptive MediaMTX adapter, also set `RSTREAM_DISCOVERY_DISTRIBUTOR=mediamtx`.
 That variant uses the documented local stack helper (including its production

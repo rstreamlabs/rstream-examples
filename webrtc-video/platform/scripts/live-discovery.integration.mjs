@@ -323,10 +323,21 @@ async function device(actor = "alice") {
   return result.body.devices.find((value) => value.id === deviceID)
 }
 async function qualifyPlayback() {
-  const executablePath = process.env.RSTREAM_DISCOVERY_BROWSER
-  if (!executablePath) return null
+  const browserSelection = process.env.RSTREAM_DISCOVERY_BROWSER
+  if (!browserSelection) return null
   const { chromium } = require("playwright-core")
+  const executablePath =
+    browserSelection === "bundled"
+      ? chromium.executablePath()
+      : browserSelection
   const browser = await chromium.launch({ executablePath, headless: true })
+  json("playback-runtime.json", {
+    browserVersion: browser.version(),
+    playwrightVersion: require("playwright-core/package.json").version,
+    nodeVersion: process.version,
+    browserSelection:
+      browserSelection === "bundled" ? "bundled" : "explicit executable",
+  })
   const stopOnAbort = () => {
     void browser.close().catch(() => {})
   }
@@ -502,6 +513,7 @@ async function qualifyPlayback() {
       observation.sharedQuality = "medium"
       observation.continuesAfterFirstMemberCloses = true
     }
+    json("playback-observation.json", { ...observation, pageErrors })
     assert.equal(pageErrors, 0)
     assert.ok(
       viewers.every(({ startup }) => startup?.measurementValid),
