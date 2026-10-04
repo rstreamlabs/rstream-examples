@@ -691,7 +691,9 @@ and encoder shutdown after the viewer closes. Browser runs also retain
 navigation-to-first-presentation and authorization-to-first-presentation timings,
 with the authorization response and WHEP/peer milestones. A one-shot video frame
 callback must observe exactly the first presented frame; missing evidence or a
-retried startup fails the measurement. These timings cover an authenticated
+retried startup fails the measurement. Independent lifecycle/discovery scenarios
+still run before that final gate, retaining their results alongside a failed
+startup measurement. These timings cover an authenticated
 dashboard opening with an already running producer after previous membership
 and inventory requests, not OAuth sign-in or device process startup. Every
 viewer request still reads live inventory. The expected display time is

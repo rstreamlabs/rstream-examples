@@ -543,12 +543,12 @@ async function qualifyPlayback() {
       observation.sharedQuality = "medium"
       observation.continuesAfterFirstMemberCloses = true
     }
-    json("playback-observation.json", { ...observation, pageErrors })
-    assert.equal(pageErrors, 0)
-    assert.ok(
-      viewers.every(({ startup }) => startup?.measurementValid),
-      "First presentation must be measured from navigation and authorization",
+    observation.pageErrors = pageErrors
+    observation.startupMeasurementValid = viewers.every(
+      ({ startup }) => startup?.measurementValid,
     )
+    json("playback-observation.json", observation)
+    assert.equal(pageErrors, 0)
     return observation
   } finally {
     abort.signal.removeEventListener("abort", stopOnAbort)
@@ -867,6 +867,17 @@ globalThis.fetch=async(input,init)=>{
   stopProducer()
   await until("live-only removal", async () => (await device()) === undefined)
   gates.liveOnlyWithoutHistoryWrites = true
+  if (playback) {
+    // Keep the failed startup gate, but finish the independent lifecycle and
+    // discovery scenarios first so a measurement defect cannot hide regressions.
+    json("playback-observation.json", playback)
+    stage = "first presentation measurement"
+    assert.ok(
+      playback.startupMeasurementValid,
+      "First presentation must be measured from navigation and authorization",
+    )
+    gates.firstPresentationMeasurement = true
+  }
   abort.signal.throwIfAborted()
   result = {
     passed: true,
