@@ -743,7 +743,8 @@ async function collectSample(activePage, phase = null) {
       estimatedPlayoutTimestamp: inbound?.estimatedPlayoutTimestamp ?? null,
       framesDecoded: inbound?.framesDecoded || 0,
       framePresentation: window.__rstreamFrameDiagnostics?.drain() ?? null,
-      transitionBoundary: window.__rstreamTransitionBoundary?.snapshot() ?? null,
+      transitionBoundary:
+        window.__rstreamTransitionBoundary?.snapshot() ?? null,
       latency: window.__rstreamLatencyProbe?.read() ?? null,
       framesDropped: inbound?.framesDropped || 0,
       framesPerSecond: inbound?.framesPerSecond || 0,

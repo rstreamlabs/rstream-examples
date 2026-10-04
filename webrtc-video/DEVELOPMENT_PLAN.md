@@ -52,8 +52,18 @@ down-hold and disruption budgets remain unchanged.
 The collector now records this boundary probe as diagnostic evidence only.
 Twenty-one focused tests cover stale/native timestamps, ambiguous counters,
 stream replacement, deadlines, overlapping requests, phase changes and teardown.
-Real-media qualification must validate the probe before any acceptance
-calculation uses it; the existing gates still apply unchanged.
+The [first MediaMTX runtime at `f3488c0`](./distributor/qualification/evidence/f3488c0/mediamtx-format-boundary.json)
+passes all 22 original gates with the unchanged 3s down-hold and a 1500 kbit/s
+source bottleneck. Both native boundary probes are valid; no freeze counters
+increase afterward through either phase. Initial transition freezes total
+1.329s, with no decoded frame drops and complete 30/15/30 fps format recovery.
+The standalone activation presents its first frame in 793.8ms; this excludes
+Next.js navigation/authentication and device-process startup. Cleanup restores
+the original socket limits and removes all owned runtime resources.
+The independent hosted crossover is still running. Existing acceptance gates
+and failed historical verdicts remain unchanged. The new collector tests pass
+in CI; its initial CI failure is formatting-only in `collect.mjs` and is
+corrected without altering the measured behavior.
 The current-dependency local forced-TURN trial at `18f6cc1` passes all 56 gates,
 including actual relay candidates at both endpoints, adaptation, recovery and
 session cleanup. It does not remove the separate hosted-runner TCP obstacle.
