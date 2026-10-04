@@ -1,0 +1,53 @@
+{
+  "purpose": "Diagnostic capture locating lost transport feedback before versus after SRTCP destination routing",
+  "qualification": false,
+  "stabilized": false,
+  "baseRevision": "4f5029e",
+  "interceptorRevision": "f95fe4f9d945f1c9864f501bf085a093e6e6fada",
+  "producerImage": "sha256:8da55a83f55dcbdffaa85229f3f6d05bd714834324887de50da89048cbd64de0",
+  "overrides": [
+    "Bounded synchronous interceptor feedback/observation traces",
+    "Bounded SRTCP TWCC trace before per-SSRC routing, pion/srtp/v3 v3.0.13"
+  ],
+  "limitations": "Private instrumented binary; synchronous diagnostics invalidate latency and resource comparisons. This isolates routing, not final end-to-end qualification.",
+  "network": {
+    "scope": "producer-to-browser",
+    "delayMilliseconds": 60,
+    "jitterMilliseconds": 15,
+    "lossPercent": 1
+  },
+  "producerLogSHA256": "18c6b197dda24bd8014f5ef2782e434f7c0978ac0fc22d1d89bc76f40a638eb6",
+  "resultSHA256": "834bb102f6c2062a7fce4796ab5b78e8b3335aef6bf0c016f29c5a0b410b10fe",
+  "decryptedTransportFeedbackReports": 1593,
+  "controllerTransportFeedbackReports": 1506,
+  "missingAtController": 87,
+  "decryptedCounterSteps": {
+    "1": 1592
+  },
+  "controllerCounterSteps": {
+    "1": 1446,
+    "2": 38,
+    "3": 16,
+    "5": 2,
+    "4": 3
+  },
+  "streams": [
+    {
+      "ssrc": 472545554,
+      "payloadType": 108,
+      "decodedFeedbackReferences": 82818,
+      "decryptedReportsAddressedHere": 1506,
+      "reportsMissingAtController": 0
+    },
+    {
+      "ssrc": 1546589077,
+      "payloadType": 109,
+      "decodedFeedbackReferences": 4011,
+      "decryptedReportsAddressedHere": 87,
+      "reportsMissingAtController": 87
+    }
+  ],
+  "interpretation": "All 87 decrypted reports missing from the controller target the RTX SSRC. Decrypted feedback counters are contiguous; the primary-only RTPSender reader omits these reports. Independent earlier source-path traces also show late receipts after loss-observation closure, which remains a separate issue.",
+  "udpSocketLimitsRestored": true,
+  "ownedContainersRemoved": true
+}

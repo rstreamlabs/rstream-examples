@@ -1,0 +1,80 @@
+{
+  "diagnosticOnly": true,
+  "qualification": false,
+  "sourceRevision": "4f5029e",
+  "interceptorRevision": "f95fe4f9d945f1c9864f501bf085a093e6e6fada",
+  "producerImage": "sha256:66ed0535e8160bfc4dc7ad6a08ae2dcb362f73eab322a0abe64e57de4419041a",
+  "limitations": "Instrumented binary with synchronous traces; not latency or resource qualification. Phase selection excludes one second at each sampled boundary. Packet cohorts and observation losses have different time bounds; unresolved at trace end is not proof of permanent loss.",
+  "cases": {
+    "direct-impairment": {
+      "producerLogSHA256": "89c23ef449a7f0c61915ef00545a4f2b1a8abce118122a922610922ce271d028",
+      "resultSHA256": "4a1539dbf7b2901f34adb9d551553b1b9d21adf7f66c78e21bdb77a9fa247ab9",
+      "feedbackReports": 1515,
+      "selectedObservationCounts": {
+        "observations": 34,
+        "meanObservationLossRatio": 0.14810765662729533,
+        "completedObservationLosses": 997,
+        "receivedAfterObservationCompleted": 286,
+        "lateReceiptLagMilliseconds": {
+          "median": 62.284,
+          "maximum": 124.721,
+          "within100ms": 285,
+          "within250ms": 286
+        },
+        "byPayloadType": {
+          "108": {
+            "packetsSentWithinSampleBounds": 4469,
+            "firstReportedMissing": 1104,
+            "eventuallyReceived": 4025,
+            "completedObservationLosses": 655,
+            "receivedAfterObservationCompleted": 190,
+            "unresolvedAtTraceEnd": 465
+          },
+          "109": {
+            "packetsSentWithinSampleBounds": 2146,
+            "firstReportedMissing": 565,
+            "eventuallyReceived": 1919,
+            "completedObservationLosses": 342,
+            "receivedAfterObservationCompleted": 96,
+            "unresolvedAtTraceEnd": 246
+          }
+        }
+      }
+    },
+    "source-impairment": {
+      "producerLogSHA256": "5131143e636218f9cca80cb8cb1ffb97a0e595d589bb04fac2cb7f22ca3146a5",
+      "resultSHA256": "2dddbd25560beda5ee835a182bbad8cd82a4c8cb1161ca70b597c39b3f61d395",
+      "feedbackReports": 1029,
+      "selectedObservationCounts": {
+        "observations": 40,
+        "meanObservationLossRatio": 0.06866972945201867,
+        "completedObservationLosses": 464,
+        "receivedAfterObservationCompleted": 388,
+        "lateReceiptLagMilliseconds": {
+          "median": 99.875,
+          "maximum": 100.811,
+          "within100ms": 212,
+          "within250ms": 388
+        },
+        "byPayloadType": {
+          "96": {
+            "packetsSentWithinSampleBounds": 6578,
+            "firstReportedMissing": 1191,
+            "eventuallyReceived": 6503,
+            "completedObservationLosses": 457,
+            "receivedAfterObservationCompleted": 381,
+            "unresolvedAtTraceEnd": 76
+          },
+          "97": {
+            "packetsSentWithinSampleBounds": 97,
+            "firstReportedMissing": 18,
+            "eventuallyReceived": 97,
+            "completedObservationLosses": 7,
+            "receivedAfterObservationCompleted": 7,
+            "unresolvedAtTraceEnd": 0
+          }
+        }
+      }
+    }
+  }
+}

@@ -447,8 +447,11 @@ expose packet-loss ratio, delay estimate, queue depth, queue delay, and active
 loss control. Existing `lossGuard*` diagnostic fields and `loss_guard_*`
 OpenMetrics names now report the GCC loss controller: repeated missing reports
 and late receipts are reconciled over a bounded 250 ms send-time observation.
-There is no additional raw-feedback controller. This observation holds metadata
-only and does not add media buffering. The repair view includes the current RTT-derived retransmission
+Receipts after an observation closes still correct the next interval's signed
+loss count, without counting an old packet as a new send. The pinned native
+sender delivers feedback addressed to primary, retransmission and FEC streams
+to the same controller. There is no additional raw-feedback controller or media
+buffering. The repair view includes the current RTT-derived retransmission
 suppression window and the number of duplicate requests coalesced or suppressed
 before they consume wire capacity. Counters cover source backpressure, frame
 admission drops, adaptive updates, key-frame recovery, malformed feedback,

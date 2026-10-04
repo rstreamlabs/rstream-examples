@@ -351,8 +351,40 @@ estimates remain 17.63% directly and 6.53% to the adapter while the qdiscs drop
 about 1.15% of packets. The corrected deterministic defects do not fully explain
 this live discrepancy. Further evidence must distinguish late receipt across
 observation boundaries, retransmission feedback and actual receiver-side drops;
-none is yet established as the cause. This unresolved fidelity issue prevents
-a stabilized result despite the four passing media runs.
+at that stage, none was established as the cause. The unresolved fidelity issue
+prevents a stabilized result despite the four passing media runs.
+
+Subsequent [bounded diagnostic captures](./distributor/qualification/evidence/42761dc/late-receipt-diagnostic.json)
+separate two accounting defects. On the
+source-to-adapter path, 388 of 464 packets counted as lost in selected completed
+observations are later reported received, typically about 100 ms after closure.
+Those late receipts must still correct the signed expected/received counts,
+without entering the denominator twice or carrying unused negative loss into a
+future completed interval (the accounting principle in
+[RFC 3550 Appendix A.3](https://www.rfc-editor.org/rfc/rfc3550.html#appendix-A.3)).
+No media buffer or longer observation period is required for that correction.
+
+The [direct-path routing capture](./distributor/qualification/evidence/42761dc/feedback-routing-diagnostic.json)
+observes 1,593 consecutive decrypted TWCC reports but only 1,506 at the
+controller. All 87 omitted reports target the RTX SSRC. The native sender reads
+only its primary SRTCP stream, despite feedback on a repair SSRC describing the
+same transport sequence space. A real encrypted-peer regression reproduces the
+omission; the sender fix merges primary/RTX/FEC control readers, with
+bounded storage, joined shutdown, deadlines and multi-destination report
+deduplication. The source and direct accounting fixes require new uninstrumented
+network qualification. Synchronous diagnostic captures are retained as diagnosis
+only and cannot substantiate latency or CPU improvements.
+
+The sample pins the published signed-loss correction `5175d43` in both Go
+modules and the [sender RTCP fix](https://github.com/rstreamlabs/pion-webrtc/pull/1)
+at `ab2ba524` in the producer. The distributor keeps its separate FlexFEC
+receiver fork. Full race suites and lint pass in both affected native forks;
+producer/distributor race suites, no-embedded mode and real MediaMTX 1.21.1
+integration also pass. The sender suite initially hit two existing incomplete
+ICE-signaling fixtures; the statistics hang reproduces with the original sender
+code. Both fixtures now exchange gathered candidates, with bounded waits and
+cleanup, and the complete suite passes without excluding tests. Delivery-path
+qualification after these corrections is still required.
 
 The discovery configuration review additionally reproduced valid display names
 being rejected or changed when environment expansion encounters YAML quotes or

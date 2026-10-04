@@ -30,7 +30,7 @@ require (
 	golang.org/x/time v0.15.0 // indirect
 )
 
-replace github.com/pion/interceptor => github.com/rstreamlabs/pion-interceptor v0.1.48-0.20261004003836-f95fe4f9d945
+replace github.com/pion/interceptor => github.com/rstreamlabs/pion-interceptor v0.1.48-0.20261004013401-5175d43849ed
 
 replace github.com/pion/webrtc/v4 => github.com/rstreamlabs/pion-webrtc/v4 v4.2.19-0.20260817140720-926abfa31a52
 
