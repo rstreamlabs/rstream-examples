@@ -396,6 +396,9 @@ trap cleanup EXIT INT TERM
 
 write_phase() {
   write_phase_file "${control_directory}/phase.json" "$1"
+  if ((browser_started)); then
+    copy_phase_to_container "${browser_name}" "${control_directory}/phase.json" /tmp/phase.json
+  fi
 }
 
 printf 'Preparing an isolated rstream runtime\n'
@@ -661,11 +664,12 @@ docker run --detach \
   --env HOME=/tmp \
   --mount "type=bind,source=${output_directory},target=/artifacts" \
   --mount "type=bind,source=${control_directory},target=/runtime,readonly" \
-  "${browser_image}" \
+  --entrypoint /bin/sh \
+  "${browser_image}" -ceu 'cp /runtime/phase.json /tmp/phase.json; exec node /qualification/collect.mjs "$@"' collector \
   --whep-endpoint "${viewer_endpoint}" \
   --producer-metrics-url http://producer:9090/metrics \
   --output-directory /artifacts \
-  --phase-file /runtime/phase.json \
+  --phase-file /tmp/phase.json \
   --ice-policy direct \
   --browser-executable /usr/bin/chromium \
   --browser-sandbox disabled \

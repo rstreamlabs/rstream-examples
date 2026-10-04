@@ -54,6 +54,7 @@ jobs:
             webrtc-video/distributor/qualification/end-to-end/mode-test.sh
             webrtc-video/distributor/qualification/end-to-end/phase.sh
             webrtc-video/distributor/qualification/end-to-end/phase-test.sh
+            webrtc-video/distributor/qualification/end-to-end/phase-container-test.sh
             webrtc-video/distributor/qualification/end-to-end/resource-report-test.sh
             webrtc-video/distributor/qualification/end-to-end/result-test.sh
             webrtc-video/distributor/qualification/comparison/report-test.sh
@@ -85,6 +86,7 @@ jobs:
           webrtc-video/distributor/qualification/end-to-end/configuration-test.sh
           webrtc-video/distributor/qualification/end-to-end/mode-test.sh
           webrtc-video/distributor/qualification/end-to-end/phase-test.sh
+          webrtc-video/distributor/qualification/end-to-end/phase-container-test.sh node:24-bookworm
           webrtc-video/distributor/qualification/comparison/report-test.sh
           webrtc-video/distributor/qualification/matrix/report-test.sh
           webrtc-video/distributor/qualification/matrix/run-test.sh

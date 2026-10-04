@@ -377,6 +377,15 @@ Use `RSTREAM_DISTRIBUTOR_MODE=direct` for the one-to-one reference. Setting
 `RSTREAM_DISTRIBUTOR_EDGE_AUTH=false` is useful only when isolating local media
 behavior and does not satisfy the release authentication gate.
 
+Phase changes are published atomically inside the browser container, with
+an acknowledged write before the runner continues. The collector's live control
+file does not depend on host bind-mount rename visibility. Its concurrent-reader
+check requires only a Node container (or an existing qualification browser image):
+
+```bash
+qualification/end-to-end/phase-container-test.sh node:24-bookworm
+```
+
 The browser runner can apply capacity, delay, jitter, loss, and an explicit
 playout target to the viewer leg. It correlates first-frame timing, decoded
 frame rate, freezes, source OpenMetrics, packet repair, traffic-control
