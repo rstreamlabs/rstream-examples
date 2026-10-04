@@ -1,6 +1,6 @@
 # WebRTC Video Platform
 
-This example shows how a third-party Next.js application can integrate `rstream` without asking devices or browser users to install the `rstream` CLI or handle long-lived rstream tokens.
+In its default managed mode, this example shows how a third-party Next.js application can integrate `rstream` without asking devices or browser users to install the `rstream` CLI or handle long-lived rstream tokens.
 
 The application owns the device inventory, authentication, device secrets, producer provisioning, viewer authorization, and demo data lifecycle. `rstream` remains the tunnel, TURN, token, and real-time tunnel state layer behind that product API.
 
@@ -62,7 +62,7 @@ MediaMTX JWT for distributed viewers. The player uses the same response shape
 for both paths and keeps the two trust boundaries separate during credential
 refresh.
 
-The dashboard uses `@rstreamlabs/react` to watch tunnel state in real time. The device list is still stored in PostgreSQL, but online/offline state is read from rstream tunnel state.
+The dashboard uses `@rstreamlabs/react` to watch tunnel state in real time. With managed inventory, registered devices are stored in PostgreSQL; online/offline state is read from rstream tunnel state.
 
 The app also exposes `POST /api/rstream/webhook`. rstream signs lifecycle events for this endpoint, the app verifies them with the JavaScript SDK, and tunnel lifecycle events update the device presence timestamps from the labels attached to the short-lived producer token. `tunnel.created` records when the device came online, and `tunnel.deleted` records when it was last seen before going offline.
 
@@ -90,6 +90,10 @@ while MediaMTX and browser telemetry describe the second.
 - Tailwind CSS with small shadcn-style UI primitives
 
 ## Setup
+
+Use Node.js 24 with npm for the platform's verified development and validation
+workflow, and have a PostgreSQL database available. The integration suite uses
+PostgreSQL 17 in disposable containers.
 
 Create the environment file:
 
@@ -410,13 +414,17 @@ not create delivery history or retry after the CLI exits.
 
 The sample always mints short-lived tokens with tunnel resources. Producer tokens can only create the expected tunnel for one device, direct viewer tokens can only connect to that device's `/whep` resource, distributor tokens are bound to one MediaMTX device path, and dashboard watch tokens can only list the sample tunnels for the signed-in user.
 
-Install dependencies, create the database, and start the app:
+Install dependencies, apply the checked-in database migrations, and start the app:
 
 ```bash
 npm ci
-npm run prisma:migrate
+npm run prisma:deploy
 npm run dev
 ```
+
+`npm run dev` generates the Prisma client before starting Next.js. Use
+`npm run prisma:migrate` when deliberately changing the database schema and
+creating a new development migration.
 
 Open `http://localhost:3000`, sign in with GitHub, create a device, and copy the generated device secret.
 

@@ -23,6 +23,13 @@ under investigation.
   automatic congestion control remains active below each selected ceiling.
 - Concurrent selection protection, bounded control-plane requests and database
   waits, lifecycle fixes, dependency updates and corresponding guide changes.
+- Membership-cache age uses monotonic elapsed time. A regression reproduces
+  authorization surviving its 60-second limit when civil time moves backwards
+  but remains later than cache creation. All seven targeted access tests pass
+  after the correction, including positive/negative expiry and caller-local
+  cancellation. The complete 173-test platform suite passes on macOS Node 26.7
+  and Linux Node 24.21; the production build and real PostgreSQL/Next.js route
+  regression pass on macOS. Fresh installation reports no npm vulnerabilities.
 - MediaMTX source RTCP consumption: sender reports must reach Pion's report
   interceptor so the producer receives usable round-trip measurements.
 - Explicit release of GStreamer's native appsink callbacks on source closure.
@@ -650,6 +657,32 @@ passes both runs, now accounting for every observed freeze increment exactly
 once, including the TURN 205ms impaired-entry and 352ms recovery-entry events.
 No production timing, buffering, protection policy or acceptance threshold
 changes. Socket limits are restored and owned containers removed.
+
+The release matrix at `d3893e6` exposes another qualification defect in its
+[host heartbeat clock](./producer/qualification/adaptive-streaming/evidence/d3893e6/scheduler-clock.json).
+During the second direct reference trial, realtime advances 1416ms while
+Node/browser monotonic time advances about 1006ms. Both 250ms host samplers
+therefore report false 661/662ms gaps. Their corrected intervals use Linux boot
+time at 10ms resolution and retain UTC solely for phase correlation. A fixture
+reproduces forward/backward realtime jumps while preserving a real 750ms pause;
+the signal regression also exposes and fixes a sleep process surviving sampler
+termination. All three focused tests pass under macOS and Linux `/bin/sh`,
+the full 121-test collector suite passes, and a live Linux check records eleven
+valid boot-time samples with clean shutdown. Original run verdicts remain unchanged. The direct
+trial also fails impaired playback, and this clock defect does not explain the
+separate first TURN/FEC trial's persistent losses before simulated impairment.
+
+The [completed twelve-run matrix](./producer/qualification/adaptive-streaming/evidence/d3893e6/release-matrix.json)
+fails overall: full protection passes two of three direct trials and one of three
+TURN trials. The third direct trial fails encoder cadence only (205.253ms maximum
+gap), with a 210ms recovery freeze. The first two TURN trials lose packets before
+injected impairment; the last has negligible baseline loss and passes with 4.736%
+impaired frozen time. The original results, diagnostic NACK/RTX baselines and
+comparison gates are all retained. UDP limits return to 212992 and all owned
+containers are removed. A separate timing review finds pauses near UTC second
+52.5 at ten-minute intervals, including the earlier 193ms MediaMTX recovery event.
+This correlation does not establish a cause. Inspect host/VM scheduling and
+capture the relayed transport before modifying production pacing or buffers.
 
 ## Cross-cutting latency and resource criteria
 

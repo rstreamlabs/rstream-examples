@@ -1,0 +1,1197 @@
+{
+  "schemaVersion": 1,
+  "revision": "d3893e607cf889b866f36ae584c5b97818efc99a",
+  "producerTree": "15c006855c711422fa4c82c00a99251a507361a3",
+  "images": {
+    "producerImage": "sha256:818dd252c9bb494d63122fef1eb516ad63887d51496f47f9fe2c675c9713bb4f",
+    "browserImage": "sha256:d0121a43d72234f55d64aa9667d5b498b757639f7e86f9198989d6d4ab10cf4b"
+  },
+  "runtime": {
+    "dockerVersion": "29.6.2",
+    "operatingSystem": "linux",
+    "kernelRelease": "6.12.76-linuxkit",
+    "architecture": "aarch64",
+    "logicalCPUs": 10,
+    "memoryBytes": 33600471040,
+    "producerLocation": "local-docker-daemon"
+  },
+  "video": {
+    "codec": "H264",
+    "width": 1280,
+    "height": 720,
+    "framesPerSecond": 30,
+    "playoutDelayHintSeconds": 0,
+    "adaptive": {
+      "initialBitrateKbps": 5000,
+      "minimumBitrateKbps": 2000,
+      "maximumBitrateKbps": 8000,
+      "changeThresholdPct": 10,
+      "maxIncreaseLossPct": 1
+    }
+  },
+  "profile": {
+    "repetitions": 3,
+    "phaseDurationsSeconds": {
+      "warmup": 20,
+      "baseline": 25,
+      "conditioning": 45,
+      "constrained": 45,
+      "impaired": 35,
+      "recovery": 45
+    },
+    "conditioningKbps": 32000,
+    "capacityStepsKbps": [16000, 12000, 8000, 4000],
+    "playoutDelayHintSeconds": 0,
+    "flexFEC": {
+      "mediaPackets": 5,
+      "repairPackets": 1
+    }
+  },
+  "passed": false,
+  "comparisonSHA256": "10204f31ff52db92d0c96abdd2d3016ea9892dd44feda3542c188a3de5296dcf",
+  "comparison": {
+    "assertions": [
+      {
+        "description": "every matrix run produced a machine-readable summary",
+        "name": "complete-runs",
+        "passed": true
+      },
+      {
+        "description": "every run qualifies the same repository revision",
+        "name": "single-revision",
+        "passed": true
+      },
+      {
+        "description": "every run qualifies the same WebRTC producer source tree",
+        "name": "single-producer-tree",
+        "passed": true
+      },
+      {
+        "description": "the WebRTC producer source tree is clean for every run",
+        "name": "clean-producer-tree",
+        "passed": true
+      },
+      {
+        "description": "every run qualifies the same producer container image",
+        "name": "single-producer-image",
+        "passed": true
+      },
+      {
+        "description": "every run qualifies the same browser container image",
+        "name": "single-browser-image",
+        "passed": true
+      },
+      {
+        "description": "every run applies the same declared network conditions",
+        "name": "single-impairment-profile",
+        "passed": true
+      },
+      {
+        "description": "every full-profile run uses one explicit FlexFEC protection ratio",
+        "name": "single-full-protection-profile",
+        "passed": true
+      },
+      {
+        "description": "direct-nack-rtx has at least 3 complete run(s)",
+        "name": "direct-nack-rtx-coverage",
+        "passed": true
+      },
+      {
+        "description": "relay-nack-rtx has at least 3 complete run(s)",
+        "name": "relay-nack-rtx-coverage",
+        "passed": true
+      },
+      {
+        "description": "direct-nack-rtx-flexfec has at least 3 complete run(s)",
+        "name": "direct-nack-rtx-flexfec-coverage",
+        "passed": true
+      },
+      {
+        "description": "relay-nack-rtx-flexfec has at least 3 complete run(s)",
+        "name": "relay-nack-rtx-flexfec-coverage",
+        "passed": true
+      },
+      {
+        "description": "the full protection profile passes every direct-reference run",
+        "name": "full-direct-pass",
+        "passed": false
+      },
+      {
+        "description": "the full protection profile passes every rstream relay run",
+        "name": "full-relay-pass",
+        "passed": false
+      },
+      {
+        "description": "every full-profile direct run forces and measures a congestion response",
+        "name": "full-direct-adaptation-coverage",
+        "passed": true
+      },
+      {
+        "description": "every full-profile relay run receives valid TWCC feedback and avoids increasing its target under additional pressure",
+        "name": "full-relay-feedback-coverage",
+        "passed": true
+      },
+      {
+        "description": "full-profile rstream relay median impaired output stays at or above 20 fps",
+        "name": "full-relay-frame-rate",
+        "passed": true
+      },
+      {
+        "description": "full-profile rstream relay median impaired freeze ratio stays at or below 10%",
+        "name": "full-relay-freezes",
+        "passed": false
+      },
+      {
+        "description": "every full-profile direct and relay run reports H.264 quantization quality",
+        "name": "full-profile-quality-coverage",
+        "passed": true
+      },
+      {
+        "description": "full-profile rstream relay median impaired H.264 QP stays at or below 42",
+        "name": "full-relay-compression-quality",
+        "passed": true
+      },
+      {
+        "description": "rstream relay stays within 5 fps of the direct reference under identical impairment",
+        "name": "relay-direct-frame-gap",
+        "passed": true
+      },
+      {
+        "description": "rstream relay stays within five freeze-percentage points of the direct reference",
+        "name": "relay-direct-freeze-gap",
+        "passed": false
+      },
+      {
+        "description": "rstream relay average H.264 QP stays within six points of the direct reference",
+        "name": "relay-direct-quality-gap",
+        "passed": true
+      },
+      {
+        "description": "proactive repair materially improves a degraded NACK/RTX relay baseline",
+        "name": "proactive-repair-gain",
+        "passed": false
+      }
+    ],
+    "groups": {
+      "direct-nack-rtx": {
+        "adaptationRuns": 3,
+        "feedbackRuns": 3,
+        "impairedAverageQP": {
+          "maximum": 27.221758555133064,
+          "median": 27.19241674595626,
+          "minimum": 27.157368922783643
+        },
+        "impairedFPS": {
+          "maximum": 29.198144853134206,
+          "median": 29.128480532368222,
+          "minimum": 28.944911297852475
+        },
+        "impairedFreezeRatio": {
+          "maximum": 0.14884208736075286,
+          "median": 0.13748227955769776,
+          "minimum": 0.13066024369509777
+        },
+        "impairedReceivedKbps": {
+          "maximum": 1856.4051638530289,
+          "median": 1843.2380952380952,
+          "minimum": 1842.7567030784508
+        },
+        "maximumRTTMilliseconds": {
+          "maximum": 215,
+          "median": 211,
+          "minimum": 208
+        },
+        "passedRuns": 0,
+        "path": "direct",
+        "profile": "nack-rtx",
+        "qualityRuns": 3,
+        "runs": 3
+      },
+      "relay-nack-rtx": {
+        "adaptationRuns": 3,
+        "feedbackRuns": 3,
+        "impairedAverageQP": {
+          "maximum": 27.275200000000034,
+          "median": 27.172597526165532,
+          "minimum": 27.136790476190498
+        },
+        "impairedFPS": {
+          "maximum": 29.356032123199086,
+          "median": 28.846434300714602,
+          "minimum": 28.724894908921065
+        },
+        "impairedFreezeRatio": {
+          "maximum": 0.3478211594038647,
+          "median": 0.29313364862497815,
+          "minimum": 0.15385924119548575
+        },
+        "impairedReceivedKbps": {
+          "maximum": 1893.0249945869339,
+          "median": 1865.3346573982126,
+          "minimum": 1838.9592850049653
+        },
+        "maximumRTTMilliseconds": {
+          "maximum": 228,
+          "median": 220,
+          "minimum": 218
+        },
+        "passedRuns": 0,
+        "path": "relay",
+        "profile": "nack-rtx",
+        "qualityRuns": 3,
+        "runs": 3
+      },
+      "direct-nack-rtx-flexfec": {
+        "adaptationRuns": 3,
+        "feedbackRuns": 3,
+        "impairedAverageQP": {
+          "maximum": 27.233399810066516,
+          "median": 27.10264761904763,
+          "minimum": 27.100712927756664
+        },
+        "impairedFPS": {
+          "maximum": 29.933125018251904,
+          "median": 29.872974156811214,
+          "minimum": 29.84464431725266
+        },
+        "impairedFreezeRatio": {
+          "maximum": 0.04175649608532849,
+          "median": 0.01852429718305864,
+          "minimum": 0.015800521956201068
+        },
+        "impairedReceivedKbps": {
+          "maximum": 2480.978131212724,
+          "median": 2469.054726368159,
+          "minimum": 2451.057425742574
+        },
+        "maximumRTTMilliseconds": {
+          "maximum": 224,
+          "median": 215,
+          "minimum": 210
+        },
+        "passedRuns": 2,
+        "path": "direct",
+        "profile": "nack-rtx-flexfec",
+        "qualityRuns": 3,
+        "runs": 3
+      },
+      "relay-nack-rtx-flexfec": {
+        "adaptationRuns": 1,
+        "feedbackRuns": 3,
+        "impairedAverageQP": {
+          "maximum": 27.349685114503824,
+          "median": 27.258764258555136,
+          "minimum": 27.174885931558933
+        },
+        "impairedFPS": {
+          "maximum": 29.769208296815663,
+          "median": 28.66074558840715,
+          "minimum": 23.623232019259707
+        },
+        "impairedFreezeRatio": {
+          "maximum": 0.8150884981599393,
+          "median": 0.27312975366102854,
+          "minimum": 0.047364985668473476
+        },
+        "impairedReceivedKbps": {
+          "maximum": 2484.6713008937436,
+          "median": 2479.2842942345924,
+          "minimum": 2298.378238357267
+        },
+        "maximumRTTMilliseconds": {
+          "maximum": 243,
+          "median": 225,
+          "minimum": 218
+        },
+        "passedRuns": 1,
+        "path": "relay",
+        "profile": "nack-rtx-flexfec",
+        "qualityRuns": 3,
+        "runs": 3
+      }
+    },
+    "impairment": {
+      "discipline": "selective-prio+netem",
+      "scope": "peer-webrtc-transport-address",
+      "capacityKbps": 4000,
+      "queueLimitPackets": 256,
+      "delay": "120ms",
+      "jitter": "30ms",
+      "loss": "2%"
+    },
+    "incomplete": [],
+    "passed": false,
+    "protection": {
+      "mediaPackets": 5,
+      "repairPackets": 1
+    },
+    "runs": 12
+  },
+  "runs": [
+    {
+      "name": "run-1-direct-nack-rtx",
+      "passed": false,
+      "failedAssertions": ["impaired-link-freezes"],
+      "sha256": {
+        "manifest.json": "43bbfb493a0a0d0917bb00f1dd7c5bcaf9d9df1c43aace627d8fc6c025d9ce19",
+        "summary.json": "2bf1bd7e220ca030d60213a2c85b8b0cce1f7bb888441091be8554dffbd045e6",
+        "samples.jsonl": "eeb4fe0d98580924d29e0ce9269c67bfd407c32d8333c4df8e788fb80eab9dca",
+        "encoder.log": "09463c1375de76925a4e7d1490efa47d4f5c3bcfa910011ba1ba2a1ca206ce6c"
+      },
+      "phases": {
+        "warmup": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 29.97645827883861,
+          "encoderMaximumFrameGapMilliseconds": 42.75054200000068
+        },
+        "baseline": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 29.95324976211162,
+          "encoderMaximumFrameGapMilliseconds": 43.353792000001704
+        },
+        "conditioning": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 30.00203174029844,
+          "encoderMaximumFrameGapMilliseconds": 68.04387500000303
+        },
+        "constrained": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 3200,
+          "decodedFramesPerSecond": 29.97041353298552,
+          "encoderMaximumFrameGapMilliseconds": 180.64695900000515
+        },
+        "impaired": {
+          "freezeDurationSeconds": 4.611,
+          "freezeRatio": 0.13066024369509777,
+          "medianAverageLoss": 0.018695486193198933,
+          "twccReportedLossRatio": 0.021011673151750974,
+          "medianEncoderTargetKbps": 2000,
+          "decodedFramesPerSecond": 29.198144853134206,
+          "encoderMaximumFrameGapMilliseconds": 43.50941599995713
+        },
+        "recovery": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 8.312330352973544e-57,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 7700,
+          "decodedFramesPerSecond": 30.129522314316716,
+          "encoderMaximumFrameGapMilliseconds": 42.689624999969965
+        }
+      },
+      "recoveryDelayMilliseconds": 12130,
+      "sustainedRecoveryMilliseconds": 26183
+    },
+    {
+      "name": "run-1-direct-nack-rtx-flexfec",
+      "passed": true,
+      "failedAssertions": [],
+      "sha256": {
+        "manifest.json": "05610e58ed073bd50e0f643f199403469df91c1f9fdd92e679aedca45957c395",
+        "summary.json": "7a24d22a6195309a1e4979e82f6878fab422d49d6fe4b13cda2e49745624130f",
+        "samples.jsonl": "40f5475401f05d629062755b0bcaa1ac902841b210bb1fd0f7f43048dd026758",
+        "encoder.log": "9d4da09de477a4ff0b7a08af0d9e0ffa3269585f6e96cccb001033d6de92932f"
+      },
+      "phases": {
+        "warmup": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 30.005227391531626,
+          "encoderMaximumFrameGapMilliseconds": 42.72441600000093
+        },
+        "baseline": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 30.00082760903749,
+          "encoderMaximumFrameGapMilliseconds": 42.55241699999169
+        },
+        "conditioning": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 30.007451060082637,
+          "encoderMaximumFrameGapMilliseconds": 43.53716700000223
+        },
+        "constrained": {
+          "freezeDurationSeconds": 0.377,
+          "freezeRatio": 0.008320826344133487,
+          "medianAverageLoss": 6.760070711788402e-43,
+          "twccReportedLossRatio": 0.00043636363636363637,
+          "medianEncoderTargetKbps": 2500,
+          "decodedFramesPerSecond": 29.976749960497504,
+          "encoderMaximumFrameGapMilliseconds": 42.5556660000002
+        },
+        "impaired": {
+          "freezeDurationSeconds": 0.557,
+          "freezeRatio": 0.015800521956201068,
+          "medianAverageLoss": 0.01546594475159557,
+          "twccReportedLossRatio": 0.020161290322580645,
+          "medianEncoderTargetKbps": 2000,
+          "decodedFramesPerSecond": 29.84464431725266,
+          "encoderMaximumFrameGapMilliseconds": 43.645458000013605
+        },
+        "recovery": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 9.530322191812527e-57,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 7400,
+          "decodedFramesPerSecond": 30.156787586302443,
+          "encoderMaximumFrameGapMilliseconds": 42.722083000000566
+        }
+      },
+      "recoveryDelayMilliseconds": 12124,
+      "sustainedRecoveryMilliseconds": 26183
+    },
+    {
+      "name": "run-1-relay-nack-rtx",
+      "passed": false,
+      "failedAssertions": ["impaired-link-freezes", "throughput-recovery"],
+      "sha256": {
+        "manifest.json": "74398ac65054d1c4870f67e2723468cc34be6001102da285ce06de875066e184",
+        "summary.json": "2cda123fe558522640b6b102c7f225c1fcae85e54b415d3e8dd3d9f6e20ff685",
+        "samples.jsonl": "0126cd4e405c88ede73d9f3030137cd923de032c6ac5ea49116b1bc78a62a4fd",
+        "encoder.log": "f4b7e738eca2c888d95399dc6bcef7ffe1c529dfd1643fb463b8370f0b0ba0ac"
+      },
+      "phases": {
+        "warmup": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 1.5458440546920458e-6,
+          "twccReportedLossRatio": 0.0035518931590537758,
+          "medianEncoderTargetKbps": 5000,
+          "decodedFramesPerSecond": 30.00365898280278,
+          "encoderMaximumFrameGapMilliseconds": 40.422584000001734
+        },
+        "baseline": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 1.5406198794579519e-6,
+          "twccReportedLossRatio": 0.002226551628165878,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 29.997103727915924,
+          "encoderMaximumFrameGapMilliseconds": 41.50395799999387
+        },
+        "conditioning": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 1.8755209191112924e-5,
+          "twccReportedLossRatio": 0.0036656891495601175,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 30.00270904822106,
+          "encoderMaximumFrameGapMilliseconds": 43.986417000000074
+        },
+        "constrained": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0.00019361163081757694,
+          "twccReportedLossRatio": 0.004221820144113259,
+          "medianEncoderTargetKbps": 3200,
+          "decodedFramesPerSecond": 29.940390173410407,
+          "encoderMaximumFrameGapMilliseconds": 42.72104100001161
+        },
+        "impaired": {
+          "freezeDurationSeconds": 5.426,
+          "freezeRatio": 0.15385924119548575,
+          "medianAverageLoss": 0.021004714421526946,
+          "twccReportedLossRatio": 0.023856209150326796,
+          "medianEncoderTargetKbps": 2000,
+          "decodedFramesPerSecond": 28.724894908921065,
+          "encoderMaximumFrameGapMilliseconds": 44.71879199999967
+        },
+        "recovery": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 6.8962499740574244e-9,
+          "twccReportedLossRatio": 0.004399870592041411,
+          "medianEncoderTargetKbps": 4300,
+          "decodedFramesPerSecond": 30.170821791320407,
+          "encoderMaximumFrameGapMilliseconds": 43.91666700001224
+        }
+      },
+      "recoveryDelayMilliseconds": 30269,
+      "sustainedRecoveryMilliseconds": 8051
+    },
+    {
+      "name": "run-1-relay-nack-rtx-flexfec",
+      "passed": false,
+      "failedAssertions": [
+        "receiver-host-scheduler",
+        "playout-effective-latency-budget",
+        "healthy-link-freezes",
+        "impaired-link-freezes",
+        "repair-amplification",
+        "twcc-loss-fidelity"
+      ],
+      "sha256": {
+        "manifest.json": "b9611786e5e4ba5acd684ae63d58f092cc840fad827a5df3ee57f0270a692b9c",
+        "summary.json": "a734255c0ca51ab4aae4ab72ca25524b1d4664c8d8895581c158ad3631932e10",
+        "samples.jsonl": "7c89b7eec3ac08157e426c026d3741ca457326f8c675753e445d1e831cc70e82",
+        "encoder.log": "de8c5a70d13749cdd800761a7989c1d5af613b3f712864ed4b17b276f939dc1c"
+      },
+      "phases": {
+        "warmup": {
+          "freezeDurationSeconds": 4.06,
+          "freezeRatio": 0.20121920999157455,
+          "medianAverageLoss": 0.1824069093889969,
+          "twccReportedLossRatio": 0.16042069632495165,
+          "medianEncoderTargetKbps": 2000,
+          "decodedFramesPerSecond": 29.52684021075695,
+          "encoderMaximumFrameGapMilliseconds": 211.0845420000005
+        },
+        "baseline": {
+          "freezeDurationSeconds": 7.119000000000001,
+          "freezeRatio": 0.28264580934609124,
+          "medianAverageLoss": 0.15547340505884555,
+          "twccReportedLossRatio": 0.16476868327402136,
+          "medianEncoderTargetKbps": 2000,
+          "decodedFramesPerSecond": 30.497393031531903,
+          "encoderMaximumFrameGapMilliseconds": 43.0793330000015
+        },
+        "conditioning": {
+          "freezeDurationSeconds": 12.625,
+          "freezeRatio": 0.27859917027098596,
+          "medianAverageLoss": 0.1712175867588675,
+          "twccReportedLossRatio": 0.17108531454351902,
+          "medianEncoderTargetKbps": 2000,
+          "decodedFramesPerSecond": 29.768218646324677,
+          "encoderMaximumFrameGapMilliseconds": 42.64962500000547
+        },
+        "constrained": {
+          "freezeDurationSeconds": 22.948999999999998,
+          "freezeRatio": 0.5063880491626028,
+          "medianAverageLoss": 0.20947007279716023,
+          "twccReportedLossRatio": 0.2047807551766139,
+          "medianEncoderTargetKbps": 2000,
+          "decodedFramesPerSecond": 28.276764758981766,
+          "encoderMaximumFrameGapMilliseconds": 40.49412500001199
+        },
+        "impaired": {
+          "freezeDurationSeconds": 27.907000000000004,
+          "freezeRatio": 0.8150884981599393,
+          "medianAverageLoss": 0.21251676045424733,
+          "twccReportedLossRatio": 0.23062815222375058,
+          "medianEncoderTargetKbps": 2000,
+          "decodedFramesPerSecond": 23.623232019259707,
+          "encoderMaximumFrameGapMilliseconds": 41.164374999993015
+        },
+        "recovery": {
+          "freezeDurationSeconds": 14.018,
+          "freezeRatio": 0.30929108840985814,
+          "medianAverageLoss": 0.17199575686725527,
+          "twccReportedLossRatio": 0.17070800330433938,
+          "medianEncoderTargetKbps": 2000,
+          "decodedFramesPerSecond": 29.87634263020128,
+          "encoderMaximumFrameGapMilliseconds": 44.87641700002132
+        }
+      },
+      "recoveryDelayMilliseconds": 33,
+      "sustainedRecoveryMilliseconds": 39283
+    },
+    {
+      "name": "run-2-direct-nack-rtx",
+      "passed": false,
+      "failedAssertions": [
+        "producer-host-scheduler",
+        "receiver-host-scheduler",
+        "impaired-link-freezes"
+      ],
+      "sha256": {
+        "manifest.json": "f23a09e85cfa7d845ea66199f21b860582919bfe33f31c96c79113de54c67bd0",
+        "summary.json": "3676e650145c643518c878987b6c1cfafb8fe08c846955663bd2735624f487c5",
+        "samples.jsonl": "993e421f826213b28d61ed3aef643d81a17173cbb50d16bc7741a75ad152e342",
+        "encoder.log": "79231a54ac38206263ee04622e8b08dcf1e4dc2adc324375ac9ce8a619b731a9"
+      },
+      "phases": {
+        "warmup": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 30.00052265718915,
+          "encoderMaximumFrameGapMilliseconds": 41.34962499999892
+        },
+        "baseline": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 30.015732383870166,
+          "encoderMaximumFrameGapMilliseconds": 42.62062499999956
+        },
+        "conditioning": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 29.99322951929587,
+          "encoderMaximumFrameGapMilliseconds": 43.73812499999622
+        },
+        "constrained": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 3200,
+          "decodedFramesPerSecond": 30.006773538044705,
+          "encoderMaximumFrameGapMilliseconds": 42.41662500001257
+        },
+        "impaired": {
+          "freezeDurationSeconds": 4.849,
+          "freezeRatio": 0.13748227955769776,
+          "medianAverageLoss": 0.02157436016543796,
+          "twccReportedLossRatio": 0.021155094094743674,
+          "medianEncoderTargetKbps": 2000,
+          "decodedFramesPerSecond": 29.128480532368222,
+          "encoderMaximumFrameGapMilliseconds": 43.412624999997206
+        },
+        "recovery": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 5.8701748561299766e-58,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 30.15539495255028,
+          "encoderMaximumFrameGapMilliseconds": 42.80229200000758
+        }
+      },
+      "recoveryDelayMilliseconds": 12126,
+      "sustainedRecoveryMilliseconds": 26183
+    },
+    {
+      "name": "run-2-direct-nack-rtx-flexfec",
+      "passed": true,
+      "failedAssertions": [],
+      "sha256": {
+        "manifest.json": "ad5755e7b0a5df6a872c09c14c1a3bee117f0422e7ba2d5d2dec144d392935c3",
+        "summary.json": "b58407234c74c247a6c50ed3c0933bbd049d081ef2d891f1e604831f16050685",
+        "samples.jsonl": "19141fb580c748fd9e3e556475a0a039dc73e80f68e466bc38b8573cb9077ae2",
+        "encoder.log": "f571bddf99b7ae1c90d2db84d40c4f7da6ad840cdc12e4bea52fc3610623e640"
+      },
+      "phases": {
+        "warmup": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 29.97645827883861,
+          "encoderMaximumFrameGapMilliseconds": 43.00433399999929
+        },
+        "baseline": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 30.009520261600233,
+          "encoderMaximumFrameGapMilliseconds": 43.16266700000051
+        },
+        "conditioning": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 30.008806195949152,
+          "encoderMaximumFrameGapMilliseconds": 42.34212500001013
+        },
+        "constrained": {
+          "freezeDurationSeconds": 0.685,
+          "freezeRatio": 0.015126755586962285,
+          "medianAverageLoss": 1.4338996436352386e-39,
+          "twccReportedLossRatio": 0.0010147666036811533,
+          "medianEncoderTargetKbps": 2500,
+          "decodedFramesPerSecond": 29.72130629206378,
+          "encoderMaximumFrameGapMilliseconds": 43.36724999999569
+        },
+        "impaired": {
+          "freezeDurationSeconds": 0.653,
+          "freezeRatio": 0.01852429718305864,
+          "medianAverageLoss": 0.018907464837877495,
+          "twccReportedLossRatio": 0.01883337692911326,
+          "medianEncoderTargetKbps": 2000,
+          "decodedFramesPerSecond": 29.933125018251904,
+          "encoderMaximumFrameGapMilliseconds": 42.91408300003968
+        },
+        "recovery": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 8.166723823873679e-57,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 30.152610070879412,
+          "encoderMaximumFrameGapMilliseconds": 43.22770899999887
+        }
+      },
+      "recoveryDelayMilliseconds": 12133,
+      "sustainedRecoveryMilliseconds": 26180
+    },
+    {
+      "name": "run-2-relay-nack-rtx",
+      "passed": false,
+      "failedAssertions": [
+        "capacity-reference-bounded",
+        "impaired-link-freezes",
+        "recovery-time",
+        "sustained-recovery",
+        "throughput-recovery"
+      ],
+      "sha256": {
+        "manifest.json": "29478186689bad5ad8d063db2774a9dfeed16054ade74750447e215c1d6fcf3a",
+        "summary.json": "5af6277e94f88f0b7cad054b86aa8976c333df1821140c3161062c8171745bf4",
+        "samples.jsonl": "55b0a1e98a83931ad91ed184708972671d54d00f276da04ce31d7e97efebd4aa",
+        "encoder.log": "ff6de5b43fc4a50d55a52332542f9029a7c23ff26bdbc9ea56eb415e09037784"
+      },
+      "phases": {
+        "warmup": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0.0009541749989723618,
+          "twccReportedLossRatio": 0.006725626224646507,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 30.009933601714856,
+          "encoderMaximumFrameGapMilliseconds": 41.80500000000029
+        },
+        "baseline": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0.0005290041822424704,
+          "twccReportedLossRatio": 0.005612413337735226,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 29.98965873836608,
+          "encoderMaximumFrameGapMilliseconds": 44.535250000000815
+        },
+        "conditioning": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0.00039839641091156495,
+          "twccReportedLossRatio": 0.007112025585400219,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 30.010839129256617,
+          "encoderMaximumFrameGapMilliseconds": 43.26691700000083
+        },
+        "constrained": {
+          "freezeDurationSeconds": 0.948,
+          "freezeRatio": 0.020929462413069873,
+          "medianAverageLoss": 0.00877593273904272,
+          "twccReportedLossRatio": 0.011943040881947635,
+          "medianEncoderTargetKbps": 3100,
+          "decodedFramesPerSecond": 29.82681930050351,
+          "encoderMaximumFrameGapMilliseconds": 43.8987080000079
+        },
+        "impaired": {
+          "freezeDurationSeconds": 12.276,
+          "freezeRatio": 0.3478211594038647,
+          "medianAverageLoss": 0.02685513717921872,
+          "twccReportedLossRatio": 0.03391812865497076,
+          "medianEncoderTargetKbps": 2000,
+          "decodedFramesPerSecond": 28.846434300714602,
+          "encoderMaximumFrameGapMilliseconds": 110.27712600000086
+        },
+        "recovery": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0.003300688876363647,
+          "twccReportedLossRatio": 0.014337096613048257,
+          "medianEncoderTargetKbps": 2000,
+          "decodedFramesPerSecond": 30.045495485092722,
+          "encoderMaximumFrameGapMilliseconds": 43.50449999998091
+        }
+      },
+      "recoveryDelayMilliseconds": null,
+      "sustainedRecoveryMilliseconds": 0
+    },
+    {
+      "name": "run-2-relay-nack-rtx-flexfec",
+      "passed": false,
+      "failedAssertions": ["impaired-link-freezes"],
+      "sha256": {
+        "manifest.json": "9b9daac4fb0e70d24af7bcffa86067ada3c1c4098f6f3edc19094a8f01b692a6",
+        "summary.json": "2264d5f763fa7fd4490275b2e8bde4af49ff16bb6536262d873c83ab4dca473a",
+        "samples.jsonl": "e4acc19befaaa3e27358b388ea7a3a191296d200622513561481fef8c2532ea2",
+        "encoder.log": "75f8e9aa802806cd4133e7ce883223eaa8a4a2bfd728f2215f2be5aff01625a3"
+      },
+      "phases": {
+        "warmup": {
+          "freezeDurationSeconds": 0.954,
+          "freezeRatio": 0.04739430672164538,
+          "medianAverageLoss": 0.019668349796627238,
+          "twccReportedLossRatio": 0.026347216002388416,
+          "medianEncoderTargetKbps": 5000,
+          "decodedFramesPerSecond": 29.963917795325,
+          "encoderMaximumFrameGapMilliseconds": 42.746666999999434
+        },
+        "baseline": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0.017958383419495755,
+          "twccReportedLossRatio": 0.028101300108342362,
+          "medianEncoderTargetKbps": 3500,
+          "decodedFramesPerSecond": 29.92797417004719,
+          "encoderMaximumFrameGapMilliseconds": 42.927167000001646
+        },
+        "conditioning": {
+          "freezeDurationSeconds": 0.28500000000000014,
+          "freezeRatio": 0.006292085219119111,
+          "medianAverageLoss": 0.020403258011296534,
+          "twccReportedLossRatio": 0.028173928213179815,
+          "medianEncoderTargetKbps": 2300,
+          "decodedFramesPerSecond": 29.962293120187855,
+          "encoderMaximumFrameGapMilliseconds": 41.80862499999057
+        },
+        "constrained": {
+          "freezeDurationSeconds": 0.4929999999999999,
+          "freezeRatio": 0.010882521742969402,
+          "medianAverageLoss": 0.014463345317481328,
+          "twccReportedLossRatio": 0.019826835391157333,
+          "medianEncoderTargetKbps": 2000,
+          "decodedFramesPerSecond": 29.980133646378906,
+          "encoderMaximumFrameGapMilliseconds": 43.501499999983935
+        },
+        "impaired": {
+          "freezeDurationSeconds": 9.624,
+          "freezeRatio": 0.27312975366102854,
+          "medianAverageLoss": 0.043843176217235554,
+          "twccReportedLossRatio": 0.04128738621586476,
+          "medianEncoderTargetKbps": 2000,
+          "decodedFramesPerSecond": 28.66074558840715,
+          "encoderMaximumFrameGapMilliseconds": 38.89741700000013
+        },
+        "recovery": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0.0040760935846950435,
+          "twccReportedLossRatio": 0.014113183101198464,
+          "medianEncoderTargetKbps": 2900,
+          "decodedFramesPerSecond": 30.14204873541979,
+          "encoderMaximumFrameGapMilliseconds": 42.92095800000243
+        }
+      },
+      "recoveryDelayMilliseconds": 34,
+      "sustainedRecoveryMilliseconds": 38261
+    },
+    {
+      "name": "run-3-direct-nack-rtx",
+      "passed": false,
+      "failedAssertions": [
+        "producer-host-scheduler",
+        "receiver-host-scheduler",
+        "impaired-link-freezes"
+      ],
+      "sha256": {
+        "manifest.json": "179d7fd85706c7f1b606459a1128e44add6fa391123e523864bfd616ffd138ef",
+        "summary.json": "27952a03be6b8e37b82197c4715d27ad23261f782e761c6ce5d1cfe1950f9bd9",
+        "samples.jsonl": "ad035b239d6f32d0dacc7fd679aa7db40011227eba842236a559d775d4d6bd5e",
+        "encoder.log": "c8267f51f9901f179b5464c101d43cb5228612940dfc921d852674f74915b456"
+      },
+      "phases": {
+        "warmup": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 30.013071895424837,
+          "encoderMaximumFrameGapMilliseconds": 41.48091699999895
+        },
+        "baseline": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 29.998344918901026,
+          "encoderMaximumFrameGapMilliseconds": 43.44579199999862
+        },
+        "conditioning": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 30.00834818708964,
+          "encoderMaximumFrameGapMilliseconds": 190.8917919999949
+        },
+        "constrained": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 3100,
+          "decodedFramesPerSecond": 29.980810475222935,
+          "encoderMaximumFrameGapMilliseconds": 43.854999999995925
+        },
+        "impaired": {
+          "freezeDurationSeconds": 5.251,
+          "freezeRatio": 0.14884208736075286,
+          "medianAverageLoss": 0.015906280990456604,
+          "twccReportedLossRatio": 0.019511246515848835,
+          "medianEncoderTargetKbps": 2000,
+          "decodedFramesPerSecond": 28.944911297852475,
+          "encoderMaximumFrameGapMilliseconds": 42.202707999997074
+        },
+        "recovery": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 8.824443799552936e-57,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 7800,
+          "decodedFramesPerSecond": 30.15539495255028,
+          "encoderMaximumFrameGapMilliseconds": 43.58750000002328
+        }
+      },
+      "recoveryDelayMilliseconds": 12123,
+      "sustainedRecoveryMilliseconds": 26186
+    },
+    {
+      "name": "run-3-direct-nack-rtx-flexfec",
+      "passed": false,
+      "failedAssertions": ["encoder-cadence"],
+      "sha256": {
+        "manifest.json": "1f992680fdfcb654550951b2a4dae11e2da26cbfa1fcf216472c2dc033978705",
+        "summary.json": "db8bad3dbbee29c614c2f63542ec1d05803ac0c288956053ad2d8a8c70a3e756",
+        "samples.jsonl": "f66a823f01ecf4adea60ab6e769d388ba265e4c671c17f0d96ebfa780efa7709",
+        "encoder.log": "f2c64e3fd32d7e8b33c1d734dfb226e7114ba4a878a6ab64d25ce3d9e3807726"
+      },
+      "phases": {
+        "warmup": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 30.00209073803052,
+          "encoderMaximumFrameGapMilliseconds": 41.73650000000089
+        },
+        "baseline": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 30.00455241484915,
+          "encoderMaximumFrameGapMilliseconds": 41.676000000003114
+        },
+        "conditioning": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 29.996614377609752,
+          "encoderMaximumFrameGapMilliseconds": 43.815958999999566
+        },
+        "constrained": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 2500,
+          "decodedFramesPerSecond": 29.98961203197688,
+          "encoderMaximumFrameGapMilliseconds": 42.95879099999729
+        },
+        "impaired": {
+          "freezeDurationSeconds": 1.472,
+          "freezeRatio": 0.04175649608532849,
+          "medianAverageLoss": 0.017929058365440464,
+          "twccReportedLossRatio": 0.019110357422384556,
+          "medianEncoderTargetKbps": 2000,
+          "decodedFramesPerSecond": 29.872974156811214,
+          "encoderMaximumFrameGapMilliseconds": 43.62612500000978
+        },
+        "recovery": {
+          "freezeDurationSeconds": 0.20999999999999996,
+          "freezeRatio": 0.0047227094858993375,
+          "medianAverageLoss": 1.275502110529982e-57,
+          "twccReportedLossRatio": 0,
+          "medianEncoderTargetKbps": 7400,
+          "decodedFramesPerSecond": 30.119650253106304,
+          "encoderMaximumFrameGapMilliseconds": 205.2529579999973
+        }
+      },
+      "recoveryDelayMilliseconds": 12120,
+      "sustainedRecoveryMilliseconds": 15263
+    },
+    {
+      "name": "run-3-relay-nack-rtx",
+      "passed": false,
+      "failedAssertions": [
+        "constrained-link-efficiency",
+        "healthy-link-freezes",
+        "impaired-link-freezes"
+      ],
+      "sha256": {
+        "manifest.json": "5eeec45909ed5be4c87dbf2ab4dbed8c3bbae908a5d0c54c983e7e0dd5a35eb9",
+        "summary.json": "1caa4a57923f1601136e14f4d57de42d58a9cb2df5681633f1721dea3afc3e4f",
+        "samples.jsonl": "4f1ff8aab71cfe5fefbca866d243e571ad649e4a6289c3defbc3b256244bcfe0",
+        "encoder.log": "5d16181337a6991253e870d9c7ad6d16b067924298eb8293fe416d3c2c8c127c"
+      },
+      "phases": {
+        "warmup": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0.0007899206125469202,
+          "twccReportedLossRatio": 0.0038262435291469728,
+          "medianEncoderTargetKbps": 7800,
+          "decodedFramesPerSecond": 29.973322173981273,
+          "encoderMaximumFrameGapMilliseconds": 43.52845800000068
+        },
+        "baseline": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0.00039272443323168913,
+          "twccReportedLossRatio": 0.00456465167868265,
+          "medianEncoderTargetKbps": 6400,
+          "decodedFramesPerSecond": 30.00579422233259,
+          "encoderMaximumFrameGapMilliseconds": 39.99841700000252
+        },
+        "conditioning": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 2.7930966213356752e-5,
+          "twccReportedLossRatio": 0.006002148629081228,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 29.99729144095341,
+          "encoderMaximumFrameGapMilliseconds": 42.84316599999147
+        },
+        "constrained": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0.0030786036473339825,
+          "twccReportedLossRatio": 0.007414201635710464,
+          "medianEncoderTargetKbps": 2300,
+          "decodedFramesPerSecond": 29.980810475222935,
+          "encoderMaximumFrameGapMilliseconds": 42.648540999987745
+        },
+        "impaired": {
+          "freezeDurationSeconds": 10.041,
+          "freezeRatio": 0.29313364862497815,
+          "medianAverageLoss": 0.026086565368548514,
+          "twccReportedLossRatio": 0.029088985852175064,
+          "medianEncoderTargetKbps": 2000,
+          "decodedFramesPerSecond": 29.356032123199086,
+          "encoderMaximumFrameGapMilliseconds": 40.672374999994645
+        },
+        "recovery": {
+          "freezeDurationSeconds": 1.1519999999999992,
+          "freezeRatio": 0.025423728813559306,
+          "medianAverageLoss": 1.3276488117756438e-10,
+          "twccReportedLossRatio": 0.0067770622508433,
+          "medianEncoderTargetKbps": 6000,
+          "decodedFramesPerSecond": 30.154610089154723,
+          "encoderMaximumFrameGapMilliseconds": 44.08458300001803
+        }
+      },
+      "recoveryDelayMilliseconds": 20171,
+      "sustainedRecoveryMilliseconds": 14094
+    },
+    {
+      "name": "run-3-relay-nack-rtx-flexfec",
+      "passed": true,
+      "failedAssertions": [],
+      "sha256": {
+        "manifest.json": "a0dfb3fd89e265fc83c8909d2fd442ab3d6f51b69fc671d38788084b7b20c774",
+        "summary.json": "9c9f38034324e42d6c0de3ad36f61f6531cce14c135722774b0c28112262faab",
+        "samples.jsonl": "d11f0a0322b917086c83f8a0683e242e7c4c5ab11e8897b3baf02e5a3d9bde31",
+        "encoder.log": "948810de6ee94da95237756c0ed9fcc340906d0faf812dff38aebd673ff8e293"
+      },
+      "phases": {
+        "warmup": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 7.396195311679295e-7,
+          "twccReportedLossRatio": 0.0014966059115933507,
+          "medianEncoderTargetKbps": 8000,
+          "decodedFramesPerSecond": 29.99895474025295,
+          "encoderMaximumFrameGapMilliseconds": 42.33341699999801
+        },
+        "baseline": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 9.659114509363444e-9,
+          "twccReportedLossRatio": 0.0008949273888459505,
+          "medianEncoderTargetKbps": 7400,
+          "decodedFramesPerSecond": 30.009141857784492,
+          "encoderMaximumFrameGapMilliseconds": 42.90729199999987
+        },
+        "conditioning": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 2.899255246594933e-5,
+          "twccReportedLossRatio": 0.002639836628978433,
+          "medianEncoderTargetKbps": 7000,
+          "decodedFramesPerSecond": 29.995609271370135,
+          "encoderMaximumFrameGapMilliseconds": 43.50237499999639
+        },
+        "constrained": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 7.0614443969623255e-6,
+          "twccReportedLossRatio": 0.0017516398330351818,
+          "medianEncoderTargetKbps": 2400,
+          "decodedFramesPerSecond": 29.99096657633243,
+          "encoderMaximumFrameGapMilliseconds": 43.01437500002794
+        },
+        "impaired": {
+          "freezeDurationSeconds": 1.669,
+          "freezeRatio": 0.047364985668473476,
+          "medianAverageLoss": 0.020479646969643227,
+          "twccReportedLossRatio": 0.021137026239067054,
+          "medianEncoderTargetKbps": 2000,
+          "decodedFramesPerSecond": 29.769208296815663,
+          "encoderMaximumFrameGapMilliseconds": 42.60574999998789
+        },
+        "recovery": {
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 8.954995010450767e-8,
+          "twccReportedLossRatio": 0.0013024903615713244,
+          "medianEncoderTargetKbps": 7500,
+          "decodedFramesPerSecond": 30.138841855739923,
+          "encoderMaximumFrameGapMilliseconds": 42.92624999998952
+        }
+      },
+      "recoveryDelayMilliseconds": 13118,
+      "sustainedRecoveryMilliseconds": 26177
+    }
+  ],
+  "cleanup": {
+    "udpReceiveLimitRestored": 212992,
+    "udpSendLimitRestored": 212992,
+    "ownedContainersRemoved": true
+  },
+  "findings": [
+    "All twelve runs complete from one clean revision and identical runtime images. Full FEC has two direct passes and one TURN pass; the whole matrix fails.",
+    "The third full direct case fails encoder cadence only: a 205.253 ms maximum output gap and 0.210 s recovery freeze. Its impaired freeze fraction is 4.176%.",
+    "The first full TURN case has persistent loss before impairment; the second has roughly 2% reconciled baseline loss and 27.31% impaired frozen time. The third passes with negligible reconciled baseline loss and 4.736% impaired frozen time. These runs are retained; a transport-side cause has not been established.",
+    "The second NACK/RTX direct case exposes a realtime-derived host-heartbeat defect documented in scheduler-clock.json; original verdicts are not rewritten.",
+    "Separate host-pause observations recur near UTC minute 19/29/39/49, second 52.5, including the earlier MediaMTX recovery freeze. This is correlation only; inspect host/VM timing before changing production media buffering."
+  ]
+}
