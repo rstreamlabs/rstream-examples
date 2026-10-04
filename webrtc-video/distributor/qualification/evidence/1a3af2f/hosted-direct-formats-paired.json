@@ -1,0 +1,2305 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Same-runner, same-image interleaved comparison of automatic source-format down-holds",
+  "revision": "1a3af2fab749d97a0092a0a668e6cfb29751bf5f",
+  "workingTreeDirty": false,
+  "workflowURL": "https://github.com/rstreamlabs/rstream-examples/actions/runs/37224285264",
+  "passed": false,
+  "sameImages": true,
+  "runner": {
+    "platform": "linux",
+    "architecture": "x64",
+    "kernel": "6.17.0-1022-azure",
+    "logicalCPUs": 4,
+    "memoryBytes": 16766414848,
+    "socketLimitsRestored": true,
+    "originalSocketLimits": {
+      "receive": 1048576,
+      "send": 212992
+    }
+  },
+  "summarySHA256": "d40d16af311df76790d4fce0c46dd1a775899b56b6cee5534d0b4da40f78def0",
+  "scope": [
+    "Direct WebRTC on an isolated Docker bridge, without tunnel, TURN, MediaMTX, authentication or physical capture. All six attempts use one hosted runner and identical image digests.",
+    "All six format ladders and source-target recoveries pass. All six original playback and viewer recovery verdicts fail and remain failed. The sixth trial also misses exact first-presentation measurement (presentedFrames is two).",
+    "The legacy four-second steady interval subtracts the preceding one-second snapshot. Every failed steady freeze increment includes an interval starting near three seconds and ending near four seconds; it does not prove that the increment occurred after four seconds.",
+    "Browser frame gaps and native freeze increments are separate observations. Correlation does not independently reproduce the browser native freeze classifier. Both raw intervals and browser-clock frame events are retained below.",
+    "Phase-relative browser diagnostics are relative to the first observed phase snapshot, not the exact network-shaping activation. The host phase marker has only whole-second precision, including in the earlier 18338c8 comparison.",
+    "Total transition freeze durations overlap between one- and three-second down-holds. No production timing, acceptance budget or historical verdict is changed. A bounded native-counter boundary measurement is required before selecting a timing policy.",
+    "Baseline and recovery native freeze counters remain unchanged in all six attempts. Measurements concern these synthetic sources and this environment, not target-device performance."
+  ],
+  "cases": [
+    {
+      "run": 1,
+      "downHold": "1s",
+      "exitCode": 1,
+      "passed": false,
+      "publishable": false,
+      "images": {
+        "producer": "sha256:96bd68029e0dae228cd5be32aea46e63201894d3f7651887a26c75a1467f5a2b",
+        "distributor": null,
+        "browser": "sha256:c010640b459cc3fd6fa66b7b50c7196c2b0c86ab3b25795e261f8463b484993f"
+      },
+      "profile": {
+        "controlPath": "local",
+        "edgeAuthentication": false,
+        "edgeCredentialLifetimeSeconds": null,
+        "warmupSeconds": 20,
+        "phaseSeconds": 45,
+        "recoverySeconds": 90,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "37741fcc4516ba4cb207ca796576246280b6a860271939d56e9a0ebc22448fd8",
+        "latencyProbe": false,
+        "sourceQualityObserved": true,
+        "expectedNetworkFormat": "small",
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": true,
+          "capacityKbps": 1500,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 256
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "gates": {
+        "recordingEvidence": true,
+        "sourceFormats": true,
+        "sourceQualityEvidence": true,
+        "latencyMeasurement": true,
+        "media": true,
+        "playback": false,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "startupPresentationEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": false,
+        "sourceTargetRecovery": true
+      },
+      "sourceFormats": {
+        "enabled": true,
+        "scope": "Automatic source-format observations and decoded browser dimensions/cadence; sampled media-time continuity, not physical capture latency.",
+        "networkProfile": "small",
+        "minimumDwellMilliseconds": 10000,
+        "maximumSampleGapMilliseconds": 1023,
+        "gates": {
+          "qualityComplete": true,
+          "stableConfiguration": true,
+          "lowerNetworkFormat": true,
+          "samplingContinuous": true,
+          "sampledMediaContinuous": true,
+          "decodedCountersContinuous": true,
+          "singleSession": true,
+          "minimumDwell": true,
+          "expectedSteadyFormats": true,
+          "configuredCadence": true,
+          "phaseOrder": true
+        },
+        "passed": true,
+        "transitions": [
+          {
+            "profile": "large",
+            "atMilliseconds": 20179,
+            "phase": "baseline"
+          },
+          {
+            "profile": "small",
+            "atMilliseconds": 67525,
+            "phase": "viewer-network"
+          },
+          {
+            "profile": "medium",
+            "atMilliseconds": 136960,
+            "phase": "recovery"
+          },
+          {
+            "profile": "large",
+            "atMilliseconds": 152063,
+            "phase": "recovery"
+          }
+        ],
+        "phases": {
+          "baseline": {
+            "expectedProfile": "large",
+            "expectedFramesPerSecond": 30,
+            "samples": 45,
+            "steadyMilliseconds": 9074,
+            "steadyDecodedFramesPerSecond": 29.975754904121665,
+            "configuredFrameRatio": 1.0001654408999983,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          },
+          "viewer-network": {
+            "expectedProfile": "small",
+            "expectedFramesPerSecond": 15,
+            "samples": 45,
+            "steadyMilliseconds": 9056,
+            "steadyDecodedFramesPerSecond": 15.017667844522968,
+            "configuredFrameRatio": 0.9200863930885528,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          },
+          "recovery": {
+            "expectedProfile": "large",
+            "expectedFramesPerSecond": 30,
+            "samples": 90,
+            "steadyMilliseconds": 9064,
+            "steadyDecodedFramesPerSecond": 30.00882612533098,
+            "configuredFrameRatio": 1.0021734921030085,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          }
+        },
+        "failures": []
+      },
+      "setup": {
+        "presentation": {
+          "supported": true,
+          "measurementValid": true,
+          "requestedAtMilliseconds": 150.90000000002328,
+          "firstFrame": {
+            "callbackMilliseconds": 410.5,
+            "expectedDisplayMilliseconds": 399.1,
+            "width": 1280,
+            "height": 720,
+            "presentedFrames": 1
+          },
+          "requestToCallbackMilliseconds": 259.5999999999767,
+          "requestToExpectedDisplayMilliseconds": 248.19999999997674
+        },
+        "peerCreatedMilliseconds": 154,
+        "whepPostDurationMilliseconds": 177,
+        "whepPostCompletedMilliseconds": 343,
+        "connectedMilliseconds": 349,
+        "playbackReadyMilliseconds": 413,
+        "firstDecodedFrameMilliseconds": 416,
+        "postToConnectedMilliseconds": 6,
+        "peerToFirstDecodedFrameMilliseconds": 262
+      },
+      "teardown": {
+        "whepDeleteDurationMilliseconds": 256,
+        "whepDeleteCompletedMilliseconds": 205148
+      },
+      "phases": {
+        "baseline": {
+          "samples": 45,
+          "durationMilliseconds": 44326,
+          "receivedBitrateKbps": 7020.430086179669,
+          "decodedFramesPerSecond": 30.004963226999955,
+          "averageDecodedQP": 12.354887218045112,
+          "framesPerSecond": {
+            "minimum": 29,
+            "maximum": 30
+          },
+          "encoderTargetKbps": {
+            "first": 6000,
+            "last": 6000,
+            "minimum": 6000,
+            "maximum": 6000,
+            "medianLast10Seconds": 6000,
+            "sustainedMinimumLast10Seconds": 6000
+          },
+          "twccTargetKbps": {
+            "first": 6000,
+            "last": 6000,
+            "minimum": 6000,
+            "maximum": 6000,
+            "medianLast10Seconds": 6000,
+            "sustainedMinimumLast10Seconds": 6000
+          },
+          "jitterMilliseconds": {
+            "average": 11.955555555555561,
+            "maximum": 14
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0,
+            "maximum": 0
+          },
+          "nacks": 0,
+          "packetsLostNetChange": 0,
+          "framesDropped": 0,
+          "freezes": 0,
+          "freezeDurationSeconds": 0
+        },
+        "sourceNetwork": null,
+        "viewerNetwork": {
+          "samples": 45,
+          "durationMilliseconds": 44287,
+          "receivedBitrateKbps": 985.0540339151444,
+          "decodedFramesPerSecond": 14.428613362837853,
+          "averageDecodedQP": 14.169014084507042,
+          "framesPerSecond": {
+            "minimum": 2,
+            "maximum": 22
+          },
+          "encoderTargetKbps": {
+            "first": 3749,
+            "last": 1364,
+            "minimum": 500,
+            "maximum": 3749,
+            "medianLast10Seconds": 1101,
+            "sustainedMinimumLast10Seconds": 920
+          },
+          "twccTargetKbps": {
+            "first": 3749.933,
+            "last": 1403.952,
+            "minimum": 500,
+            "maximum": 3749.933,
+            "medianLast10Seconds": 1188.683,
+            "sustainedMinimumLast10Seconds": 1026.652
+          },
+          "jitterMilliseconds": {
+            "average": 41.64444444444445,
+            "maximum": 62
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 32.26666666666664,
+            "maximum": 989
+          },
+          "nacks": 130,
+          "packetsLostNetChange": 154,
+          "framesDropped": 0,
+          "freezes": 2,
+          "freezeDurationSeconds": 1.582
+        },
+        "recovery": {
+          "samples": 90,
+          "durationMilliseconds": 89605,
+          "receivedBitrateKbps": 5208.25230734892,
+          "decodedFramesPerSecond": 24.663802243178395,
+          "averageDecodedQP": 8.965610859728507,
+          "framesPerSecond": {
+            "minimum": 15,
+            "maximum": 30
+          },
+          "encoderTargetKbps": {
+            "first": 1364,
+            "last": 5674,
+            "minimum": 1364,
+            "maximum": 5674,
+            "medianLast10Seconds": 5674,
+            "sustainedMinimumLast10Seconds": 5674
+          },
+          "twccTargetKbps": {
+            "first": 1479.606,
+            "last": 6000,
+            "minimum": 1479.606,
+            "maximum": 6000,
+            "medianLast10Seconds": 6000,
+            "sustainedMinimumLast10Seconds": 6000
+          },
+          "jitterMilliseconds": {
+            "average": 14.288888888888875,
+            "maximum": 49
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0.7555555555555555,
+            "maximum": 22
+          },
+          "nacks": 0,
+          "packetsLostNetChange": 0,
+          "framesDropped": 0,
+          "freezes": 0,
+          "freezeDurationSeconds": 0
+        }
+      },
+      "networkPlayback": {
+        "enabled": true,
+        "scope": "producer-to-browser",
+        "capacityKbps": 1500,
+        "delayMilliseconds": 0,
+        "jitterMilliseconds": 0,
+        "lossPercent": 0,
+        "queuePackets": 256,
+        "nackCountDelta": 130,
+        "packetsLostNetChange": 154,
+        "framesDecodedDelta": 639,
+        "framesDroppedDelta": 0,
+        "freezeCountDelta": 2,
+        "freezeDurationDeltaSeconds": 1.582,
+        "baselineFreezeCountDelta": 0,
+        "baselineFreezeDurationDeltaSeconds": 0,
+        "recoveryFramesDecodedDelta": 2210,
+        "recoveryFreezeCountDelta": 0,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyStateFramesDecodedDelta": 627,
+        "steadyStateFramesDroppedDelta": 0,
+        "steadyStateFreezeCountDelta": 1,
+        "steadyStateFreezeDurationDeltaSeconds": 0.4610000000000001,
+        "steadyRecoveryFreezeCountDelta": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "freezeRatio": 0.03515555555555556,
+        "frameDropRatio": 0,
+        "steadyStateFrameDropRatio": 0,
+        "capacityTransitionFramesDropped": 0,
+        "capacityTransitionDroppedFrameDurationSeconds": 0,
+        "capacityTransitionDisruptionSeconds": 1.582,
+        "recoveryFreezeRatio": 0
+      },
+      "diagnostics": {
+        "maximumTimerDelayMilliseconds": 0.5,
+        "freezeIntervals": [
+          {
+            "intervalStartAfterFirstPhaseSampleMilliseconds": 2013,
+            "intervalEndAfterFirstPhaseSampleMilliseconds": 3020,
+            "freezeCountDelta": 1,
+            "freezeDurationDeltaSeconds": 1.121,
+            "frameGaps": [
+              {
+                "gapMilliseconds": 1116.6000000000058,
+                "expectedDisplayAfterFirstBrowserPhaseSampleMilliseconds": 2648.6999999999825
+              },
+              {
+                "gapMilliseconds": 333.29999999998836,
+                "expectedDisplayAfterFirstBrowserPhaseSampleMilliseconds": 2981.999999999971
+              }
+            ]
+          },
+          {
+            "intervalStartAfterFirstPhaseSampleMilliseconds": 3020,
+            "intervalEndAfterFirstPhaseSampleMilliseconds": 4026,
+            "freezeCountDelta": 1,
+            "freezeDurationDeltaSeconds": 0.4610000000000001,
+            "frameGaps": [
+              {
+                "gapMilliseconds": 466.70000000001164,
+                "expectedDisplayAfterFirstBrowserPhaseSampleMilliseconds": 3448.6999999999825
+              }
+            ]
+          }
+        ]
+      },
+      "hashes": {
+        "result.json": "d990971f67296c3d9279df84a51068363ec6773739565f0708d1caa2c8f3ef25",
+        "samples.jsonl": "2913f2cffb4b9cf8c437472660d5282d94891aa48886a04fb7de33e1e1cfc10d",
+        "producer.log": "eb581e283a23c334aafbe8b5db32134362569aa2d2500aee615f42ea0784afdf",
+        "browser.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "resource-samples.jsonl": "e9efda576cc24e2e1bffa210745a09a72330922636109b5575c0d1035dac1ce9",
+        "source-formats.json": "4716c8b1a6f69e924b5083a68f50f39d4b9833fcb4b76b957ee63a58845714ef"
+      }
+    },
+    {
+      "run": 2,
+      "downHold": "3s",
+      "exitCode": 1,
+      "passed": false,
+      "publishable": false,
+      "images": {
+        "producer": "sha256:96bd68029e0dae228cd5be32aea46e63201894d3f7651887a26c75a1467f5a2b",
+        "distributor": null,
+        "browser": "sha256:c010640b459cc3fd6fa66b7b50c7196c2b0c86ab3b25795e261f8463b484993f"
+      },
+      "profile": {
+        "controlPath": "local",
+        "edgeAuthentication": false,
+        "edgeCredentialLifetimeSeconds": null,
+        "warmupSeconds": 20,
+        "phaseSeconds": 45,
+        "recoverySeconds": 90,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "77f93fc59780e72b66d5621bc7e0192417d9af8d64a567a150af6a7cecd62a98",
+        "latencyProbe": false,
+        "sourceQualityObserved": true,
+        "expectedNetworkFormat": "small",
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": true,
+          "capacityKbps": 1500,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 256
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "gates": {
+        "recordingEvidence": true,
+        "sourceFormats": true,
+        "sourceQualityEvidence": true,
+        "latencyMeasurement": true,
+        "media": true,
+        "playback": false,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "startupPresentationEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": false,
+        "sourceTargetRecovery": true
+      },
+      "sourceFormats": {
+        "enabled": true,
+        "scope": "Automatic source-format observations and decoded browser dimensions/cadence; sampled media-time continuity, not physical capture latency.",
+        "networkProfile": "small",
+        "minimumDwellMilliseconds": 10000,
+        "maximumSampleGapMilliseconds": 1018,
+        "gates": {
+          "qualityComplete": true,
+          "stableConfiguration": true,
+          "lowerNetworkFormat": true,
+          "samplingContinuous": true,
+          "sampledMediaContinuous": true,
+          "decodedCountersContinuous": true,
+          "singleSession": true,
+          "minimumDwell": true,
+          "expectedSteadyFormats": true,
+          "configuredCadence": true,
+          "phaseOrder": true
+        },
+        "passed": true,
+        "transitions": [
+          {
+            "profile": "large",
+            "atMilliseconds": 20188,
+            "phase": "baseline"
+          },
+          {
+            "profile": "small",
+            "atMilliseconds": 69576,
+            "phase": "viewer-network"
+          },
+          {
+            "profile": "medium",
+            "atMilliseconds": 137029,
+            "phase": "recovery"
+          },
+          {
+            "profile": "large",
+            "atMilliseconds": 155154,
+            "phase": "recovery"
+          }
+        ],
+        "phases": {
+          "baseline": {
+            "expectedProfile": "large",
+            "expectedFramesPerSecond": 30,
+            "samples": 45,
+            "steadyMilliseconds": 9075,
+            "steadyDecodedFramesPerSecond": 29.97245179063361,
+            "configuredFrameRatio": 0.9996467413771073,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          },
+          "viewer-network": {
+            "expectedProfile": "small",
+            "expectedFramesPerSecond": 15,
+            "samples": 45,
+            "steadyMilliseconds": 9057,
+            "steadyDecodedFramesPerSecond": 15.016009716241582,
+            "configuredFrameRatio": 0.918437002254721,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          },
+          "recovery": {
+            "expectedProfile": "large",
+            "expectedFramesPerSecond": 30,
+            "samples": 90,
+            "steadyMilliseconds": 9062,
+            "steadyDecodedFramesPerSecond": 30.015449128227765,
+            "configuredFrameRatio": 1.0007909403045803,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          }
+        },
+        "failures": []
+      },
+      "setup": {
+        "presentation": {
+          "supported": true,
+          "measurementValid": true,
+          "requestedAtMilliseconds": 154.79999999998836,
+          "firstFrame": {
+            "callbackMilliseconds": 430.6,
+            "expectedDisplayMilliseconds": 415,
+            "width": 1280,
+            "height": 720,
+            "presentedFrames": 1
+          },
+          "requestToCallbackMilliseconds": 275.80000000001166,
+          "requestToExpectedDisplayMilliseconds": 260.20000000001164
+        },
+        "peerCreatedMilliseconds": 158,
+        "whepPostDurationMilliseconds": 190,
+        "whepPostCompletedMilliseconds": 360,
+        "connectedMilliseconds": 367,
+        "playbackReadyMilliseconds": 433,
+        "firstDecodedFrameMilliseconds": 436,
+        "postToConnectedMilliseconds": 7,
+        "peerToFirstDecodedFrameMilliseconds": 278
+      },
+      "teardown": {
+        "whepDeleteDurationMilliseconds": 256,
+        "whepDeleteCompletedMilliseconds": 205233
+      },
+      "phases": {
+        "baseline": {
+          "samples": 45,
+          "durationMilliseconds": 44349,
+          "receivedBitrateKbps": 7001.485309702586,
+          "decodedFramesPerSecond": 29.98940224131322,
+          "averageDecodedQP": 12.293233082706767,
+          "framesPerSecond": {
+            "minimum": 29,
+            "maximum": 31
+          },
+          "encoderTargetKbps": {
+            "first": 6000,
+            "last": 6000,
+            "minimum": 6000,
+            "maximum": 6000,
+            "medianLast10Seconds": 6000,
+            "sustainedMinimumLast10Seconds": 6000
+          },
+          "twccTargetKbps": {
+            "first": 6000,
+            "last": 6000,
+            "minimum": 6000,
+            "maximum": 6000,
+            "medianLast10Seconds": 6000,
+            "sustainedMinimumLast10Seconds": 6000
+          },
+          "jitterMilliseconds": {
+            "average": 11.955555555555561,
+            "maximum": 14
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0.1111111111111111,
+            "maximum": 1
+          },
+          "nacks": 0,
+          "packetsLostNetChange": 0,
+          "framesDropped": 0,
+          "freezes": 0,
+          "freezeDurationSeconds": 0
+        },
+        "sourceNetwork": null,
+        "viewerNetwork": {
+          "samples": 45,
+          "durationMilliseconds": 44311,
+          "receivedBitrateKbps": 1018.123355374512,
+          "decodedFramesPerSecond": 15.03012795919749,
+          "averageDecodedQP": 14.193693693693694,
+          "framesPerSecond": {
+            "minimum": 3,
+            "maximum": 35
+          },
+          "encoderTargetKbps": {
+            "first": 3825,
+            "last": 1421,
+            "minimum": 500,
+            "maximum": 3825,
+            "medianLast10Seconds": 1183.5,
+            "sustainedMinimumLast10Seconds": 921
+          },
+          "twccTargetKbps": {
+            "first": 3825.665,
+            "last": 1528.64,
+            "minimum": 500,
+            "maximum": 3825.665,
+            "medianLast10Seconds": 1280.707,
+            "sustainedMinimumLast10Seconds": 1115.771
+          },
+          "jitterMilliseconds": {
+            "average": 42.44444444444446,
+            "maximum": 62
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 123.93333333333334,
+            "maximum": 1536
+          },
+          "nacks": 132,
+          "packetsLostNetChange": 157,
+          "framesDropped": 0,
+          "freezes": 2,
+          "freezeDurationSeconds": 1.589
+        },
+        "recovery": {
+          "samples": 90,
+          "durationMilliseconds": 89618,
+          "receivedBitrateKbps": 5417.846593318307,
+          "decodedFramesPerSecond": 24.42589658327568,
+          "averageDecodedQP": 8.188670625856556,
+          "framesPerSecond": {
+            "minimum": 15,
+            "maximum": 30
+          },
+          "encoderTargetKbps": {
+            "first": 1421,
+            "last": 6000,
+            "minimum": 1421,
+            "maximum": 6000,
+            "medianLast10Seconds": 6000,
+            "sustainedMinimumLast10Seconds": 6000
+          },
+          "twccTargetKbps": {
+            "first": 1528.64,
+            "last": 6000,
+            "minimum": 1528.64,
+            "maximum": 6000,
+            "medianLast10Seconds": 6000,
+            "sustainedMinimumLast10Seconds": 6000
+          },
+          "jitterMilliseconds": {
+            "average": 15.18888888888888,
+            "maximum": 50
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0.4111111111111112,
+            "maximum": 31
+          },
+          "nacks": 0,
+          "packetsLostNetChange": 0,
+          "framesDropped": 0,
+          "freezes": 0,
+          "freezeDurationSeconds": 0
+        }
+      },
+      "networkPlayback": {
+        "enabled": true,
+        "scope": "producer-to-browser",
+        "capacityKbps": 1500,
+        "delayMilliseconds": 0,
+        "jitterMilliseconds": 0,
+        "lossPercent": 0,
+        "queuePackets": 256,
+        "nackCountDelta": 132,
+        "packetsLostNetChange": 157,
+        "framesDecodedDelta": 666,
+        "framesDroppedDelta": 0,
+        "freezeCountDelta": 2,
+        "freezeDurationDeltaSeconds": 1.589,
+        "baselineFreezeCountDelta": 0,
+        "baselineFreezeDurationDeltaSeconds": 0,
+        "recoveryFramesDecodedDelta": 2189,
+        "recoveryFreezeCountDelta": 0,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyStateFramesDecodedDelta": 654,
+        "steadyStateFramesDroppedDelta": 0,
+        "steadyStateFreezeCountDelta": 1,
+        "steadyStateFreezeDurationDeltaSeconds": 0.583,
+        "steadyRecoveryFreezeCountDelta": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "freezeRatio": 0.03531111111111111,
+        "frameDropRatio": 0,
+        "steadyStateFrameDropRatio": 0,
+        "capacityTransitionFramesDropped": 0,
+        "capacityTransitionDroppedFrameDurationSeconds": 0,
+        "capacityTransitionDisruptionSeconds": 1.589,
+        "recoveryFreezeRatio": 0
+      },
+      "diagnostics": {
+        "maximumTimerDelayMilliseconds": 0.6999999999534339,
+        "freezeIntervals": [
+          {
+            "intervalStartAfterFirstPhaseSampleMilliseconds": 2018,
+            "intervalEndAfterFirstPhaseSampleMilliseconds": 3026,
+            "freezeCountDelta": 1,
+            "freezeDurationDeltaSeconds": 1.006,
+            "frameGaps": [
+              {
+                "gapMilliseconds": 999.8999999999942,
+                "expectedDisplayAfterFirstBrowserPhaseSampleMilliseconds": 2517.699999999968
+              }
+            ]
+          },
+          {
+            "intervalStartAfterFirstPhaseSampleMilliseconds": 3026,
+            "intervalEndAfterFirstPhaseSampleMilliseconds": 4032,
+            "freezeCountDelta": 1,
+            "freezeDurationDeltaSeconds": 0.583,
+            "frameGaps": [
+              {
+                "gapMilliseconds": 566.6000000000058,
+                "expectedDisplayAfterFirstBrowserPhaseSampleMilliseconds": 3150.999999999971
+              }
+            ]
+          }
+        ]
+      },
+      "hashes": {
+        "result.json": "d645bb411d9d325ad82e982c7036c0c88ba0ad1866b6d0301a9f0777f51b5a5a",
+        "samples.jsonl": "65f59815b3090092cdd9214c43280ece03a18f996ab53c5723777e7c1e25988b",
+        "producer.log": "c597ac9d16b844586d401aabfc83e15903c9b45560b40f6551663e22171e54f5",
+        "browser.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "resource-samples.jsonl": "62f5e8ae3a217310dc38898bf6891e149c1cacbe7536b0521c17360aa9882509",
+        "source-formats.json": "4d48e50b53fea5b74cb6d4d31543a87faeeeda90733c3057fd16b79eaf158339"
+      }
+    },
+    {
+      "run": 3,
+      "downHold": "3s",
+      "exitCode": 1,
+      "passed": false,
+      "publishable": false,
+      "images": {
+        "producer": "sha256:96bd68029e0dae228cd5be32aea46e63201894d3f7651887a26c75a1467f5a2b",
+        "distributor": null,
+        "browser": "sha256:c010640b459cc3fd6fa66b7b50c7196c2b0c86ab3b25795e261f8463b484993f"
+      },
+      "profile": {
+        "controlPath": "local",
+        "edgeAuthentication": false,
+        "edgeCredentialLifetimeSeconds": null,
+        "warmupSeconds": 20,
+        "phaseSeconds": 45,
+        "recoverySeconds": 90,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "77f93fc59780e72b66d5621bc7e0192417d9af8d64a567a150af6a7cecd62a98",
+        "latencyProbe": false,
+        "sourceQualityObserved": true,
+        "expectedNetworkFormat": "small",
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": true,
+          "capacityKbps": 1500,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 256
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "gates": {
+        "recordingEvidence": true,
+        "sourceFormats": true,
+        "sourceQualityEvidence": true,
+        "latencyMeasurement": true,
+        "media": true,
+        "playback": false,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "startupPresentationEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": false,
+        "sourceTargetRecovery": true
+      },
+      "sourceFormats": {
+        "enabled": true,
+        "scope": "Automatic source-format observations and decoded browser dimensions/cadence; sampled media-time continuity, not physical capture latency.",
+        "networkProfile": "small",
+        "minimumDwellMilliseconds": 10000,
+        "maximumSampleGapMilliseconds": 1011,
+        "gates": {
+          "qualityComplete": true,
+          "stableConfiguration": true,
+          "lowerNetworkFormat": true,
+          "samplingContinuous": true,
+          "sampledMediaContinuous": true,
+          "decodedCountersContinuous": true,
+          "singleSession": true,
+          "minimumDwell": true,
+          "expectedSteadyFormats": true,
+          "configuredCadence": true,
+          "phaseOrder": true
+        },
+        "passed": true,
+        "transitions": [
+          {
+            "profile": "large",
+            "atMilliseconds": 20168,
+            "phase": "baseline"
+          },
+          {
+            "profile": "small",
+            "atMilliseconds": 69526,
+            "phase": "viewer-network"
+          },
+          {
+            "profile": "medium",
+            "atMilliseconds": 138950,
+            "phase": "recovery"
+          },
+          {
+            "profile": "large",
+            "atMilliseconds": 155053,
+            "phase": "recovery"
+          }
+        ],
+        "phases": {
+          "baseline": {
+            "expectedProfile": "large",
+            "expectedFramesPerSecond": 30,
+            "samples": 45,
+            "steadyMilliseconds": 9065,
+            "steadyDecodedFramesPerSecond": 30.005515719801434,
+            "configuredFrameRatio": 1.0002331370469806,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          },
+          "viewer-network": {
+            "expectedProfile": "small",
+            "expectedFramesPerSecond": 15,
+            "samples": 45,
+            "steadyMilliseconds": 9057,
+            "steadyDecodedFramesPerSecond": 14.905597880092746,
+            "configuredFrameRatio": 0.9246991277464942,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          },
+          "recovery": {
+            "expectedProfile": "large",
+            "expectedFramesPerSecond": 30,
+            "samples": 90,
+            "steadyMilliseconds": 9060,
+            "steadyDecodedFramesPerSecond": 30.02207505518764,
+            "configuredFrameRatio": 1.0032810750744845,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          }
+        },
+        "failures": []
+      },
+      "setup": {
+        "presentation": {
+          "supported": true,
+          "measurementValid": true,
+          "requestedAtMilliseconds": 165.40000000002328,
+          "firstFrame": {
+            "callbackMilliseconds": 437.9,
+            "expectedDisplayMilliseconds": 427.5,
+            "width": 1280,
+            "height": 720,
+            "presentedFrames": 1
+          },
+          "requestToCallbackMilliseconds": 272.4999999999767,
+          "requestToExpectedDisplayMilliseconds": 262.0999999999767
+        },
+        "peerCreatedMilliseconds": 168,
+        "whepPostDurationMilliseconds": 197,
+        "whepPostCompletedMilliseconds": 373,
+        "connectedMilliseconds": 378,
+        "playbackReadyMilliseconds": 441,
+        "firstDecodedFrameMilliseconds": 444,
+        "postToConnectedMilliseconds": 5,
+        "peerToFirstDecodedFrameMilliseconds": 276
+      },
+      "teardown": {
+        "whepDeleteDurationMilliseconds": 256,
+        "whepDeleteCompletedMilliseconds": 205123
+      },
+      "phases": {
+        "baseline": {
+          "samples": 45,
+          "durationMilliseconds": 44323,
+          "receivedBitrateKbps": 6988.408907339304,
+          "decodedFramesPerSecond": 30.006994111409426,
+          "averageDecodedQP": 12.27593984962406,
+          "framesPerSecond": {
+            "minimum": 29,
+            "maximum": 31
+          },
+          "encoderTargetKbps": {
+            "first": 6000,
+            "last": 6000,
+            "minimum": 6000,
+            "maximum": 6000,
+            "medianLast10Seconds": 6000,
+            "sustainedMinimumLast10Seconds": 6000
+          },
+          "twccTargetKbps": {
+            "first": 6000,
+            "last": 6000,
+            "minimum": 6000,
+            "maximum": 6000,
+            "medianLast10Seconds": 6000,
+            "sustainedMinimumLast10Seconds": 6000
+          },
+          "jitterMilliseconds": {
+            "average": 11.911111111111117,
+            "maximum": 14
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0.022222222222222223,
+            "maximum": 1
+          },
+          "nacks": 0,
+          "packetsLostNetChange": 0,
+          "framesDropped": 0,
+          "freezes": 0,
+          "freezeDurationSeconds": 0
+        },
+        "sourceNetwork": null,
+        "viewerNetwork": {
+          "samples": 45,
+          "durationMilliseconds": 44278,
+          "receivedBitrateKbps": 969.6271737657528,
+          "decodedFramesPerSecond": 15.131668097023352,
+          "averageDecodedQP": 15.256716417910448,
+          "framesPerSecond": {
+            "minimum": 2,
+            "maximum": 40
+          },
+          "encoderTargetKbps": {
+            "first": 3981,
+            "last": 1169,
+            "minimum": 500,
+            "maximum": 3981,
+            "medianLast10Seconds": 1062,
+            "sustainedMinimumLast10Seconds": 894
+          },
+          "twccTargetKbps": {
+            "first": 3981.674,
+            "last": 1208.713,
+            "minimum": 525,
+            "maximum": 3981.674,
+            "medianLast10Seconds": 1128.1799999999998,
+            "sustainedMinimumLast10Seconds": 894.918
+          },
+          "jitterMilliseconds": {
+            "average": 40.15555555555556,
+            "maximum": 59
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 59.37777777777774,
+            "maximum": 1258
+          },
+          "nacks": 142,
+          "packetsLostNetChange": 174,
+          "framesDropped": 0,
+          "freezes": 2,
+          "freezeDurationSeconds": 1.66
+        },
+        "recovery": {
+          "samples": 90,
+          "durationMilliseconds": 89567,
+          "receivedBitrateKbps": 5037.292127680954,
+          "decodedFramesPerSecond": 24.283497270199963,
+          "averageDecodedQP": 9.028045977011494,
+          "framesPerSecond": {
+            "minimum": 15,
+            "maximum": 31
+          },
+          "encoderTargetKbps": {
+            "first": 1169,
+            "last": 5644,
+            "minimum": 1169,
+            "maximum": 5644,
+            "medianLast10Seconds": 5644,
+            "sustainedMinimumLast10Seconds": 5644
+          },
+          "twccTargetKbps": {
+            "first": 1237.894,
+            "last": 6000,
+            "minimum": 1237.894,
+            "maximum": 6000,
+            "medianLast10Seconds": 6000,
+            "sustainedMinimumLast10Seconds": 6000
+          },
+          "jitterMilliseconds": {
+            "average": 14.122222222222215,
+            "maximum": 43
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0.488888888888889,
+            "maximum": 14
+          },
+          "nacks": 0,
+          "packetsLostNetChange": 0,
+          "framesDropped": 0,
+          "freezes": 0,
+          "freezeDurationSeconds": 0
+        }
+      },
+      "networkPlayback": {
+        "enabled": true,
+        "scope": "producer-to-browser",
+        "capacityKbps": 1500,
+        "delayMilliseconds": 0,
+        "jitterMilliseconds": 0,
+        "lossPercent": 0,
+        "queuePackets": 256,
+        "nackCountDelta": 142,
+        "packetsLostNetChange": 174,
+        "framesDecodedDelta": 670,
+        "framesDroppedDelta": 0,
+        "freezeCountDelta": 2,
+        "freezeDurationDeltaSeconds": 1.66,
+        "baselineFreezeCountDelta": 0,
+        "baselineFreezeDurationDeltaSeconds": 0,
+        "recoveryFramesDecodedDelta": 2175,
+        "recoveryFreezeCountDelta": 0,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyStateFramesDecodedDelta": 658,
+        "steadyStateFramesDroppedDelta": 0,
+        "steadyStateFreezeCountDelta": 1,
+        "steadyStateFreezeDurationDeltaSeconds": 0.6379999999999999,
+        "steadyRecoveryFreezeCountDelta": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "freezeRatio": 0.03688888888888889,
+        "frameDropRatio": 0,
+        "steadyStateFrameDropRatio": 0,
+        "capacityTransitionFramesDropped": 0,
+        "capacityTransitionDroppedFrameDurationSeconds": 0,
+        "capacityTransitionDisruptionSeconds": 1.66,
+        "recoveryFreezeRatio": 0
+      },
+      "diagnostics": {
+        "maximumTimerDelayMilliseconds": 0.5,
+        "freezeIntervals": [
+          {
+            "intervalStartAfterFirstPhaseSampleMilliseconds": 2013,
+            "intervalEndAfterFirstPhaseSampleMilliseconds": 3019,
+            "freezeCountDelta": 1,
+            "freezeDurationDeltaSeconds": 1.022,
+            "frameGaps": [
+              {
+                "gapMilliseconds": 1033.300000000003,
+                "expectedDisplayAfterFirstBrowserPhaseSampleMilliseconds": 2629.8999999999505
+              }
+            ]
+          },
+          {
+            "intervalStartAfterFirstPhaseSampleMilliseconds": 3019,
+            "intervalEndAfterFirstPhaseSampleMilliseconds": 4026,
+            "freezeCountDelta": 1,
+            "freezeDurationDeltaSeconds": 0.6379999999999999,
+            "frameGaps": [
+              {
+                "gapMilliseconds": 633.3000000000029,
+                "expectedDisplayAfterFirstBrowserPhaseSampleMilliseconds": 3263.1999999999534
+              }
+            ]
+          }
+        ]
+      },
+      "hashes": {
+        "result.json": "38866b7a7aadd2ac62d7e3bcfebc63e43355afc46827876aaab3e9205d6d4845",
+        "samples.jsonl": "215466ea116fa31d5919f3fbfbc4e9f80d0a1d12554af5992955f12f02d3086a",
+        "producer.log": "03c7fbd3287f5d8ca54274372ba9d9b16e3594af021184cf049d59853a3efd14",
+        "browser.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "resource-samples.jsonl": "9c2a52729a2c9df489ba2270b522390105e4c698c495e5ec6e05198fa342b3cf",
+        "source-formats.json": "8a2d083123181ea44c394c7aa86af1588ada6e97706d0b08c5df80816c478ef2"
+      }
+    },
+    {
+      "run": 4,
+      "downHold": "1s",
+      "exitCode": 1,
+      "passed": false,
+      "publishable": false,
+      "images": {
+        "producer": "sha256:96bd68029e0dae228cd5be32aea46e63201894d3f7651887a26c75a1467f5a2b",
+        "distributor": null,
+        "browser": "sha256:c010640b459cc3fd6fa66b7b50c7196c2b0c86ab3b25795e261f8463b484993f"
+      },
+      "profile": {
+        "controlPath": "local",
+        "edgeAuthentication": false,
+        "edgeCredentialLifetimeSeconds": null,
+        "warmupSeconds": 20,
+        "phaseSeconds": 45,
+        "recoverySeconds": 90,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "37741fcc4516ba4cb207ca796576246280b6a860271939d56e9a0ebc22448fd8",
+        "latencyProbe": false,
+        "sourceQualityObserved": true,
+        "expectedNetworkFormat": "small",
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": true,
+          "capacityKbps": 1500,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 256
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "gates": {
+        "recordingEvidence": true,
+        "sourceFormats": true,
+        "sourceQualityEvidence": true,
+        "latencyMeasurement": true,
+        "media": true,
+        "playback": false,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "startupPresentationEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": false,
+        "sourceTargetRecovery": true
+      },
+      "sourceFormats": {
+        "enabled": true,
+        "scope": "Automatic source-format observations and decoded browser dimensions/cadence; sampled media-time continuity, not physical capture latency.",
+        "networkProfile": "small",
+        "minimumDwellMilliseconds": 10000,
+        "maximumSampleGapMilliseconds": 1018,
+        "gates": {
+          "qualityComplete": true,
+          "stableConfiguration": true,
+          "lowerNetworkFormat": true,
+          "samplingContinuous": true,
+          "sampledMediaContinuous": true,
+          "decodedCountersContinuous": true,
+          "singleSession": true,
+          "minimumDwell": true,
+          "expectedSteadyFormats": true,
+          "configuredCadence": true,
+          "phaseOrder": true
+        },
+        "passed": true,
+        "transitions": [
+          {
+            "profile": "large",
+            "atMilliseconds": 20173,
+            "phase": "baseline"
+          },
+          {
+            "profile": "small",
+            "atMilliseconds": 67505,
+            "phase": "viewer-network"
+          },
+          {
+            "profile": "medium",
+            "atMilliseconds": 140987,
+            "phase": "recovery"
+          },
+          {
+            "profile": "large",
+            "atMilliseconds": 156087,
+            "phase": "recovery"
+          }
+        ],
+        "phases": {
+          "baseline": {
+            "expectedProfile": "large",
+            "expectedFramesPerSecond": 30,
+            "samples": 45,
+            "steadyMilliseconds": 9070,
+            "steadyDecodedFramesPerSecond": 30.09922822491731,
+            "configuredFrameRatio": 1.0004814346753321,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          },
+          "viewer-network": {
+            "expectedProfile": "small",
+            "expectedFramesPerSecond": 15,
+            "samples": 45,
+            "steadyMilliseconds": 9059,
+            "steadyDecodedFramesPerSecond": 14.902307097913678,
+            "configuredFrameRatio": 0.9197685465066064,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          },
+          "recovery": {
+            "expectedProfile": "large",
+            "expectedFramesPerSecond": 30,
+            "samples": 90,
+            "steadyMilliseconds": 9060,
+            "steadyDecodedFramesPerSecond": 30.02207505518764,
+            "configuredFrameRatio": 1.0023344270858836,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          }
+        },
+        "failures": []
+      },
+      "setup": {
+        "presentation": {
+          "supported": true,
+          "measurementValid": true,
+          "requestedAtMilliseconds": 164.09999999997672,
+          "firstFrame": {
+            "callbackMilliseconds": 421.6,
+            "expectedDisplayMilliseconds": 415.6,
+            "width": 1280,
+            "height": 720,
+            "presentedFrames": 1
+          },
+          "requestToCallbackMilliseconds": 257.5000000000233,
+          "requestToExpectedDisplayMilliseconds": 251.5000000000233
+        },
+        "peerCreatedMilliseconds": 168,
+        "whepPostDurationMilliseconds": 181,
+        "whepPostCompletedMilliseconds": 359,
+        "connectedMilliseconds": 365,
+        "playbackReadyMilliseconds": 424,
+        "firstDecodedFrameMilliseconds": 427,
+        "postToConnectedMilliseconds": 6,
+        "peerToFirstDecodedFrameMilliseconds": 259
+      },
+      "teardown": {
+        "whepDeleteDurationMilliseconds": 256,
+        "whepDeleteCompletedMilliseconds": 205141
+      },
+      "phases": {
+        "baseline": {
+          "samples": 45,
+          "durationMilliseconds": 44312,
+          "receivedBitrateKbps": 6598.834627189023,
+          "decodedFramesPerSecond": 30.014443040259973,
+          "averageDecodedQP": 13.102255639097745,
+          "framesPerSecond": {
+            "minimum": 30,
+            "maximum": 30
+          },
+          "encoderTargetKbps": {
+            "first": 5663,
+            "last": 5663,
+            "minimum": 5663,
+            "maximum": 5663,
+            "medianLast10Seconds": 5663,
+            "sustainedMinimumLast10Seconds": 5663
+          },
+          "twccTargetKbps": {
+            "first": 6000,
+            "last": 6000,
+            "minimum": 6000,
+            "maximum": 6000,
+            "medianLast10Seconds": 6000,
+            "sustainedMinimumLast10Seconds": 6000
+          },
+          "jitterMilliseconds": {
+            "average": 10.644444444444451,
+            "maximum": 12
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0,
+            "maximum": 0
+          },
+          "nacks": 0,
+          "packetsLostNetChange": 0,
+          "framesDropped": 0,
+          "freezes": 0,
+          "freezeDurationSeconds": 0
+        },
+        "sourceNetwork": null,
+        "viewerNetwork": {
+          "samples": 45,
+          "durationMilliseconds": 44303,
+          "receivedBitrateKbps": 980.4024106719635,
+          "decodedFramesPerSecond": 14.423402478387468,
+          "averageDecodedQP": 14.137715179968701,
+          "framesPerSecond": {
+            "minimum": 1,
+            "maximum": 25
+          },
+          "encoderTargetKbps": {
+            "first": 3817,
+            "last": 1116,
+            "minimum": 500,
+            "maximum": 3817,
+            "medianLast10Seconds": 1063.5,
+            "sustainedMinimumLast10Seconds": 872
+          },
+          "twccTargetKbps": {
+            "first": 3817.377,
+            "last": 1167.828,
+            "minimum": 500,
+            "maximum": 3817.377,
+            "medianLast10Seconds": 1142.348,
+            "sustainedMinimumLast10Seconds": 897.677
+          },
+          "jitterMilliseconds": {
+            "average": 41.17777777777777,
+            "maximum": 59
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 112.88888888888907,
+            "maximum": 1487
+          },
+          "nacks": 123,
+          "packetsLostNetChange": 141,
+          "framesDropped": 0,
+          "freezes": 2,
+          "freezeDurationSeconds": 1.6300000000000001
+        },
+        "recovery": {
+          "samples": 90,
+          "durationMilliseconds": 89579,
+          "receivedBitrateKbps": 4970.345996271448,
+          "decodedFramesPerSecond": 23.989997655700556,
+          "averageDecodedQP": 8.91903210795719,
+          "framesPerSecond": {
+            "minimum": 15,
+            "maximum": 30
+          },
+          "encoderTargetKbps": {
+            "first": 1116,
+            "last": 5643,
+            "minimum": 1116,
+            "maximum": 5643,
+            "medianLast10Seconds": 5643,
+            "sustainedMinimumLast10Seconds": 5643
+          },
+          "twccTargetKbps": {
+            "first": 1207.49,
+            "last": 6000,
+            "minimum": 1207.49,
+            "maximum": 6000,
+            "medianLast10Seconds": 6000,
+            "sustainedMinimumLast10Seconds": 6000
+          },
+          "jitterMilliseconds": {
+            "average": 14.49999999999999,
+            "maximum": 42
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0.07777777777777778,
+            "maximum": 1
+          },
+          "nacks": 0,
+          "packetsLostNetChange": 0,
+          "framesDropped": 0,
+          "freezes": 0,
+          "freezeDurationSeconds": 0
+        }
+      },
+      "networkPlayback": {
+        "enabled": true,
+        "scope": "producer-to-browser",
+        "capacityKbps": 1500,
+        "delayMilliseconds": 0,
+        "jitterMilliseconds": 0,
+        "lossPercent": 0,
+        "queuePackets": 256,
+        "nackCountDelta": 123,
+        "packetsLostNetChange": 141,
+        "framesDecodedDelta": 639,
+        "framesDroppedDelta": 0,
+        "freezeCountDelta": 3,
+        "freezeDurationDeltaSeconds": 1.818,
+        "baselineFreezeCountDelta": 0,
+        "baselineFreezeDurationDeltaSeconds": 0,
+        "recoveryFramesDecodedDelta": 2149,
+        "recoveryFreezeCountDelta": 0,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyStateFramesDecodedDelta": 627,
+        "steadyStateFramesDroppedDelta": 0,
+        "steadyStateFreezeCountDelta": 1,
+        "steadyStateFreezeDurationDeltaSeconds": 0.45399999999999996,
+        "steadyRecoveryFreezeCountDelta": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "freezeRatio": 0.0404,
+        "frameDropRatio": 0,
+        "steadyStateFrameDropRatio": 0,
+        "capacityTransitionFramesDropped": 0,
+        "capacityTransitionDroppedFrameDurationSeconds": 0,
+        "capacityTransitionDisruptionSeconds": 1.818,
+        "recoveryFreezeRatio": 0
+      },
+      "diagnostics": {
+        "maximumTimerDelayMilliseconds": 0.7000000001862645,
+        "freezeIntervals": [
+          {
+            "intervalStartAfterFirstPhaseSampleMilliseconds": -1007,
+            "intervalEndAfterFirstPhaseSampleMilliseconds": 0,
+            "freezeCountDelta": 1,
+            "freezeDurationDeltaSeconds": 0.188,
+            "frameGaps": [
+              {
+                "gapMilliseconds": 166.6999999999971,
+                "expectedDisplayAfterFirstBrowserPhaseSampleMilliseconds": -79.99999999991269
+              }
+            ]
+          },
+          {
+            "intervalStartAfterFirstPhaseSampleMilliseconds": 2013,
+            "intervalEndAfterFirstPhaseSampleMilliseconds": 3020,
+            "freezeCountDelta": 1,
+            "freezeDurationDeltaSeconds": 1.1760000000000002,
+            "frameGaps": [
+              {
+                "gapMilliseconds": 1183.300000000003,
+                "expectedDisplayAfterFirstBrowserPhaseSampleMilliseconds": 2803.200000000099
+              }
+            ]
+          },
+          {
+            "intervalStartAfterFirstPhaseSampleMilliseconds": 3020,
+            "intervalEndAfterFirstPhaseSampleMilliseconds": 4026,
+            "freezeCountDelta": 1,
+            "freezeDurationDeltaSeconds": 0.45399999999999996,
+            "frameGaps": [
+              {
+                "gapMilliseconds": 250,
+                "expectedDisplayAfterFirstBrowserPhaseSampleMilliseconds": 3053.200000000099
+              },
+              {
+                "gapMilliseconds": 450,
+                "expectedDisplayAfterFirstBrowserPhaseSampleMilliseconds": 3503.200000000099
+              }
+            ]
+          }
+        ]
+      },
+      "hashes": {
+        "result.json": "8f550d4d38202812b1791bb146c143ee82e0b0388260c27c3705384bf71e54e1",
+        "samples.jsonl": "b2ecb096f1db9f495164a86700933329065cc3449151989016d1eac2b3302984",
+        "producer.log": "2e49bdbb035f54ca45f127a188fa29d55e5e49a4c1dd86ea9140c01fbffde05b",
+        "browser.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "resource-samples.jsonl": "27c84467f8a30c8ce2814dbc884db4d4fc8def280d2c90e554e21df4d4c9a313",
+        "source-formats.json": "32e9f93001beec064ef86fdc885eb0c1f57583c4920edce8fd85acaab4cf71ca"
+      }
+    },
+    {
+      "run": 5,
+      "downHold": "1s",
+      "exitCode": 1,
+      "passed": false,
+      "publishable": false,
+      "images": {
+        "producer": "sha256:96bd68029e0dae228cd5be32aea46e63201894d3f7651887a26c75a1467f5a2b",
+        "distributor": null,
+        "browser": "sha256:c010640b459cc3fd6fa66b7b50c7196c2b0c86ab3b25795e261f8463b484993f"
+      },
+      "profile": {
+        "controlPath": "local",
+        "edgeAuthentication": false,
+        "edgeCredentialLifetimeSeconds": null,
+        "warmupSeconds": 20,
+        "phaseSeconds": 45,
+        "recoverySeconds": 90,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "37741fcc4516ba4cb207ca796576246280b6a860271939d56e9a0ebc22448fd8",
+        "latencyProbe": false,
+        "sourceQualityObserved": true,
+        "expectedNetworkFormat": "small",
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": true,
+          "capacityKbps": 1500,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 256
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "gates": {
+        "recordingEvidence": true,
+        "sourceFormats": true,
+        "sourceQualityEvidence": true,
+        "latencyMeasurement": true,
+        "media": true,
+        "playback": false,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "startupPresentationEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": false,
+        "sourceTargetRecovery": true
+      },
+      "sourceFormats": {
+        "enabled": true,
+        "scope": "Automatic source-format observations and decoded browser dimensions/cadence; sampled media-time continuity, not physical capture latency.",
+        "networkProfile": "small",
+        "minimumDwellMilliseconds": 10000,
+        "maximumSampleGapMilliseconds": 1023,
+        "gates": {
+          "qualityComplete": true,
+          "stableConfiguration": true,
+          "lowerNetworkFormat": true,
+          "samplingContinuous": true,
+          "sampledMediaContinuous": true,
+          "decodedCountersContinuous": true,
+          "singleSession": true,
+          "minimumDwell": true,
+          "expectedSteadyFormats": true,
+          "configuredCadence": true,
+          "phaseOrder": true
+        },
+        "passed": true,
+        "transitions": [
+          {
+            "profile": "large",
+            "atMilliseconds": 20172,
+            "phase": "baseline"
+          },
+          {
+            "profile": "small",
+            "atMilliseconds": 67530,
+            "phase": "viewer-network"
+          },
+          {
+            "profile": "medium",
+            "atMilliseconds": 143002,
+            "phase": "recovery"
+          },
+          {
+            "profile": "large",
+            "atMilliseconds": 159106,
+            "phase": "recovery"
+          }
+        ],
+        "phases": {
+          "baseline": {
+            "expectedProfile": "large",
+            "expectedFramesPerSecond": 30,
+            "samples": 45,
+            "steadyMilliseconds": 9064,
+            "steadyDecodedFramesPerSecond": 30.00882612533098,
+            "configuredFrameRatio": 0.9999173000729262,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          },
+          "viewer-network": {
+            "expectedProfile": "small",
+            "expectedFramesPerSecond": 15,
+            "samples": 45,
+            "steadyMilliseconds": 9055,
+            "steadyDecodedFramesPerSecond": 15.019326339039205,
+            "configuredFrameRatio": 0.9243261921216307,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          },
+          "recovery": {
+            "expectedProfile": "large",
+            "expectedFramesPerSecond": 30,
+            "samples": 90,
+            "steadyMilliseconds": 9059,
+            "steadyDecodedFramesPerSecond": 30.025389115796447,
+            "configuredFrameRatio": 1.0023286471029944,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          }
+        },
+        "failures": []
+      },
+      "setup": {
+        "presentation": {
+          "supported": true,
+          "measurementValid": true,
+          "requestedAtMilliseconds": 139.5,
+          "firstFrame": {
+            "callbackMilliseconds": 383.5,
+            "expectedDisplayMilliseconds": 381.3,
+            "width": 1280,
+            "height": 720,
+            "presentedFrames": 1
+          },
+          "requestToCallbackMilliseconds": 244,
+          "requestToExpectedDisplayMilliseconds": 241.8
+        },
+        "peerCreatedMilliseconds": 142,
+        "whepPostDurationMilliseconds": 170,
+        "whepPostCompletedMilliseconds": 326,
+        "connectedMilliseconds": 332,
+        "playbackReadyMilliseconds": 386,
+        "firstDecodedFrameMilliseconds": 391,
+        "postToConnectedMilliseconds": 6,
+        "peerToFirstDecodedFrameMilliseconds": 249
+      },
+      "teardown": {
+        "whepDeleteDurationMilliseconds": 256,
+        "whepDeleteCompletedMilliseconds": 205119
+      },
+      "phases": {
+        "baseline": {
+          "samples": 45,
+          "durationMilliseconds": 44337,
+          "receivedBitrateKbps": 6552.012450098112,
+          "decodedFramesPerSecond": 29.99751900218779,
+          "averageDecodedQP": 13.166917293233082,
+          "framesPerSecond": {
+            "minimum": 29,
+            "maximum": 31
+          },
+          "encoderTargetKbps": {
+            "first": 5611,
+            "last": 5611,
+            "minimum": 5611,
+            "maximum": 5611,
+            "medianLast10Seconds": 5611,
+            "sustainedMinimumLast10Seconds": 5611
+          },
+          "twccTargetKbps": {
+            "first": 6000,
+            "last": 6000,
+            "minimum": 6000,
+            "maximum": 6000,
+            "medianLast10Seconds": 6000,
+            "sustainedMinimumLast10Seconds": 6000
+          },
+          "jitterMilliseconds": {
+            "average": 10.466666666666672,
+            "maximum": 12
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0.044444444444444446,
+            "maximum": 1
+          },
+          "nacks": 0,
+          "packetsLostNetChange": 0,
+          "framesDropped": 0,
+          "freezes": 0,
+          "freezeDurationSeconds": 0
+        },
+        "sourceNetwork": null,
+        "viewerNetwork": {
+          "samples": 45,
+          "durationMilliseconds": 44289,
+          "receivedBitrateKbps": 944.0579827948249,
+          "decodedFramesPerSecond": 14.495698706225022,
+          "averageDecodedQP": 14.906542056074766,
+          "framesPerSecond": {
+            "minimum": 4,
+            "maximum": 22
+          },
+          "encoderTargetKbps": {
+            "first": 3729,
+            "last": 982,
+            "minimum": 500,
+            "maximum": 3729,
+            "medianLast10Seconds": 982,
+            "sustainedMinimumLast10Seconds": 823
+          },
+          "twccTargetKbps": {
+            "first": 3729.361,
+            "last": 1080.808,
+            "minimum": 500,
+            "maximum": 3729.361,
+            "medianLast10Seconds": 1073.351,
+            "sustainedMinimumLast10Seconds": 859.948
+          },
+          "jitterMilliseconds": {
+            "average": 39.62222222222223,
+            "maximum": 55
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 109.11111111111117,
+            "maximum": 1468
+          },
+          "nacks": 125,
+          "packetsLostNetChange": 134,
+          "framesDropped": 0,
+          "freezes": 3,
+          "freezeDurationSeconds": 1.871
+        },
+        "recovery": {
+          "samples": 90,
+          "durationMilliseconds": 89587,
+          "receivedBitrateKbps": 5032.77457666849,
+          "decodedFramesPerSecond": 23.586011363255828,
+          "averageDecodedQP": 8.280643634642688,
+          "framesPerSecond": {
+            "minimum": 15,
+            "maximum": 31
+          },
+          "encoderTargetKbps": {
+            "first": 982,
+            "last": 6000,
+            "minimum": 982,
+            "maximum": 6000,
+            "medianLast10Seconds": 6000,
+            "sustainedMinimumLast10Seconds": 6000
+          },
+          "twccTargetKbps": {
+            "first": 1143.952,
+            "last": 6000,
+            "minimum": 1143.952,
+            "maximum": 6000,
+            "medianLast10Seconds": 6000,
+            "sustainedMinimumLast10Seconds": 6000
+          },
+          "jitterMilliseconds": {
+            "average": 15.533333333333328,
+            "maximum": 37
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0.05555555555555555,
+            "maximum": 1
+          },
+          "nacks": 0,
+          "packetsLostNetChange": 0,
+          "framesDropped": 0,
+          "freezes": 0,
+          "freezeDurationSeconds": 0
+        }
+      },
+      "networkPlayback": {
+        "enabled": true,
+        "scope": "producer-to-browser",
+        "capacityKbps": 1500,
+        "delayMilliseconds": 0,
+        "jitterMilliseconds": 0,
+        "lossPercent": 0,
+        "queuePackets": 256,
+        "nackCountDelta": 125,
+        "packetsLostNetChange": 134,
+        "framesDecodedDelta": 642,
+        "framesDroppedDelta": 0,
+        "freezeCountDelta": 3,
+        "freezeDurationDeltaSeconds": 1.871,
+        "baselineFreezeCountDelta": 0,
+        "baselineFreezeDurationDeltaSeconds": 0,
+        "recoveryFramesDecodedDelta": 2113,
+        "recoveryFreezeCountDelta": 0,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyStateFramesDecodedDelta": 627,
+        "steadyStateFramesDroppedDelta": 0,
+        "steadyStateFreezeCountDelta": 1,
+        "steadyStateFreezeDurationDeltaSeconds": 0.4850000000000001,
+        "steadyRecoveryFreezeCountDelta": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "freezeRatio": 0.041577777777777776,
+        "frameDropRatio": 0,
+        "steadyStateFrameDropRatio": 0,
+        "capacityTransitionFramesDropped": 0,
+        "capacityTransitionDroppedFrameDurationSeconds": 0,
+        "capacityTransitionDisruptionSeconds": 1.871,
+        "recoveryFreezeRatio": 0
+      },
+      "diagnostics": {
+        "maximumTimerDelayMilliseconds": 0.4000000001396984,
+        "freezeIntervals": [
+          {
+            "intervalStartAfterFirstPhaseSampleMilliseconds": 2015,
+            "intervalEndAfterFirstPhaseSampleMilliseconds": 3022,
+            "freezeCountDelta": 2,
+            "freezeDurationDeltaSeconds": 1.386,
+            "frameGaps": [
+              {
+                "gapMilliseconds": 999.8999999999942,
+                "expectedDisplayAfterFirstBrowserPhaseSampleMilliseconds": 2575.7000000001863
+              },
+              {
+                "gapMilliseconds": 383.3000000000029,
+                "expectedDisplayAfterFirstBrowserPhaseSampleMilliseconds": 2992.4000000001834
+              }
+            ]
+          },
+          {
+            "intervalStartAfterFirstPhaseSampleMilliseconds": 3022,
+            "intervalEndAfterFirstPhaseSampleMilliseconds": 4030,
+            "freezeCountDelta": 1,
+            "freezeDurationDeltaSeconds": 0.4850000000000001,
+            "frameGaps": [
+              {
+                "gapMilliseconds": 500,
+                "expectedDisplayAfterFirstBrowserPhaseSampleMilliseconds": 3492.300000000192
+              }
+            ]
+          }
+        ]
+      },
+      "hashes": {
+        "result.json": "351743d15c8b9a49ba9b7b5bf404f855c175b8c847231c884e7936fe896eafb4",
+        "samples.jsonl": "c37146e87d43591f6fe3dab425476608dd473dfa38032db22aad90bffac80779",
+        "producer.log": "81dffe46efe87873febc7d5af8bf9f0153d831c7b5c452327978811198f9cf64",
+        "browser.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "resource-samples.jsonl": "7a16f7b2db805a33ba507a91d690a4ffd4012f985b9fef0d0cc737527ddda33d",
+        "source-formats.json": "8d61728b86b43a2c9cd4dbf650d78ad9a28d11a47121fffd1c4ae07d30070868"
+      }
+    },
+    {
+      "run": 6,
+      "downHold": "3s",
+      "exitCode": 1,
+      "passed": false,
+      "publishable": false,
+      "images": {
+        "producer": "sha256:96bd68029e0dae228cd5be32aea46e63201894d3f7651887a26c75a1467f5a2b",
+        "distributor": null,
+        "browser": "sha256:c010640b459cc3fd6fa66b7b50c7196c2b0c86ab3b25795e261f8463b484993f"
+      },
+      "profile": {
+        "controlPath": "local",
+        "edgeAuthentication": false,
+        "edgeCredentialLifetimeSeconds": null,
+        "warmupSeconds": 20,
+        "phaseSeconds": 45,
+        "recoverySeconds": 90,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "77f93fc59780e72b66d5621bc7e0192417d9af8d64a567a150af6a7cecd62a98",
+        "latencyProbe": false,
+        "sourceQualityObserved": true,
+        "expectedNetworkFormat": "small",
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": true,
+          "capacityKbps": 1500,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 256
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "gates": {
+        "recordingEvidence": true,
+        "sourceFormats": true,
+        "sourceQualityEvidence": true,
+        "latencyMeasurement": true,
+        "media": true,
+        "playback": false,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "startupPresentationEvidence": false,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": false,
+        "sourceTargetRecovery": true
+      },
+      "sourceFormats": {
+        "enabled": true,
+        "scope": "Automatic source-format observations and decoded browser dimensions/cadence; sampled media-time continuity, not physical capture latency.",
+        "networkProfile": "small",
+        "minimumDwellMilliseconds": 10000,
+        "maximumSampleGapMilliseconds": 1017,
+        "gates": {
+          "qualityComplete": true,
+          "stableConfiguration": true,
+          "lowerNetworkFormat": true,
+          "samplingContinuous": true,
+          "sampledMediaContinuous": true,
+          "decodedCountersContinuous": true,
+          "singleSession": true,
+          "minimumDwell": true,
+          "expectedSteadyFormats": true,
+          "configuredCadence": true,
+          "phaseOrder": true
+        },
+        "passed": true,
+        "transitions": [
+          {
+            "profile": "large",
+            "atMilliseconds": 20179,
+            "phase": "baseline"
+          },
+          {
+            "profile": "small",
+            "atMilliseconds": 69573,
+            "phase": "viewer-network"
+          },
+          {
+            "profile": "medium",
+            "atMilliseconds": 143042,
+            "phase": "recovery"
+          },
+          {
+            "profile": "large",
+            "atMilliseconds": 158142,
+            "phase": "recovery"
+          }
+        ],
+        "phases": {
+          "baseline": {
+            "expectedProfile": "large",
+            "expectedFramesPerSecond": 30,
+            "samples": 45,
+            "steadyMilliseconds": 9073,
+            "steadyDecodedFramesPerSecond": 29.979058745729088,
+            "configuredFrameRatio": 1.00026302934656,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          },
+          "viewer-network": {
+            "expectedProfile": "small",
+            "expectedFramesPerSecond": 15,
+            "samples": 45,
+            "steadyMilliseconds": 9056,
+            "steadyDecodedFramesPerSecond": 15.017667844522968,
+            "configuredFrameRatio": 0.9132042156375874,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          },
+          "recovery": {
+            "expectedProfile": "large",
+            "expectedFramesPerSecond": 30,
+            "samples": 90,
+            "steadyMilliseconds": 9063,
+            "steadyDecodedFramesPerSecond": 30.012137261392475,
+            "configuredFrameRatio": 1.0029829280004916,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          }
+        },
+        "failures": []
+      },
+      "setup": {
+        "presentation": {
+          "supported": true,
+          "measurementValid": false,
+          "requestedAtMilliseconds": 139.79999999981374,
+          "firstFrame": {
+            "callbackMilliseconds": 398.3,
+            "expectedDisplayMilliseconds": 397.4,
+            "width": 1280,
+            "height": 720,
+            "presentedFrames": 2
+          },
+          "requestToCallbackMilliseconds": null,
+          "requestToExpectedDisplayMilliseconds": null
+        },
+        "peerCreatedMilliseconds": 143,
+        "whepPostDurationMilliseconds": 173,
+        "whepPostCompletedMilliseconds": 328,
+        "connectedMilliseconds": 336,
+        "playbackReadyMilliseconds": 401,
+        "firstDecodedFrameMilliseconds": 404,
+        "postToConnectedMilliseconds": 8,
+        "peerToFirstDecodedFrameMilliseconds": 261
+      },
+      "teardown": {
+        "whepDeleteDurationMilliseconds": 257,
+        "whepDeleteCompletedMilliseconds": 205152
+      },
+      "phases": {
+        "baseline": {
+          "samples": 45,
+          "durationMilliseconds": 44355,
+          "receivedBitrateKbps": 6539.7865404125805,
+          "decodedFramesPerSecond": 30.007890880396797,
+          "averageDecodedQP": 13.410969196093163,
+          "framesPerSecond": {
+            "minimum": 29,
+            "maximum": 30
+          },
+          "encoderTargetKbps": {
+            "first": 5570,
+            "last": 5570,
+            "minimum": 5570,
+            "maximum": 5570,
+            "medianLast10Seconds": 5570,
+            "sustainedMinimumLast10Seconds": 5570
+          },
+          "twccTargetKbps": {
+            "first": 6000,
+            "last": 6000,
+            "minimum": 6000,
+            "maximum": 6000,
+            "medianLast10Seconds": 6000,
+            "sustainedMinimumLast10Seconds": 6000
+          },
+          "jitterMilliseconds": {
+            "average": 10.533333333333339,
+            "maximum": 12
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0.06666666666666667,
+            "maximum": 1
+          },
+          "nacks": 0,
+          "packetsLostNetChange": 0,
+          "framesDropped": 0,
+          "freezes": 0,
+          "freezeDurationSeconds": 0
+        },
+        "sourceNetwork": null,
+        "viewerNetwork": {
+          "samples": 45,
+          "durationMilliseconds": 44298,
+          "receivedBitrateKbps": 1063.693891372071,
+          "decodedFramesPerSecond": 14.94424127500113,
+          "averageDecodedQP": 13.258308157099698,
+          "framesPerSecond": {
+            "minimum": 1,
+            "maximum": 32
+          },
+          "encoderTargetKbps": {
+            "first": 4296,
+            "last": 936,
+            "minimum": 669,
+            "maximum": 4296,
+            "medianLast10Seconds": 1406,
+            "sustainedMinimumLast10Seconds": 936
+          },
+          "twccTargetKbps": {
+            "first": 4296.832,
+            "last": 1107.261,
+            "minimum": 669.142,
+            "maximum": 4296.832,
+            "medianLast10Seconds": 1537.894,
+            "sustainedMinimumLast10Seconds": 973.352
+          },
+          "jitterMilliseconds": {
+            "average": 44.866666666666674,
+            "maximum": 64
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 130.04444444444445,
+            "maximum": 1306
+          },
+          "nacks": 91,
+          "packetsLostNetChange": 91,
+          "framesDropped": 0,
+          "freezes": 2,
+          "freezeDurationSeconds": 1.4
+        },
+        "recovery": {
+          "samples": 90,
+          "durationMilliseconds": 89574,
+          "receivedBitrateKbps": 4735.850224395472,
+          "decodedFramesPerSecond": 23.66758211088039,
+          "averageDecodedQP": 9.306603773584905,
+          "framesPerSecond": {
+            "minimum": 14,
+            "maximum": 31
+          },
+          "encoderTargetKbps": {
+            "first": 936,
+            "last": 5551,
+            "minimum": 936,
+            "maximum": 5551,
+            "medianLast10Seconds": 5551,
+            "sustainedMinimumLast10Seconds": 5551
+          },
+          "twccTargetKbps": {
+            "first": 1107.261,
+            "last": 6000,
+            "minimum": 1107.261,
+            "maximum": 6000,
+            "medianLast10Seconds": 6000,
+            "sustainedMinimumLast10Seconds": 6000
+          },
+          "jitterMilliseconds": {
+            "average": 14.455555555555557,
+            "maximum": 38
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0.2111111111111111,
+            "maximum": 18
+          },
+          "nacks": 0,
+          "packetsLostNetChange": 0,
+          "framesDropped": 0,
+          "freezes": 0,
+          "freezeDurationSeconds": 0
+        }
+      },
+      "networkPlayback": {
+        "enabled": true,
+        "scope": "producer-to-browser",
+        "capacityKbps": 1500,
+        "delayMilliseconds": 0,
+        "jitterMilliseconds": 0,
+        "lossPercent": 0,
+        "queuePackets": 256,
+        "nackCountDelta": 91,
+        "packetsLostNetChange": 91,
+        "framesDecodedDelta": 662,
+        "framesDroppedDelta": 0,
+        "freezeCountDelta": 2,
+        "freezeDurationDeltaSeconds": 1.4,
+        "baselineFreezeCountDelta": 0,
+        "baselineFreezeDurationDeltaSeconds": 0,
+        "recoveryFramesDecodedDelta": 2120,
+        "recoveryFreezeCountDelta": 0,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyStateFramesDecodedDelta": 648,
+        "steadyStateFramesDroppedDelta": 0,
+        "steadyStateFreezeCountDelta": 1,
+        "steadyStateFreezeDurationDeltaSeconds": 0.6359999999999999,
+        "steadyRecoveryFreezeCountDelta": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "freezeRatio": 0.03111111111111111,
+        "frameDropRatio": 0,
+        "steadyStateFrameDropRatio": 0,
+        "capacityTransitionFramesDropped": 0,
+        "capacityTransitionDroppedFrameDurationSeconds": 0,
+        "capacityTransitionDisruptionSeconds": 1.4,
+        "recoveryFreezeRatio": 0
+      },
+      "diagnostics": {
+        "maximumTimerDelayMilliseconds": 0.6000000000931323,
+        "freezeIntervals": [
+          {
+            "intervalStartAfterFirstPhaseSampleMilliseconds": 2016,
+            "intervalEndAfterFirstPhaseSampleMilliseconds": 3023,
+            "freezeCountDelta": 1,
+            "freezeDurationDeltaSeconds": 0.764,
+            "frameGaps": [
+              {
+                "gapMilliseconds": 766.6000000000058,
+                "expectedDisplayAfterFirstBrowserPhaseSampleMilliseconds": 2454.1000000000495
+              }
+            ]
+          },
+          {
+            "intervalStartAfterFirstPhaseSampleMilliseconds": 3023,
+            "intervalEndAfterFirstPhaseSampleMilliseconds": 4030,
+            "freezeCountDelta": 1,
+            "freezeDurationDeltaSeconds": 0.6359999999999999,
+            "frameGaps": [
+              {
+                "gapMilliseconds": 633.3999999999942,
+                "expectedDisplayAfterFirstBrowserPhaseSampleMilliseconds": 3087.5000000000437
+              },
+              {
+                "gapMilliseconds": 183.29999999998836,
+                "expectedDisplayAfterFirstBrowserPhaseSampleMilliseconds": 4020.7000000000407
+              }
+            ]
+          }
+        ]
+      },
+      "hashes": {
+        "result.json": "ec3d02b1b2a2ffabb4b1ad0ae367b17b11a92179eba1263e277acd42bb764486",
+        "samples.jsonl": "e7290226388cb47afd4fb65e842b02f27996bd32175de4c55f55cf39e0aa3dba",
+        "producer.log": "ada7c7d7f17eb04143aa52c98107fffb6c20197307b77f560d77064219190661",
+        "browser.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "resource-samples.jsonl": "c284ad52f8b6a2548baf7423cea3d1f279bcf06a7557d4c7486bfb53a680a1d6",
+        "source-formats.json": "e70d1c72ac172c078aafc440282cc18553baa9470f338cdebf3571df7ed8f0eb"
+      }
+    }
+  ]
+}
