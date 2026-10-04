@@ -186,6 +186,24 @@ all thresholds and reference configuration remain unchanged. The full producer
 race suite, focused policy checks, vet and formatting pass. Delivery validation
 of this timing correction remains required.
 
+Review of the remaining abrupt-capacity delay identifies an old fork rule
+that floors each overuse reduction at 85% of the previous target, even when
+received throughput is far lower. With a 6 Mbit/s target and 1.2 Mbit/s received,
+a deterministic test retains 5.1 Mbit/s after the first congestion report and
+still 2.263 Mbit/s after five further reports. Published interceptor revision
+`94d4709` restores the original Pion AIMD decrease to 85% of received throughput
+(1.02 Mbit/s in that case), capped by the current target so overuse cannot
+increase the rate. The existing 200ms repeat interval and throughput-bounded
+recovery remain. This follows the receive-throughput backoff used by
+[Pion](https://github.com/pion/interceptor/blob/master/pkg/gcc/rate_controller.go)
+and [libwebrtc](https://webrtc.googlesource.com/src/+/refs/heads/main/modules/remote_bitrate_estimator/aimd_rate_control.cc);
+it does not claim the sample implements the full libwebrtc controller.
+The new regression fails before the change and passes afterward, with the full
+native race suite (Go 1.24.6) and zero golangci-lint 2.10.1 issues (Go 1.25.6).
+Producer and distributor pin the same published version with verified checksums;
+both full race suites and the sample GCC regression target pass.
+Fresh reference-profile delivery qualification is required before acceptance.
+
 Next, stabilize the initial capacity-drop transition and repeat direct/MediaMTX/TURN qualification. Do not
 claim that one successful fast-down run establishes a stable policy. Before adopting
 a further threshold or controller change, inspect acknowledged throughput, increase
