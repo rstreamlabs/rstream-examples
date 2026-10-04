@@ -116,7 +116,6 @@ func (f *peerConnectionFactory) NewPeerConnection(
 				SendSideBWE:         estimator,
 				minimumMediaBitrate: minimumMediaBitrateBps,
 				maximumMediaBitrate: maximumMediaBitrateBps,
-				lossGuard:           newFeedbackLossGuard(minimumMediaBitrateBps),
 				pacer:               pacer,
 				protection:          protection,
 			}, nil
@@ -182,7 +181,6 @@ type associatedStreamBandwidthEstimator struct {
 	*gcc.SendSideBWE
 	minimumMediaBitrate   int
 	maximumMediaBitrate   int
-	lossGuard             *feedbackLossGuard
 	pacer                 *minimumBitratePacer
 	protection            flexFECProtection
 	callbackMu            sync.RWMutex
@@ -198,9 +196,6 @@ type associatedStreamBandwidthEstimator struct {
 
 func (e *associatedStreamBandwidthEstimator) GetTargetBitrate() int {
 	target := e.effectiveMediaBitrate(mediaBitrate(e.SendSideBWE.GetTargetBitrate(), e.protection))
-	if e.lossGuard != nil {
-		target = e.lossGuard.effectiveBitrate(target)
-	}
 	return target
 }
 
@@ -242,9 +237,6 @@ func (e *associatedStreamBandwidthEstimator) GetStats() map[string]any {
 	rawWireBitrate := e.SendSideBWE.GetTargetBitrate()
 	rawMediaBitrate := mediaBitrate(rawWireBitrate, e.protection)
 	effectiveMediaBitrate := e.effectiveMediaBitrate(rawMediaBitrate)
-	if e.lossGuard != nil {
-		effectiveMediaBitrate = e.lossGuard.effectiveBitrate(effectiveMediaBitrate)
-	}
 	convertControllerTargetToMedia(stats, "lossTargetBitrate", "rawWireLossTargetBitrate", e.protection)
 	convertControllerTargetToMedia(stats, "delayTargetBitrate", "rawWireDelayTargetBitrate", e.protection)
 	stats["rawWireTargetBitrate"] = rawWireBitrate
@@ -260,14 +252,15 @@ func (e *associatedStreamBandwidthEstimator) GetStats() map[string]any {
 	stats["twccPaddingStatuses"] = e.twccPaddingStatuses.Load()
 	stats["twccReportedLost"] = e.twccReportedLost.Load()
 	stats["twccReportedStatuses"] = e.twccReportedStatuses.Load()
-	if e.lossGuard != nil {
-		guard := e.lossGuard.snapshot()
-		stats["lossGuardActive"] = guard.Active
-		stats["lossGuardTargetBitrate"] = guard.TargetBitrate
-		stats["lossGuardLastObservedLoss"] = guard.LastObservedLoss
-		stats["lossGuardReductions"] = guard.Reductions
-		stats["lossGuardRecoveries"] = guard.Recoveries
-	}
+	// Preserve existing diagnostic field names for consumers. The GCC loss
+	// controller is now the sole rate authority; these are aliases of its
+	// reconciled observations, not a second controller reading raw TWCC symbols.
+	stats["lossGuardActive"] = stats["lossLimited"]
+	stats["lossGuardTargetBitrate"] = stats["lossTargetBitrate"]
+	stats["lossGuardLastObservedLoss"] = stats["lossLastObservedLoss"]
+	stats["lossGuardReductions"] = stats["lossReductions"]
+	stats["lossGuardRecoveries"] = stats["lossRecoveries"]
+
 	for name, value := range e.pacerStats() {
 		stats[name] = value
 	}

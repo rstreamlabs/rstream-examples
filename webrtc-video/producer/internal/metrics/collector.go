@@ -229,7 +229,7 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 		),
 		lossGuardObservedLossRatio: newDesc(
 			namespace+"_loss_guard_maximum_observed_loss_ratio",
-			"Highest packet loss ratio most recently observed by a loss guard among active sessions.",
+			"Highest reconciled packet loss ratio most recently observed by GCC among active sessions.",
 			nil,
 			nil,
 		),
@@ -297,13 +297,13 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 		),
 		lossGuardActiveSessions: newDesc(
 			namespace+"_loss_guard_active_sessions",
-			"Current sessions whose loss guard is constraining bitrate recovery.",
+			"Current sessions whose GCC loss estimate is limiting bitrate below the delay estimate.",
 			nil,
 			nil,
 		),
 		lossGuardTargetBytesSecond: newDesc(
 			namespace+"_loss_guard_target_bytes_per_second",
-			"Sum of current loss guard bitrate ceilings across sessions actively constrained by the guard.",
+			"Sum of GCC loss bitrate ceilings across sessions actively constrained by persistent loss.",
 			nil,
 			nil,
 			"bytes_per_second",
@@ -340,7 +340,7 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 		),
 		lossGuardTransitions: newDesc(
 			namespace+"_loss_guard_transitions_total",
-			"Total loss guard state transitions by direction.",
+			"Total GCC loss-controller bitrate changes by direction.",
 			[]string{"transition"},
 			nil,
 		),

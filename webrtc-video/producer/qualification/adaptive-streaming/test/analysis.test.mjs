@@ -1816,6 +1816,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
       ...sample,
       twccFeedbackPackets: index + 1,
       twccMalformedFeedback: index === samples.length - 1 ? 1 : 0,
+      lossAverage: 0.5,
       twccReportedLost: index * 50,
       twccReportedStatuses: index * 100,
     })),
@@ -1842,6 +1843,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     samples.map((sample, index) => ({
       ...sample,
       lossGuardReductions: 0,
+      lossAverage: 0.2,
       twccReportedLost: index * 20,
       twccReportedStatuses: index * 100,
     })),
@@ -1857,6 +1859,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     samples.map((sample, index) => ({
       ...sample,
       lossGuardReductions: index === 0 ? 0 : 1,
+      lossAverage: 0.2,
       twccReportedLost: index * 20,
       twccReportedStatuses: index * 100,
     })),
@@ -1864,6 +1867,22 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
   );
   assert.equal(
     highLossWithGuardResponse.assertions.find(
+      (assertion) => assertion.name === "loss-guard-response",
+    ).passed,
+    true,
+  );
+  const reorderedFeedback = analyze(
+    samples.map((sample, index) => ({
+      ...sample,
+      lossGuardReductions: 0,
+      lossAverage: 0.01,
+      twccReportedLost: index * 20,
+      twccReportedStatuses: index * 100,
+    })),
+    manifest,
+  );
+  assert.equal(
+    reorderedFeedback.assertions.find(
       (assertion) => assertion.name === "loss-guard-response",
     ).passed,
     true,

@@ -4,7 +4,7 @@ import process from "node:process";
 import { renderFrameRateSVG, renderPacketRepairSVG } from "./media-charts.mjs";
 
 const maximumQualificationSampleGapMilliseconds = 2500;
-const minimumTWCCLossGuardStatuses = 20;
+const minimumTWCCLossObservationStatuses = 20;
 const minimumSustainedRecoveryMilliseconds = 10_000;
 const minimumSustainedRecoveryTargetRatio = 0.8;
 const networkTransitionGuardMilliseconds = 2000;
@@ -681,7 +681,7 @@ export function analyze(
   const lossGuardTelemetryPresent = enriched.some((sample) =>
     Object.hasOwn(sample, "lossGuardReductions"),
   );
-  const sustainedHighLoss = hasPersistentTWCCLoss(
+  const sustainedHighLoss = hasPersistentControllerLoss(
     enriched,
     0.1,
     manifest.video?.adaptive?.minimumBitrateKbps,
@@ -692,7 +692,7 @@ export function analyze(
       !sustainedHighLoss ||
       counterIncrease(enriched, "lossGuardReductions", phaseOrder) > 0,
     "loss-guard-response",
-    "two consecutive TWCC sampling intervals above 10% loss reduce an encoder target that remains above its configured floor without waiting for a delay-estimator callback",
+    "two consecutive sampling intervals above 10% reconciled GCC loss reduce an encoder target that remains above its configured floor without waiting for a delay-estimator callback",
   );
   if (manifest.networkImpairment) {
     assert(
@@ -743,12 +743,12 @@ export function analyze(
     assert(
       assertions,
       !twccTelemetryPresent ||
-        (constrained.twccReportedLossRatio <=
+        (constrained.medianAverageLoss <=
           trafficControlSummary.constrainedDropRatio + 0.08 &&
-          impaired.twccReportedLossRatio <=
+          impaired.medianAverageLoss <=
             trafficControlSummary.impairedDropRatio + 0.08),
       "twcc-loss-fidelity",
-      "browser TWCC loss stays within eight percentage points of shaped-link drops, detecting transport-sequence accounting regressions",
+      "reconciled GCC loss stays within eight percentage points of shaped-link drops; raw TWCC missing symbols may repeat during reordering",
     );
   }
   if (receiverUDP.available) {
@@ -1293,8 +1293,8 @@ export function renderMarkdown(analysis, manifest) {
     ],
     [
       "Loss fidelity",
-      `qdisc ${formatNumber(analysis.trafficControl?.impairedDropRatio * 100, 2)}%; TWCC ${formatNumber(impaired.twccReportedLossRatio * 100, 2)}%`,
-      "2% injected; TWCC within 8 percentage points",
+      `qdisc ${formatNumber(analysis.trafficControl?.impairedDropRatio * 100, 2)}%; GCC ${formatNumber(impaired.medianAverageLoss * 100, 2)}%`,
+      "2% injected; reconciled GCC loss within 8 percentage points",
     ],
     ["Packet repair", repairObserved, repairRequired],
     [
@@ -2861,7 +2861,7 @@ function counterIncrease(samples, field, phases) {
   return Math.max(0, last - first);
 }
 
-function hasPersistentTWCCLoss(samples, threshold, minimumTargetKbps) {
+function hasPersistentControllerLoss(samples, threshold, minimumTargetKbps) {
   if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
     return false;
   }
@@ -2886,18 +2886,18 @@ function hasPersistentTWCCLoss(samples, threshold, minimumTargetKbps) {
       [previous, sample],
       "twccReportedStatuses",
     );
-    const lost = nullableCounterIncrease(
-      [previous, sample],
-      "twccReportedLost",
-    );
+    // Raw not-received symbols can be repeated by overlapping feedback and
+    // corrected by late receipts. Only the reconciled controller observation
+    // may authorize a loss response; raw counters remain diagnostic evidence.
+    const loss = sample.lossAverage;
     const canReduce =
       Number.isFinite(previous.encoderTargetKbps) &&
       previous.encoderTargetKbps > Math.max(1, targetFloorKbps * 1.01);
     if (
       reported !== null &&
-      reported >= minimumTWCCLossGuardStatuses &&
-      lost !== null &&
-      lost / reported > threshold &&
+      reported >= minimumTWCCLossObservationStatuses &&
+      Number.isFinite(loss) &&
+      loss > threshold &&
       canReduce
     ) {
       consecutive += 1;

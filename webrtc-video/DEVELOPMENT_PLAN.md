@@ -310,6 +310,35 @@ qdisc drops; whether temporary missing/overlapping feedback accounts for this
 is under investigation. No acceptance gate is relaxed and no causal improvement
 is inferred from these single random-loss trials.
 
+A deterministic feedback regression then reproduces 26% estimated loss and an
+8-to-6.96 Mbit/s reduction for one missing packet out of 300, with the remaining
+missing reports resolved by late receipts. Fork `f95fe4f` records whether a
+packet was previously reported missing and reconciles first reports, repeated
+reports and late receipt within a bounded 250 ms send-time observation. This
+uses the observation policy in
+[libwebrtc's loss estimator](https://webrtc.googlesource.com/src/+/main/modules/congestion_controller/goog_cc/loss_based_bwe_v2.cc),
+not its complete bandwidth-estimation algorithm. The corrected regression
+measures 1/300; persistent 30% loss still reduces bitrate and subsequent clean
+observations recover it. Late receipt after a completed observation is not
+counted again in the next observation. A 32,768-packet count bound also protects
+metadata during pathological timing. No media buffering is added.
+
+Completed loss observations now publish the target, pacing rate and callback
+even without a delay-measurement callback. A second sample regression proves
+that the old raw-status guard could reduce bitrate for feedback with no matching
+sent packets. The sample removes that redundant controller and preserves its
+existing diagnostic field names as aliases of the GCC loss controller, with
+updated metric help and README text. Qualification loss-response/fidelity
+checks use reconciled loss instead of raw repeated not-received symbols; their
+loss thresholds remain unchanged, and tests retain rejection of persistent
+high loss without a bitrate reduction. The four preceding live results remain
+unchanged evidence.
+
+Both modules pin the published `f95fe4f` revision. The fork's full race/lint
+checks, producer/distributor race suites, no-embedded build, separate actual
+MediaMTX 1.21.1 integration, and 92 qualification/sanitizer checks pass. New live
+network qualification is required before attributing improvements to this change.
+
 The discovery configuration review additionally reproduced valid display names
 being rejected or changed when environment expansion encounters YAML quotes or
 backslashes. A literal scalar preserves those names; the real configuration
