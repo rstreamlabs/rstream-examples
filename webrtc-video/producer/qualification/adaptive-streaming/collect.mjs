@@ -23,6 +23,7 @@ import { PathStability, pathMatchesPolicy } from "./lib/path.mjs";
 import { redactError, redactSensitiveText } from "./lib/redaction.mjs";
 import { negotiatedVideoCodecs } from "./lib/sdp-codecs.mjs";
 import { installFrameDiagnostics } from "./lib/frame-diagnostics.mjs";
+import { installTransitionBoundary } from "./lib/transition-boundary.mjs";
 import { installStartupTiming } from "./lib/startup-timing.mjs";
 import { createLatencyReport } from "./latency/report.mjs";
 import { calibrateBrowserClock, calibrationBounds } from "./latency/clock.mjs";
@@ -434,6 +435,7 @@ try {
   });
   let initialSample = null;
   await page.evaluate(installFrameDiagnostics);
+  await page.evaluate(installTransitionBoundary);
   if (latencyEnabled) {
     latencyClocks.initialCalibration = await calibrateBrowserClock(() =>
       page.evaluate(() => ({
@@ -497,7 +499,7 @@ try {
   let disconnectedSince = null;
   while (performance.now() - startedAt < maximumDurationSeconds * 1000) {
     const phase = await readPhase(phaseFile);
-    const sample = await collectSample(page);
+    const sample = await collectSample(page, phase);
     if (producerMetricsURL) {
       Object.assign(
         sample,
@@ -575,6 +577,7 @@ try {
     await page
       .evaluate(() => {
         window.__rstreamFrameDiagnostics?.stop();
+        window.__rstreamTransitionBoundary?.stop();
         window.__rstreamStartupTiming?.stop();
         window.__rstreamLatencyProbe?.stop();
       })
@@ -641,8 +644,9 @@ async function collectFailureContext(activePage) {
   }
 }
 
-async function collectSample(activePage) {
-  return activePage.evaluate(async () => {
+async function collectSample(activePage, phase = null) {
+  return activePage.evaluate(async (phase) => {
+    window.__rstreamTransitionBoundary?.observe(phase);
     const peers = window.__rstreamQualificationPeers || [];
     const peer = [...peers]
       .reverse()
@@ -739,6 +743,7 @@ async function collectSample(activePage) {
       estimatedPlayoutTimestamp: inbound?.estimatedPlayoutTimestamp ?? null,
       framesDecoded: inbound?.framesDecoded || 0,
       framePresentation: window.__rstreamFrameDiagnostics?.drain() ?? null,
+      transitionBoundary: window.__rstreamTransitionBoundary?.snapshot() ?? null,
       latency: window.__rstreamLatencyProbe?.read() ?? null,
       framesDropped: inbound?.framesDropped || 0,
       framesPerSecond: inbound?.framesPerSecond || 0,
@@ -933,7 +938,7 @@ async function collectSample(activePage) {
       const amount = Number.parseFloat(match[1]);
       return match[2].toLowerCase() === "mbps" ? amount * 1000 : amount;
     }
-  });
+  }, phase);
 }
 
 async function collectSignalingMetadata(activePage) {

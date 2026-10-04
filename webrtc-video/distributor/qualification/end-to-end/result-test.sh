@@ -610,4 +610,20 @@ render_result "${fixture_directory}/degraded-samples.jsonl" | jq -e '
   .passed == false
 ' >/dev/null
 
+# Boundary probes remain diagnostic during their first real-media qualification.
+# Even a claimed valid probe must not erase a failed legacy continuity verdict.
+jq -c '.transitionBoundary = {status: "valid", after: {freezeCount: .freezeCount}}' \
+  "${fixture_directory}/degraded-samples.jsonl" >"${fixture_directory}/boundary-diagnostic-samples.jsonl"
+render_result "${fixture_directory}/boundary-diagnostic-samples.jsonl" | jq -e '
+  .transitionBoundaryDiagnostics.viewerNetwork.status == "valid" and
+  .transitionBoundaryDiagnostics.recovery.after.freezeCount == 1 and
+  .gates.playback == false and .passed == false
+' >/dev/null
+jq -c '.transitionBoundary = {status: "invalid", reason: "stats-outside-boundary"}' \
+  "${fixture_directory}/samples.jsonl" >"${fixture_directory}/boundary-diagnostic-samples.jsonl"
+render_result "${fixture_directory}/boundary-diagnostic-samples.jsonl" | jq -e '
+  .transitionBoundaryDiagnostics.viewerNetwork.reason == "stats-outside-boundary" and
+  .gates.playback == true and .passed == true
+' >/dev/null
+
 printf 'End-to-end result tests passed\n'

@@ -73,6 +73,25 @@ boundary remains visible. Native freeze counters are reported when playback
 resumes; this attribution does not prove when the freeze began or what caused it.
 The first sample of the entire collection has no preceding interval to measure.
 
+The distributor additionally records `transitionBoundaryDiagnostics`. The
+qualification browser takes two native-statistics snapshots around four seconds
+after its first observation of each network/recovery phase. It requires the
+statistics' own collection timestamps to bracket that boundary within 250ms,
+one unchanged decoded stream, and identical freeze/drop counters on both sides.
+The phase observation precedes the regular sample and producer HTTP requests;
+it does not claim to timestamp the actual network-shaping command. The host's
+whole-second phase marker is not used as a precise browser clock.
+
+Missing counters, cached or late timestamps, a changed stream, unfinished calls
+and counter increments across the bracket remain invalid observations. There
+are at most two extra calls per phase; timers and pending results are invalidated
+on phase changes or teardown. A freeze still in progress at the boundary remains
+a later native-counter increment when rendering resumes. These records are
+diagnostic only: the existing sampled-counter gates and their failed historical
+verdicts are unchanged. They follow the W3C definitions of
+[statistics timestamps](https://www.w3.org/TR/webrtc-stats/#basic-concepts) and
+[native freeze duration](https://www.w3.org/TR/webrtc-stats/#dom-rtcinboundrtpstreamstats-totalfreezesduration).
+
 ### Optional pixel-based latency measurement
 
 The distributor's end-to-end runner supports `RSTREAM_DISTRIBUTOR_LATENCY_PROBE=true`

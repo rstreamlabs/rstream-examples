@@ -49,6 +49,11 @@ increments from actual steady freezes before selecting a timing policy. The
 host phase marker, including in the earlier comparison, has whole-second
 precision and cannot establish millisecond-accurate network activation. Public
 down-hold and disruption budgets remain unchanged.
+The collector now records this boundary probe as diagnostic evidence only.
+Twenty-one focused tests cover stale/native timestamps, ambiguous counters,
+stream replacement, deadlines, overlapping requests, phase changes and teardown.
+Real-media qualification must validate the probe before any acceptance
+calculation uses it; the existing gates still apply unchanged.
 The current-dependency local forced-TURN trial at `18f6cc1` passes all 56 gates,
 including actual relay candidates at both endpoints, adaptation, recovery and
 session cleanup. It does not remove the separate hosted-runner TCP obstacle.

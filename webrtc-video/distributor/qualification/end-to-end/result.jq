@@ -227,6 +227,12 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     whepDeleteCompletedMilliseconds: $whep_delete.elapsedMilliseconds
   },
   resources: $resources[0],
+  transitionBoundaryDiagnostics: {
+    scope: "Native snapshots bracketing the transition cutoff; not used by acceptance gates",
+    viewerNetwork: ([.[] | select(.phase == "viewer-network") | .transitionBoundary] | last),
+    sourceNetwork: ([.[] | select(.phase == "source-network") | .transitionBoundary] | last),
+    recovery: ([.[] | select(.phase == "recovery") | .transitionBoundary] | last)
+  },
   phases: {
     baseline: phase_summary("baseline"),
     sourceNetwork: phase_summary("source-network"),
