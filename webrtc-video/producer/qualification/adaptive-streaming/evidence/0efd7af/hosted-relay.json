@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 1,
+  "workflow": "https://github.com/rstreamlabs/rstream-examples/actions/runs/37220216253",
+  "revision": "0efd7af5730a2bb61663fe9b4d9563d3d2fdcd1e",
+  "qualificationPassed": false,
+  "stage": "producer tunnel publication before browser/media setup",
+  "scope": "Forced TURN qualification attempted on hosted Ubuntu 24.04/x86-64. No media measurements are available.",
+  "runtime": {
+    "dockerVersion": "28.0.4",
+    "operatingSystem": "linux",
+    "kernelRelease": "6.17.0-1022-azure",
+    "architecture": "x86_64",
+    "logicalCPUs": 4,
+    "memoryBytes": 16766414848,
+    "producerLocation": "local-docker-daemon"
+  },
+  "producerImage": "sha256:d79df24747b85e3015f360a09094ac213615b9ebc503cf7d569f16800457341a",
+  "browserImage": "sha256:7fbbd3f8376024877a18ea3a1c7a935c052a3afe7f0b26616386ead542237f1d",
+  "setupTimeline": [
+    {
+      "name": "runtime-prepared",
+      "observedAt": "2026-10-04T17:22:21.079Z"
+    },
+    {
+      "name": "producer-build-started",
+      "observedAt": "2026-10-04T17:22:21.125Z"
+    },
+    {
+      "name": "producer-build-completed",
+      "observedAt": "2026-10-04T17:24:42.820Z"
+    },
+    {
+      "name": "browser-build-started",
+      "observedAt": "2026-10-04T17:24:42.916Z"
+    },
+    {
+      "name": "browser-build-completed",
+      "observedAt": "2026-10-04T17:25:09.411Z"
+    },
+    {
+      "name": "connection-started",
+      "observedAt": "2026-10-04T17:25:09.443Z"
+    },
+    {
+      "name": "producer-container-started",
+      "observedAt": "2026-10-04T17:25:09.678Z"
+    }
+  ],
+  "observedConnectionDeadlineErrors": 4,
+  "runnerConnectivity": {
+    "schemaVersion": 2,
+    "cliVersion": "1.32.10",
+    "scope": "runner-host",
+    "exitCode": 1,
+    "reportAvailable": true,
+    "checks": [
+      {
+        "name": "config",
+        "status": "pass"
+      },
+      {
+        "name": "context",
+        "status": "pass"
+      },
+      {
+        "name": "token",
+        "status": "pass"
+      },
+      {
+        "name": "control_plane_auth",
+        "status": "pass"
+      },
+      {
+        "name": "project",
+        "status": "pass"
+      },
+      {
+        "name": "engine_address",
+        "status": "pass"
+      },
+      {
+        "name": "dns",
+        "status": "pass"
+      },
+      {
+        "name": "tls",
+        "status": "fail"
+      },
+      {
+        "name": "quic_transport",
+        "status": "fail"
+      },
+      {
+        "name": "tunnel_transport",
+        "status": "fail"
+      },
+      {
+        "name": "engine",
+        "status": "fail"
+      }
+    ],
+    "tokenExpired": false,
+    "transportDiagnostics": [
+      {
+        "name": "tls",
+        "status": "fail",
+        "errorClass": "timeout"
+      },
+      {
+        "name": "quic_transport",
+        "status": "fail",
+        "errorClass": "timeout"
+      }
+    ],
+    "dnsAddressFamilies": [
+      "ipv4",
+      "ipv6"
+    ],
+    "transportSelection": [
+      {
+        "configured": "auto",
+        "selected": "none"
+      }
+    ]
+  },
+  "socketLimits": {
+    "previous": {
+      "receive": 1048576,
+      "send": 212992
+    },
+    "applied": {
+      "receive": 7500000,
+      "send": 7500000
+    },
+    "restored": true
+  },
+  "sha256": {
+    "manifest.json": "8a60a3119804d58f1c8bd85cc10bdf087437bfada200f041ea9658c534c21dd5",
+    "producer.log": "cac8627ea4c18dc43c4e8c52020f3100957b306421b6684f91c06b57a179bcca",
+    "setup-timeline.jsonl": "1ece91128b98c91916fb4c5bd883ae2290d06f6d40fcf4fa90d40881e0359f10",
+    "runner-connectivity.json": "d1ef9c98d3877b474be96c6146a6587f66aeab4babf055cd8dc433d2ba9ff2ef",
+    "runner-socket-limits.json": "70aabd8f0715fabccf8aac3a0b0cc237d6f8e38c02627d8064da39d7cb507e13"
+  },
+  "boundaries": [
+    "DNS returns both IPv4 and IPv6; this does not establish address reachability or which address the transport attempted.",
+    "Both SDK TLS and QUIC diagnostics classify their errors as timeouts. No transport is selected. The failure stage within each transport remains unknown.",
+    "Authentication and project resolution succeed and the token is not expired.",
+    "Runner-host diagnostics are distinct from producer-container networking.",
+    "No claim is made about a firewall, address-family defect or server-side root cause."
+  ]
+}

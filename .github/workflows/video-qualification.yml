@@ -218,6 +218,11 @@ jobs:
           jq --argjson exit_code "$status" -f doctor-report.jq \
             "${diagnostic_directory}/report.json" \
             >"${OUTPUT_DIRECTORY}/runner-connectivity.json"
+          # Distinguish basic TCP reachability from the SDK TLS/QUIC probes.
+          # The helper opens at most two bounded sockets and emits no endpoint.
+          timeout --kill-after=2s 12s \
+            node ./probe-runner-tcp.mjs "${diagnostic_directory}/report.json" \
+            >"${OUTPUT_DIRECTORY}/runner-tcp.json"
 
       - name: Remove prepared credentials
         if: always()

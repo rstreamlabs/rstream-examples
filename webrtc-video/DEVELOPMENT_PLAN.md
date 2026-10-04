@@ -1167,6 +1167,25 @@ diagnostic now adds fixed error categories, DNS address families and the selecte
 transport. All 131 collector tests and artifact sanitization pass; classification
 does not itself establish a network root cause.
 
+The [classified repeat at `0efd7af`](./producer/qualification/adaptive-streaming/evidence/0efd7af/hosted-relay.json)
+again fails before media setup. Both TLS and QUIC errors classify as timeouts;
+DNS provides IPv4 and IPv6, but no transport is selected. Authentication and
+project resolution pass, the token is not expired, and cleanup restores socket
+limits. This does not establish an address-family or firewall cause. All three
+video CI jobs pass at this revision. The next read-only diagnostic opens at most
+two direct TCP sockets, one per DNS family, with five-second deadlines. It emits
+only fixed outcome categories and elapsed times, closes every socket and never
+publishes an endpoint or raw error. This checks reachability separately from SDK
+proxy/interface/TLS settings; it is not a substitute for those transport probes.
+
+Review of MediaMTX 1.21.1 confirms the native path's periodic upstream PLI and
+discarded downstream PLI. The current native first-frame delay is consistent
+with that behavior, without proving exact attribution from the existing trace.
+The rapid-start reference remains the adaptive adapter with its supported
+reader hook. The native interoperability profile retains its documented startup
+limitation; no shorter GOP, continuous capture or server fork is introduced to
+conceal that distinction.
+
 The [current native MediaMTX regression at `82c9c40`](./distributor/qualification/evidence/82c9c40/native-current.json)
 passes all 22 gates through a real authenticated producer tunnel with the same
 current media images as the recent adaptive path. Its fixed 5 Mbit/s source
