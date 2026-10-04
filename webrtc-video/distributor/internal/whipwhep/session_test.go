@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -1129,14 +1130,26 @@ func TestResolveSessionURLCarriesTheEdgeCredentialOntoTheOpaqueResource(t *testi
 	}
 }
 
+// Local signaling tests exercise both address families without depending on
+// external interfaces, VPN routes or neighbor discovery on the test host.
+func newSignalingPeer(t *testing.T) *webrtc.PeerConnection {
+	t.Helper()
+	settings := webrtc.SettingEngine{}
+	settings.SetNetworkTypes([]webrtc.NetworkType{webrtc.NetworkTypeUDP4, webrtc.NetworkTypeUDP6})
+	settings.SetIncludeLoopbackCandidate(true)
+	settings.SetIPFilter(func(ip net.IP) bool { return ip.IsLoopback() })
+	peer, err := webrtc.NewAPI(webrtc.WithSettingEngine(settings)).NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatalf("create local signaling peer: %v", err)
+	}
+	t.Cleanup(func() { _ = peer.Close() })
+	return peer
+}
+
 func newReceivingPeer(t *testing.T) *webrtc.PeerConnection {
 	t.Helper()
-	peer, err := webrtc.NewPeerConnection(webrtc.Configuration{})
-	if err != nil {
-		t.Fatalf("create receiving peer: %v", err)
-	}
+	peer := newSignalingPeer(t)
 	if _, err := peer.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly}); err != nil {
-		_ = peer.Close()
 		t.Fatalf("add receiving transceiver: %v", err)
 	}
 	return peer
@@ -1144,20 +1157,14 @@ func newReceivingPeer(t *testing.T) *webrtc.PeerConnection {
 
 func newSendingPeer(t *testing.T) *webrtc.PeerConnection {
 	t.Helper()
-	peer, err := webrtc.NewPeerConnection(webrtc.Configuration{})
-	if err != nil {
-		t.Fatalf("create sending peer: %v", err)
-	}
+	peer := newSignalingPeer(t)
 	track, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000}, "video", "source")
 	if err != nil {
-		_ = peer.Close()
 		t.Fatalf("create source track: %v", err)
 	}
 	if _, err := peer.AddTrack(track); err != nil {
-		_ = peer.Close()
 		t.Fatalf("add source track: %v", err)
 	}
-	t.Cleanup(func() { _ = peer.Close() })
 	return peer
 }
 

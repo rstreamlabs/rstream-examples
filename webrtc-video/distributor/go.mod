@@ -32,6 +32,6 @@ require (
 
 replace github.com/pion/interceptor => github.com/rstreamlabs/pion-interceptor v0.1.48-0.20261004062019-94d47092806b
 
-replace github.com/pion/webrtc/v4 => github.com/rstreamlabs/pion-webrtc/v4 v4.2.19-0.20260817140720-926abfa31a52
+replace github.com/pion/webrtc/v4 => github.com/rstreamlabs/pion-webrtc/v4 v4.2.19-0.20261004104852-5924f8e74b64
 
 replace github.com/pion/ice/v4 => github.com/rstreamlabs/ice/v4 v4.4.2-0.20260822124615-7bd2416006e3
