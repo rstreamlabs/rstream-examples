@@ -5,133 +5,61 @@ delivery paths. Deployment is a separate activity. Implementation and synthetic
 qualification do not establish compatibility with untested cameras, encoders,
 operating systems or networks.
 
-The remaining acceptance work is concentrated on independent Linux MediaMTX
-delivery qualification and outstanding visual approval. Conservative standalone
-visible-startup measurement now passes nine activation cases and four setup cancellations.
-Current direct, native/adaptive MediaMTX and local forced-relay media
-checks pass in their documented environments; hosted-runner connectivity and
-historical scheduling observations remain explicit boundaries below. The final route/browser regression
-passes at `d8cb5d7` on Chromium 153, WebKit 26.6 and Linux Firefox 155 with the
-current dependencies and session-cleanup code. Static Linux packaging and
-its H.264/AV1 source checks pass again with Go 1.27 at `90df80f` on ARM64 and
-AMD64 (the latter emulated). The guide build/toolchain/plugin instructions have been verified or
-corrected. [The isolated guides draft PR](https://github.com/rstreamlabs/rstream-nextjs/pull/57)
-passes its complete CI, including search and PostgreSQL checks, with automatic
-deployment disabled for that branch. Bounded shutdown for the
-reproduced blocked native transport write is verified in both samples. Inventory and replay
-presentation are accepted;
-the separate quality/format/metrics visual review remains pending. The current
-automatic-format series at `02fdf82` has five complete passes in six trials and
-retains one 208ms recovery freeze coincident with a 167ms JavaScript timer delay
-at the recurring ten-minute event. All six format ladders and source-target
-recoveries pass; the complete series remains failed and the public timing is
-unchanged pending attribution. The extended TURN diagnostic at `c585c3c` passes
-all 56 fixed-format gates. Its periodic pause coincides with an unrelated host
-renderer using 5.46 CPU cores; a controlled comparison remains pending.
-The earlier fixed-format latency series validates measurement in all four cases
-and passes delivery in three, retaining a 193ms source-capacity recovery freeze.
-The current source-capacity repeat at `50c1262` passes all 22 gates with no
-recovery freeze. A smaller periodic scheduling event is still observed; its
-cause remains unproven and the old failure is not reclassified.
-The independent hosted direct comparison at `18338c8` passes three of three
-one-second down-hold trials and fails three of three three-second trials on
-late sampled freeze counters. All six format ladders recover. The groups use
-different runners and image builds; total freeze durations overlap.
-The [same-runner, same-image crossover at `1a3af2f`](./distributor/qualification/evidence/1a3af2f/hosted-direct-formats-paired.json)
-completes all six trials (1s/3s/3s/1s/1s/3s). All ladders and source-target
-recoveries pass, but all original playback/recovery verdicts fail. Every late
-freeze increment straddles the four-second accounting boundary: the legacy
-calculation includes the entire preceding one-second sampling interval. Browser
-frame-gap observations suggest that the corresponding freezes end before the
-boundary; they cannot replace native freeze classification. Trial six also
-misses exact first-presentation measurement. All failed verdicts are retained.
-A bounded browser-clock native-counter measurement must distinguish pre-boundary
-increments from actual steady freezes before selecting a timing policy. The
-host phase marker, including in the earlier comparison, has whole-second
-precision and cannot establish millisecond-accurate network activation. Public
-down-hold and disruption budgets remain unchanged.
-The collector first records this boundary probe as diagnostic evidence only.
-Twenty-one focused tests cover stale/native timestamps, ambiguous counters,
-stream replacement, deadlines, overlapping requests, phase changes and teardown.
-The [first MediaMTX runtime at `f3488c0`](./distributor/qualification/evidence/f3488c0/mediamtx-format-boundary.json)
-passes all 22 original gates with the unchanged 3s down-hold and a 1500 kbit/s
-source bottleneck. Both native boundary probes are valid; no freeze counters
-increase afterward through either phase. Initial transition freezes total
-1.329s, with no decoded frame drops and complete 30/15/30 fps format recovery.
-The standalone activation presents its first frame in 793.8ms; this excludes
-Next.js navigation/authentication and device-process startup. Cleanup restores
-the original socket limits and removes all owned runtime resources.
-The [independent hosted crossover](./distributor/qualification/evidence/f3488c0/hosted-direct-boundaries.json)
-completes all six trials, with all original playback/format/recovery gates and
-all twelve native boundary probes passing. Five complete trials pass; trial
-four fails exact first-presentation measurement because the initial callback
-reports two submitted frames. Its exact durations remain unknown and its verdict
-remains failed. Both down-holds recover; these observations do not justify
-changing the public 3s default. The new collector tests pass
-in CI; its initial CI failure is formatting-only in `collect.mjs` and is
-corrected without altering the measured behavior.
-The current runner now requires a verified native boundary for steady capacity
-and recovery accounting, with explicit stream identity, native timestamps,
-monotonic counters, agreement with regular samples and post-boundary coverage.
-The old interval calculation remains visible alongside the new deltas; no
-historical verdict is rewritten and no disruption budget is changed. Result
-fixtures reproduce the coarse-sampling false attribution and still reject late
-freezes, dropped-frame excess, unavailable/ambiguous counters, stream changes,
-clock changes and truncated observation. The [three integrated MediaMTX trials
-at `125c181`](./distributor/qualification/evidence/125c181/mediamtx-native-boundaries.json)
-pass every format ladder, source-target recovery and all six native boundaries.
-Trials one and three pass all 23 gates. Trial two retains a 231ms baseline
-freeze before impairment: browser callback gap 333.3ms, timer delay 34.4ms,
-producer maximum queued/admitted delay 200.252/165.622ms and 90 queued packets,
-with no reported packet loss, NACK or decoded-frame drop. CPU increases in the
-containing resource sample do not establish a cause. This failure is separate
-from transition attribution and remains unresolved. All owned resources and
-socket limits are restored. The Linux series using the integrated method is
-now complete. [All three public-default Linux trials](./distributor/qualification/evidence/125c181/hosted-direct-boundaries.json)
-pass all 23 gates. All six crossover trials pass playback/format/recovery and
-all twelve integrated boundary measurements; the three 1s trials fail only the
-old exact-first-submission diagnostic. No historical verdict is rewritten.
+The first technical stabilization is complete. All three video CI jobs pass at
+`4098c52`; the guides PR passes its complete CI, and the SDK correction passes
+its eight jobs. Implementation, packaging, access/browser regressions, source
+presets/formats, delivery paths, metrics, replay and startup/lifecycle checks
+are mapped to revision-specific evidence in the [final acceptance table](#final-acceptance).
+No deployment or change to the public demo configuration is included.
 
-The standalone collector now records the conservative visible-frame measurement
-already used by the dashboard. Browser callbacks can miss submitted frames;
-the exact-first diagnostic stays unknown in that case, while an actually
-observed unobstructed visible frame provides a conservative startup duration.
-Raw visibility and timing evidence is required by the distributor gate; missing,
-hidden, covered or backdated observations fail. Repeated startup cases bring
-their viewer to the foreground before activation. All 177 collector tests,
-artifact sanitization and result fixtures pass. [Fresh runtime validation](./distributor/qualification/evidence/9d3359c/startup-cycles.json)
-passes nine cold/reopen/join activations and four setup cancellations. The first
-observed visible frame takes 379–794ms from activation with an idle source and
-129–179ms with an already active source. This excludes process boot, dashboard
-authorization and physical display timing. Old trials are not backfilled.
+The last independent [Linux MediaMTX series](./distributor/qualification/evidence/3aa4015/hosted-mediamtx-formats.json)
+passes all 23 gates in all three trials at `3aa4015`, using identical images and
+the public three-second format down-hold. Every format ladder and source-target
+recovery passes. Baseline, steady capacity and recovery frozen time are zero;
+initial capacity-transition freezes are 1.664–1.912s, within the unchanged
+three-second disruption budget. The [independent direct series](./distributor/qualification/evidence/125c181/hosted-direct-boundaries.json)
+also passes all 23 gates in its three public-default trials. No timing policy
+is changed on the basis of the alternative one-second experiments.
 
-The [three new authenticated MediaMTX trials](./distributor/qualification/evidence/9d3359c/mediamtx-visible-startup-formats.json)
-pass every startup measurement, format ladder and native source/recovery boundary.
-Trials one and three pass all 23 gates; trial two fails baseline playback with
-207ms frozen time at 19:59:52 UTC. A 199.9ms browser callback gap includes a
-109ms JavaScript timer delay; adjacent receive timestamps differ by 30.1ms while
-expected composition differs by 183.4ms. The independent Linux host sampler
-records a 330ms interval instead of 250ms in that window. This includes receiver
-presentation delay and coincides with earlier periodic scheduling observations,
-but does not prove the cause or explain the separate 231ms event. The series
-remains failed. Owned resources are removed and socket limits restored.
+[Current repeated startup qualification](./distributor/qualification/evidence/9d3359c/startup-cycles.json)
+passes nine MediaMTX activations and four setup cancellations. First observed
+visible frames take 379–794ms with an idle source and 129–179ms with an active
+source. Independent Linux MediaMTX observes 626–891ms. These observations exclude
+device-process startup, dashboard authorization, physical capture and display
+scanout; dashboard activation has its separate qualification. A conservative
+visible-frame observation is recorded independently of exact first-submission
+callbacks, which can be missed by the browser. Invalid visibility/timing remains
+invalid; historical missing observations are not backfilled. All 177 collector
+tests, artifact sanitization, shell/result fixtures and the local control
+helper's race tests pass.
 
-The qualification-only local control fixture now supports adaptive MediaMTX
-with separate producer/adapter media namespaces and a loopback signaling proxy.
-The production HTTPS requirement is unchanged. The renamed `compare-delivery.sh`
-and workflow can repeat three public-default MediaMTX trials on an independent
-Linux runner without credentials, alongside the existing direct crossover.
-This isolates media qualification from the local desktop and external control
-plane. The local media smoke test at `3aa4015` passes all 23 gates, including
-visible startup and resource teardown; socket limits return to 212992. The
-[independent Linux three-trial series](https://github.com/rstreamlabs/rstream-examples/actions/runs/37231189865)
-is running. This local smoke test has no shaped network phase and does not
-replace that series.
-The current-dependency local forced-TURN trial at `18f6cc1` passes all 56 gates,
-including actual relay candidates at both endpoints, adaptation, recovery and
-session cleanup. It does not remove the separate hosted-runner TCP obstacle.
+Retained qualification limits remain explicit. The [authenticated local series](./distributor/qualification/evidence/9d3359c/mediamtx-visible-startup-formats.json)
+passes every startup, format and source/recovery boundary check but only two of
+three complete trials: one has a 207ms baseline freeze alongside a 109ms browser
+timer delay and a 330ms independent Linux-host sampling interval. Its adjacent
+receive times differ by 30.1ms while expected composition differs by 183.4ms,
+so receiver presentation delay is involved. This does not prove a host cause
+or resolve the separate [231ms local event](./distributor/qualification/evidence/125c181/mediamtx-native-boundaries.json).
+Neither failed verdict is discarded or turned into a pass by the independent
+Linux results. Earlier [coarse-boundary failures](./distributor/qualification/evidence/1a3af2f/hosted-direct-formats-paired.json)
+and [exact-first callback failures](./distributor/qualification/evidence/f3488c0/hosted-direct-boundaries.json)
+also remain unchanged. Fresh steady-state accounting requires verified native
+counter boundaries without relaxing the four-second transition window or
+zero steady-freeze requirement.
 
-## Implemented; final regression qualification pending
+Local forced TURN passes all 56 current-profile gates. Hosted forced relay has
+a separate pre-media reachability obstacle; identical retries remain deferred
+until that external condition changes. Physical-source implementations, target
+hardware budgets and actual GitHub OAuth/SSO policy require their target
+environment. These are not claimed as validated by synthetic media fixtures.
+
+The only outstanding acceptance decision for this first delivery is explicit
+quality/format/metrics visual approval. The final desktop/mobile views have
+been presented again; inventory and replay presentation are already accepted.
+No new UI change is pending implementation. The source and guides PRs remain
+drafts until that review is received. The goal remains open for this decision.
+
+## Implemented; visual acceptance pending
 
 ### Added acceptance criterion: rapid first picture
 
@@ -473,7 +401,7 @@ owned containers. GitHub membership remains substituted; these short functional
 observations do not qualify actual OAuth/SSO, forced relay or resource/latency
 budgets.
 
-## In progress: optional source format adaptation
+## Implemented: optional source format adaptation
 
 Resolution and frame-rate adaptation is a general-purpose WebRTC technique.
 [Libwebrtc's adaptation model](https://webrtc.googlesource.com/src/+/HEAD/video/g3doc/adaptation.md)
@@ -1619,7 +1547,7 @@ GStreamer package fixes that setup error, and the README lists the dependency.
 - Preserve demand-driven source startup/shutdown and one upstream for shared
   viewing. Do not enable persistent transmission implicitly.
 
-## In progress: MediaMTX observability
+## Implemented: MediaMTX observability
 
 The private, authorized metrics reader and API are implemented, including
 coalescing, cancellation, bounded resources and conservative rate baselines.
@@ -1638,7 +1566,7 @@ device, cache/coalesce server requests and keep credentials/server topology out
 of browser responses. Do not expose the administrative API. Validate unavailable,
 idle and counter-reset states; avoid misleading zero rates on the first sample.
 
-## Separate lot: recent recording and playback
+## Implemented: recent recording and playback
 
 The server foundation is implemented locally: opt-in MediaMTX recording with
 short retention, a bounded temporary local volume, a private playback endpoint,
@@ -1858,16 +1786,16 @@ The sample and guides remain draft PRs, with no deployment in this work.
 | Personal isolation and shared GitHub organization access | [Current route/browser regression](./platform/qualification/evidence/d8cb5d7/browser-regression.json): real Next.js/PostgreSQL, personal isolation, shared inventory, nonmember denial, mutation origin and watch-token scope. | GitHub membership is a fixture; actual OAuth/SSO policy requires the target identity provider. |
 | Provisioning or project discovery, names and optional history | The same regression checks display names, live rename, concurrent history, stale observations, outages, live-only inventory and hidden provisioning controls. [Real discovered playback](./platform/qualification/evidence/7e75e65/visible-startup.json) covers actual rstream inventory and shared MediaMTX playback. | History never grants live-source access. Real OAuth and future deployment configuration remain separate. |
 | Optional shared quality presets and manual source formats | [Current provisioned regression](./platform/qualification/evidence/18338c8/manual-source-formats.json): nine selections in both delivery paths, two MediaMTX readers, one encoder, decoded dimensions/cadence, fallback and recovery. | Generic H.264 source-format interface and test pipeline are qualified; physical source implementations require their own checks. |
-| Optional automatic resolution/frame-rate adaptation | All three public-default [independent Linux direct trials](./distributor/qualification/evidence/125c181/hosted-direct-boundaries.json) pass 23 gates. The [latest authenticated MediaMTX series](./distributor/qualification/evidence/9d3359c/mediamtx-visible-startup-formats.json) passes all startup, format and native-boundary checks, with two complete passes. | A 207ms baseline freeze coincides with receiver and independent host scheduling delays; the earlier 231ms event remains unexplained. Independent Linux MediaMTX qualification is pending. Public down-hold stays 3s; historical failed verdicts remain unchanged. |
-| Rapid activation, cancellation and demand-driven release | [Portable lifecycle cases](./distributor/qualification/evidence/9dac607/startup-cycles.json) and [visible dashboard activation](./platform/qualification/evidence/7e75e65/visible-startup.json) distinguish cold/reopen/join, canceled setup and actual encoder idle. | Finite local observations, no startup SLA; slow control-plane authorization and native MediaMTX key-frame behavior remain explicit. |
+| Optional automatic resolution/frame-rate adaptation | Three public-default [independent Linux direct trials](./distributor/qualification/evidence/125c181/hosted-direct-boundaries.json) and three [independent Linux MediaMTX trials](./distributor/qualification/evidence/3aa4015/hosted-mediamtx-formats.json) each pass all 23 gates, with full ladders and source-target recovery. | The [authenticated local series](./distributor/qualification/evidence/9d3359c/mediamtx-visible-startup-formats.json) retains a 207ms baseline failure with receiver/host scheduling delays; the earlier 231ms event remains unexplained. These are documented environment observations, not proven fixed defects. Public down-hold stays 3s. |
+| Rapid activation, cancellation and demand-driven release | [Current portable lifecycle cases](./distributor/qualification/evidence/9d3359c/startup-cycles.json) and [visible dashboard activation](./platform/qualification/evidence/7e75e65/visible-startup.json) distinguish cold/reopen/join, canceled setup and actual encoder idle. | Finite local observations, no startup SLA; slow control-plane authorization and native MediaMTX key-frame behavior remain explicit. |
 | Direct, adaptive MediaMTX and native delivery | Real media tests cover direct fallback, adaptive single-upstream sharing and [current native MediaMTX](./distributor/qualification/evidence/82c9c40/native-current.json), whose 22 gates pass. | Native pull is fixed-rate interoperability, not the adaptive platform backend or an optimized startup path. |
 | Congestion, latency and forced relay | [Current local relay](./producer/qualification/adaptive-streaming/evidence/18f6cc1/local-relay.json) and the earlier [extended diagnostic](./producer/qualification/adaptive-streaming/evidence/c585c3c/extended-relay-diagnostic.json) each pass 56 gates. [Four latency trials](./distributor/qualification/evidence/4a0d83a/latency-network.json) have valid measurements but only three delivery passes; the [current source-capacity repeat](./distributor/qualification/evidence/50c1262/source-capacity-latency.json) passes all 22 gates. | The historical 193ms recovery freeze remains failed and its scheduling attribution is unproven. [Hosted relay](./producer/qualification/adaptive-streaming/evidence/2a45705/hosted-relay.json) fails basic TCP reachability before media; identical retries are deferred until the external condition changes. |
 | Metrics and bounded recent recording/replay | Current route/browser regression covers authorized metrics, outages, replay gaps/expiry and return to the same live session. [Recording startup regressions](./distributor/qualification/evidence/2b22561/recording-startup.json) pass; [resource comparisons](./distributor/qualification/evidence/5b83934/recording-resources.json) retain all twelve attempts. | Recording remains opt-in. Historical failed resource/delivery trials remain failed; synthetic CPU measurements are not target-device budgets. |
 | Same-page expansion and responsive controls | Current browser regression passes on Chromium, WebKit and Linux Firefox with desktop/mobile/landscape captures, focus/scroll restoration and media continuity. | Inventory and replay visuals are accepted. Explicit quality/format/metrics visual approval is still pending. |
-| Packaging, dependencies, commands and guides | [Go 1.27 static H.264/AV1 runtime checks](./producer/qualification/evidence/90df80f/static-linux-go127.json) pass on ARM64 and emulated AMD64. [Guides PR #57](https://github.com/rstreamlabs/rstream-nextjs/pull/57) passes complete CI at `0ab4f9c`. All three video CI jobs pass at `9d3359c`, including the platform build/audit and conservative visible-startup collector. | No physical-camera or native-AMD64 performance claim. Runtime evidence data are unchanged by that formatting correction; unrelated example CI failures are not video regressions. |
+| Packaging, dependencies, commands and guides | [Go 1.27 static H.264/AV1 runtime checks](./producer/qualification/evidence/90df80f/static-linux-go127.json) pass on ARM64 and emulated AMD64. [Guides PR #57](https://github.com/rstreamlabs/rstream-nextjs/pull/57) passes complete CI at `0ab4f9c`. All three video CI jobs pass at `4098c52`, including the platform build/audit, conservative visible-startup collector and isolated MediaMTX fixture. | No physical-camera or native-AMD64 performance claim. Runtime evidence data are unchanged by that formatting correction; unrelated example CI failures are not video regressions. |
 
-The completion review must resolve the remaining source-format/network verdicts
-and obtain the outstanding visual approval. Target hardware and real OAuth are
+Technical stabilization is complete for the documented reference environments.
+The completion review still needs the outstanding visual approval. Target hardware and real OAuth are
 explicit later-environment boundaries, not silently passing tests. No deployment,
 unrelated repository repair or public-demo configuration change is implied.
 
