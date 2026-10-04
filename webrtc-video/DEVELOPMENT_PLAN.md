@@ -402,6 +402,18 @@ necessary before claiming stable delivery. No full-matrix, latency or resource
 comparison is inferred from these four passes. The native PRs currently report
 no remote CI checks; the passing race/lint results above are local verification.
 
+The [two additional repeat series](./distributor/qualification/evidence/96b5feb/feedback-repeats.json)
+retain eleven passes and one failure across all twelve trials. The repeats use
+clean documentation-only revision `f762165` and the exact same three image
+contents as `96b5feb`. Direct/source capacity and source delay/jitter/loss pass
+three of three. Direct impairment passes two of three; its third trial has two
+transition freezes totaling 0.741 s, above the unchanged 2% phase gate. Browser
+frame callbacks confirm 550 ms and 200 ms gaps, with no corresponding JavaScript
+timer stall. Steady playback and recovery have no freezes or decoded-frame
+drops. This is retained as a delivery failure requiring investigation, not
+classified as host interference. Socket limits are restored and owned
+containers removed after the series. Stable delivery is not yet established.
+
 The discovery configuration review additionally reproduced valid display names
 being rejected or changed when environment expansion encounters YAML quotes or
 backslashes. A literal scalar preserves those names; the real configuration
