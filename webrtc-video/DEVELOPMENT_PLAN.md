@@ -565,6 +565,32 @@ These format checks do not measure capture-to-display latency or establish
 arbitrary hardware support or AV1 switching; fixed-format latency evidence is
 recorded separately below.
 
+To distinguish direct format behavior from the recurring Mac scheduling pause,
+the existing end-to-end runner now has an explicit credential-free Docker control
+path for direct diagnostics. It rejects MediaMTX mode, an rstream context or edge
+authentication in that mode. A qualification-only helper exposes WHEP and
+read-only observations inside the isolated Docker network; the producer's local
+quality API keeps its loopback restriction and no host port is published.
+Credential-bearing HTTP observation URLs remain rejected. Results record this
+control boundary explicitly; the authenticated tunnel qualification is unchanged.
+
+The first local smoke fails because the observation helper accepts HTTPS only;
+it is retained. The explicit credential-free Docker fixture then passes all
+22 delivery/observation/lifecycle gates with the automatic-format source held
+at its initial format: 29.93 fps, no loss/drop/freeze during the 14.13-second
+baseline, socket limits restored and all owned containers removed. This is a
+working-tree harness check, not a clean-revision format-transition qualification.
+Both helper packages pass race tests and vet; 139 collector tests, artifact
+sanitization, shell/configuration/result fixtures and workflow lint pass.
+
+The dedicated hosted comparison runs three complete direct trials for each
+of the one-second and three-second down-holds, with the same ladder, 1.5 Mbit/s
+capacity and unchanged delivery/format gates. Every attempted trial is retained;
+incomplete setup stops its series instead of triggering identical retries.
+This independent Linux comparison is pending. It cannot by itself qualify
+MediaMTX, TURN, edge access or physical source hardware, and does not change
+the public three-second setting.
+
 1. Define optional format profiles with bitrate ceiling, dimensions and frame
    rate. Existing bitrate-only configurations must remain unchanged. Expose
    requested, pending and observed formats separately.

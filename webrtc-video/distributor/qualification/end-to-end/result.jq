@@ -152,6 +152,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
   workingTreeDirty: $working_tree_dirty,
   recording: $recording,
   profile: {
+    controlPath: ($ARGS.named.control_path // "rstream"),
     edgeAuthentication: $edge_auth,
     edgeCredentialLifetimeSeconds: (if $edge_auth then $connect_token_ttl_seconds else null end),
     warmupSeconds: $warmup_seconds,

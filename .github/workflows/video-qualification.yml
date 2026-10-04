@@ -3,6 +3,11 @@ name: Video qualification
 on:
   workflow_dispatch:
     inputs:
+      automatic_format_comparison:
+        description: Compare 1s/3s source-format down-holds on isolated direct WebRTC (no rstream credentials)
+        required: true
+        default: false
+        type: boolean
       path:
         description: WebRTC path under test
         required: true
@@ -49,6 +54,7 @@ concurrency:
 
 jobs:
   qualify:
+    if: ${{ !inputs.automatic_format_comparison }}
     name: ${{ inputs.path }} ${{ inputs.protection }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -273,3 +279,83 @@ jobs:
             printf 'Video qualification failed; inspect the uploaded evidence bundle.\n' >&2
             exit 1
           fi
+
+  automatic-formats:
+    if: ${{ inputs.automatic_format_comparison }}
+    name: Direct source formats (${{ matrix.down_hold }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        down_hold: [1s, 3s]
+    steps:
+      - name: Check out the tested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: webrtc-video/producer/go.mod
+          cache-dependency-path: webrtc-video/producer/go.sum
+      - name: Prepare runner socket limits
+        id: sockets
+        shell: bash
+        run: |
+          set -euo pipefail
+          receive_limit="$(sysctl -n net.core.rmem_max)"
+          send_limit="$(sysctl -n net.core.wmem_max)"
+          {
+            printf 'receive_limit=%s\n' "$receive_limit"
+            printf 'send_limit=%s\n' "$send_limit"
+          } >>"$GITHUB_OUTPUT"
+          sudo sysctl -w \
+            "net.core.rmem_max=$((receive_limit > 7500000 ? receive_limit : 7500000))" \
+            "net.core.wmem_max=$((send_limit > 7500000 ? send_limit : 7500000))"
+      - name: Compare automatic formats in three complete trials
+        id: comparison
+        continue-on-error: true
+        env:
+          DOWN_HOLD: ${{ matrix.down_hold }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          webrtc-video/producer/qualification/adaptive-streaming/formats/compare-direct.sh \
+            "$DOWN_HOLD" "${RUNNER_TEMP}/video-format-comparison"
+      - name: Restore limits and retain runner metadata
+        if: always() && steps.sockets.outputs.receive_limit != ''
+        env:
+          ORIGINAL_RECEIVE: ${{ steps.sockets.outputs.receive_limit }}
+          ORIGINAL_SEND: ${{ steps.sockets.outputs.send_limit }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo sysctl -w "net.core.rmem_max=$ORIGINAL_RECEIVE" "net.core.wmem_max=$ORIGINAL_SEND"
+          if [[ -d "${RUNNER_TEMP}/video-format-comparison" ]]; then
+            node --input-type=module -e '
+              import os from "node:os";
+              console.log(JSON.stringify({platform: os.platform(), architecture: os.arch(),
+                kernel: os.release(), logicalCPUs: os.cpus().length, memoryBytes: os.totalmem(),
+                socketLimitsRestored: true,
+                originalSocketLimits: {receive: Number(process.env.ORIGINAL_RECEIVE), send: Number(process.env.ORIGINAL_SEND)}}));
+            ' >"${RUNNER_TEMP}/video-format-comparison/runner.json"
+          fi
+      - name: Upload every attempted trial
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: video-direct-formats-${{ matrix.down_hold }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/video-format-comparison
+          if-no-files-found: error
+          retention-days: 14
+      - name: Enforce the unchanged delivery and format gates
+        if: always()
+        env:
+          OUTCOME: ${{ steps.comparison.outcome }}
+        shell: bash
+        run: test "$OUTCOME" = success

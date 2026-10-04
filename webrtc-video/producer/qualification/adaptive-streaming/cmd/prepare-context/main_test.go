@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -11,6 +13,39 @@ import (
 	"github.com/rstreamlabs/rstream-go/config"
 	"gopkg.in/yaml.v3"
 )
+
+func TestLocalReferenceIgnoresCredentialsAndPreservesFormatPolicy(t *testing.T) {
+	t.Setenv("RSTREAM_CONFIG", filepath.Join(t.TempDir(), "does-not-exist"))
+	t.Setenv("RSTREAM_AUTHENTICATION_TOKEN", "must-not-be-copied")
+	directory := t.TempDir()
+	source := filepath.Join("..", "..", "formats", "config.automatic.yaml")
+	if err := runLocal(directory, source, false, false, flexFECConfig{enabled: true, mediaPackets: 5, repairPackets: 1}); err != nil {
+		t.Fatal(err)
+	}
+	direct, err := producerconfig.Load(filepath.Join(directory, "direct-config.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, err := producerconfig.Load(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if direct.Tunnel.Enabled || direct.Tunnel.Auth.Token || direct.Tunnel.Reconnect.Enabled || direct.WebRTC.UseTURN {
+		t.Fatal("local reference retained an external transport")
+	}
+	if !reflect.DeepEqual(direct.Media, original.Media) {
+		t.Fatal("local reference changed source-format policy")
+	}
+	for _, name := range []string{"config.yaml", "runtime.env", "direct-config.yaml", "relay-config.yaml"} {
+		data, err := os.ReadFile(filepath.Join(directory, name))
+		if err != nil || bytes.Contains(data, []byte("must-not-be-copied")) {
+			t.Fatalf("local file %s is absent or contains inherited credentials", name)
+		}
+		if name == "runtime.env" && len(data) != 0 {
+			t.Fatal("local environment is not empty")
+		}
+	}
+}
 
 func TestRunBuildsPrivateQualificationContextFromEnvironment(t *testing.T) {
 	directory := t.TempDir()

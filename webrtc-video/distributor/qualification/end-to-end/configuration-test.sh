@@ -39,6 +39,30 @@ fi
 
 fixture_directory="$(mktemp -d "${TMPDIR:-/tmp}/rstream-recording-config.XXXXXX")"
 trap 'rm -rf "${fixture_directory}"' EXIT INT TERM
+for scenario in invalid distributed authenticated context; do
+  control=local
+  mode=direct
+  auth=false
+  context=
+  expected='local control requires direct mode, EDGE_AUTH=false and no RSTREAM_CONTEXT'
+  case "${scenario}" in
+    invalid) control=invalid; expected='RSTREAM_DISTRIBUTOR_CONTROL_PATH must be rstream or local' ;;
+    distributed) mode=mediamtx ;;
+    authenticated) auth=true ;;
+    context) context=qualification ;;
+  esac
+  if output="$(RSTREAM_CONTEXT="${context}" RSTREAM_DISTRIBUTOR_MODE="${mode}" \
+    RSTREAM_DISTRIBUTOR_CONTROL_PATH="${control}" RSTREAM_DISTRIBUTOR_EDGE_AUTH="${auth}" \
+    "${script_directory}/run.sh" "${fixture_directory}/output" 2>&1)"; then
+    printf 'incompatible local control configuration was accepted\n' >&2
+    exit 1
+  fi
+  if [[ "${output}" != *"${expected}"* || -e "${fixture_directory}/output" ]]; then
+    printf 'local control configuration did not fail before creating runtime artifacts\n' >&2
+    exit 1
+  fi
+done
+
 for scenario in invalid direct; do
   mode=mediamtx
   recording=invalid

@@ -16,6 +16,7 @@ producer_directory="${video_directory}/producer"
 qualification_directory="${producer_directory}/qualification/adaptive-streaming"
 repository_directory="$(git -C "${video_directory}" rev-parse --show-toplevel)"
 context_name="${RSTREAM_CONTEXT:-}"
+control_path="${RSTREAM_DISTRIBUTOR_CONTROL_PATH:-rstream}"
 rstream_cli="${RSTREAM_CLI:-rstream}"
 distribution_mode="${RSTREAM_DISTRIBUTOR_MODE:-mediamtx}"
 warmup_seconds="${RSTREAM_DISTRIBUTOR_WARMUP_SECONDS:-20}"
@@ -43,10 +44,21 @@ expected_format="${RSTREAM_DISTRIBUTOR_EXPECT_FORMAT:-}"
 producer_config="${RSTREAM_DISTRIBUTOR_PRODUCER_CONFIG:-}"
 output_directory="${1:-}"
 
-if [[ -z "${context_name}" ]]; then
-  printf 'RSTREAM_CONTEXT must name an explicit qualification context\n' >&2
-  exit 1
-fi
+case "${control_path}" in
+rstream)
+  if [[ -z "${context_name}" ]]; then
+    printf 'RSTREAM_CONTEXT must name an explicit qualification context\n' >&2
+    exit 1
+  fi
+  ;;
+local)
+  if [[ "${distribution_mode}" != direct || "${edge_auth}" != false || -n "${context_name}" ]]; then
+    printf 'local control requires direct mode, EDGE_AUTH=false and no RSTREAM_CONTEXT\n' >&2
+    exit 1
+  fi
+  ;;
+*) printf 'RSTREAM_DISTRIBUTOR_CONTROL_PATH must be rstream or local\n' >&2; exit 1 ;;
+esac
 if [[ -z "${output_directory}" ]]; then
   printf 'usage: RSTREAM_CONTEXT=<context> %s OUTPUT_DIRECTORY\n' "$0" >&2
   exit 1
@@ -166,13 +178,15 @@ for command in docker git go jq node; do
   fi
 done
 producer_config_sha256="$(node -e 'process.stdout.write(require("node:crypto").createHash("sha256").update(require("node:fs").readFileSync(process.argv[1])).digest("hex"))' "${producer_config}")"
-if ! command -v "${rstream_cli}" >/dev/null; then
-  printf 'required command not found: %s\n' "${rstream_cli}" >&2
-  exit 1
-fi
-if ! "${rstream_cli}" token create --help 2>&1 | grep -q -- '--expires-in'; then
-  printf 'the selected rstream CLI cannot create bounded-lifetime tokens; install version 1.29.0 or newer, or set RSTREAM_CLI to a compatible binary\n' >&2
-  exit 1
+if [[ "${control_path}" == rstream ]]; then
+  if ! command -v "${rstream_cli}" >/dev/null; then
+    printf 'required command not found: %s\n' "${rstream_cli}" >&2
+    exit 1
+  fi
+  if ! "${rstream_cli}" token create --help 2>&1 | grep -q -- '--expires-in'; then
+    printf 'the selected rstream CLI cannot create bounded-lifetime tokens; install version 1.29.0 or newer, or set RSTREAM_CLI to a compatible binary\n' >&2
+    exit 1
+  fi
 fi
 if ! jq -en --arg value "${viewer_loss_percent}" '
   ($value | tonumber) as $loss | $loss >= 0 and $loss <= 20
@@ -301,12 +315,14 @@ network_name="rstream-distribution-qualification-${suffix}"
 producer_name="rstream-distribution-producer-${suffix}"
 distributor_name="rstream-distribution-mediamtx-${suffix}"
 browser_name="rstream-distribution-browser-${suffix}"
+control_name="rstream-distribution-control-${suffix}"
 runtime_directory="$(mktemp -d "${TMPDIR:-/tmp}/rstream-distribution-qualification.XXXXXX")"
 control_directory="${runtime_directory}/control"
 container_user="$(id -u):$(id -g)"
 producer_started=0
 distributor_started=0
 browser_started=0
+control_started=0
 network_created=0
 resource_sampler_pid=0
 
@@ -427,6 +443,9 @@ cleanup() {
   if ((distributor_started)); then
     docker rm -f "${distributor_name}" >/dev/null 2>&1 || true
   fi
+  if ((control_started)); then
+    docker rm -f "${control_name}" >/dev/null 2>&1 || true
+  fi
   if ((producer_started)); then
     docker rm -f "${producer_name}" >/dev/null 2>&1 || true
   fi
@@ -446,50 +465,61 @@ write_phase() {
   fi
 }
 
-printf 'Preparing an isolated rstream runtime\n'
-project_endpoint="$(
-  "${rstream_cli}" context list --output json |
-    jq -er --arg context "${context_name}" '
-      [.[] | select(.Name == $context)] |
-      if length == 1 then .[0].ProjectEndpoint else error("qualification context is not unique") end
-    '
-)"
-project_id="$(
-  "${rstream_cli}" --context "${context_name}" project list --output json |
-    jq -er --arg endpoint "${project_endpoint}" '
-      [.projects[] | select(.endpoint == $endpoint)] |
-      if length == 1 then .[0].id else error("qualification project is not unique") end
-    '
-)"
-qualification_resources="$(
-  jq -cn --arg project "${project_id}" --argjson token_auth "${edge_auth}" '{
-    tunnels: {projects: [$project], scopes: {tunnels: {create: {filters: {
-      name: {exact: "webrtc-video-producer-adaptive"},
-      protocol: "http",
-      publish: true,
-      token_auth: $token_auth
-    }}}}}
-  }'
-)"
-qualification_token="$(
-  "${rstream_cli}" --context "${context_name}" token create \
-    --expires-in "${qualification_token_ttl_seconds}" \
-    --resources-json "${qualification_resources}" \
-    --output json |
-    jq -er '.token | select(type == "string" and length > 0)'
-)"
-RSTREAM_AUTHENTICATION_TOKEN="${qualification_token}" go -C "${producer_directory}" run ./qualification/adaptive-streaming/cmd/prepare-context \
-  -context "${context_name}" \
-  -allow-mediamtx-native-offer="$([[ "${distribution_mode}" == mediamtx-native ]] && printf true || printf false)" \
-  -embedded-viewer=false \
-  -flex-fec=true \
-  -flex-fec-media-packets "${flexfec_media_packets}" \
-  -flex-fec-repair-packets "${flexfec_repair_packets}" \
-  -producer-config "${producer_config}" \
-  -producer-turn-policy disabled \
-  -tunnel-token-auth="${edge_auth}" \
-  -output-directory "${runtime_directory}"
-unset qualification_token
+producer_runtime_config=relay-config.yaml
+if [[ "${control_path}" == local ]]; then
+  printf 'Preparing a credential-free direct Docker reference\n'
+  go -C "${producer_directory}" run ./qualification/adaptive-streaming/cmd/prepare-context \
+    -local-reference -embedded-viewer=false -flex-fec=true \
+    -flex-fec-media-packets "${flexfec_media_packets}" \
+    -flex-fec-repair-packets "${flexfec_repair_packets}" \
+    -producer-config "${producer_config}" -output-directory "${runtime_directory}"
+  producer_runtime_config=direct-config.yaml
+else
+  printf 'Preparing an isolated rstream runtime\n'
+  project_endpoint="$(
+    "${rstream_cli}" context list --output json |
+      jq -er --arg context "${context_name}" '
+        [.[] | select(.Name == $context)] |
+        if length == 1 then .[0].ProjectEndpoint else error("qualification context is not unique") end
+      '
+  )"
+  project_id="$(
+    "${rstream_cli}" --context "${context_name}" project list --output json |
+      jq -er --arg endpoint "${project_endpoint}" '
+        [.projects[] | select(.endpoint == $endpoint)] |
+        if length == 1 then .[0].id else error("qualification project is not unique") end
+      '
+  )"
+  qualification_resources="$(
+    jq -cn --arg project "${project_id}" --argjson token_auth "${edge_auth}" '{
+      tunnels: {projects: [$project], scopes: {tunnels: {create: {filters: {
+        name: {exact: "webrtc-video-producer-adaptive"},
+        protocol: "http",
+        publish: true,
+        token_auth: $token_auth
+      }}}}}
+    }'
+  )"
+  qualification_token="$(
+    "${rstream_cli}" --context "${context_name}" token create \
+      --expires-in "${qualification_token_ttl_seconds}" \
+      --resources-json "${qualification_resources}" \
+      --output json |
+      jq -er '.token | select(type == "string" and length > 0)'
+  )"
+  RSTREAM_AUTHENTICATION_TOKEN="${qualification_token}" go -C "${producer_directory}" run ./qualification/adaptive-streaming/cmd/prepare-context \
+    -context "${context_name}" \
+    -allow-mediamtx-native-offer="$([[ "${distribution_mode}" == mediamtx-native ]] && printf true || printf false)" \
+    -embedded-viewer=false \
+    -flex-fec=true \
+    -flex-fec-media-packets "${flexfec_media_packets}" \
+    -flex-fec-repair-packets "${flexfec_repair_packets}" \
+    -producer-config "${producer_config}" \
+    -producer-turn-policy disabled \
+    -tunnel-token-auth="${edge_auth}" \
+    -output-directory "${runtime_directory}"
+  unset qualification_token
+fi
 mkdir -m 0700 "${control_directory}"
 write_phase warmup
 jq -n '{enabled: false, capacityKbps: 0, delayMilliseconds: 0, jitterMilliseconds: 0, lossPercent: 0, queuePackets: 0, qdisc: null, filters: []}' \
@@ -526,7 +556,7 @@ docker run --detach \
   --env RSTREAM_CONFIG=/runtime/config.yaml \
   --env RSTREAM_CONTEXT=qualification \
   --mount "type=bind,source=${runtime_directory}/config.yaml,target=/runtime/config.yaml,readonly" \
-  --mount "type=bind,source=${runtime_directory}/relay-config.yaml,target=/runtime/producer.yaml,readonly" \
+  --mount "type=bind,source=${runtime_directory}/${producer_runtime_config},target=/runtime/producer.yaml,readonly" \
   "${producer_image}" -config /runtime/producer.yaml >/dev/null
 producer_started=1
 latency_arguments=()
@@ -542,21 +572,46 @@ if [[ "${latency_probe}" == true ]]; then
   latency_arguments=(--latency-probe enabled --producer-boot-hash "${producer_boot_hash}" --producer-monotonic-offset-hash "${producer_monotonic_hash}")
 fi
 
-source_base=""
-for _ in $(seq 1 90); do
-  if [[ "$(docker inspect --format '{{.State.Running}}' "${producer_name}")" != true ]]; then
-    printf 'producer exited before publishing its tunnel\n' >&2
+if [[ "${control_path}" == local ]]; then
+  # Keep the source quality listener on loopback. Only this isolated test
+  # network can reach WHEP and read-only observations through the helper.
+  docker run --detach --name "${control_name}" --network "container:${producer_name}" \
+    --user "${container_user}" --read-only --security-opt no-new-privileges --cap-drop ALL \
+    --entrypoint /app/local-control "${producer_image}" >/dev/null
+  control_started=1
+  source_base=http://producer:18080
+  docker run --rm --network "${network_name}" --user "${container_user}" \
+    --read-only --security-opt no-new-privileges --cap-drop ALL \
+    --entrypoint node "${browser_image}" --input-type=module -e '
+      const deadline = performance.now() + 10000;
+      while (true) {
+        try {
+          const response = await fetch("http://producer:18080/healthz", {signal: AbortSignal.timeout(1000)});
+          await response.body?.cancel();
+          if (response.ok) break;
+        } catch {}
+        if (performance.now() >= deadline) throw new Error("local producer readiness timed out");
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    '
+else
+  source_base=""
+  for _ in $(seq 1 90); do
+    if [[ "$(docker inspect --format '{{.State.Running}}' "${producer_name}")" != true ]]; then
+      printf 'producer exited before publishing its tunnel\n' >&2
+      exit 1
+    fi
+    source_base="$(docker logs "${producer_name}" 2>&1 | sed -nE 's/.*Public URL: (https:\/\/[^[:space:]]+).*/\1/p' | tail -1)"
+    if [[ -n "${source_base}" ]]; then
+      break
+    fi
+    sleep 1
+  done
+  if [[ -z "${source_base}" ]]; then
+    printf 'producer did not publish its tunnel within 90 seconds\n' >&2
     exit 1
   fi
-  source_base="$(docker logs "${producer_name}" 2>&1 | sed -nE 's/.*Public URL: (https:\/\/[^[:space:]]+).*/\1/p' | tail -1)"
-  if [[ -n "${source_base}" ]]; then
-    break
-  fi
-  sleep 1
-done
-if [[ -z "${source_base}" ]]; then
-  printf 'producer did not publish its tunnel within 90 seconds\n' >&2
-  exit 1
+
 fi
 
 source_endpoint="${source_base%/}/whep"
@@ -614,7 +669,8 @@ if [[ "${quality_observer}" == true ]]; then
     quality_authorization="Bearer ${quality_token}"
   fi
   jq -n --arg endpoint "${source_base%/}/api/quality" --arg authorization "${quality_authorization}" \
-    '{endpoint: $endpoint, authorization: $authorization}' >"${control_directory}/source-quality.json"
+    --arg control_path "${control_path}" \
+    '{endpoint: $endpoint, authorization: $authorization, localReference: ($control_path == "local")}' >"${control_directory}/source-quality.json"
   chmod 0600 "${control_directory}/source-quality.json"
   unset quality_token quality_authorization
   quality_arguments=(--source-quality-file /runtime/source-quality.json)
@@ -1073,6 +1129,7 @@ fi
 jq -s \
   --arg revision "${revision}" \
   --arg mode "${distribution_mode}" \
+  --arg control_path "${control_path}" \
   --argjson edge_auth "${edge_auth}" \
   --argjson connect_token_ttl_seconds "${connect_token_ttl_seconds}" \
   --argjson working_tree_dirty "${working_tree_dirty}" \

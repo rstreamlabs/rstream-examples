@@ -415,6 +415,16 @@ Use `RSTREAM_DISTRIBUTOR_MODE=direct` for the one-to-one reference. Setting
 `RSTREAM_DISTRIBUTOR_EDGE_AUTH=false` is useful only when isolating local media
 behavior and does not satisfy the release authentication gate.
 
+For a direct media diagnostic without an external control-plane dependency,
+unset `RSTREAM_CONTEXT` and set `RSTREAM_DISTRIBUTOR_CONTROL_PATH=local`,
+`RSTREAM_DISTRIBUTOR_MODE=direct` and `RSTREAM_DISTRIBUTOR_EDGE_AUTH=false`.
+No rstream CLI configuration or credentials are read. The producer stays on an
+isolated Docker bridge with no published host ports; a qualification-only
+proxy preserves the local quality API's loopback restriction and exposes only
+WHEP and read-only observations. Results explicitly record `controlPath: local`.
+This diagnoses direct media independently; it does not qualify tunnels, TURN,
+edge authentication or MediaMTX. Other modes reject this option.
+
 For a separate activation and cancellation check, use
 `RSTREAM_DISTRIBUTOR_STARTUP_CYCLES=true` with the same command and an empty
 output directory. This adaptive MediaMTX check repeats three source-cold
@@ -484,6 +494,21 @@ This selects a qualification-only 720p30 / 540p24 / 360p15 ladder, measures
 For direct delivery, use `MODE=direct` and `VIEWER_CAPACITY_KBPS` with the same
 prefix. Native MediaMTX and downstream-only MediaMTX shaping cannot qualify a
 shared adaptive source. The public provisioning example remains unchanged.
+
+The `Video qualification` workflow also provides
+`automatic_format_comparison=true`: a dedicated direct-only comparison of
+one-second and three-second down-holds, with three full trials each on hosted
+Linux. Other workflow inputs apply to the usual fixed-format qualification and
+are unused in this comparison. This job needs no secrets. It fixes the source
+ladder, 1.5 Mbit/s capacity, zero injected loss/delay and zero playout-delay hint,
+retains every attempted result and restores the runner's socket limits. No
+production default changes as a side effect. Its local equivalent, after the
+host's socket-limit preparation, is:
+
+```bash
+../producer/qualification/adaptive-streaming/formats/compare-direct.sh 1s /tmp/video-formats-1s
+../producer/qualification/adaptive-streaming/formats/compare-direct.sh 3s /tmp/video-formats-3s
+```
 
 The collector reads the existing quality API with a separate, short-lived
 path-scoped credential that stays in a private file outside the evidence.

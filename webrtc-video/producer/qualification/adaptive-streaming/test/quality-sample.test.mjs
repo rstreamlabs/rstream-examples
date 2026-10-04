@@ -87,7 +87,29 @@ test("quality credential files reject insecure targets, malformed input and over
   try {
     await writeFile(path, JSON.stringify(credential), { mode: 0o600 });
     assert.deepEqual(await readSourceQualityCredential(path), credential);
+    const local = {
+      endpoint: "http://producer:18080/api/quality",
+      authorization: "",
+    };
+    await writeFile(path, JSON.stringify({ ...local, localReference: true }));
+    assert.deepEqual(await readSourceQualityCredential(path), local);
     for (const value of [
+      JSON.stringify(local),
+      JSON.stringify({
+        ...local,
+        localReference: true,
+        authorization: credential.authorization,
+      }),
+      JSON.stringify({
+        ...local,
+        localReference: true,
+        endpoint: "http://source.example/api/quality",
+      }),
+      JSON.stringify({
+        ...local,
+        localReference: true,
+        endpoint: "http://producer:8080/api/quality",
+      }),
       credential.authorization,
       JSON.stringify({
         ...credential,

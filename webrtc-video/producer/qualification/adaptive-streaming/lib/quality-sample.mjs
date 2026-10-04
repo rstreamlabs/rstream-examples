@@ -10,8 +10,14 @@ export async function readSourceQualityCredential(path) {
   try {
     value = JSON.parse(await readFile(path, "utf8"));
     const url = new URL(value.endpoint);
+    // An explicit credential-free fixture is confined to the runner's named
+    // Docker peer. Never send a credential over an HTTP observation endpoint.
+    const transportValid =
+      value.localReference === true
+        ? url.origin === "http://producer:18080" && value.authorization === ""
+        : url.protocol === "https:";
     if (
-      url.protocol !== "https:" ||
+      !transportValid ||
       url.username ||
       url.password ||
       url.search ||
