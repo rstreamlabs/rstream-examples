@@ -26,6 +26,30 @@ under investigation.
 
 ## Implemented; final regression qualification pending
 
+### Added acceptance criterion: rapid first picture
+
+Measure and optimize request-to-first-presented-frame time independently of
+steady-state media latency. Cover direct WebRTC, the custom MediaMTX adapter
+and native MediaMTX pull. Repeatedly exercise a first viewer with an idle source,
+reopening after the last viewer has closed and the encoder has stopped, and
+joining an already active shared source. Record cold process startup separately
+from playback activation on an already running device.
+
+Use browser frame-presentation callbacks rather than connection success or the
+first received packet. Correlate authorization, WHEP/ICE setup, on-demand
+adapter/source readiness and first decodable key frame without requiring clocks
+on separate hosts to be synchronized. Preserve every attempt, including failures;
+report the distribution and sample count, not just the fastest observation.
+No numerical acceptance target has yet been specified.
+
+Remove demonstrated serial waits, unnecessary polling and avoidable key-frame
+delays while retaining authentication, bounded cancellation, one shared upstream
+and demand-driven encoder shutdown. Do not keep capture, encoding or media
+uplink active merely to conceal slow activation. Verify rapid open/close cycles,
+concurrent readers and cancellation during startup do not leave a session,
+adapter process or encoder running. Document any configurable idle grace and its
+resource/startup tradeoff. Recheck steady-state latency and CPU after changes.
+
 - GitHub personal ownership or shared organization ownership, with bounded
   membership verification, explicit configuration and existing-device migration.
 - Optional source-wide bitrate presets, dynamically advertised to both viewers;
@@ -867,7 +891,24 @@ issue. Hosted producer unit and race suites pass; its static analysis then
 identifies an unused initial quality-policy value in a cancellation test.
 The test now uses only its rebuilt policy and checks constructor errors. Ten
 focused race repetitions and the full producer static analysis pass locally.
-The final CI run and merged dependency network checks remain in progress.
+At clean `96088fb`, all three hosted video jobs pass, including producer race
+tests/static analysis, the platform build/audit and the real MediaMTX tests.
+Unrelated example jobs still fail and are not reported as video successes.
+The merged-dependency direct trial at `361df32` passes all 57 gates (29.99 fps
+baseline, no healthy/constrained/recovery freezes, 3.40% impaired frozen time).
+Relay setup at `f32dfa6` again fails before publishing an URL. A bounded,
+read-only runner connectivity report now preserves known check outcomes while
+discarding raw URLs, project metadata and diagnostic error text.
+
+Investigation also reproduces a separate SDK defect: `Client.Connect` ignores
+its context after dialing, leaving blocked handshake reads/writes uncancelable.
+[SDK draft PR #138](https://github.com/rstreamlabs/rstream-go/pull/138) closes
+the pending connection on cancellation, joins that callback and detaches it
+before transferring ownership to the established channel. All four original
+failure cases now pass ten race repetitions, as do established-channel lifetime
+checks, the full SDK root race suite and repository-wide vet/static analysis.
+The sample has not yet consumed that fix; the relay startup cause is not yet
+established by this independently reproduced defect.
 Earlier Go 1.26 packaging/media evidence remains revision-specific: the merged
 toolchain still needs its final packaging and repeated playback qualification.
 

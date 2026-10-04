@@ -351,6 +351,12 @@ The workflow temporarily raises the runner's UDP socket receive/send limits to
 at least 7,500,000 bytes, records the previous and applied limits, and restores
 them after success or failure. It also removes the prepared authentication
 files. The evidence upload excludes those private runtime directories.
+After a failed relay run, a read-only `rstream doctor` check runs with a
+45-second limit. `runner-connectivity.json` retains only known check names,
+statuses and an expired-token classification; raw diagnostic text, addresses
+and project metadata are discarded. This check observes the runner host, not
+the producer container, and cannot turn a failed media qualification into a
+pass. A missing or timed-out report remains explicit.
 Choose the path, repair profile and receiver hint explicitly; set
 `playout_delay_hint_seconds` to `0` to qualify the low-latency viewer without an
 additional requested buffering floor. The workflow's historical default is

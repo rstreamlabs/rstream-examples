@@ -187,6 +187,38 @@ jobs:
           RSTREAM_QUALIFICATION_PREPARED_RUNTIME_DIRECTORY: ${{ steps.runtime.outputs.runtime_directory }}
         run: ./run.sh "${{ steps.runtime.outputs.output_directory }}"
 
+      - name: Diagnose failed relay setup
+        if: inputs.path == 'relay' && steps.runtime.outcome == 'success' && steps.qualification.outcome == 'failure'
+        continue-on-error: true
+        timeout-minutes: 5
+        working-directory: webrtc-video/producer/qualification/adaptive-streaming
+        shell: bash
+        env:
+          RSTREAM_AUTHENTICATION_TOKEN: ${{ secrets.RSTREAM_QUALIFICATION_TOKEN }}
+          RSTREAM_CONFIG: ${{ steps.runtime.outputs.runtime_directory }}/config.yaml
+          OUTPUT_DIRECTORY: ${{ steps.runtime.outputs.output_directory }}
+        run: |
+          set -euo pipefail
+          diagnostic_directory="$(mktemp -d)"
+          trap 'rm -rf -- "$diagnostic_directory"' EXIT
+          chmod 700 "$diagnostic_directory"
+          GOBIN="$diagnostic_directory" \
+            go install github.com/rstreamlabs/rstream-go/cmd/rstream@v1.32.10
+          status=0
+          timeout --kill-after=5s 45s \
+            "${diagnostic_directory}/rstream" --context qualification doctor --output json \
+            >"${diagnostic_directory}/report.json" \
+            2>"${diagnostic_directory}/stderr.log" || status=$?
+          # Only fixed check names, statuses and classifications leave this
+          # private directory. Raw URLs, project data and errors are discarded.
+          if ! jq -e 'type == "object" and (.checks | type == "array")' \
+            "${diagnostic_directory}/report.json" >/dev/null 2>&1; then
+            printf '{}\n' >"${diagnostic_directory}/report.json"
+          fi
+          jq --argjson exit_code "$status" -f doctor-report.jq \
+            "${diagnostic_directory}/report.json" \
+            >"${OUTPUT_DIRECTORY}/runner-connectivity.json"
+
       - name: Remove prepared credentials
         if: always()
         shell: bash
