@@ -13,8 +13,11 @@ instructions have been verified or corrected. Bounded shutdown for the
 reproduced blocked native transport write is verified in both samples. Inventory and replay
 presentation are accepted;
 the separate quality/format/metrics visual review remains pending. The current
-automatic-format series has five complete passes in six trials and retains one
-baseline browser-presentation freeze; it is not an all-green release result.
+automatic-format series at `02fdf82` has five complete passes in six trials and
+retains one 208ms recovery freeze coincident with a 167ms JavaScript timer delay
+at the recurring ten-minute event. All six format ladders and source-target
+recoveries pass; the complete series remains failed and the public timing is
+unchanged pending attribution.
 The latest fixed-format latency series validates measurement in all four cases
 and passes delivery in three; a 193ms source-capacity recovery freeze remains
 under investigation.
@@ -274,17 +277,30 @@ individual format costs. All original gates and failed verdicts are retained;
 the public down-hold remains three seconds. Owned containers are removed and
 temporary socket settings restored after the series.
 
-Next, stabilize the initial capacity-drop transition and repeat direct/MediaMTX/TURN qualification. Do not
-claim that one successful fast-down run establishes a stable policy. Before adopting
-a further threshold or controller change, inspect acknowledged throughput, increase
-mode, receive-time ordering and encoder undershoot; a clean loss signal alone
-does not prove spare capacity. If application limitation is established,
-compare with libwebrtc's bounded [probe controller](https://webrtc.googlesource.com/src/+/refs/heads/main/modules/congestion_controller/goog_cc/probe_controller.cc)
-and [probe-rate measurement](https://webrtc.googlesource.com/src/+/refs/heads/main/modules/congestion_controller/goog_cc/probe_bitrate_estimator.cc)
-instead of blindly raising the estimate or replacing the whole controller.
-Repeat automatic-format qualification after the targeted correction.
-Capture-to-display latency and isolated CPU measurements remain pending.
-These checks do not establish arbitrary hardware support or AV1 switching.
+The [new complete series at `02fdf82`](./distributor/qualification/evidence/02fdf82/automatic-format-repetitions.json)
+again passes all three direct cases and two of three adaptive MediaMTX cases.
+All six use one clean revision and identical media images. Initial transition
+disruption is 1.220–1.868s directly and 1.056–1.469s through MediaMTX; no steady
+constrained-network freeze is observed. The last two MediaMTX cases each drop
+two initial-transition frames, included in disruption. The second also records
+a 219ms warmup freeze. Every case recovers 720p30 and its source target without
+another encoder or WebRTC session. Phase-averaged producer CPU is about 0.36
+cores at baseline and 0.10 during the reduced-format phase on this host; these
+averages include transitions, so they are not isolated format benchmarks.
+
+The final MediaMTX case retains a failed playback verdict for a 208ms recovery
+freeze around 12:19:52.5 UTC, after 720p30 and 6 Mbit/s are already restored.
+Its frame callback gap is 233.3ms, receive-metadata gap 211.1ms and JavaScript
+timer delay 167.1ms, with no sampled downstream loss or NACK increase. This is
+another occurrence of the periodic scheduling observation, not proof of its
+cause. All format, source-target recovery and resource-lifecycle gates pass;
+the six-case result remains failed. The public three-second setting is not
+changed. Socket limits return to 212992 bytes and all owned containers are
+removed. Inspect the periodic pause before repeating the same matrix or
+changing production format policy. Forced TURN qualification remains separate.
+These format checks do not measure capture-to-display latency or establish
+arbitrary hardware support or AV1 switching; fixed-format latency evidence is
+recorded separately below.
 
 1. Define optional format profiles with bitrate ceiling, dimensions and frame
    rate. Existing bitrate-only configurations must remain unchanged. Expose

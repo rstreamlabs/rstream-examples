@@ -72,13 +72,6 @@ credentials. It only knows the platform URL and a `DEVICE_SECRET`; the platform
 returns the short-lived rstream configuration required to create exactly the
 producer tunnel and to refresh TURN credentials.
 
-The video platform also supports [shared organization access and discovered
-inventory](./webrtc-video/platform/README.md#select-managed-or-discovered-inventory).
-In discovery mode, producers use their existing CLI project credentials and
-appear automatically from labeled video tunnels, including an optional device
-name. Inventory history is optional; PostgreSQL still stores authentication
-accounts and sessions. Organization access can also retain managed provisioning.
-
 This can be the right shape for a SaaS product, a multi-device platform, or an
 onboarding flow where rstream should be hidden behind domain-specific product
 concepts. It avoids project-selection mistakes on devices and centralizes
@@ -99,6 +92,13 @@ rstream is less abstracted from the machine: every host must be provisioned
 carefully, host credentials must be protected, and the active project must be
 intentional. That mobility is useful for operators, but it can be a source of
 mistakes in a product meant for unmanaged devices.
+
+The video platform also supports [shared organization access and discovered
+inventory](./webrtc-video/platform/README.md#select-managed-or-discovered-inventory).
+In discovery mode, producers use their existing CLI project credentials and
+appear automatically from labeled video tunnels, including an optional device
+name. Inventory history is optional; PostgreSQL still stores authentication
+accounts and sessions. Organization access can also retain managed provisioning.
 
 `private-llm-mesh` combines the two ideas without introducing a third posture.
 The web application is rstream-aware: it uses application credentials to watch
