@@ -684,6 +684,41 @@ containers are removed. A separate timing review finds pauses near UTC second
 This correlation does not establish a cause. Inspect host/VM scheduling and
 capture the relayed transport before modifying production pacing or buffers.
 
+An [eight-minute idle observation](./producer/qualification/adaptive-streaming/evidence/d3893e6/idle-clock-observation.json)
+now samples host and Linux VM monotonic intervals simultaneously, with no video
+producer running. The maximum gaps are 69ms on the host and 178ms in the VM.
+Near the suspected periodic window, both record about 60ms gaps; neither
+reproduces the loaded-video 193–212ms freeze. Both also observe an approximately
+153ms civil-clock adjustment, about twenty seconds apart. This supports keeping
+elapsed measurements independent of civil time, but does not establish a cause
+for the video pauses or change any failed verdict. Unrelated applications and
+host configuration are left unchanged.
+
+A [bounded packet capture at `2c15bbc`](./producer/qualification/adaptive-streaming/evidence/d3893e6/turn-packet-correlation.json)
+reproduces the persistent TURN failure. During the unshaped baseline, 1,684 of
+11,259 primary RTP packets captured at producer egress are absent from receiver
+ingress (14.96%); FEC and RTX have losses too. Both captures report zero kernel
+drops, and both endpoint UDP buffer/error counters remain zero. The receiver
+records 4.064s frozen time (16.14%) while encoder frame gaps remain below 41ms.
+This locates missing packets between the two network-namespace capture points,
+without yet attributing them to the remote relay, host network or Docker path.
+A separate 370ms receiver heartbeat gap occurs in warmup at 09:19:52.581 UTC;
+that periodic observation does not explain sustained baseline packet loss.
+The capture covers only bounded RTP headers and excludes STUN/authentication.
+All private capture containers are removed and socket limits restored. The
+instrumented trial fails six gates and is retained as diagnostic evidence.
+
+A [second capture with VM ingress/egress points](./producer/qualification/adaptive-streaming/evidence/d3893e6/turn-vm-hop-correlation.json)
+passes every delivery gate but does not reproduce the large loss. All 24,064
+baseline primary packets reach VM egress; 38 (0.158%) are absent at VM ingress,
+and all packets observed there reach the browser container. The measured loss
+therefore lies outside the Linux VM in this trial; the macOS networking layer
+and external route/relay remain within that interval. There are no baseline or
+recovery freezes; impaired freezes total 2.892s (8.208%), with a 24.201s rate
+recovery. This successful diagnostic does not replace the failed release matrix
+or explain the first trial's larger loss. All four captures report zero kernel
+drops; owned containers and temporary socket settings are cleaned up.
+
 ## Cross-cutting latency and resource criteria
 
 The optional qualification-only pixel timestamp probe is now maintained in
