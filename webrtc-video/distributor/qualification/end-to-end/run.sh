@@ -69,7 +69,7 @@ esac
 if [[ -z "${producer_config}" ]]; then
   producer_config="${producer_directory}/config.test-pattern.h264.twcc-gcc-flexfec.yaml"
   if [[ "${latency_probe}" == true ]]; then
-    producer_config="${qualification_directory}/latency/config.yaml"
+    producer_config="${qualification_directory}/latency/config.latency.yaml"
   fi
 fi
 if [[ ! -f "${producer_config}" ]]; then

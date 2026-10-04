@@ -49,7 +49,7 @@ qualification browser and is stopped before session teardown.
 
 The distributor's end-to-end runner supports `RSTREAM_DISTRIBUTOR_LATENCY_PROBE=true`
 for direct, custom-adapter and native MediaMTX paths. It selects the matching
-720p30 qualification profile in `latency/config.yaml`, which stamps a timestamp
+720p30 qualification profile in `latency/config.latency.yaml`, which stamps a timestamp
 into a small patch of I420 pixels immediately before the encoder. The browser
 decodes that patch at most five times per second. This works across MediaMTX RTP
 timestamp rewriting and does not add a queue or change the public source profiles.
