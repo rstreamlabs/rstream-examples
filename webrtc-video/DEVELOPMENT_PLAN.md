@@ -26,6 +26,11 @@ baseline browser-presentation freeze; it is not an all-green release result.
   A reachability regression reproduces the previous source/pipeline retention
   and checks never-started, playing, stopped and end-of-stream lifecycles;
   the producer's full Go race suite passes with the fix.
+- Incremental viewer builds now include every imported local/shared TypeScript
+  module. A clean timestamp-controlled fixture reproduces skipped rebuilds for
+  `contracts.ts` and `ice-recovery.ts` before the dependency correction and
+  verifies rebuilds afterward; the actual producer build passes. The guide's
+  Go minimum and optional Node.js requirement match the producer README.
 
 ## Implemented: project discovery
 
@@ -655,6 +660,30 @@ publishable delay bound. The collector now retains a complete report when marker
 gates fail, allowing the runner to collect teardown/resource/media evidence
 before its unchanged latency gate fails. Frame-latency percentiles must be read
 alongside freeze durations because callbacks sample newly presented frames.
+
+The [post-backoff latency series at `ce008b0`](./distributor/qualification/evidence/ce008b0/latency-network.json)
+passes the video, congestion-response and lifecycle gates in all four fixed
+720p30 cases. Direct delay/jitter/loss also passes latency validity: baseline
+median/p95 are 56.602/57.559ms and the impaired phase is 104.893/122.817ms,
+with 0.276s transition freezes. These are single same-host observations.
+The other three overall verdicts fail only latency-clock agreement. Source
+capacity has a sustained wall/performance-clock offset change of about 145ms
+during recovery; 87 following markers are outside the unchanged 5ms bound,
+while their probes take at most 2.2ms. Source impairment and direct capacity
+reach 9.200ms and 7.800ms offsets. Their full-run latency distributions are
+invalid. None reproduces the earlier pixel-stamp reversal, whose cause remains
+separate and unresolved. Socket limits are restored and owned containers removed.
+
+Next, qualify a common Linux monotonic clock for the timestamp marker and an
+explicitly bounded alignment of browser performance time to that clock. Keep
+the same-host check, source-marker integrity/ordering, complete failure evidence
+and a measured calibration error bound. Do not loosen the existing clock gate
+or retrospectively correct failed runs. GLib's
+[monotonic clock](https://docs.gtk.org/glib/func.get_monotonic_time.html) and
+[Chromium's Linux TimeTicks](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/base/time/time_now_posix.cc)
+provide the basis; the calibration and real-browser qualification are not yet
+implemented. Production streaming and its buffers do not need to change for
+this measurement correction.
 
 - Compare changes against the current path at equal source content and network
   conditions. Measure time to first frame separately from capture-to-display
