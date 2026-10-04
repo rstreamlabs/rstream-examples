@@ -25,6 +25,7 @@ import (
 const (
 	httpTimeout                       = 15 * time.Second
 	sourceTrackTimeout                = 10 * time.Second
+	destinationConnectTimeout         = 10 * time.Second
 	sessionCleanupTimeout             = 3 * time.Second
 	workerShutdownTimeout             = 3 * time.Second
 	minimumResolvedCredentialLifetime = 60 * time.Second
@@ -426,7 +427,43 @@ func openDestination(
 		_ = peer.Close()
 		return nil, nil, nil, nil, fmt.Errorf("open MediaMTX WHIP session: %w", err)
 	}
+	connectCtx, cancelConnect := context.WithTimeout(ctx, destinationConnectTimeout)
+	err = waitForPeerConnection(connectCtx, peer)
+	cancelConnect()
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("connect MediaMTX WHIP transport: %w", errors.Join(err, closeSession(session)))
+	}
 	return peer, sender, output, session, nil
+}
+
+// SDP completion does not imply that DTLS/SRTP is ready. Pion can silently
+// discard writes before connection, including the initial H264 parameter sets.
+// Wait only at startup; the live forwarding path needs no additional buffering.
+func waitForPeerConnection(ctx context.Context, peer peerConnectionStateSource) error {
+	changed := make(chan struct{}, 1)
+	peer.OnConnectionStateChange(func(webrtc.PeerConnectionState) {
+		select {
+		case changed <- struct{}{}:
+		default:
+		}
+	})
+	defer peer.OnConnectionStateChange(nil)
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		switch state := peer.ConnectionState(); state {
+		case webrtc.PeerConnectionStateConnected:
+			return nil
+		case webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed:
+			return fmt.Errorf("peer connection entered %s state before media was ready", state)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-changed:
+		}
+	}
 }
 
 func openSource(

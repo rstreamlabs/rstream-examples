@@ -6,7 +6,7 @@ qualification do not establish compatibility with untested cameras, encoders,
 operating systems or networks.
 
 The remaining acceptance work is concentrated on repeated network/latency
-qualification, isolated resource measurements, final route/browser regressions
+qualification, the recording-startup correction, final route/browser regressions
 and the guide-command audit. Inventory and replay presentation are accepted;
 the separate quality/format/metrics visual review remains pending. The current
 automatic-format series has five complete passes in six trials and retains one
@@ -760,8 +760,46 @@ observations do not rank the paths: realized source rates differ (8, 7.586 and
 5 Mbit/s), as do their control policies. Canvas readback materially increases
 browser memory (about 553 MiB peak versus 326 MiB in the direct reference),
 which is retained as measurement overhead. Production readers do not use it.
-Repeated controlled resource comparisons and impaired-network latency remain
-pending; the earlier direct impairment freeze remains an open delivery failure.
+The repeated resource comparison below now supplies controlled observations;
+impaired-network delivery qualification remains open.
+
+The [twelve resource trials at `5b83934`](./distributor/qualification/evidence/5b83934/recording-resources.json)
+compare probe and recording independently, three times each, with identical
+images and a 720p30 source at an observed 8 Mbit/s encoder target. Resource
+samples cover only complete batches inside each 60-second baseline after
+40 seconds of warmup. All twelve cases meet comparability checks and all six
+instrumented cases have valid monotonic latency measurements. Ten delivery
+verdicts pass. One recording/probe case freezes for 220ms at 09:59:52 UTC,
+coinciding with the earlier periodic observations without proving their cause.
+Another records MediaMTX's `SPS not received yet` error at startup, then resumes
+recording after two seconds; its live reader has no freeze or dropped frame.
+Both failed verdicts are retained.
+
+Across paired trials, recording changes mean distributor CPU by -0.0012 to
++0.0095 of one logical core and peak cgroup memory by +87.8 to +97.9 MiB.
+The cgroup includes the approximately 99 MB of recording files in the bounded
+512 MiB tmpfs; this is not a process-RSS or physical-disk I/O budget. The
+qualification-only pixel probe adds about 212 to 235 MiB of browser memory.
+Baseline latency medians range from 41.8 to 61.5ms; recording-on versus off
+p95 differences range from -15.8 to +7.1ms. These are host-specific ranges with
+retained failures and normal variation, not proof of an absence of latency
+regressions. All owned containers were removed and socket limits restored.
+
+A deterministic WHIP regression reproduces the adapter returning a usable
+destination while its transport is still unconnected. Startup now awaits a
+connected peer with a ten-second bound and caller cancellation, closing the
+session on failure. The focused race tests cover successful and terminal state
+changes, timeout, cancellation and exactly-once HTTP cleanup. Full integration
+with MediaMTX 1.21.1 passes under the race detector; a fresh recording startup
+check remains required before closing this defect.
+
+The broader distributor race run exposes a separate intermittent ICE-restart
+failure in `TestRestartRenewsCredentialsAndKeepsOneConnectedPeer`: the peer
+remains connecting, and failed-test cleanup stalls in a UDP IPv6 socket write
+from the ICE task loop, with DTLS closure waiting for that loop. A standalone
+repeat passes, while a bounded full-package repeat reproduces the failure.
+This is not classified as a destination-readiness regression or a passing full
+suite. The preserved stacks require a separate native transport investigation.
 
 The [four initial impaired-network latency trials](./distributor/qualification/evidence/f654989/latency-network.json)
 retain two passes (source delay/jitter/loss and direct capacity), one direct

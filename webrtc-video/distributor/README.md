@@ -107,6 +107,12 @@ local resource invariants stop the process immediately so a broken deployment
 cannot hammer the control plane. `SIGINT`/`SIGTERM` interrupts both forwarding
 and backoff immediately.
 
+After WHIP signaling, the adapter waits up to ten seconds for the destination
+media transport to connect before forwarding RTP or requesting the initial
+source key frame. This preserves the initial H.264 parameter sets that a
+not-yet-connected sender can otherwise discard. Cancellation or connection
+failure closes the newly created session; no extra live buffering is added.
+
 The forwarding pipeline has bounded packet, repair, and worker queues. It
 reorders media for at most 300 ms, retries NACK feedback at a bounded cadence,
 expires missing packets after one second, and stops instead of accumulating an
