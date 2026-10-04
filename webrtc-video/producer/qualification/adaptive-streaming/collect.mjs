@@ -20,6 +20,7 @@ import { PathStability, pathMatchesPolicy } from "./lib/path.mjs";
 import { redactError, redactSensitiveText } from "./lib/redaction.mjs";
 import { negotiatedVideoCodecs } from "./lib/sdp-codecs.mjs";
 import { installFrameDiagnostics } from "./lib/frame-diagnostics.mjs";
+import { installStartupTiming } from "./lib/startup-timing.mjs";
 import { createLatencyReport } from "./latency/report.mjs";
 import { calibrateBrowserClock, calibrationBounds } from "./latency/clock.mjs";
 
@@ -349,6 +350,9 @@ try {
     { timeout: 60_000 },
   );
   await page.selectOption("#turn-policy", icePolicy);
+  if (!(await page.evaluate(installStartupTiming))) {
+    throw new Error("the viewer cannot measure first-frame presentation");
+  }
   await page.click("#connect");
   await page.waitForFunction(
     () => {
@@ -568,6 +572,7 @@ try {
     await page
       .evaluate(() => {
         window.__rstreamFrameDiagnostics?.stop();
+        window.__rstreamStartupTiming?.stop();
         window.__rstreamLatencyProbe?.stop();
       })
       .catch(() => {});
@@ -1005,6 +1010,7 @@ async function collectSignalingMetadata(activePage) {
     const telemetry = window.__rstreamQualificationTelemetry || {};
     return {
       closeResult: window.__rstreamQualificationViewer?.closeResult || null,
+      startup: window.__rstreamStartupTiming?.snapshot() ?? null,
       events: telemetry.events || [],
       iceRestartOffers: telemetry.iceRestartOffers || 0,
       localCandidatesSent: telemetry.localCandidatesSent || 0,

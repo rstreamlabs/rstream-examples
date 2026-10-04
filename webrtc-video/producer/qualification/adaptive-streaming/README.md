@@ -15,6 +15,18 @@ queue, recovery and network-loss gates are unchanged.
 
 ## What the harness measures
 
+First-picture timing is recorded separately in `signaling-events.json` under
+`startup`. A capture listener timestamps the actual Connect click and arms
+`requestVideoFrameCallback` before the player handles that click. The first
+callback preserves both its arrival time and the browser's expected display
+time. Missing or invalid observations remain explicit; later polling completion
+is not substituted for first presentation. MediaMTX end-to-end results include
+this record under `setup.presentation` and require valid presentation evidence.
+These durations exclude page navigation, device-process startup and physical
+display scanout. They measure one fresh activation; repeat/cold/warm/churn
+qualification must still distinguish source lifecycle state. No startup-time
+performance threshold is implied by measurement validity.
+
 For QUIC signaling, first prepare adequate UDP socket limits on the Linux
 container host (the Linux VM when using Docker Desktop). The
 [distribution prerequisites](../../../distributor/README.md#technical-qualification)

@@ -11,6 +11,11 @@ jq -n '{
   whepSessionCreates: 1,
   whepSessionDeletes: 1,
   whepFailedRequests: 0,
+  startup: {
+    measurementValid: true,
+    requestToCallbackMilliseconds: 750,
+    requestToExpectedDisplayMilliseconds: 760
+  },
   events: [
     {elapsedMilliseconds: 100, kind: "peer-created"},
     {durationMilliseconds: 200, elapsedMilliseconds: 350, kind: "whep-request", method: "POST", status: 201},
@@ -154,6 +159,15 @@ render_result() {
 
 jq -n '{enabled: false}' >"${fixture_directory}/source-formats.json"
 recording='{"enabled":false}'
+for startup in null '{measurementValid: false}' '{measurementValid: true}' \
+  '{measurementValid: true, requestToCallbackMilliseconds: -1, requestToExpectedDisplayMilliseconds: 760}'; do
+  cp "${fixture_directory}/signaling.json" "${fixture_directory}/signaling-original.json"
+  jq ".startup = ${startup}" "${fixture_directory}/signaling-original.json" >"${fixture_directory}/signaling.json"
+  render_result "${fixture_directory}/samples.jsonl" | jq -e '
+    .gates.startupPresentationEvidence == false and .passed == false
+  ' >/dev/null
+  mv "${fixture_directory}/signaling-original.json" "${fixture_directory}/signaling.json"
+done
 render_result "${fixture_directory}/samples.jsonl" | jq -e '.gates.recordingEvidence == true and .recording.enabled == false' >/dev/null
 recording='{"enabled":true,"segmentFiles":3,"bytes":1024,"storageLimitBytes":536870912}'
 render_result "${fixture_directory}/samples.jsonl" mediamtx | jq -e '.gates.recordingEvidence == true and .recording.segmentFiles == 3' >/dev/null

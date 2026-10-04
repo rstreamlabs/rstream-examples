@@ -50,6 +50,15 @@ concurrent readers and cancellation during startup do not leave a session,
 adapter process or encoder running. Document any configurable idle grace and its
 resource/startup tradeoff. Recheck steady-state latency and CPU after changes.
 
+The collector now arms a one-shot frame-presentation callback before the
+Connect click is handled. It retains click, callback and expected-display
+timestamps separately from the older decoded-frame polling milestone. Missing,
+invalid or canceled observations remain invalid rather than becoming zero
+latency. The MediaMTX result requires this evidence; callback/lifecycle and
+result-gate regressions pass. This instrument still needs real-browser checks
+and repeated cold/reopen/join measurements before any startup optimization can
+be claimed.
+
 - GitHub personal ownership or shared organization ownership, with bounded
   membership verification, explicit configuration and existing-device migration.
 - Optional source-wide bitrate presets, dynamically advertised to both viewers;

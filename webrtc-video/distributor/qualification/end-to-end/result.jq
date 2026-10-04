@@ -211,6 +211,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
   signaling: $signaling[0],
   setupMilliseconds: $connected.elapsedMilliseconds,
   setup: {
+    presentation: $signaling[0].startup,
     peerCreatedMilliseconds: $peer_created.elapsedMilliseconds,
     whepPostDurationMilliseconds: $whep_post.durationMilliseconds,
     whepPostCompletedMilliseconds: $whep_post.elapsedMilliseconds,
@@ -294,6 +295,13 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     producerMetrics: (([.[] | select(producer_metrics_complete)] | length) == length),
     qualityEvidence: ([phase_summary("baseline"), phase_summary("source-network"), phase_summary("viewer-network"), phase_summary("recovery")] | map(select(. != null)) | all(.averageDecodedQP != null and .averageDecodedQP >= 0)),
     setupEvidence: ([$peer_created, $whep_post, $connected, $playback_ready, $first_decoded_frame] | all(. != null)),
+    startupPresentationEvidence: (
+      $signaling[0].startup.measurementValid == true and
+      ($signaling[0].startup.requestToCallbackMilliseconds | type) == "number" and
+      $signaling[0].startup.requestToCallbackMilliseconds >= 0 and
+      ($signaling[0].startup.requestToExpectedDisplayMilliseconds | type) == "number" and
+      $signaling[0].startup.requestToExpectedDisplayMilliseconds >= 0
+    ),
     teardownEvidence: ($whep_delete != null and $whep_delete.durationMilliseconds >= 0),
     adapterIntegrity: (
       $mode != "mediamtx" or (
