@@ -6,8 +6,10 @@ qualification do not establish compatibility with untested cameras, encoders,
 operating systems or networks.
 
 The remaining acceptance work is concentrated on repeated network/latency
-qualification, bounded native transport shutdown, final route/browser regressions
-and the guide-command audit. Inventory and replay presentation are accepted;
+qualification, intermittent native connectivity, final route/browser regressions
+and the guide-command audit. Bounded shutdown for the reproduced blocked native
+transport write is now verified in both samples. Inventory and replay
+presentation are accepted;
 the separate quality/format/metrics visual review remains pending. The current
 automatic-format series has five complete passes in six trials and retains one
 baseline browser-presentation freeze; it is not an all-green release result.
@@ -547,10 +549,11 @@ deduplication. The source and direct accounting fixes require new uninstrumented
 network qualification. Synchronous diagnostic captures are retained as diagnosis
 only and cannot substantiate latency or CPU improvements.
 
-The sample pins `d17c867` in both Go modules, including the signed-loss and
+At this stage the sample pinned `d17c867` in both Go modules, including the signed-loss and
 arrival-ordered bounded-rate corrections, and the [sender RTCP fix](https://github.com/rstreamlabs/pion-webrtc/pull/1)
-at `ab2ba524` in the producer. The distributor keeps its separate FlexFEC
-receiver fork. Full race suites and lint pass in both affected native forks;
+at `ab2ba524` in the producer. The distributor then used its separate FlexFEC
+receiver fork; the later `5924f8e7` shutdown revision combines both extensions.
+Full race suites and lint pass in both affected native forks;
 producer/distributor race suites, no-embedded mode and real MediaMTX 1.21.1
 integration also pass. The sender suite initially hit two existing incomplete
 ICE-signaling fixtures; the statistics hang reproduces with the original sender
@@ -809,6 +812,35 @@ complete module run reproduces the same IPv6 write stall, so Go 1.27 alone is
 not its cause. The preserved stacks require a separate native transport
 investigation. Existing ICE pre-stop cancellation is present in the fork;
 DTLS close-notify waits before PeerConnection reaches that ICE shutdown.
+
+The [native shutdown qualification at `cd4216c`](./distributor/qualification/evidence/cd4216c/native-shutdown.json)
+now closes that demonstrated teardown defect. A deterministic blocked UDP writer
+keeps both Close and GracefulClose stuck on the previous implementation. Native
+revision `5924f8e7` preserves normal shutdown ordering, but after one second
+interrupts ICE transport I/O and joins the timeout worker before the closing
+owner returns. Live deadlines, buffering and pacing are unchanged. This is not
+a universal bound for arbitrary application callbacks or custom transports.
+The fork combines the existing sender-associated RTCP and FlexFEC receiver
+extensions, and both samples now pin its published module.
+
+The complete native Linux race suite passes in 171.628s. Its initial run exposed
+a separate ICE-restart test race: new-generation candidates were delivered
+before the corresponding remote SDP and discarded. The test now queues those
+early candidates until the SDP is applied, then continues forwarding new
+candidates immediately. Native macOS close/concurrency/RTCP/FlexFEC regressions,
+vet and lint pass. Both complete sample race suites, vet and module integrity
+checks pass using the published dependency at clean sample revision `cd4216c`.
+Real MediaMTX 1.21.1 integration passes in 32.421s, including source repair,
+native pull, on-demand stop/restart and failure recovery.
+
+The local distributor signaling fixtures now restrict candidates to IPv4/IPv6
+loopback and register cleanup immediately on both peers; production interface
+selection is unchanged. The original unrestricted-interface restart still
+failed with the shutdown correction alone, but its cleanup finished instead of
+hanging. The original full macOS native run also timed out while MassiveTracks
+awaited a connection, before any close call; the isolated repeat passed. These
+failures remain recorded. Their underlying external-interface IPv6 connectivity
+cause, and the separate TURN/latency failures, are not declared resolved.
 
 The [four initial impaired-network latency trials](./distributor/qualification/evidence/f654989/latency-network.json)
 retain two passes (source delay/jitter/loss and direct capacity), one direct

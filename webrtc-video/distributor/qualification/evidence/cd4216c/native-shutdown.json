@@ -1,0 +1,275 @@
+{
+  "schemaVersion": 1,
+  "sampleRevision": "cd4216cf2c4900ba87f7f0cc969be51f13a5311a",
+  "sampleWorkingTree": "clean during published-module regression and integration checks",
+  "nativeRevision": "5924f8e74b6400461536bd87f5928ea4803cca38",
+  "nativeSourceTree": "5595f138300a912132ac917c60b5375e14db02f2",
+  "nativeLinuxRunSourceNote": "The test signaling-order edit was committed during the run without changing source contents. The full suite used the source tree identified above.",
+  "nativeModule": "github.com/rstreamlabs/pion-webrtc/v4@v4.2.19-0.20261004104852-5924f8e74b64",
+  "nativePullRequest": "https://github.com/rstreamlabs/pion-webrtc/pull/2",
+  "linuxImage": "golang:1.27.0-bookworm",
+  "linuxImageID": "sha256:8bb81319f02915548895ba9e213b958367f9572fb1fa641d145c6730f5c6a440",
+  "hostGoVersion": "1.27.0",
+  "lintGoVersion": "1.26.6",
+  "mediaMTXVersion": "1.21.1",
+  "changes": [
+    "First PeerConnection close owner starts a one-second timer; stalled final transport writes trigger ICE Stop and the timer worker is joined before returning.",
+    "Normal close ordering and all live transport behavior remain unchanged.",
+    "The existing sender-associated RTCP and FlexFEC receiver extensions are retained in one published fork revision.",
+    "Native ICE-restart test buffers candidates until the matching remote SDP is applied; later candidates are still forwarded immediately.",
+    "Local distributor signaling fixtures use IPv4/IPv6 loopback candidates and register cleanup as soon as each peer is created. Production interface selection is unchanged."
+  ],
+  "checks": [
+    {
+      "label": "destination-readiness-red",
+      "file": "rstream-destination-readiness-red.log",
+      "sha256": "7f453cb58d2eb771467853f7827ca71010c7bc00764a55216d6db942dd4dc693",
+      "outcome": "failed: returned nil before transport connected"
+    },
+    {
+      "label": "destination-readiness-green",
+      "file": "rstream-destination-readiness-green.log",
+      "sha256": "8b1cc788fbec8380583d4fa1aea4037728b54f97f607858dd43a4036d9dc2d68",
+      "outcome": "passed with race detector"
+    },
+    {
+      "label": "destination-integration",
+      "file": "rstream-destination-readiness-integration.log",
+      "sha256": "b8af40d06a38e47d4002cbfba443a6d99ffc222ebdc62322766bb8203a753cb2",
+      "outcome": "passed with race detector and MediaMTX 1.21.1"
+    },
+    {
+      "label": "distributor-full-go127",
+      "file": "rstream-destination-readiness-race.log",
+      "sha256": "17f5a0ebde4239800f954f4fd7a0c81c232c107696c5c2a52e72faa72642e302",
+      "outcome": "failed; restart remained connecting, cleanup hung; owned test stopped with SIGQUIT to preserve stacks"
+    },
+    {
+      "label": "whip-restart-only-go127",
+      "file": "rstream-whip-restart-diagnostic.log",
+      "sha256": "e358fdc8f8f9b89ab082e098f07351ba8d681e62a7bca1772727135c95c504ec",
+      "outcome": "passed"
+    },
+    {
+      "label": "whip-package-go127",
+      "file": "rstream-whip-suite-repeat.log",
+      "sha256": "1f526c6e33b8484e84165dc8232084530d8c735ff6c4a5b26784f6ba84dc91c3",
+      "outcome": "failed; timeout after 45 seconds"
+    },
+    {
+      "label": "whip-package-go126",
+      "file": "rstream-whip-suite-go126.log",
+      "sha256": "a557d77af203198608460b076a56f14d89e4a28f48d18492b38132cbc8b4960e",
+      "outcome": "passed"
+    },
+    {
+      "label": "distributor-full-go126",
+      "file": "rstream-distributor-readiness-go126.log",
+      "sha256": "84b0d627d38c5ea875428d8ae7316d271ab809368b402e98a3edff32819b6740",
+      "outcome": "failed; timeout after 60 seconds"
+    },
+    {
+      "label": "peer-close-blocked-red",
+      "file": "rstream-peer-close-blocked-red.log",
+      "sha256": "541d2a825390e6b8e184244d0432b316788c552054f308d7308b1a7c8cbb0ea3",
+      "outcome": "failed: both Close and GracefulClose remained blocked for three seconds before fixture release"
+    },
+    {
+      "label": "peer-close-blocked-green",
+      "file": "rstream-peer-close-blocked-green.log",
+      "sha256": "b3ad5bd699d65be1c31b043acfa52387e908e29e961715fb17dbca2e44e1883b",
+      "outcome": "passed: race detector; forced socket release after one-second closing grace"
+    },
+    {
+      "label": "peer-close-repeated",
+      "file": "rstream-peer-close-repeated.log",
+      "sha256": "9883f7e8dcfed27d0acec0dbbd4a485e3e6b8802f0e90acf87edeb2016f18024",
+      "outcome": "passed: blocked-write close regression repeated three times under race detector"
+    },
+    {
+      "label": "peer-close-regressions",
+      "file": "rstream-peer-close-regressions.log",
+      "sha256": "2d69fad4a12c442603e7e4bf11856d461896d683bd95537b2aef0d0fddcf6dd2",
+      "outcome": "passed: existing normal, graceful, concurrent, during-ICE and DTLS/media close tests"
+    },
+    {
+      "label": "peer-close-vet",
+      "file": "rstream-peer-close-vet.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "outcome": "passed"
+    },
+    {
+      "label": "peer-close-lint-final2",
+      "file": "rstream-peer-close-lint-final2.log",
+      "sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47",
+      "outcome": "passed: zero issues"
+    },
+    {
+      "label": "peer-close-full",
+      "file": "rstream-peer-close-full.log",
+      "sha256": "03bd4694cc7ac05e9e8ea2d3c8147f940facebac107757abf1a8516911f75a6b",
+      "outcome": "failed: full native macOS race suite timed out after four minutes in MassiveTracks, awaiting connection before close"
+    },
+    {
+      "label": "peer-massive-isolated",
+      "file": "rstream-peer-massive-isolated.log",
+      "sha256": "27b61895eb2e38028f8562e5645063b051803f5b381faea58693fd56ab0eb3c9",
+      "outcome": "passed: isolated native MassiveTracks race test in 8.519s"
+    },
+    {
+      "label": "peer-close-linux-full",
+      "file": "rstream-peer-close-linux-full.log",
+      "sha256": "ee2f18de340ad2f73b95e5a241417da1673630f4aa44955fb7f42665fafc9b9b",
+      "outcome": "harness failed: Docker tmpfs did not permit execution; no test outcome"
+    },
+    {
+      "label": "whip-close-patched",
+      "file": "rstream-whip-close-patched.log",
+      "sha256": "a92a9f956cbaa7c6c703b128de8232e35d36cad40b0046772cdb3cbe01f93424",
+      "outcome": "failed: original unrestricted-interface restart remained connecting; patched cleanup completed and suite exited in 8.725s"
+    },
+    {
+      "label": "whip-loopback-repeated",
+      "file": "rstream-whip-loopback-repeated.log",
+      "sha256": "8c87e042ac7d6c25f19d87a802e593591c4ba1bc8cd280f42f9512c8a9367099",
+      "outcome": "passed: local dual-address-family signaling fixture and immediate peer cleanup, three repetitions"
+    },
+    {
+      "label": "distributor-close-full",
+      "file": "rstream-distributor-close-full.log",
+      "sha256": "12cbe9cb6a7431155a6714027c6a102101c170f706bfe25b0b31ce2ff6d4102d",
+      "outcome": "build failed: sender-only native branch does not contain distributor FlexFEC receiver extension; consolidate existing extensions before module-wide validation"
+    },
+    {
+      "label": "peer-close-linux-full-exec",
+      "file": "rstream-peer-close-linux-full-exec.log",
+      "sha256": "4bd800d229988d04e6ba3ee5ada029309445d4adebee3bd747116398bcab4d46",
+      "outcome": "failed",
+      "scope": "full Linux suite timed out in original TestICERestart; new-generation candidates were sent before the new remote SDP"
+    },
+    {
+      "label": "peer-restart-linux-original",
+      "file": "rstream-peer-restart-linux-original.log",
+      "sha256": "df473f481cf7e3277e46bd135e6aea96238e31e21bd8d478a917a9f40c351ffe",
+      "outcome": "passed",
+      "scope": "three isolated repeats pass but still log dropped candidates, retaining evidence of fixture scheduling dependence"
+    },
+    {
+      "label": "distributor-close-combined",
+      "file": "rstream-distributor-close-combined.log",
+      "sha256": "4f55bf18bf8261c3c1324d7134af0e6805d6addbc7678d3e17678495ffbc8549",
+      "outcome": "passed",
+      "scope": "full distributor race suite with combined fork through private modfile"
+    },
+    {
+      "label": "producer-close-combined",
+      "file": "rstream-producer-close-combined.log",
+      "sha256": "43aa7643691e6e6b166694e439836a13c2925fbfe4a7f7da2e45e21e5283364b",
+      "outcome": "passed",
+      "scope": "full producer race suite with combined fork through private modfile"
+    },
+    {
+      "label": "peer-close-combined-regression",
+      "file": "rstream-peer-close-combined-regression.log",
+      "sha256": "3c6907dd51c1e894feeddf347914a2bda1880d7ef2b54aece6cacbe8cfd15e7a",
+      "outcome": "passed",
+      "scope": "normal and blocked close, concurrent close, RTCP sender and FlexFEC receiver race tests; 19.366 seconds"
+    },
+    {
+      "label": "peer-close-combined-lint",
+      "file": "rstream-peer-close-combined-lint.log",
+      "sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47",
+      "outcome": "passed",
+      "scope": "golangci-lint reports zero issues"
+    },
+    {
+      "label": "peer-close-combined-vet",
+      "file": "rstream-peer-close-combined-vet.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "outcome": "passed",
+      "scope": "native go vet"
+    },
+    {
+      "label": "peer-close-linux-combined",
+      "file": "rstream-peer-close-linux-combined.log",
+      "sha256": "ae6dd3fb568f92c5946752151fe01ad21de4157081a86254ca7c3cf4bf65f64a",
+      "outcome": "passed",
+      "scope": "full native Linux Go 1.27 race suite; 171.628 seconds; includes test signaling-order correction"
+    },
+    {
+      "label": "distributor-close-integration",
+      "file": "rstream-distributor-close-integration.log",
+      "sha256": "2a59a3441b76c485d3f5deb4a6676fb9f37e29088d256aa094ad51829a52b65c",
+      "outcome": "passed",
+      "scope": "MediaMTX 1.21.1 integration with private combined module; 33.342 seconds"
+    },
+    {
+      "label": "producer-close-published",
+      "file": "rstream-producer-close-published.log",
+      "sha256": "bff2448d2ed28fd4d8d3f6c7735e0358eaab60a14e750cd1d6de6d7af83d331b",
+      "outcome": "passed",
+      "scope": "full producer race suite on downloaded published module at clean sample revision cd4216c"
+    },
+    {
+      "label": "distributor-close-published",
+      "file": "rstream-distributor-close-published.log",
+      "sha256": "aef4f432b4c3e83680e667c272bcaf2f9ea5bc542216580775bfefaa6d9a7e2b",
+      "outcome": "passed",
+      "scope": "full distributor race suite on downloaded published module at clean sample revision cd4216c"
+    },
+    {
+      "label": "producer-close-published-vet",
+      "file": "rstream-producer-close-published-vet.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "outcome": "passed",
+      "scope": "producer go vet on published module"
+    },
+    {
+      "label": "distributor-close-published-vet",
+      "file": "rstream-distributor-close-published-vet.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "outcome": "passed",
+      "scope": "distributor go vet on published module"
+    },
+    {
+      "label": "producer-close-modules",
+      "file": "rstream-producer-close-modules.log",
+      "sha256": "b4537ed75f533f993f371954de47e42a793b8e5b0587577de7e27fb3e50696bd",
+      "outcome": "passed",
+      "scope": "all producer modules verified"
+    },
+    {
+      "label": "distributor-close-modules",
+      "file": "rstream-distributor-close-modules.log",
+      "sha256": "b4537ed75f533f993f371954de47e42a793b8e5b0587577de7e27fb3e50696bd",
+      "outcome": "passed",
+      "scope": "all distributor modules verified"
+    },
+    {
+      "label": "distributor-close-published-integration",
+      "file": "rstream-distributor-close-published-integration.log",
+      "sha256": "1f78bd68add138fa55e7c01ab21f0885295e7071699b2bce2f6f347b3c385055",
+      "outcome": "passed",
+      "scope": "MediaMTX 1.21.1 integration on published module at clean sample revision cd4216c; 32.421 seconds"
+    }
+  ],
+  "reproduction": {
+    "native": [
+      "go test -race ./... -count=1 -timeout=6m",
+      "go test -race -run TestPeerConnectionCloseInterruptsBlockedTransportWrite -count=3",
+      "go vet ./..."
+    ],
+    "samples": [
+      "go test -race ./... -count=1 -timeout=3m",
+      "go vet ./...",
+      "go mod verify"
+    ],
+    "distributorIntegration": "RSTREAM_MEDIAMTX_BINARY=<MediaMTX-1.21.1-executable> go test -race -tags=integration ./internal/bridge -count=1 -timeout=2m"
+  },
+  "limitations": [
+    "The original unrestricted-interface macOS full native suite timed out while MassiveTracks awaited a connection, before Close was called; the isolated test passed.",
+    "The original distributor restart still failed with the shutdown fix alone, but cleanup completed instead of hanging. Loopback fixture success does not establish external IPv6 restart success.",
+    "The one-second grace interrupts blocked transport I/O; it is not a universal bound for arbitrary application callbacks, custom network implementations or every possible lock deadlock.",
+    "Passing local suites and MediaMTX integration do not supersede retained impaired-network, TURN-loss or periodic presentation-freeze failures."
+  ]
+}
