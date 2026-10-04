@@ -132,6 +132,13 @@ continue on the same live upstream, and the last reader still releases it after
 grace trades briefly continued encoding against avoiding source recreation on
 rapid reopen; reduce it when immediate resource release matters more.
 
+Stopping the shared browser client during its initial WHEP POST retains that
+request only within its existing close budget, so a returned session URL can
+be deleted promptly. Aborting the POST before its response would lose the only
+resource identifier and leave MediaMTX's unfinished peer waiting for its
+handshake timeout. An unreachable response or disappearing page can still
+require that server timeout; the client reports unconfirmed cleanup explicitly.
+
 The `host` command creates and removes the private notification directory and
 passes it to MediaMTX and its hooks. Path locks reject a duplicate live adapter
 and allow a replacement to recover a socket left by a crashed process. Custom

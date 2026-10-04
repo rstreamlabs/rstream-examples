@@ -580,6 +580,15 @@ webrtc:
 
 The WHEP path uses Trickle ICE: both peers exchange candidates as soon as they are discovered. If the selected network path disappears during playback, the browser keeps the same WebRTC session and sends a new offer with ICE restart enabled. The producer keeps the session open during that recovery window and only closes it if ICE does not reconnect.
 
+An explicit stop during connection drains an already issued WHEP POST within
+the player's bounded close deadline (at most five seconds). This lets it read
+the new resource's `Location` and delete that resource instead of abandoning
+server-side work until the handshake expires. Candidate updates are canceled
+immediately, and stop never follows a redirect to create another session. A
+lost response or disappearing page can still require the server's finite
+handshake/ICE timeout. MediaMTX separately applies its configured on-demand idle
+grace before releasing the shared producer source.
+
 ### Codecs and media pipelines
 
 `webrtc.video.mimeType` selects the codec advertised to the browser. The sample supports `video/H264` and `video/AV1`.

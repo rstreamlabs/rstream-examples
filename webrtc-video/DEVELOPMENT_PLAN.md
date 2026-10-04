@@ -110,9 +110,20 @@ failure without a known resource is reported as unconfirmed (`request-error`).
 An abort-aware reproduction fails before the change; regressions also cover a
 late response after the close deadline, one DELETE, response-body cancellation
 and no new POST on a late redirect. All 178 platform unit tests and TypeScript
-checks pass. Real cancellation timing with this client change is the next
-integration check. Page disappearance or a lost response still requires the
-server's finite handshake timeout; draining cannot recover an unknown URL.
+checks and the production build pass. The [real lifecycle exercise at clean
+`7b518b4`](./distributor/qualification/evidence/7b518b4/first-picture-and-cancellation.json)
+confirms remote deletion in 4–485ms for stops after POST creation; an earlier
+stop creates no session. Source allocation is zero about 1.33 seconds after
+close settles with the qualification's one-second idle grace, instead of the
+preceding roughly 11.4 seconds. The complete 18-second observation after each
+stop has no late reactivation or duplicate source. Three additional cycles
+measure 453.1–755.8ms cold, 166.6–386.5ms same-page reopen and 118.9–208.1ms
+warm join. All observations are retained; the earlier faster reopen samples do
+not establish an upper bound. Cycle/cancellation pilots still need integration
+into the portable qualification runner, followed by the complete Next.js path
+and target-network measurements. Page disappearance or a lost response still
+requires the server's finite handshake timeout; draining cannot recover an
+unknown URL.
 
 - GitHub personal ownership or shared organization ownership, with bounded
   membership verification, explicit configuration and existing-device migration.
