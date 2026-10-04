@@ -162,6 +162,8 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     playoutDelayHintSeconds: $playout_delay_hint_seconds,
     producerConfigSHA256: $producer_config_sha256,
     latencyProbe: $latency_probe,
+    sourceQualityObserved: $quality_observer,
+    expectedNetworkFormat: (if $expected_format == "" then null else $expected_format end),
     acceptance: {
       capacityTransitionGraceMilliseconds: capacity_transition_grace_milliseconds,
       maximumCapacityTransitionFreezeSeconds: maximum_capacity_transition_freeze_seconds,
@@ -189,6 +191,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
   },
   images: {producer: $producer_image, distributor: (if $distributor_image == "" then null else $distributor_image end), browser: $browser_image},
   latency: $latency[0],
+  sourceFormats: $source_formats[0],
   samples: length,
   framesDecoded: maximum("framesDecoded"),
   framesDropped: maximum("framesDropped"),
@@ -267,6 +270,12 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     steadyRecoveryFreezeDurationDeltaSeconds: phase_delta_after("recovery"; capacity_transition_grace_milliseconds; "totalFreezesDurationSeconds")
   }),
   gates: {
+    sourceFormats: ($expected_format == "" or (
+      $source_formats[0].enabled == true and $source_formats[0].networkProfile == $expected_format and $source_formats[0].passed == true
+    )),
+    sourceQualityEvidence: (($quality_observer | not) or (
+      length > 0 and all(.sourceQuality != null and .sourceQuality.failedUpdates == 0)
+    )),
     latencyMeasurement: (($latency_probe | not) or (
       $latency[0].enabled == true and $latency[0].collectionComplete == true and
       $latency[0].measurementValid == true
@@ -414,8 +423,10 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
   )
 | .gates.sourceNetworkResponse = (
     if .sourceNetwork.enabled then
-      .phases.sourceNetwork.decodedFramesPerSecond >=
-        (.phases.baseline.decodedFramesPerSecond * minimum_frame_rate_ratio) and
+      (if $expected_format != "" then
+        $source_formats[0].phases["source-network"].cadencePassed == true
+      else .phases.sourceNetwork.decodedFramesPerSecond >=
+        (.phases.baseline.decodedFramesPerSecond * minimum_frame_rate_ratio) end) and
       (if .sourceNetwork.capacityKbps > 0 and
           .sourceNetwork.delayMilliseconds == 0 and
           .sourceNetwork.jitterMilliseconds == 0 and
@@ -439,8 +450,10 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
       .viewerNetwork.qdisc.packets > 0 and
       (if .viewerNetwork.qdisc.drops > 0 then .viewerNetwork.nackCountDelta > 0 else true end) and
       (if .viewerNetwork.lossPercent > 0 then .viewerNetwork.qdisc.drops > 0 else true end) and
-      .phases.viewerNetwork.decodedFramesPerSecond >=
-        (.phases.baseline.decodedFramesPerSecond * minimum_frame_rate_ratio) and
+      (if $expected_format != "" then
+        $source_formats[0].phases["viewer-network"].cadencePassed == true
+      else .phases.viewerNetwork.decodedFramesPerSecond >=
+        (.phases.baseline.decodedFramesPerSecond * minimum_frame_rate_ratio) end) and
       (if .viewerNetwork.capacityKbps > 0 and
           .viewerNetwork.delayMilliseconds == 0 and
           .viewerNetwork.jitterMilliseconds == 0 and
@@ -453,8 +466,10 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
         .viewerNetwork.frameDropRatio <= maximum_dropped_frame_ratio and
         .viewerNetwork.freezeRatio <= maximum_freeze_ratio
       end) and
-      .phases.recovery.decodedFramesPerSecond >=
-        (.phases.baseline.decodedFramesPerSecond * minimum_frame_rate_ratio) and
+      (if $expected_format != "" then
+        $source_formats[0].phases.recovery.cadencePassed == true
+      else .phases.recovery.decodedFramesPerSecond >=
+        (.phases.baseline.decodedFramesPerSecond * minimum_frame_rate_ratio) end) and
       .viewerNetwork.recoveryFreezeDurationDeltaSeconds <= maximum_capacity_transition_freeze_seconds and
       .viewerNetwork.steadyRecoveryFreezeCountDelta == 0 and
       .viewerNetwork.steadyRecoveryFreezeDurationDeltaSeconds == 0

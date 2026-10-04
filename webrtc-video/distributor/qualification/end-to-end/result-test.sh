@@ -140,6 +140,9 @@ render_result() {
   --argjson playout_delay_hint_seconds 0.2 \
   --arg producer_config_sha256 fixture \
   --argjson latency_probe "${latency_probe:-false}" \
+  --argjson quality_observer "${quality_observer:-false}" \
+  --arg expected_format "${expected_format:-}" \
+  --slurpfile source_formats "${fixture_directory}/source-formats.json" \
   --slurpfile latency "${fixture_directory}/latency.json" \
   --slurpfile viewer_network "${network}" \
   --slurpfile source_network "${source_network}" \
@@ -147,6 +150,44 @@ render_result() {
   -f "${script_directory}/result.jq" \
   "$1"
 }
+
+jq -n '{enabled: false}' >"${fixture_directory}/source-formats.json"
+expected_format=small
+render_result "${fixture_directory}/samples.jsonl" | jq -e '.gates.sourceFormats == false and .passed == false' >/dev/null
+expected_format=""
+
+quality_observer=true
+render_result "${fixture_directory}/samples.jsonl" | jq -e '.gates.sourceQualityEvidence == false and .passed == false' >/dev/null
+jq -c '. + {sourceQuality: {failedUpdates: 0}}' "${fixture_directory}/samples.jsonl" >"${fixture_directory}/quality-observed.jsonl"
+render_result "${fixture_directory}/quality-observed.jsonl" | jq -e '.gates.sourceQualityEvidence == true and .profile.sourceQualityObserved == true and .passed == true' >/dev/null
+jq -c '.sourceQuality.failedUpdates = 1' "${fixture_directory}/quality-observed.jsonl" >"${fixture_directory}/quality-failed.jsonl"
+render_result "${fixture_directory}/quality-failed.jsonl" | jq -e '.gates.sourceQualityEvidence == false and .passed == false' >/dev/null
+quality_observer=false
+
+expected_format=small
+jq -n '{enabled: true, networkProfile: "small", passed: true, phases: {"viewer-network": {cadencePassed: true}, recovery: {cadencePassed: true}}}' >"${fixture_directory}/source-formats.json"
+jq -c '
+  if .phase == "viewer-network" then .framesDecoded = (60 + (.elapsedMilliseconds - 2000) * 0.015)
+  elif .phase == "recovery" then .framesDecoded -= 15 else . end |
+  .qpSum = .framesDecoded * 25
+' "${fixture_directory}/samples.jsonl" >"${fixture_directory}/format-samples.jsonl"
+render_result "${fixture_directory}/format-samples.jsonl" | jq -e '
+  .passed == true and .gates.sourceFormats == true and
+  .phases.viewerNetwork.decodedFramesPerSecond == 15 and
+  .profile.expectedNetworkFormat == "small"
+' >/dev/null
+# The same lower cadence is unacceptable without observed format qualification.
+expected_format=""
+render_result "${fixture_directory}/format-samples.jsonl" | jq -e '.gates.viewerNetworkRecovery == false and .passed == false' >/dev/null
+expected_format=small
+jq -c 'if .phase != "baseline" then .freezeCount = 1 | .totalFreezesDurationSeconds = 4 else . end' \
+  "${fixture_directory}/format-samples.jsonl" >"${fixture_directory}/format-freeze.jsonl"
+render_result "${fixture_directory}/format-freeze.jsonl" | jq -e '.gates.playback == false and .passed == false' >/dev/null
+jq '.passed = false' "${fixture_directory}/source-formats.json" >"${fixture_directory}/failed-formats.json"
+mv "${fixture_directory}/failed-formats.json" "${fixture_directory}/source-formats.json"
+render_result "${fixture_directory}/format-samples.jsonl" | jq -e '.gates.sourceFormats == false and .passed == false' >/dev/null
+expected_format=""
+jq -n '{enabled: false}' >"${fixture_directory}/source-formats.json"
 
 latency_probe=true
 render_result "${fixture_directory}/samples.jsonl" | jq -e '.gates.latencyMeasurement == false and .passed == false' >/dev/null

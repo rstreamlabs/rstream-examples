@@ -36,6 +36,8 @@ source_jitter_milliseconds="${RSTREAM_DISTRIBUTOR_SOURCE_JITTER_MILLISECONDS:-0}
 source_queue_packets="${RSTREAM_DISTRIBUTOR_SOURCE_QUEUE_PACKETS:-256}"
 playout_delay_hint_seconds="${RSTREAM_DISTRIBUTOR_PLAYOUT_DELAY_HINT_SECONDS:-0}"
 latency_probe="${RSTREAM_DISTRIBUTOR_LATENCY_PROBE:-false}"
+quality_observer="${RSTREAM_DISTRIBUTOR_QUALITY_OBSERVER:-false}"
+expected_format="${RSTREAM_DISTRIBUTOR_EXPECT_FORMAT:-}"
 producer_config="${RSTREAM_DISTRIBUTOR_PRODUCER_CONFIG:-}"
 output_directory="${1:-}"
 
@@ -59,6 +61,19 @@ true | false)
   exit 1
   ;;
 esac
+if [[ -n "${expected_format}" ]]; then
+  if ! [[ "${expected_format}" =~ ^[a-z][a-z0-9-]{0,31}$ ]] || [[ "${distribution_mode}" == mediamtx-native ]]; then
+    printf 'automatic-format qualification needs a profile ID and direct or adaptive MediaMTX delivery\n' >&2
+    exit 1
+  fi
+  if [[ "${latency_probe}" == true && -z "${producer_config}" ]]; then
+    printf 'combined format/latency qualification requires an explicit pipeline with a timestamp marker\n' >&2
+    exit 1
+  fi
+  quality_observer=true
+  duration_seconds="${RSTREAM_DISTRIBUTOR_QUALIFICATION_SECONDS:-45}"
+  recovery_seconds="${RSTREAM_DISTRIBUTOR_RECOVERY_SECONDS:-90}"
+fi
 case "${latency_probe}" in
 true | false) ;;
 *)
@@ -66,10 +81,19 @@ true | false) ;;
   exit 1
   ;;
 esac
+case "${quality_observer}" in
+true | false) ;;
+*)
+  printf 'RSTREAM_DISTRIBUTOR_QUALITY_OBSERVER must be true or false\n' >&2
+  exit 1
+  ;;
+esac
 if [[ -z "${producer_config}" ]]; then
   producer_config="${producer_directory}/config.test-pattern.h264.twcc-gcc-flexfec.yaml"
   if [[ "${latency_probe}" == true ]]; then
     producer_config="${qualification_directory}/latency/config.latency.yaml"
+  elif [[ -n "${expected_format}" ]]; then
+    producer_config="${qualification_directory}/formats/config.automatic.yaml"
   fi
 fi
 if [[ ! -f "${producer_config}" ]]; then
@@ -205,6 +229,12 @@ if [[ "${viewer_network_enabled}" == true && "${source_network_enabled}" == true
 fi
 if [[ "${source_network_enabled}" == true && "${uses_adapter}" != true ]]; then
   printf 'source network impairment requires RSTREAM_DISTRIBUTOR_MODE=mediamtx\n' >&2
+  exit 1
+fi
+if [[ -n "${expected_format}" ]] &&
+  ! { { [[ "${distribution_mode}" == direct ]] && ((viewer_capacity_kbps > 0)); } ||
+    { [[ "${uses_adapter}" == true ]] && ((source_capacity_kbps > 0)); }; }; then
+  printf 'automatic-format qualification requires a capacity limit on the direct viewer or adaptive shared source\n' >&2
   exit 1
 fi
 collector_maximum_duration_seconds=$((warmup_seconds + duration_seconds + 60))
@@ -423,6 +453,7 @@ jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 0, trans
   >"${output_directory}/runtime-health.json"
 jq -n '{required: false}' >"${output_directory}/native-source-profile.json"
 jq -n '{enabled: false}' >"${output_directory}/latency.json"
+jq -n '{enabled: false}' >"${output_directory}/source-formats.json"
 
 printf 'Building producer and browser images\n'
 docker build --provenance=false --file "${qualification_directory}/Dockerfile" --tag "${producer_image}" "${video_directory}"
@@ -516,6 +547,28 @@ if [[ "${edge_auth}" == true ]]; then
   source_endpoint="${source_endpoint}?rstream.token=${encoded_connect_token}"
 fi
 viewer_endpoint="${source_endpoint}"
+quality_arguments=()
+if [[ "${quality_observer}" == true ]]; then
+  quality_authorization=""
+  if [[ "${edge_auth}" == true ]]; then
+    # Preserve the media credential's WHEP-only scope. The observer owns a
+    # separate control credential, never passed to the browser or adapter.
+    quality_resources="$(jq -c '.tunnels.scopes.tunnels.connect.params.path.regex = "^/api/quality$"' <<<"${connect_resources}")"
+    quality_token="$(
+      "${rstream_cli}" --context "${context_name}" token create \
+        --expires-in "${connect_token_ttl_seconds}" \
+        --resources-json "${quality_resources}" \
+        --output json |
+        jq -er '.token | select(type == "string" and length > 0)'
+    )"
+    quality_authorization="Bearer ${quality_token}"
+  fi
+  jq -n --arg endpoint "${source_base%/}/api/quality" --arg authorization "${quality_authorization}" \
+    '{endpoint: $endpoint, authorization: $authorization}' >"${control_directory}/source-quality.json"
+  chmod 0600 "${control_directory}/source-quality.json"
+  unset quality_token quality_authorization
+  quality_arguments=(--source-quality-file /runtime/source-quality.json)
+fi
 if [[ "${uses_adapter}" == true ]]; then
   docker run --detach \
     --name "${distributor_name}" \
@@ -618,6 +671,7 @@ docker run --detach \
   --browser-sandbox disabled \
   --playout-delay-hint-seconds "${playout_delay_hint_seconds}" \
   ${latency_arguments[@]+"${latency_arguments[@]}"} \
+  ${quality_arguments[@]+"${quality_arguments[@]}"} \
   --maximum-duration-seconds "${collector_maximum_duration_seconds}" >/dev/null
 browser_started=1
 
@@ -891,6 +945,10 @@ if ! jq -e --argjson required "${required_resource_components}" '
   exit 1
 fi
 
+if [[ -n "${expected_format}" ]]; then
+  node "${qualification_directory}/formats/report.mjs" "${output_directory}" "${expected_format}"
+fi
+
 jq -s \
   --arg revision "${revision}" \
   --arg mode "${distribution_mode}" \
@@ -913,6 +971,9 @@ jq -s \
   --argjson playout_delay_hint_seconds "${playout_delay_hint_seconds}" \
   --arg producer_config_sha256 "${producer_config_sha256}" \
   --argjson latency_probe "${latency_probe}" \
+  --argjson quality_observer "${quality_observer}" \
+  --arg expected_format "${expected_format}" \
+  --slurpfile source_formats "${output_directory}/source-formats.json" \
   --slurpfile latency "${output_directory}/latency.json" \
   --slurpfile viewer_network "${output_directory}/viewer-network.json" \
   --slurpfile source_network "${output_directory}/source-network.json" \

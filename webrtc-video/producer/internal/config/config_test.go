@@ -165,6 +165,7 @@ func TestReferenceConfigsAreValid(t *testing.T) {
 		"config.provisioning.h264.yaml",
 		"config.provisioning.quality.h264.yaml",
 		"config.provisioning.source-formats.h264.yaml",
+		"qualification/adaptive-streaming/formats/config.automatic.yaml",
 		"config.test-pattern.h264.twcc-gcc.yaml",
 		"config.test-pattern.h264.twcc-gcc-flexfec.yaml",
 		"config.av1.yaml",

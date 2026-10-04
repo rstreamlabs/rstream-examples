@@ -11,6 +11,10 @@ import process from "node:process";
 import { createHash } from "node:crypto";
 import { chromium } from "playwright-core";
 import { collectProducerOpenMetrics } from "./lib/openmetrics.mjs";
+import {
+  collectSourceQuality,
+  readSourceQualityCredential,
+} from "./lib/quality-sample.mjs";
 import { readPhase } from "./lib/phase.mjs";
 import { PathStability, pathMatchesPolicy } from "./lib/path.mjs";
 import { redactError, redactSensitiveText } from "./lib/redaction.mjs";
@@ -27,6 +31,10 @@ if ((requestedURL === "") === (whepEndpoint === "")) {
 const outputDirectory = requiredArgument(argumentsByName, "output-directory");
 const phaseFile = requiredArgument(argumentsByName, "phase-file");
 const producerMetricsURL = argumentsByName.get("producer-metrics-url") || "";
+const sourceQualityFile = argumentsByName.get("source-quality-file") || "";
+const sourceQualityCredential = sourceQualityFile
+  ? await readSourceQualityCredential(sourceQualityFile)
+  : null;
 const pathScope = whepEndpoint ? "viewer" : "end-to-end";
 const icePolicy = argumentsByName.get("ice-policy") || "relay";
 if (!new Set(["direct", "relay"]).has(icePolicy)) {
@@ -458,6 +466,11 @@ try {
       Object.assign(
         sample,
         await collectProducerOpenMetrics(producerMetricsURL),
+      );
+    }
+    if (sourceQualityCredential) {
+      sample.sourceQuality = await collectSourceQuality(
+        sourceQualityCredential,
       );
     }
     sample.capturedAt = new Date().toISOString();

@@ -25,11 +25,11 @@ IDs, display names and optional offline inventory history.
 
 ## Delivery profiles
 
-| Profile               | Device uplinks | Producer leg                                      | Viewer leg                     | Use it when                                                         |
-| --------------------- | -------------: | ------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------- |
-| Direct                | one per viewer | TWCC, NACK/RTX, FlexFEC, bounded pacer            | same end-to-end session        | one viewer needs the shortest path and end-to-end adaptation        |
-| MediaMTX native pull  |     one shared | NACK/RTX and TWCC with fixed source pacing | MediaMTX NACK and TWCC         | a static source accepts the reduced MediaMTX 1.21.1 offer             |
-| MediaMTX with adapter |     one shared | TWCC, NACK/RTX, FlexFEC, bounded pacer            | independent MediaMTX NACK/TWCC | a product needs dynamic sources, complete source repair and fan-out |
+| Profile               | Device uplinks | Producer leg                               | Viewer leg                     | Use it when                                                         |
+| --------------------- | -------------: | ------------------------------------------ | ------------------------------ | ------------------------------------------------------------------- |
+| Direct                | one per viewer | TWCC, NACK/RTX, FlexFEC, bounded pacer     | same end-to-end session        | one viewer needs the shortest path and end-to-end adaptation        |
+| MediaMTX native pull  |     one shared | NACK/RTX and TWCC with fixed source pacing | MediaMTX NACK and TWCC         | a static source accepts the reduced MediaMTX 1.21.1 offer           |
+| MediaMTX with adapter |     one shared | TWCC, NACK/RTX, FlexFEC, bounded pacer     | independent MediaMTX NACK/TWCC | a product needs dynamic sources, complete source repair and fan-out |
 
 The native profile is intentionally retained as an interoperability option. It
 removes the adapter when its smaller feature set and static source contract are
@@ -277,8 +277,7 @@ per device.
 
 The bundled configuration leaves `record` and `playback` disabled. To enable a
 short history, explicitly set `MTX_PATHDEFAULTS_RECORD=true` and
-`MTX_PLAYBACK=true`, then supply a writable `/recordings` mount owned by UID/GID
-10001. Keep playback port 9996 on loopback or a private network accessible to
+`MTX_PLAYBACK=true`, then supply a writable `/recordings` mount owned by UID/GID 10001. Keep playback port 9996 on loopback or a private network accessible to
 Next.js. Playback uses the existing JWT issuer/JWKS and a separate, path-scoped
 `playback` permission; live `read` and `publish` tokens cannot read recordings.
 The administrative API remains disabled.
@@ -404,6 +403,36 @@ impairment cannot be enabled in one run because that would make the observed
 reaction causally ambiguous. The result records the selected network
 namespace, destination, traffic-control counters, TWCC response, encoder
 target, RTX/FlexFEC repair, decoded frame rate, freezes, and recovery.
+
+To qualify automatic source resolution and frame-rate changes, use the optional
+format profile and name the expected format during the constrained phase:
+
+```bash
+RSTREAM_CONTEXT="<staging-context>" \
+RSTREAM_DISTRIBUTOR_MODE="mediamtx" \
+RSTREAM_DISTRIBUTOR_SOURCE_CAPACITY_KBPS="1500" \
+RSTREAM_DISTRIBUTOR_EXPECT_FORMAT="small" \
+qualification/end-to-end/run.sh /tmp/rstream-video-automatic-format
+```
+
+This selects a qualification-only 720p30 / 540p24 / 360p15 ladder, measures
+45-second baseline and capacity phases, then allows 90 seconds for recovery.
+For direct delivery, use `MODE=direct` and `VIEWER_CAPACITY_KBPS` with the same
+prefix. Native MediaMTX and downstream-only MediaMTX shaping cannot qualify a
+shared adaptive source. The public provisioning example remains unchanged.
+
+The collector reads the existing quality API with a separate, short-lived
+path-scoped credential that stays in a private file outside the evidence.
+`source-formats.json` compares confirmed encoder caps with actual decoded
+dimensions, measures cadence against the observed format, checks dwell time
+within the reported sampling uncertainty, and requires return to the initial
+format without another peer connection or WHEP session. Requested caps alone
+cannot pass. Existing freeze, dropped-frame, bitrate, recovery and resource
+checks remain active. Media-time continuity is sampled; this observation does
+not establish every-frame timestamp continuity or physical capture latency.
+`RSTREAM_DISTRIBUTOR_QUALITY_OBSERVER=true` enables just the API observations
+for other profiles that expose quality modes. Combined format/latency runs
+require an explicit profile with the pixel marker after format selection.
 
 For pixel-based latency measurement on a shared Linux host, add
 `RSTREAM_DISTRIBUTOR_LATENCY_PROBE=true`. The optional
