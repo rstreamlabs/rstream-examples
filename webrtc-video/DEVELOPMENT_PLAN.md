@@ -112,9 +112,31 @@ its final diagnostics gate: the harness did not correlate the expected metrics
 503 responses during the deliberate MediaMTX outage. It remains a failed run.
 The updated gate requires matching method, URL, response status, time and outage
 phase; the successful run also verifies metrics disappearance and recovery.
-Automatic-ladder network qualification, capture-to-display latency and CPU
-measurements remain pending. These checks do not establish arbitrary hardware
-support or AV1 format-switching support.
+The [automatic-ladder trials at `7cb827b`](./distributor/qualification/evidence/7cb827b/automatic-formats.json)
+now observe the source quality API independently from decoded dimensions and
+cadence. The 4 Mbit/s MediaMTX source case passes 720p30 → 540p24 → 720p30
+without replacing its encoder/session or regressing sampled media time. Its
+capacity transition freezes total 1.416s; subsequent playback has no freezes.
+At 1.5 Mbit/s, direct and MediaMTX both reach 360p15 but remain there after the
+90-second recovery window. Direct also exceeds the unchanged transition-freeze
+bound (3.231s versus 3s); MediaMTX has 2.316s transition freezes. Changing just
+the test content from SMPTE to snow does not resolve the recovery failure.
+Removing just the encoder's 10% increase threshold recovers 6 Mbit/s and reaches
+540p24, but misses the final 720p return. This is an informative failed trial,
+not a promoted policy. All five cases retain identical runtime images, private
+path-scoped observation credentials and complete teardown/resource evidence.
+Temporary host socket settings are restored and owned containers are removed.
+
+Next, diagnose the measured bitrate/format recovery interaction before adopting
+a threshold or controller change. Inspect acknowledged throughput, increase
+mode, receive-time ordering and encoder undershoot; a clean loss signal alone
+does not prove spare capacity. If application limitation is established,
+compare with libwebrtc's bounded [probe controller](https://webrtc.googlesource.com/src/+/refs/heads/main/modules/congestion_controller/goog_cc/probe_controller.cc)
+and [probe-rate measurement](https://webrtc.googlesource.com/src/+/refs/heads/main/modules/congestion_controller/goog_cc/probe_bitrate_estimator.cc)
+instead of blindly raising the estimate or replacing the whole controller.
+Repeat automatic-format qualification after the targeted correction.
+Capture-to-display latency and isolated CPU measurements remain pending.
+These checks do not establish arbitrary hardware support or AV1 switching.
 
 1. Define optional format profiles with bitrate ceiling, dimensions and frame
    rate. Existing bitrate-only configurations must remain unchanged. Expose
