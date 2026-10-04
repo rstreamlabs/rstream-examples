@@ -5,6 +5,13 @@ delivery paths. Deployment is a separate activity. Implementation and synthetic
 qualification do not establish compatibility with untested cameras, encoders,
 operating systems or networks.
 
+The remaining acceptance work is concentrated on repeated network/latency
+qualification, isolated resource measurements, final route/browser regressions
+and the guide-command audit. Inventory and replay presentation are accepted;
+the separate quality/format/metrics visual review remains pending. The current
+automatic-format series has five complete passes in six trials and retains one
+baseline browser-presentation freeze; it is not an all-green release result.
+
 ## Implemented; final regression qualification pending
 
 - GitHub personal ownership or shared organization ownership, with bounded
@@ -209,7 +216,8 @@ with MediaMTX (1.435s initial freezes); direct delivery has 2.031s total freezes
 and still fails on a 0.589s counter increment collected after the transition
 cutoff. Both return to 720p30. With only downHold set to one second, direct and
 MediaMTX each pass every gate (1.548s / 1.316s initial freezes), with no steady or
-recovery freezes and no decoded-frame drops. The one-second setting still needs
+recovery freezes. MediaMTX drops two frames in the initial transition, counted
+in its 1.383s total disruption; direct drops none. The one-second setting still needs
 repetition and is not promoted to a public default. All acceptance thresholds
 remain unchanged; temporary socket settings and owned containers are cleaned up.
 
@@ -219,6 +227,25 @@ is sampled afterward. This suggests an attribution limit of one-second stats
 sampling near a phase boundary. Those browser observations have different
 semantics: investigate precise attribution without reclassifying the failed run
 or replacing the current gate with an unqualified correlation.
+
+The [one-second down-hold repetitions at `ce008b0`](./distributor/qualification/evidence/ce008b0/fast-down-repetitions.json)
+combine the initial pair with four clean repeats using identical media images.
+All three direct cases pass; two of three adaptive MediaMTX cases pass. Every
+case changes 720p30 → 360p15 → 540p24 → 720p30 and recovers its source target,
+with no steady constrained-network or recovery freezes and no decoded-frame
+drops in steady constrained-network playback. The first MediaMTX trial has two
+initial-transition frame drops, included in its 1.383s disruption; the other five
+have none. Initial congestion freezes range from 1.326–1.548s directly and
+1.195–1.366s through MediaMTX. The failed MediaMTX repeat has a separate 0.212s
+baseline freeze before shaping. Adjacent frame metadata show a 28.1ms reception
+interval and a 216.7ms expected-presentation interval, with 1.1ms decoder
+processing for the delayed frame and no sampled packet-loss/NACK increase.
+This supports investigating browser presentation; the cause remains unproven.
+The performance-environment gate in this runner checks transport-buffer
+warnings, not host scheduling. Resource summaries cover complete runs, not
+individual format costs. All original gates and failed verdicts are retained;
+the public down-hold remains three seconds. Owned containers are removed and
+temporary socket settings restored after the series.
 
 Next, stabilize the initial capacity-drop transition and repeat direct/MediaMTX/TURN qualification. Do not
 claim that one successful fast-down run establishes a stable policy. Before adopting

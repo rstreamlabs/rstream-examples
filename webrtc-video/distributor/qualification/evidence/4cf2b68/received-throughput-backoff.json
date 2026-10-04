@@ -15,7 +15,7 @@
   },
   "interpretation": [
     "The public/reference three-second down-hold profile passes with adaptive MediaMTX (1.435s initial disruption) but the direct trial fails its steady playback gate (2.031s total freezes, including a 0.589s counter increment sampled after the transition cutoff). All format/bitrate recovery, host/runtime and lifecycle gates pass.",
-    "Changing only downHold from three seconds to one second passes in both modes: 1.548s initial direct freezes and 1.316s with MediaMTX, with no steady or recovery freezes and no decoded-frame drops. These are single runs, not a repeated qualification series. Public defaults remain unchanged.",
+    "Changing only downHold from three seconds to one second passes in both modes: 1.548s initial direct freezes and 1.316s with MediaMTX, with no steady or recovery freezes. MediaMTX drops two frames during the initial transition, giving 1.382652s total disruption; direct drops none. These are single runs, not a repeated qualification series. Public defaults remain unchanged.",
     "The direct reference failure retains its original verdict. Bounded frame-callback observations place the nearby display gaps before the steady cutoff, while the cumulative freeze counter is read afterward. This supports investigating one-second sampling attribution near the boundary; it is not a validated replacement gate and does not establish an alternate pass.",
     "No acceptance threshold, playout buffer, repair ratio, encoder increase threshold, bitrate floor, upgrade hold or minimum format dwell was changed. These runs contain no capture-latency marker; resource samples cover whole runs and do not isolate format-change CPU cost."
   ],
@@ -199,9 +199,7 @@
           "average": 62481559.79294118,
           "p95": 76032245.76,
           "maximum": 76200017.92,
-          "sources": [
-            "container-cgroup"
-          ]
+          "sources": ["container-cgroup"]
         },
         "tasks": {
           "maximum": 38
@@ -436,9 +434,7 @@
           "average": 57462287.43876922,
           "p95": 68188897.28,
           "maximum": 68513955.84,
-          "sources": [
-            "container-cgroup"
-          ]
+          "sources": ["container-cgroup"]
         },
         "tasks": {
           "maximum": 38
@@ -628,9 +624,7 @@
           "average": 59124420.36705883,
           "p95": 74794926.08,
           "maximum": 75025612.8,
-          "sources": [
-            "container-cgroup"
-          ]
+          "sources": ["container-cgroup"]
         },
         "tasks": {
           "maximum": 37
@@ -820,9 +814,7 @@
           "average": 51888465.609696954,
           "p95": 61530439.68,
           "maximum": 61907927.04,
-          "sources": [
-            "container-cgroup"
-          ]
+          "sources": ["container-cgroup"]
         },
         "tasks": {
           "maximum": 37
