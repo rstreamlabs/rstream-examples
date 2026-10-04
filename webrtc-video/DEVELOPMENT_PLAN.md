@@ -7,7 +7,9 @@ operating systems or networks.
 
 The remaining acceptance work is concentrated on repeated network/latency
 qualification, the automatic-format timing decision, intermittent native
-connectivity and final route/browser regressions. Static Linux packaging and
+connectivity and outstanding visual approval. The final route/browser regression
+passes at `d8cb5d7` on Chromium 153, WebKit 26.6 and Linux Firefox 155 with the
+current dependencies and session-cleanup code. Static Linux packaging and
 its H.264/AV1 source checks pass again with Go 1.27 at `90df80f` on ARM64 and
 AMD64 (the latter emulated). The guide build/toolchain/plugin instructions have been verified or
 corrected. [The isolated guides draft PR](https://github.com/rstreamlabs/rstream-nextjs/pull/57)
@@ -1503,6 +1505,19 @@ Playwright's HTTP forwarding proxy restricted UDP candidates and is not used.
 The optional remote-browser endpoint and fixed application port make this
 qualification reproducible without changing application code or user profiles.
 Failed local/proxy runs are retained, not classified as successful or skipped.
+
+The [current complete UI/access regression at `d8cb5d7`](./platform/qualification/evidence/d8cb5d7/browser-regression.json)
+passes all thirteen checkpoints with Chromium 153.0.8010.12 and WebKit 26.6 on
+macOS, plus Firefox 155 on Linux ARM64, using Playwright 1.63.0 and Node 26.7.0.
+This rechecks full-page continuity, keyboard/focus and scroll restoration,
+desktop/mobile/landscape layouts, MP4 replay/gaps/expiry/index recovery, return
+to the same live session, metrics outage/recovery, dynamic discovery, shared
+organization access and personal isolation. All 63 captures are retained
+privately; owned Firefox and database containers are removed. The three video
+CI jobs also pass at this revision. Current quality/metrics desktop/mobile views
+and the unchanged source-format presentation have been shown for explicit user
+approval; that approval is still pending. These UI fixtures do not substitute
+for external network, real OAuth or physical Safari/camera qualification.
 
 All changed UI/UX must be presented to the user as actual desktop and mobile
 screenshots in the conversation and explicitly validated. Include quality

@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "passed": true,
+  "runnerExitCode": 0,
+  "revision": "d8cb5d70923ca877f3204604a1ad1da22a0b61e2",
+  "workingTreeDirty": false,
+  "completedAt": "2026-10-04T17:04:09.148929+00:00",
+  "scope": "Current production Next.js build and PostgreSQL authorization/inventory routes, real local WebRTC media and MP4 decoding. Upstream GitHub/engine responses, media source, quality and recording services and distribution metric values are controlled fixtures.",
+  "qualificationFilesSHA256": {
+    "scripts/access-routes.integration.mjs": "d5c46f4af0efbce3ce5bcf1f377c723114401ffa6679dd8a48d88f0f8df8e5be",
+    "scripts/browser-context.mjs": "85aed261489deb17574c70735fac6fb7901f6f662a435e8cc15dd5ff12648d8b",
+    "scripts/full-page.browser.mjs": "c706ee151646acaa98de28d8e5fbf63401ec1e9cb245bc8f2c34ba9b3caebaf6",
+    "scripts/recordings.browser.mjs": "b4152b7d9e31aa6bd07154555783abfb7b71eaf3a961b2a59cfa052e582e0164",
+    "package-lock.json": "1dd279a17ec2b86f89a6cde9a58f860e79302a762757e4c126fd869ea84a7229"
+  },
+  "localRuntime": {
+    "nodeVersion": "v26.7.0",
+    "platform": "darwin",
+    "browsers": [
+      {
+        "name": "chromium",
+        "version": "153.0.8010.12"
+      },
+      {
+        "name": "webkit",
+        "version": "26.6"
+      }
+    ]
+  },
+  "firefox": {
+    "version": "155.0",
+    "playwrightVersion": "1.63.0",
+    "platform": "linux",
+    "architecture": "arm64",
+    "image": "sha256:5536bbbd0ffc106a9fdab13fbff6b3abab01418cceff67ff246552b64cf5623d",
+    "connection": "Owned loopback-only Playwright endpoint and direct TCP forward of the test application. No HTTP proxy; disposable browser profile."
+  },
+  "checks": [
+    "PASS: recorded MP4 controls, timeline gaps, expiry, index outage/recovery, keyboard seek, mobile layouts and live-session preservation",
+    "PASS: recording-chromium full-page playback continuity, same tab, keyboard/focus, scroll restoration, responsive layouts and source loss",
+    "PASS: recorded MP4 controls, timeline gaps, expiry, index outage/recovery, keyboard seek, mobile layouts and live-session preservation",
+    "PASS: recording-firefox full-page playback continuity, same tab, keyboard/focus, scroll restoration, responsive layouts and source loss",
+    "PASS: recorded MP4 controls, timeline gaps, expiry, index outage/recovery, keyboard seek, mobile layouts and live-session preservation",
+    "PASS: recording-webkit full-page playback continuity, same tab, keyboard/focus, scroll restoration, responsive layouts and source loss",
+    "PASS: metrics-chromium full-page playback continuity, same tab, keyboard/focus, scroll restoration, responsive layouts and source loss",
+    "PASS: chromium full-page playback continuity, same tab, keyboard/focus, scroll restoration, responsive layouts and source loss",
+    "PASS: firefox full-page playback continuity, same tab, keyboard/focus, scroll restoration, responsive layouts and source loss",
+    "PASS: webkit full-page playback continuity, same tab, keyboard/focus, scroll restoration, responsive layouts and source loss",
+    "PASS: discovery browser hydration, live rename, unavailable/recovery state and hidden provisioning controls",
+    "PASS: project discovery, display names, concurrent history, stale observations, live-only inventory, outages and access scoping",
+    "PASS: real Next.js user isolation, shared organization inventory, nonmember denial, mutation origin and signed watch-token scope"
+  ],
+  "screenshots": 63,
+  "cleanup": {
+    "ownedFirefoxRemoved": true,
+    "ownedDatabasesRemoved": true
+  },
+  "visualApproval": "Quality/format/metrics views presented for explicit approval; no approval inferred from automated checks. Inventory and replay previously accepted.",
+  "boundaries": [
+    "WebKit automation is not physical Safari/iOS device qualification.",
+    "Firefox uses Linux; the previously failed local macOS ICE fixture remains separate.",
+    "No actual GitHub OAuth/SSO, physical camera, network impairment or capture-to-display latency qualification in this UI run.",
+    "The separate earlier source-format screenshot uses the unchanged quality-selector component; the current generic UI fixture does not exercise resolution switching."
+  ]
+}
