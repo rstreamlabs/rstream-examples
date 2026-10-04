@@ -35,7 +35,7 @@ endif
 
 check-go:
 	@command -v go >/dev/null 2>&1 || { \
-		echo "Go is required to build $(APP). Install Go 1.26.6+ and retry." >&2; \
+		echo "Go is required to build $(APP). Install Go 1.27+ and retry." >&2; \
 		exit 1; \
 	}
 

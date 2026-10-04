@@ -81,7 +81,7 @@ rstream login
 rstream project use <project-endpoint>
 ```
 
-For local development you need Go `1.26.6+`, a C compiler, `pkg-config`,
+For local development you need Go `1.27+`, a C compiler, `pkg-config`,
 and a GStreamer installation that includes the development files and the
 elements required by the selected pipeline. Use Node.js `24 LTS` for the
 embedded viewer build. Node.js and npm are only required with `make build`,
@@ -122,7 +122,7 @@ brew install node
 
 ### Ubuntu / Debian
 
-Install Go `1.26.6+` using the [Go installation instructions](https://go.dev/doc/install)
+Install Go `1.27+` using the [Go installation instructions](https://go.dev/doc/install)
 and check `go version`. The distribution's default `golang` package can be
 older than the module requires. Then install the native dependencies:
 
