@@ -83,8 +83,8 @@ rstream project use <project-endpoint>
 
 For local development you need Go `1.26.6+`, a C compiler, `pkg-config`,
 and a GStreamer installation that includes the development files and the
-elements required by the selected pipeline. Node.js `20+` and npm are only
-required when building the embedded local viewer UI with `make build`,
+elements required by the selected pipeline. Use Node.js `24 LTS` for the
+embedded viewer build. Node.js and npm are only required with `make build`,
 `make run`, or `make test`.
 
 When using the Next.js platform provisioning profile, the producer does not
@@ -122,11 +122,14 @@ brew install node
 
 ### Ubuntu / Debian
 
+Install Go `1.26.6+` using the [Go installation instructions](https://go.dev/doc/install)
+and check `go version`. The distribution's default `golang` package can be
+older than the module requires. Then install the native dependencies:
+
 ```bash
 sudo apt update
 sudo apt install -y \
   build-essential \
-  golang \
   gstreamer1.0-plugins-bad \
   gstreamer1.0-plugins-base \
   gstreamer1.0-plugins-good \
@@ -138,12 +141,19 @@ sudo apt install -y \
   pkg-config
 ```
 
-Install Node.js and npm only if you want the producer binary to serve the
-embedded viewer UI:
+Install [Node.js 24 LTS with npm](https://nodejs.org/en/download) only if you
+want the producer binary to serve the embedded viewer UI. Check the versions
+before building; distribution packages may provide an older Node.js release:
 
 ```bash
-sudo apt install -y nodejs npm
+node --version
+npm --version
 ```
+
+For the Raspberry Pi camera profiles, also install the platform's libcamera
+GStreamer plugin (`gstreamer1.0-libcamera` on Debian) and check
+`gst-inspect-1.0 libcamerasrc`. Camera access and its drivers are requirements
+of those profiles, separate from the test-pattern source.
 
 ### Windows
 
@@ -848,6 +858,11 @@ make dist
 Artifacts are written to `dist/linux-amd64` and `dist/linux-arm64`.
 
 Those targets build a static Linux binary linked against a statically packaged `gstreamer-full` toolchain. The Docker build compiles the GStreamer subset needed by the sample, including `x264`, `libaom`, the parsers, and the `appsink` path, then links the Go binary against that toolchain with `musl`.
+
+The default bundle includes the test-pattern source. Camera sources such as
+`libcamerasrc` require their platform libraries and plugins: use the native
+GStreamer build on that device, or extend the static toolchain before packaging.
+Copying a camera YAML file alone does not add its capture plugin to the binary.
 
 The practical outcome is a standalone executable you can copy to a target machine without asking that machine to install the full GStreamer development stack first. In other words, `make dist` is the path you use when you want to build once and then copy the resulting binary to a remote device.
 

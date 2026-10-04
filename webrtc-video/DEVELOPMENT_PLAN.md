@@ -1167,3 +1167,23 @@ until the user approves it.
   committed; the final builds/checks use a clean revision. Guide content builds
   successfully, and all three documented netem commands pass on an isolated
   dummy interface. All owned runtime containers are removed.
+
+
+The [AV1 comparison and corrected references at `27fa72c`](./producer/qualification/evidence/27fa72c/av1-rate-control.json)
+resolve the static-runtime cadence finding. GStreamer `av1enc` defaults both
+quantizer bounds to zero. With the original `drop-frame=25`, the same ARM64
+binary emits about 8 fps at 5.011 Mbit/s received. Disabling dropping alone
+restores 30 fps but raises received traffic to 19.101 Mbit/s. Explicit
+`min-quantizer=0 max-quantizer=63`, retaining `drop-frame=25`, restores 30 fps
+at 5.120 Mbit/s. All five AV1 profiles now include that range; their configuration
+validation passes. The actual committed test-pattern profile passes separate
+ARM64 and AMD64-emulated checks with median 30 fps, 5.121/5.119 Mbit/s received,
+no observed loss/drop/freeze, clean WHEP deletion and normal SIGTERM exit. Both
+static builds pass again with unchanged executable hashes. These measurements
+qualify this synthetic source, not physical camera access or an impaired AV1
+network. The README and guide explain the quantizer requirement, supported build
+tools and the separate capture-plugin requirements of camera profiles.
+The nine focused quality-client tests also pass on Linux Node 24.21. Debian
+bookworm installs the documented libcamera plugin and loads `libcamerasrc`
+(version 0.0.3); this checks its package/plugin availability, not physical camera
+access. The final guide build contains six collections and 136 documents.
