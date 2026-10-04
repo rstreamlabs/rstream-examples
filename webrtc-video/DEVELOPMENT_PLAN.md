@@ -462,6 +462,19 @@ the limits remain unchanged. Socket limits are restored and owned containers
 removed. This pair does not isolate the wakeup change or establish a performance
 regression from it. Further relay/recovery and source-cadence diagnosis remain.
 
+The [encoder increase-policy trials at `05921e7`](./producer/qualification/adaptive-streaming/evidence/05921e7/encoder-increase-policy.json)
+do not justify changing production defaults. Removing the five-second hold and
+raising the loss threshold together yields one faster recovery (14.130s versus
+34.272s), but fails the unchanged continued-pressure gate: a 100% threshold
+cannot supply its required above-threshold observation. Two narrower zero-hold
+trials retain the 1% threshold. One encounters substantial unshaped-path loss,
+stays at the bitrate floor and never exercises recovery; its loss source is
+unresolved. The other recovers in 24.205s but fails impaired playback freezes
+(6.491s, 18.96%), host sampling (381ms maximum gap) and encoder cadence
+(205.530ms maximum gap). These are retained failures, not evidence of a stable
+policy or grounds to loosen thresholds. Temporary UDP buffer settings are
+restored and all experiment-owned containers are removed.
+
 ## Cross-cutting latency and resource criteria
 
 The optional qualification-only pixel timestamp probe is now maintained in
