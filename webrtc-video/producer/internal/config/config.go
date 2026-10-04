@@ -58,6 +58,7 @@ const (
 	DefaultTunnelName            = "webrtc-video-producer"
 	DefaultTURNTTL               = "10m"
 	DefaultProvisioningTimeout   = "10s"
+	DefaultTunnelConnectTimeout  = "15s"
 	DefaultReconnect             = "5s"
 	DefaultBitrateKbps           = 5000
 	MinBitrateKbps               = 500
@@ -108,13 +109,14 @@ type WebWHEPConfig struct {
 }
 
 type TunnelConfig struct {
-	Labels       map[string]string        `yaml:"labels"`
-	Enabled      bool                     `yaml:"enabled"`
-	Name         string                   `yaml:"name"`
-	Auth         TunnelAuthConfig         `yaml:"auth"`
-	Transport    TunnelTransportConfig    `yaml:"transport"`
-	Provisioning TunnelProvisioningConfig `yaml:"provisioning"`
-	Reconnect    TunnelReconnectConfig    `yaml:"reconnect"`
+	ConnectTimeout string                   `yaml:"connectTimeout"`
+	Labels         map[string]string        `yaml:"labels"`
+	Enabled        bool                     `yaml:"enabled"`
+	Name           string                   `yaml:"name"`
+	Auth           TunnelAuthConfig         `yaml:"auth"`
+	Transport      TunnelTransportConfig    `yaml:"transport"`
+	Provisioning   TunnelProvisioningConfig `yaml:"provisioning"`
+	Reconnect      TunnelReconnectConfig    `yaml:"reconnect"`
 }
 
 type TunnelAuthConfig struct {
@@ -218,9 +220,10 @@ func Default() Config {
 			},
 		},
 		Tunnel: TunnelConfig{
-			Enabled:   true,
-			Name:      DefaultTunnelName,
-			Transport: TunnelTransportConfig{},
+			ConnectTimeout: DefaultTunnelConnectTimeout,
+			Enabled:        true,
+			Name:           DefaultTunnelName,
+			Transport:      TunnelTransportConfig{},
 			Reconnect: TunnelReconnectConfig{
 				Enabled:  true,
 				Interval: DefaultReconnect,
@@ -355,6 +358,9 @@ func (c Config) Validate() error {
 		return fmt.Errorf("invalid tunnel provisioning mode %q", c.Tunnel.Provisioning.Mode)
 	}
 	if _, err := c.TunnelReconnectInterval(); err != nil {
+		return err
+	}
+	if _, err := c.TunnelConnectTimeout(); err != nil {
 		return err
 	}
 	switch c.TunnelTransportMode() {
@@ -734,6 +740,18 @@ func isLoopbackHost(host string) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
+}
+
+func (c Config) TunnelConnectTimeout() (time.Duration, error) {
+	value := strings.TrimSpace(c.Tunnel.ConnectTimeout)
+	if value == "" {
+		value = DefaultTunnelConnectTimeout
+	}
+	duration, err := time.ParseDuration(value)
+	if err != nil || duration <= 0 || duration > 5*time.Minute {
+		return 0, errors.New("tunnel connectTimeout must be a positive duration no greater than 5m")
+	}
+	return duration, nil
 }
 
 func (c Config) TunnelReconnectInterval() (time.Duration, error) {

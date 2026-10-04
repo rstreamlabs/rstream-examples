@@ -484,6 +484,12 @@ after teardown. These observations add no new media buffering or controller.
 
 `tunnel.enabled` decides whether the process publishes the local server through `rstream` or stays local-only.
 
+`tunnel.connectTimeout` bounds each engine connection and tunnel-publication
+attempt (default `15s`, maximum `5m`). Cancellation interrupts a blocked
+opening handshake. A successful tunnel remains alive after its setup context
+ends; shutdown or a failed attempt releases the owned SDK client and transport.
+Remote provisioning has its separate `tunnel.provisioning.timeout`.
+
 `tunnel.transport.mode` controls the producer-to-rstream upstream session. The default `auto` mode prefers QUIC and falls back to TLS while opening the control channel, then keeps that choice for the client lifetime. The published tunnel remains a standard HTTP tunnel for the browser UI, WHEP resources, and API endpoints; this setting only changes how the Go producer connects to the rstream engine.
 
 ```yaml

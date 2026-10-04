@@ -931,7 +931,16 @@ before transferring ownership to the established channel. All four original
 failure cases now pass ten race repetitions, as do established-channel lifetime
 checks, the full SDK root race suite and repository-wide vet/static analysis.
 All eight SDK CI jobs subsequently pass, including Linux race/lifecycle and
-cross-platform checks. The sample has not yet consumed that fix. The hosted
+cross-platform checks. Integrating the latest SDK exposes its newer STUN API's
+incompatibility with the qualified Pion fork. The sample instead pins the same
+fix backported to v1.30.0 (`e3359f085d92`), leaving the media dependency graph
+unchanged. It bounds each connection/publication attempt with configurable
+`tunnel.connectTimeout` (15s default, at most 5m), releases the SDK client on
+failed setup and shutdown, and explicitly owns provisioned transports. Deadline
+and concurrent-close regressions pass; the complete producer race suite, vet,
+static analysis and module verification pass with the backport. Real tunnel
+playback after the setup context ends remains the next integration check.
+The hosted
 relay diagnostic at `a4aed7b` passes authentication/project/DNS checks but fails
 TLS, QUIC and engine access from the runner host; its token is not expired.
 This does not identify the address/network failure, nor prove the independently

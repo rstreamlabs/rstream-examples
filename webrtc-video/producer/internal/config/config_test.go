@@ -33,6 +33,31 @@ func TestDefaultConfigIsValid(t *testing.T) {
 	}
 }
 
+func TestTunnelConnectTimeout(t *testing.T) {
+	for _, testCase := range []struct {
+		value string
+		want  time.Duration
+	}{
+		{"", 15 * time.Second},
+		{" 25s ", 25 * time.Second},
+		{"5m", 5 * time.Minute},
+	} {
+		cfg := Default()
+		cfg.Tunnel.ConnectTimeout = testCase.value
+		got, err := cfg.TunnelConnectTimeout()
+		if err != nil || got != testCase.want {
+			t.Fatalf("TunnelConnectTimeout(%q) = %v, %v", testCase.value, got, err)
+		}
+	}
+	for _, value := range []string{"0s", "-1s", "never", "5m1s", "999999999999999999h"} {
+		cfg := Default()
+		cfg.Tunnel.ConnectTimeout = value
+		if err := cfg.Validate(); err == nil {
+			t.Fatalf("unbounded or invalid connectTimeout %q accepted", value)
+		}
+	}
+}
+
 func TestMetricsListenValidation(t *testing.T) {
 	for _, testCase := range []struct {
 		name   string
