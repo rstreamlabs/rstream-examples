@@ -18,6 +18,7 @@ import { createServer } from "node:net"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { setTimeout as delay } from "node:timers/promises"
+import { installPlaybackStartupTiming } from "./playback-startup.mjs"
 
 const root = resolve(import.meta.dirname, "..")
 assert.ok(
@@ -343,36 +344,49 @@ async function qualifyPlayback() {
           url: origin,
         },
       ])
-      await context.addInitScript(() => {
-        const NativePeer = window.RTCPeerConnection
-        window.__discoveryPeers = []
-        window.RTCPeerConnection = class extends NativePeer {
-          constructor(...args) {
-            super(...args)
-            window.__discoveryPeers.push(this)
-          }
-        }
-      })
+      await context.addInitScript(installPlaybackStartupTiming)
       const page = await context.newPage()
       page.on("pageerror", () => pageErrors++)
-      await page.goto(origin, { waitUntil: "domcontentloaded", timeout: 30000 })
-      if (distributed)
-        await page
-          .getByText("Distribution path: MediaMTX", { exact: true })
-          .waitFor({ timeout: 45000 })
-      await page.waitForFunction(
-        () => {
-          const video = document.querySelector("video")
-          return (
-            video?.readyState >= 2 &&
-            video.videoWidth === 1280 &&
-            video.videoHeight === 720
-          )
-        },
-        undefined,
-        { timeout: 45000 },
+      let startup = null
+      try {
+        await page.goto(origin, {
+          waitUntil: "domcontentloaded",
+          timeout: 30000,
+        })
+        if (distributed)
+          await page
+            .getByText("Distribution path: MediaMTX", { exact: true })
+            .waitFor({ timeout: 45000 })
+        await page.waitForFunction(
+          () => {
+            const video = document.querySelector(
+              ".video-player-picture > video",
+            )
+            return (
+              video?.readyState >= 2 &&
+              video.videoWidth === 1280 &&
+              video.videoHeight === 720 &&
+              window.__playbackStartup.snapshot().firstFrame !== null
+            )
+          },
+          undefined,
+          { timeout: 45000 },
+        )
+      } finally {
+        // Preserve failed/missing evidence too, without hiding the original failure.
+        startup = await page
+          .evaluate(() => window.__playbackStartup?.snapshot())
+          .catch(() => null)
+        json(
+          `playback-startup-${actor}.json`,
+          startup ?? { measurementValid: false },
+        )
+      }
+      assert.ok(
+        startup?.measurementValid,
+        "First presentation must be measured from navigation and authorization",
       )
-      viewers.push({ actor, page, context })
+      viewers.push({ actor, page, context, startup })
     }
     const sample = (page) =>
       page.evaluate(async () => {
@@ -423,7 +437,13 @@ async function qualifyPlayback() {
         return { actor: active[index].actor, ...value, framesPerSecond }
       })
     }
-    const observation = { distribution, viewers: await measure(viewers) }
+    const observation = {
+      distribution,
+      startup: viewers.map(({ actor, startup }) => ({ actor, ...startup })),
+      startupScope:
+        "Authenticated dashboard navigation; membership and inventory caches already warm; producer process ready; source selected low; OAuth excluded",
+      viewers: await measure(viewers),
+    }
     const quality = await request("alice", `/api/devices/${deviceID}/quality`)
     assert.equal(quality.status, 200)
     assert.equal(quality.body.activeEncoders, 1)

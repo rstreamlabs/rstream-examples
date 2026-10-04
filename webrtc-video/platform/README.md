@@ -674,7 +674,15 @@ rstream APIs, tunnel publication and producer HTTP controls are real. This check
 does not exercise video playback or an organization's actual OAuth/SSO policy.
 Optionally set `RSTREAM_DISCOVERY_BROWSER` to a Chrome/Chromium executable to
 include direct playback from the discovered producer, decoded 720p frame cadence
-and encoder shutdown after the viewer closes. To exercise discovery with the
+and encoder shutdown after the viewer closes. Browser runs also retain
+navigation-to-first-presentation and authorization-to-first-presentation timings,
+with the authorization response and WHEP/peer milestones. A one-shot video frame
+callback must observe exactly the first presented frame; missing evidence or a
+retried startup fails the measurement. These timings cover an authenticated
+dashboard opening with an already running producer and warm membership/inventory
+caches, not OAuth sign-in or device process startup. The expected display time is
+a browser compositor estimate, not a physical display measurement.
+To exercise discovery with the
 adaptive MediaMTX adapter, also set `RSTREAM_DISCOVERY_DISTRIBUTOR=mediamtx`.
 That variant uses the documented local stack helper (including its production
 build and temporary HTTPS callback tunnel), so its local ports must be free.
