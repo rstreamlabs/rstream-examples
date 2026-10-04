@@ -626,6 +626,31 @@ unresolved. The other recovers in 24.205s but fails impaired playback freezes
 policy or grounds to loosen thresholds. Temporary UDP buffer settings are
 restored and all experiment-owned containers are removed.
 
+The [full direct/symmetric-TURN pair at `ed2db92`](./producer/qualification/adaptive-streaming/evidence/ed2db92/direct-relay-regression.json)
+passes the unchanged profile after the received-throughput backoff fix. Direct
+and TURN reach the recovered target after 12.124s and 13.134s; sustained
+recovery windows begin at 26.173s and 20.128s. Both pass encoder cadence and
+host-scheduling checks: encoder gaps remain below 45ms, the largest 250ms
+heartbeat gap is 261ms and no steal time is observed. Direct has 0.380s
+constrained freezes and 1.558s impaired freezes. TURN has 3.212s impaired
+freezes (9.113%) and 0.352s reported at recovery entry (0.795%). These are
+passes within the severe profile's existing budgets, not freeze-free playback.
+The repeated release matrix, separate MediaMTX recovery failure and resource
+comparisons remain outstanding.
+
+Review of this pair exposes a reporting bug: subtracting each phase's first
+cumulative freeze counter omitted increments observed at phase entry. Two
+regression tests reproduce false acceptance for entry-only impaired/recovery
+freezes. The correction uses the preceding snapshot as the freeze baseline,
+retains that same observation interval in the denominator and reports its
+entry increment separately. It attributes an interval to its ending snapshot's
+phase; it does not infer the freeze's physical start or cause. All 118 collector
+tests pass. Separate offline reanalysis retains the original outputs and still
+passes both runs, now accounting for every observed freeze increment exactly
+once, including the TURN 205ms impaired-entry and 352ms recovery-entry events.
+No production timing, buffering, protection policy or acceptance threshold
+changes. Socket limits are restored and owned containers removed.
+
 ## Cross-cutting latency and resource criteria
 
 The optional qualification-only pixel timestamp probe is now maintained in

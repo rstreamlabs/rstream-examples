@@ -45,6 +45,15 @@ Missing browser metadata remains `null`. Media time and receiver timestamps do
 not establish source capture-to-display latency. The probe runs only in the
 qualification browser and is stopped before session teardown.
 
+Frozen-time accounting retains the counter increase reported at the first
+snapshot of each phase, using the preceding snapshot as its baseline. The
+sampling interval is assigned to its ending snapshot's phase and included in
+the ratio's observation duration. JSON reports expose
+`phaseEntryFreezeDurationSeconds` and `freezeMeasurementDurationSeconds` so this
+boundary remains visible. Native freeze counters are reported when playback
+resumes; this attribution does not prove when the freeze began or what caused it.
+The first sample of the entire collection has no preceding interval to measure.
+
 ### Optional pixel-based latency measurement
 
 The distributor's end-to-end runner supports `RSTREAM_DISTRIBUTOR_LATENCY_PROBE=true`

@@ -2307,6 +2307,66 @@ test("rejects negotiated RTX when loss produces no repair packets", () => {
   );
 });
 
+for (const [affectedPhase, freezeSeconds, assertionName] of [
+  ["impaired", 2.5, "impaired-link-freezes"],
+  ["recovery", 0.5, "healthy-link-freezes"],
+]) {
+  test(`counts a freeze reported at entry to ${affectedPhase}`, () => {
+    const names = ["warmup", "baseline", "constrained", "impaired", "recovery"];
+    const samples = [];
+    let elapsedMilliseconds = 0;
+    let totalFreezesDurationSeconds = 0;
+    for (const phase of names) {
+      for (let index = 0; index < 20; index++) {
+        elapsedMilliseconds += 1000;
+        if (phase === affectedPhase && index === 0)
+          totalFreezesDurationSeconds += freezeSeconds;
+        samples.push({
+          phase,
+          elapsedMilliseconds,
+          totalFreezesDurationSeconds,
+          bytesReceived: elapsedMilliseconds * 250,
+          framesDecoded: elapsedMilliseconds * 0.03,
+          encoderTargetKbps: 2000,
+          twccTargetKbps: 2000,
+          peerConnectionState: "connected",
+          playback: "Playing",
+        });
+      }
+    }
+    const result = analyze(samples, {
+      phases: names.map((name) => ({ name })),
+    });
+    assert.equal(
+      result.assertions.find((assertion) => assertion.name === assertionName)
+        .passed,
+      false,
+      "A phase-entry freeze must not disappear between per-phase counter baselines",
+    );
+    assert.equal(
+      result.phases[affectedPhase].freezeDurationSeconds,
+      freezeSeconds,
+    );
+    assert.equal(
+      result.phases[affectedPhase].phaseEntryFreezeDurationSeconds,
+      freezeSeconds,
+    );
+    assert.equal(
+      result.phases[affectedPhase].freezeMeasurementDurationSeconds,
+      20,
+    );
+    assert.equal(result.phases[affectedPhase].freezeRatio, freezeSeconds / 20);
+    assert.equal(
+      Object.values(result.phases).reduce(
+        (sum, phase) => sum + phase.freezeDurationSeconds,
+        0,
+      ),
+      freezeSeconds,
+      "Every observed increment is retained exactly once",
+    );
+  });
+}
+
 test("rejects a connected stream that freezes under impairment", () => {
   const phases = [
     ["warmup", 5000, 4200, 0],

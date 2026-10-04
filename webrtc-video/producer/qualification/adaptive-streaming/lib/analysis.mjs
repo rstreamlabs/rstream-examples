@@ -51,14 +51,21 @@ export function analyze(
     (name) => name !== "warmup",
   );
   const summaries = Object.fromEntries(
-    manifest.phases.map((phase) => [
-      phase.name,
-      summarizePhase(
-        enriched.filter((sample) => sample.phase === phase.name),
-        phase,
-        encoderQuality?.[phase.name] || null,
-      ),
-    ]),
+    manifest.phases.map((phase) => {
+      const phaseSamples = enriched.filter(
+        (sample) => sample.phase === phase.name,
+      );
+      const firstIndex = enriched.indexOf(phaseSamples[0]);
+      return [
+        phase.name,
+        summarizePhase(
+          phaseSamples,
+          phase,
+          encoderQuality?.[phase.name] || null,
+          firstIndex > 0 ? enriched[firstIndex - 1] : null,
+        ),
+      ];
+    }),
   );
   const baseline = summaries.baseline;
   const conditioning = summaries.conditioning;
@@ -1519,6 +1526,12 @@ ${setupSection}${mobilitySection}${signalingSection}## Phase summary
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 ${phaseRows}
 
+Frozen-time ratios include the sampling interval ending at the first snapshot of
+each phase, so transitions do not lose cumulative-counter increments. The JSON
+retains that entry increment and the full observation duration separately.
+Native counters are reported when playback resumes; phase attribution identifies
+the reporting interval, not the exact start or cause of a freeze.
+
 Congestion response: ${analysis.congestionResponseRequired ? formatDuration(analysis.responseDelayMilliseconds) : "not required (stable pre-transition target fits the constrained media budget)"}. Recovery response: ${analysis.congestionResponseRequired ? formatDuration(analysis.recoveryDelayMilliseconds) : "not required"}.
 
 Selected ICE candidate-pair switches: ${analysis.candidatePairSwitches}. ${manifest.networkPath?.kind === "relay" ? "Both peers remain on the required TURN relay path." : "The direct-path address selector remains active across port changes."}
@@ -2109,7 +2122,7 @@ export function summarizeHostCPU(samples, phaseTimeline, phaseOrder) {
   };
 }
 
-function summarizePhase(samples, phase, encoderQuality) {
+function summarizePhase(samples, phase, encoderQuality, previousSample) {
   if (samples.length === 0) {
     return null;
   }
@@ -2147,10 +2160,25 @@ function summarizePhase(samples, phase, encoderQuality) {
     .filter(
       (sample, index) => sample.framesDecoded > samples[index].framesDecoded,
     ).length;
+  // Native freeze counters are cumulative and reported after presentation
+  // resumes. Attribute each sampling interval to its ending snapshot's phase,
+  // including the interval crossing phase entry; otherwise that increment is
+  // omitted from both adjacent summaries. This is reporting time, not proof of
+  // when a freeze began. Keep this interval's duration in the ratio denominator.
+  const freezeBaseline = previousSample || first;
+  const freezeMeasurementDurationSeconds = Math.max(
+    0,
+    (last.elapsedMilliseconds - freezeBaseline.elapsedMilliseconds) / 1000,
+  );
+  const phaseEntryFreezeDurationSeconds = Math.max(
+    0,
+    (first.totalFreezesDurationSeconds || 0) -
+      (freezeBaseline.totalFreezesDurationSeconds || 0),
+  );
   const freezeDurationSeconds = Math.max(
     0,
     (last.totalFreezesDurationSeconds || 0) -
-      (first.totalFreezesDurationSeconds || 0),
+      (freezeBaseline.totalFreezesDurationSeconds || 0),
   );
   const nackIncrease = counterIncrease(samples, "nackCount", [phase.name]);
   const packetsReceivedIncrease = counterIncrease(samples, "packetsReceived", [
@@ -2206,8 +2234,12 @@ function summarizePhase(samples, phase, encoderQuality) {
     decoderActiveRatio:
       samples.length > 1 ? decodedIntervals / (samples.length - 1) : 0,
     freezeDurationSeconds,
+    phaseEntryFreezeDurationSeconds,
+    freezeMeasurementDurationSeconds,
     freezeRatio:
-      durationSeconds > 0 ? freezeDurationSeconds / durationSeconds : 0,
+      freezeMeasurementDurationSeconds > 0
+        ? freezeDurationSeconds / freezeMeasurementDurationSeconds
+        : 0,
     fecPacketsIncrease: counterIncrease(samples, "fecPacketsReceived", [
       phase.name,
     ]),
