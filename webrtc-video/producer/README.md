@@ -572,6 +572,13 @@ H.264 is the reference path and the better default when you want predictable liv
 
 On macOS webcam pipelines, keep `format=I420` before `av1enc`. That avoids format negotiation paths that are known to be unreliable for browser playback.
 
+The AV1 profiles explicitly set `min-quantizer=0 max-quantizer=63`. GStreamer's
+[`av1enc`](https://gstreamer.freedesktop.org/documentation/aom/av1enc.html)
+defaults both bounds to zero, preventing the encoder from increasing
+quantization to meet its bitrate target. With frame dropping enabled, that can
+reduce cadence substantially; disabling frame dropping instead can exceed the
+target bitrate. Preserve a usable quantizer range when adapting these profiles.
+
 `media.pipeline` is passed directly to GStreamer through `gst_parse_launch`. If you add new elements to a profile, remember that the static Linux build must include those same elements. Any pipeline change that adds dependencies should therefore be reflected in `build-gstreamer-static-linux.sh`.
 
 ### Transport feedback and packet repair
