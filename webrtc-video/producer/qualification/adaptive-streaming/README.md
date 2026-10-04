@@ -343,6 +343,19 @@ runner needs neither Go nor the rstream CLI. It validates the prepared input,
 copies it into its own private runtime, and removes that copy on exit. The
 caller remains responsible for removing the source directory after the run.
 
+The repository's manually dispatched `Video qualification` GitHub Actions
+workflow runs the same scenario on Ubuntu 24.04 with Node.js 24. Its two existing
+repository secrets, `RSTREAM_QUALIFICATION_CONFIG_B64` and
+`RSTREAM_QUALIFICATION_TOKEN`, must identify an isolated qualification project.
+The workflow temporarily raises the runner's UDP socket receive/send limits to
+at least 7,500,000 bytes, records the previous and applied limits, and restores
+them after success or failure. It also removes the prepared authentication
+files. The evidence upload excludes those private runtime directories.
+Choose the path, repair profile and receiver hint explicitly; set
+`playout_delay_hint_seconds` to `0` to qualify the low-latency viewer without an
+additional requested buffering floor. The workflow's historical default is
+`0.2`, so results from those two settings must remain distinguishable.
+
 ```bash
 RSTREAM_CONTEXT=your-context \
   ./qualification/adaptive-streaming/run.sh

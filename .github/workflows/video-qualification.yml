@@ -55,6 +55,13 @@ jobs:
     steps:
       - name: Check out the tested revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -79,6 +86,30 @@ jobs:
           done
           docker info >/dev/null
 
+      - name: Prepare runner UDP socket limits
+        id: sockets
+        shell: bash
+        run: |
+          set -euo pipefail
+          receive_limit="$(sysctl -n net.core.rmem_max)"
+          send_limit="$(sysctl -n net.core.wmem_max)"
+          {
+            printf 'receive_limit=%s\n' "$receive_limit"
+            printf 'send_limit=%s\n' "$send_limit"
+          } >>"$GITHUB_OUTPUT"
+          # Match the qualified local environment without lowering a larger limit.
+          sudo sysctl -w \
+            "net.core.rmem_max=$((receive_limit > 7500000 ? receive_limit : 7500000))" \
+            "net.core.wmem_max=$((send_limit > 7500000 ? send_limit : 7500000))"
+          jq -n \
+            --argjson previous_receive "$receive_limit" \
+            --argjson previous_send "$send_limit" \
+            --argjson applied_receive "$(sysctl -n net.core.rmem_max)" \
+            --argjson applied_send "$(sysctl -n net.core.wmem_max)" \
+            '{previous: {receive: $previous_receive, send: $previous_send},
+              applied: {receive: $applied_receive, send: $applied_send}}' \
+            >"${RUNNER_TEMP}/video-qualification-socket-limits.json"
+
       - name: Prepare the credential-isolated runtime
         id: runtime
         working-directory: webrtc-video/producer/qualification/adaptive-streaming
@@ -94,7 +125,10 @@ jobs:
         run: |
           set -euo pipefail
           config_directory="$(mktemp -d)"
+          trap 'rm -rf -- "$config_directory"' EXIT
           runtime_directory="$(mktemp -d)"
+          # Publish the owned path before preparation so failed setup is cleaned too.
+          printf 'runtime_directory=%s\n' "$runtime_directory" >>"$GITHUB_OUTPUT"
           output_directory="${RUNNER_TEMP}/video-qualification"
           mkdir -p "$output_directory"
           chmod 700 "$config_directory" "$runtime_directory" "$output_directory"
@@ -134,7 +168,6 @@ jobs:
           RSTREAM_CONFIG="${config_directory}/config.yaml" \
             go run ./cmd/prepare-context "${prepare_arguments[@]}"
           {
-            printf 'runtime_directory=%s\n' "$runtime_directory"
             printf 'output_directory=%s\n' "$output_directory"
             printf 'mobility=%s\n' "$mobility"
           } >>"$GITHUB_OUTPUT"
@@ -153,6 +186,38 @@ jobs:
           RSTREAM_QUALIFICATION_MOBILITY: ${{ steps.runtime.outputs.mobility }}
           RSTREAM_QUALIFICATION_PREPARED_RUNTIME_DIRECTORY: ${{ steps.runtime.outputs.runtime_directory }}
         run: ./run.sh "${{ steps.runtime.outputs.output_directory }}"
+
+      - name: Remove prepared credentials
+        if: always()
+        shell: bash
+        env:
+          RUNTIME_DIRECTORY: ${{ steps.runtime.outputs.runtime_directory }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$RUNTIME_DIRECTORY" ]]; then
+            rm -rf -- "$RUNTIME_DIRECTORY"
+          fi
+
+      - name: Restore runner UDP socket limits
+        if: always() && steps.sockets.outputs.receive_limit != ''
+        shell: bash
+        env:
+          ORIGINAL_RECEIVE_LIMIT: ${{ steps.sockets.outputs.receive_limit }}
+          ORIGINAL_SEND_LIMIT: ${{ steps.sockets.outputs.send_limit }}
+          OUTPUT_DIRECTORY: ${{ steps.runtime.outputs.output_directory }}
+        run: |
+          set -euo pipefail
+          sudo sysctl -w \
+            "net.core.rmem_max=$ORIGINAL_RECEIVE_LIMIT" \
+            "net.core.wmem_max=$ORIGINAL_SEND_LIMIT"
+          test "$(sysctl -n net.core.rmem_max)" = "$ORIGINAL_RECEIVE_LIMIT"
+          test "$(sysctl -n net.core.wmem_max)" = "$ORIGINAL_SEND_LIMIT"
+          if [[ -n "$OUTPUT_DIRECTORY" && -d "$OUTPUT_DIRECTORY" && \
+            -f "${RUNNER_TEMP}/video-qualification-socket-limits.json" ]]; then
+            jq '. + {restored: true}' \
+              "${RUNNER_TEMP}/video-qualification-socket-limits.json" \
+              >"${OUTPUT_DIRECTORY}/runner-socket-limits.json"
+          fi
 
       - name: Upload the complete evidence bundle
         if: always() && steps.runtime.outcome == 'success'
