@@ -148,8 +148,22 @@ that test and passes 100 repetitions. Native fork race/lint, distributor race
 and real MediaMTX integration passed before the adapter correction. Its next
 step is unchanged-profile live qualification, not a claim of complete recovery.
 
-Next, qualify the corrected accounting before adopting
-a threshold or controller change. Inspect acknowledged throughput, increase
+The [five delivery trials at `7c20680`](./distributor/qualification/evidence/7c20680/rtp-budget.json)
+confirm complete 360p → 540p → 720p30 recovery with the unchanged profile in
+both direct and adaptive MediaMTX modes. They still fail initial-transition
+playback: 2.798s disruption with MediaMTX (including 1.268s after the transition
+window) and 3.149s directly. Neither has recovery freezes or decoded-frame drops.
+Changing only downHold from 3s to 1s yields one complete MediaMTX pass with
+1.870s transition freezes, but its repeat retains a 0.579s late freeze and fails.
+The direct 1s trial loses its phase-control file at the end of recovery and is
+incomplete despite final 720p30 observations. Existing runs retain their original
+results and all acceptance gates remain unchanged. Socket limits are restored and owned containers removed.
+The tracked-stream accounting fix is retained; 1s downHold remains experimental.
+
+Next, stabilize the initial capacity-drop transition and diagnose phase-file
+visibility in the harness, then repeat direct/MediaMTX/TURN qualification. Do not
+claim that one successful fast-down run establishes a stable policy. Before adopting
+a further threshold or controller change, inspect acknowledged throughput, increase
 mode, receive-time ordering and encoder undershoot; a clean loss signal alone
 does not prove spare capacity. If application limitation is established,
 compare with libwebrtc's bounded [probe controller](https://webrtc.googlesource.com/src/+/refs/heads/main/modules/congestion_controller/goog_cc/probe_controller.cc)
@@ -432,8 +446,8 @@ deduplication. The source and direct accounting fixes require new uninstrumented
 network qualification. Synchronous diagnostic captures are retained as diagnosis
 only and cannot substantiate latency or CPU improvements.
 
-The sample pins the published signed-loss correction `5175d43` in both Go
-modules and the [sender RTCP fix](https://github.com/rstreamlabs/pion-webrtc/pull/1)
+The sample pins `d17c867` in both Go modules, including the signed-loss and
+arrival-ordered bounded-rate corrections, and the [sender RTCP fix](https://github.com/rstreamlabs/pion-webrtc/pull/1)
 at `ab2ba524` in the producer. The distributor keeps its separate FlexFEC
 receiver fork. Full race suites and lint pass in both affected native forks;
 producer/distributor race suites, no-embedded mode and real MediaMTX 1.21.1
