@@ -76,13 +76,16 @@ both Go roles. `make run` starts the producer. The
 [producer README](./producer/README.md) starts with the standalone path and
 continues through the congestion, repair, mobility, and qualification model.
 
-Run the platform directly with npm:
+Use Node.js 24 to run the platform directly with npm:
 
 ```bash
 cd platform
 npm ci
 cp .env.example .env.local
 # Fill PostgreSQL, GitHub OAuth, NextAuth, and rstream settings in .env.local.
-npm run prisma:migrate
+npm run prisma:deploy
 npm run dev
 ```
+
+`prisma:deploy` applies the committed migrations. Use `prisma:migrate` when
+intentionally developing a schema change.
