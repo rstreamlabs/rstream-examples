@@ -34,6 +34,9 @@ late sampled freeze counters. All six format ladders recover. The groups use
 different runners and image builds; total freeze durations overlap, so a
 same-runner, same-image interleaved comparison is the next controlled check.
 No production timing changes from this observation.
+The current-dependency local forced-TURN trial at `18f6cc1` passes all 56 gates,
+including actual relay candidates at both endpoints, adaptation, recovery and
+session cleanup. It does not remove the separate hosted-runner TCP obstacle.
 
 ## Implemented; final regression qualification pending
 
@@ -1260,6 +1263,27 @@ are deferred until the selected endpoint/configuration or network reachability
 changes. No live infrastructure change is part of this source-work goal. The
 direct hosted and local extended-TURN successes remain separate evidence.
 
+The [current local forced-TURN trial at `18f6cc1`](./producer/qualification/adaptive-streaming/evidence/18f6cc1/local-relay.json)
+passes all 56 unchanged checks with the merged Go/media dependencies and bounded
+tunnel-handshake backport. Both producer and browser select managed TURN/UDP;
+the fixed 720p30 source keeps its configured cadence through stepped 4 Mbit/s
+capacity and 2% loss / 120ms one-way delay / 30ms jitter. Baseline, conditioning,
+capacity and recovery have no freezes; impairment has 1.287s over 35.247s
+(3.65%) and 29.88 decoded fps. The encoder returns to 8 Mbit/s; the sustained
+recovery window is reached after 28.205s. Its maximum observed encoded-frame
+gap is 43.27ms, and no decoded-frame drop is observed. One created WHEP session
+is deleted without a failed request. All owned containers, networks and volumes
+are gone and socket ceilings return to 212992 bytes.
+
+This trial also retains a valid first-presentation observation of 897.9ms from
+the standalone Connect activation (910.6ms to callback, first presented frame
+counter equals one). The producer process/tunnel and viewer page are already
+ready; container launch and control-plane preparation are outside that duration.
+It is one startup sample, not dashboard authorization, repeated activation or
+physical capture-to-display latency. This fresh pass establishes the current
+local relay path; historical failed cases and the distinct hosted connectivity
+failure remain unchanged. It does not identify the periodic host pause.
+
 Review of MediaMTX 1.21.1 confirms the native path's periodic upstream PLI and
 discarded downstream PLI. The current native first-frame delay is consistent
 with that behavior, without proving exact attribution from the existing trace.
@@ -1724,7 +1748,7 @@ The sample and guides remain draft PRs, with no deployment in this work.
 | Optional automatic resolution/frame-rate adaptation | [Repeated direct/MediaMTX matrix](./distributor/qualification/evidence/02fdf82/automatic-format-repetitions.json) and [independent direct comparison](./distributor/qualification/evidence/18338c8/hosted-direct-formats.json) recover all format ladders and source targets. | Complete playback matrices retain failures. A same-runner 1s/3s crossover is in progress at `1a3af2f`; public down-hold remains 3s. |
 | Rapid activation, cancellation and demand-driven release | [Portable lifecycle cases](./distributor/qualification/evidence/9dac607/startup-cycles.json) and [visible dashboard activation](./platform/qualification/evidence/7e75e65/visible-startup.json) distinguish cold/reopen/join, canceled setup and actual encoder idle. | Finite local observations, no startup SLA; slow control-plane authorization and native MediaMTX key-frame behavior remain explicit. |
 | Direct, adaptive MediaMTX and native delivery | Real media tests cover direct fallback, adaptive single-upstream sharing and [current native MediaMTX](./distributor/qualification/evidence/82c9c40/native-current.json), whose 22 gates pass. | Native pull is fixed-rate interoperability, not the adaptive platform backend or an optimized startup path. |
-| Congestion, latency and forced relay | [Extended relay diagnostic](./producer/qualification/adaptive-streaming/evidence/c585c3c/extended-relay-diagnostic.json) passes 56 gates. [Four latency trials](./distributor/qualification/evidence/4a0d83a/latency-network.json) have valid measurements but only three delivery passes. | A 193ms recovery freeze remains. [Hosted relay](./producer/qualification/adaptive-streaming/evidence/2a45705/hosted-relay.json) fails basic TCP reachability before media; identical retries are deferred until the external condition changes. |
+| Congestion, latency and forced relay | [Current local relay](./producer/qualification/adaptive-streaming/evidence/18f6cc1/local-relay.json) and the earlier [extended diagnostic](./producer/qualification/adaptive-streaming/evidence/c585c3c/extended-relay-diagnostic.json) each pass 56 gates. [Four latency trials](./distributor/qualification/evidence/4a0d83a/latency-network.json) have valid measurements but only three delivery passes. | A 193ms recovery freeze remains. [Hosted relay](./producer/qualification/adaptive-streaming/evidence/2a45705/hosted-relay.json) fails basic TCP reachability before media; identical retries are deferred until the external condition changes. |
 | Metrics and bounded recent recording/replay | Current route/browser regression covers authorized metrics, outages, replay gaps/expiry and return to the same live session. [Recording startup regressions](./distributor/qualification/evidence/2b22561/recording-startup.json) pass; [resource comparisons](./distributor/qualification/evidence/5b83934/recording-resources.json) retain all twelve attempts. | Recording remains opt-in. Historical failed resource/delivery trials remain failed; synthetic CPU measurements are not target-device budgets. |
 | Same-page expansion and responsive controls | Current browser regression passes on Chromium, WebKit and Linux Firefox with desktop/mobile/landscape captures, focus/scroll restoration and media continuity. | Inventory and replay visuals are accepted. Explicit quality/format/metrics visual approval is still pending. |
 | Packaging, dependencies, commands and guides | [Go 1.27 static H.264/AV1 runtime checks](./producer/qualification/evidence/90df80f/static-linux-go127.json) pass on ARM64 and emulated AMD64. [Guides PR #57](https://github.com/rstreamlabs/rstream-nextjs/pull/57) passes complete CI at `0ab4f9c`. All three video CI jobs pass at `03731ac`, including the platform build/audit after a formatting-only evidence correction. | No physical-camera or native-AMD64 performance claim. Runtime evidence data are unchanged by that formatting correction; unrelated example CI failures are not video regressions. |
