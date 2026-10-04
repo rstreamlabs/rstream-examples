@@ -55,6 +55,12 @@ last-subscriber shutdown, retries and configuration/credential isolation; all
 193 platform unit tests, the production build and full access/database
 integration suite pass. Its effect on actual startup is measured separately.
 
+Configuration validation now requires `RSTREAM_PROJECT_ENDPOINT`, as the guides
+already specify: a project ID and engine override alone cannot mint TURN APP
+credentials. Previously this combination passed validation but failed when a
+viewer requested TURN. A focused regression and the complete 194-test platform
+suite, production build and access/database integration pass after the correction.
+
 The [four further dashboard attempts through `4b63d74`](./platform/qualification/evidence/4b63d74/dashboard-startup.json)
 retain the failed cold first-presentation gate and every slow authorization.
 Request-local reuse yields two valid warm-reader measurements of 630–697ms

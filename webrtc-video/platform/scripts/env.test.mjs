@@ -15,6 +15,9 @@ const mediaMTXEnvironment = {
   VIDEO_DISTRIBUTOR: "mediamtx",
 }
 const managedNames = [
+  "RSTREAM_PROJECT_ID",
+  "RSTREAM_PROJECT_ENDPOINT",
+  "RSTREAM_ENGINE",
   "MEDIAMTX_EXPOSURE",
   "MEDIAMTX_METRICS_URL",
   "MEDIAMTX_PLAYBACK_URL",
@@ -26,6 +29,33 @@ const managedNames = [
   "TURN_CREDENTIAL_TTL_SECONDS",
   "VIDEO_DISTRIBUTOR",
 ]
+
+test("project ID and engine overrides cannot replace the endpoint required by TURN", () => {
+  for (const endpoint of ["", "   "]) {
+    withEnvironment(
+      {
+        ...baseEnvironment,
+        RSTREAM_PROJECT_ENDPOINT: endpoint,
+        RSTREAM_PROJECT_ID: "project-id",
+        RSTREAM_ENGINE: "engine.test:443",
+      },
+      () => {
+        const result = rstreamEnvResult()
+        assert.equal(result.success, false)
+        assert.deepEqual(
+          result.error.issues.map((issue) => issue.path),
+          [["RSTREAM_PROJECT_ENDPOINT"]],
+        )
+      },
+    )
+  }
+  withEnvironment(
+    { ...baseEnvironment, RSTREAM_PROJECT_ID: "project-id" },
+    () => {
+      assert.equal(rstreamEnvResult().success, true)
+    },
+  )
+})
 
 test("TURN credential TTL defaults to ten minutes", () => {
   withEnvironment(baseEnvironment, () => {

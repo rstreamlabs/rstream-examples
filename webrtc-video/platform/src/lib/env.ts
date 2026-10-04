@@ -78,11 +78,15 @@ const rstreamEnvSchema = z
     MEDIAMTX_TOKEN_TTL_SECONDS: secondsSchema("300"),
   })
   .superRefine((env, ctx) => {
-    if (!env.RSTREAM_PROJECT_ID && !env.RSTREAM_PROJECT_ENDPOINT) {
+    // Every viewer receives locally issued TURN APP credentials. Both their
+    // username and realm resolution require the managed project endpoint;
+    // an engine override and a project ID alone cannot provide that contract.
+    if (!env.RSTREAM_PROJECT_ENDPOINT) {
       ctx.addIssue({
         code: "custom",
-        path: ["RSTREAM_PROJECT_ID_OR_ENDPOINT"],
-        message: "RSTREAM_PROJECT_ID or RSTREAM_PROJECT_ENDPOINT is required.",
+        path: ["RSTREAM_PROJECT_ENDPOINT"],
+        message:
+          "RSTREAM_PROJECT_ENDPOINT is required for engine and TURN resolution.",
       })
     }
     if (

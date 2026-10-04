@@ -185,7 +185,7 @@ try {
     RSTREAM_API_URL: "https://control.qualification.invalid",
     RSTREAM_TURN_KEYRING_BASE_URL: "https://control.qualification.invalid",
     RSTREAM_CLIENT_SECRET: privateKey,
-    RSTREAM_PROJECT_ENDPOINT: "",
+    RSTREAM_PROJECT_ENDPOINT: "qualification-endpoint",
     RSTREAM_PROJECT_ID: "qualification-project",
     RSTREAM_ENGINE: "engine.qualification.invalid:443",
     VIDEO_DISTRIBUTOR: "direct",
