@@ -121,10 +121,28 @@ the source; viewer NACK and TWCC remain local to the MediaMTX hop. This is not
 end-to-end forwarding of every viewer's key-frame request: MediaMTX 1.21.1
 [consumes reader RTCP without forwarding PLI upstream](https://github.com/bluenviron/mediamtx/blob/v1.21.1/internal/protocols/webrtc/outbound_track.go)
 and [generates its own periodic source PLI every two seconds](https://github.com/bluenviron/mediamtx/blob/v1.21.1/internal/protocols/webrtc/inbound_track.go).
-An established viewer connection can therefore still wait for the next
-decodable key frame. First-picture timing is measured separately from
-steady-state latency; reducing the source GOP interval also changes encoding
-cost and compression efficiency, so it requires a measured tradeoff.
+The combined image therefore uses MediaMTX's standard `runOnRead` hook to
+request a source key frame when a reader's media transport connects. A short
+local command sends a fixed notification to that path's adapter through a
+private Unix socket. Concurrent arrivals retain at most one pending request
+per 250ms; the producer also preserves one deferred request inside its own
+rate limit. Neither source bitrate nor GOP interval changes. Existing readers
+continue on the same live upstream, and the last reader still releases it after
+`runOnDemandCloseAfter` (five seconds in the reference configuration). That idle
+grace trades briefly continued encoding against avoiding source recreation on
+rapid reopen; reduce it when immediate resource release matters more.
+
+The `host` command creates and removes the private notification directory and
+passes it to MediaMTX and its hooks. Path locks reject a duplicate live adapter
+and allow a replacement to recover a socket left by a crashed process. Custom
+MediaMTX configurations must retain both `runOnDemand` and `runOnRead` from the
+bundled configuration to get this behavior. No public control endpoint or
+permanent encoding session is added. Native MediaMTX pull does not use this
+adapter hook and retains MediaMTX's periodic key-frame behavior.
+
+First-picture timing is measured separately from steady-state latency;
+reducing the source GOP interval also changes encoding cost and compression
+efficiency, so it requires a measured tradeoff.
 
 The reference configuration admits at most eight readers on one device path.
 That boundary is deliberate: the fan-out qualification drives a decoder-valid

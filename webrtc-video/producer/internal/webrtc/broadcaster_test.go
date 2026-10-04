@@ -1094,6 +1094,7 @@ func TestSessionCoalescesConcurrentRecoveryKeyFrameRequests(t *testing.T) {
 		encoder: encoder,
 		logger:  logs.NewLogger(logs.NewHub(8), false),
 	}
+	defer session.cancelScheduledKeyFrameRequest()
 	var wait sync.WaitGroup
 	wait.Add(callers)
 	for range callers {

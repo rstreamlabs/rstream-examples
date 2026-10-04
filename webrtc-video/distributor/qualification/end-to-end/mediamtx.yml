@@ -23,6 +23,7 @@ webrtcIPsFromInterfaces: true
 webrtcIPsFromInterfacesList: []
 webrtcAdditionalHosts: []
 webrtcICEServers2: []
+webrtcTrackGatherTimeout: 250ms
 
 pathDefaults:
   source: publisher
@@ -31,6 +32,8 @@ pathDefaults:
   runOnDemandRestart: false
   runOnDemandStartTimeout: 15s
   runOnDemandCloseAfter: 1s
+  runOnRead: /usr/local/bin/rstream-video-distributor reader-started
+  runOnReadRestart: false
 
 paths:
   all_others:

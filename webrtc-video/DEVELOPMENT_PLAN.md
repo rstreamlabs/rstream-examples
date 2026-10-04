@@ -73,6 +73,21 @@ use. Compare any shorter GOP against quality and CPU before changing defaults;
 do not substitute continuous encoding or old-frame replay for rapid live
 activation. Repeated cold/reopen/join measurements remain required.
 
+The adapter now consumes the standard MediaMTX `runOnRead` event over a private,
+path-scoped Unix socket and emits a source PLI after the reader transport
+connects. Concurrent events retain one trailing request per 250ms. The producer
+also retains a rate-limited request instead of discarding it, reproducing and
+fixing a reader arriving just after the previous key frame. Cancellation,
+path isolation, duplicate-owner exclusion, stale socket recovery and shutdown
+checks pass with the race detector; three real MediaMTX integration runs show
+prompt requests for both first and additional readers with one source session.
+Both Go race suites and static checks pass. Browser first-picture measurements
+of this change remain next; no startup improvement is claimed from signaling
+tests alone. The qualification adapter configuration now explicitly matches
+the bundled 250ms track-gather timeout. The earlier adapter qualifier omitted
+that setting (native already set it); its first-picture evidence remains valid
+for the recorded configuration.
+
 - GitHub personal ownership or shared organization ownership, with bounded
   membership verification, explicit configuration and existing-device migration.
 - Optional source-wide bitrate presets, dynamically advertised to both viewers;
@@ -939,7 +954,12 @@ unchanged. It bounds each connection/publication attempt with configurable
 failed setup and shutdown, and explicitly owns provisioned transports. Deadline
 and concurrent-close regressions pass; the complete producer race suite, vet,
 static analysis and module verification pass with the backport. Real tunnel
-playback after the setup context ends remains the next integration check.
+playback after the setup context ends passes at clean `3a75a64`: the MediaMTX
+stream continues beyond the 15-second setup deadline, all delivery/resource
+gates pass, and the producer releases its tunnel normally. First presentation
+is 2310.6ms on that single pre-optimization adapter trial. Socket limits are
+restored and owned containers removed. All three video CI jobs pass; the full
+repository workflow still has failures in unrelated examples.
 The hosted
 relay diagnostic at `a4aed7b` passes authentication/project/DNS checks but fails
 TLS, QUIC and engine access from the runner host; its token is not expired.

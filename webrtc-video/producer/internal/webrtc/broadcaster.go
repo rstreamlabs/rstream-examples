@@ -1330,11 +1330,13 @@ func (s *Session) writeSamples(samples <-chan media.AccessUnit) {
 }
 
 func (s *Session) requestKeyFrame() {
-	s.scheduleKeyFrameRequest(0, false, false)
+	// A reader can arrive just after the preceding key frame. Retain one
+	// trailing request when rate limited so it need not wait for the next GOP.
+	s.scheduleKeyFrameRequest(0, false)
 }
 
 func (s *Session) requestRecoveryKeyFrame(delay time.Duration) {
-	s.scheduleKeyFrameRequest(delay, true, true)
+	s.scheduleKeyFrameRequest(delay, true)
 }
 
 func (s *Session) requestCongestionRecoveryKeyFrame() {
@@ -1354,21 +1356,22 @@ func (s *Session) recoveryKeyFrameDelay() time.Duration {
 	return max(delay, spacingDelay, 0)
 }
 
-func (s *Session) scheduleKeyFrameRequest(delay time.Duration, deferIfLimited, waitForAdmission bool) {
+func (s *Session) scheduleKeyFrameRequest(delay time.Duration, waitForAdmission bool) {
 	if s.isClosed() {
 		return
 	}
 	now := time.Now()
 	due := now.Add(max(delay, 0))
 	s.keyFrameMu.Lock()
-	earliest := s.lastKeyFrameRequest.Add(keyFrameRequestInterval)
-	if earliest.After(due) {
-		due = earliest
-	}
-	if !deferIfLimited && delay <= 0 && due.After(now) {
+	// Close may have won while this caller was waiting for the mutex.
+	if s.isClosed() {
 		s.keyFrameMu.Unlock()
-		s.recoveryKeyFrameCoalesced.Add(1)
 		return
+	}
+	earliest := s.lastKeyFrameRequest.Add(keyFrameRequestInterval)
+	rateLimited := earliest.After(due)
+	if rateLimited {
+		due = earliest
 	}
 	if due.After(now) {
 		if s.keyFrameRequestTimer != nil && !due.Before(s.keyFrameRequestDue) {
@@ -1388,6 +1391,9 @@ func (s *Session) scheduleKeyFrameRequest(delay time.Duration, deferIfLimited, w
 			s.fireScheduledKeyFrameRequest(generation)
 		})
 		s.keyFrameMu.Unlock()
+		if rateLimited {
+			s.recoveryKeyFrameCoalesced.Add(1)
+		}
 		return
 	}
 	s.cancelScheduledKeyFrameRequestLocked()

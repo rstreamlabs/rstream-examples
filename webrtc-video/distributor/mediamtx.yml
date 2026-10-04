@@ -57,6 +57,9 @@ pathDefaults:
   runOnDemandRestart: false
   runOnDemandStartTimeout: 15s
   runOnDemandCloseAfter: 5s
+  # Request a fresh source key frame after each reader's transport connects.
+  runOnRead: /usr/local/bin/rstream-video-distributor reader-started
+  runOnReadRestart: false
 
 paths:
   all_others:

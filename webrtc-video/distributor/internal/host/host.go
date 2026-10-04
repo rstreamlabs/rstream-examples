@@ -7,11 +7,14 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/readnotify"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/telemetry"
 )
 
@@ -33,10 +36,15 @@ type componentResult struct {
 	err  error
 }
 
-func Run(ctx context.Context, options Options) error {
+func Run(ctx context.Context, options Options) (runErr error) {
 	if err := validate(options); err != nil {
 		return err
 	}
+	readDirectory, err := os.MkdirTemp(filepath.Dir(options.SocketPath), "read-")
+	if err != nil {
+		return fmt.Errorf("create private reader notification directory: %w", err)
+	}
+	defer func() { runErr = errors.Join(runErr, os.RemoveAll(readDirectory)) }()
 	collector, err := telemetry.NewCollector(options.SocketPath)
 	if err != nil {
 		return fmt.Errorf("start adapter telemetry collector: %w", err)
@@ -63,6 +71,7 @@ func Run(ctx context.Context, options Options) error {
 	go func() { components <- componentResult{name: "metrics server", err: server.Serve(listener)} }()
 	command := exec.Command(options.Command[0], options.Command[1:]...)
 	command.Env = replaceEnvironment(options.Environment, telemetry.SocketEnvironmentVariable, options.SocketPath)
+	command.Env = replaceEnvironment(command.Env, readnotify.DirectoryEnvironmentVariable, readDirectory)
 	command.Stdin = options.Stdin
 	command.Stdout = options.Stdout
 	command.Stderr = options.Stderr

@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"os"
 	"strings"
+
+	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/readnotify"
 )
 
 const (
@@ -19,6 +21,7 @@ const (
 )
 
 type Config struct {
+	ReadNotifyDirectory   string
 	Path                  string
 	MediaMTXURL           *url.URL
 	SourceURL             *url.URL
@@ -52,7 +55,7 @@ func load(getenv func(string) string) (Config, error) {
 	if (sourceValue == "") == (resolverValue == "") {
 		return Config{}, errors.New("exactly one of RSTREAM_SOURCE_URL or RSTREAM_SOURCE_RESOLVER_URL is required")
 	}
-	config := Config{Path: path, MediaMTXURL: mediaMTXURL}
+	config := Config{Path: path, MediaMTXURL: mediaMTXURL, ReadNotifyDirectory: getenv(readnotify.DirectoryEnvironmentVariable)}
 	if sourceValue != "" {
 		config.SourceURL, err = parseURL(sourceValue, true)
 		if err != nil {

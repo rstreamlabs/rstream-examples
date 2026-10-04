@@ -17,6 +17,7 @@ import (
 	"github.com/pion/webrtc/v4"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/config"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/media"
+	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/readnotify"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/repair"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/source"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/whipwhep"
@@ -72,9 +73,10 @@ type workerResult struct {
 }
 
 type runOptions struct {
-	dropMediaSequence *uint16
-	dropFirstFEC      bool
-	observe           func(Result)
+	readerNotifications *readnotify.Listener
+	dropMediaSequence   *uint16
+	dropFirstFEC        bool
+	observe             func(Result)
 }
 
 type peerConnectionStateSource interface {
@@ -99,6 +101,13 @@ func RunObserved(ctx context.Context, configuration config.Config, observe func(
 }
 
 func run(ctx context.Context, configuration config.Config, options runOptions) (result Result, err error) {
+	if configuration.ReadNotifyDirectory != "" {
+		options.readerNotifications, err = readnotify.Listen(configuration.ReadNotifyDirectory, configuration.Path)
+		if err != nil {
+			return Result{}, source.Permanent(err)
+		}
+		defer func() { err = errors.Join(err, options.readerNotifications.Close()) }()
+	}
 	client := &http.Client{Timeout: httpTimeout}
 	resolver, err := configuredSourceResolver(configuration, client)
 	if err != nil {
@@ -545,6 +554,9 @@ func forward(
 	events := make(chan decoderEvent, packetQueueCapacity)
 	packets := make(chan repair.Packet, packetQueueCapacity)
 	workerCount := baseWorkerCount
+	if options.readerNotifications != nil {
+		workerCount++
+	}
 	if maintain != nil {
 		workerCount++
 	}
@@ -581,6 +593,13 @@ func forward(
 	startWorker(results, "destination RTCP reader", func() error {
 		return forwardDestinationRTCP(workerCtx, sender, sourcePeer, uint32(incoming.track.SSRC()))
 	})
+	if options.readerNotifications != nil {
+		startWorker(results, "reader key-frame requests", func() error {
+			return options.readerNotifications.Run(workerCtx, func() error {
+				return requestSourceKeyFrame(sourcePeer, uint32(incoming.track.SSRC()))
+			})
+		})
+	}
 	startWorker(results, "source peer monitor", func() error {
 		return watchPeerConnection(workerCtx, sourcePeer)
 	})

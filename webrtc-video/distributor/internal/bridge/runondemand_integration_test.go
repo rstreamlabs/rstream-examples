@@ -31,6 +31,7 @@ import (
 	"github.com/pion/webrtc/v4"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/config"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/media"
+	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/readnotify"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/whipwhep"
 )
 
@@ -774,9 +775,13 @@ func startMediaMTXWithDistributor(t *testing.T, mediaMTX string, distributor str
 	return startMediaMTXWithRunCommand(t, mediaMTX, fmt.Sprintf("%q", distributor), sourceURL, false)
 }
 
-func startMediaMTXWithRunCommand(t *testing.T, mediaMTX string, runCommand string, sourceURL string, dropFirstFEC bool) (*exec.Cmd, *synchronizedBuffer) {
+func startMediaMTXWithRunCommand(t *testing.T, mediaMTX string, runCommand string, sourceURL string, dropFirstFEC bool, readerCommand ...string) (*exec.Cmd, *synchronizedBuffer) {
 	t.Helper()
 	config := filepath.Join(t.TempDir(), "mediamtx.yml")
+	onRead := ""
+	if len(readerCommand) == 1 {
+		onRead = readerCommand[0]
+	}
 	contents := fmt.Sprintf(`logLevel: debug
 logDestinations: [stdout]
 rtsp: false
@@ -803,9 +808,11 @@ pathDefaults:
   runOnDemandRestart: false
   runOnDemandStartTimeout: 3s
   runOnDemandCloseAfter: 500ms
+  runOnRead: %q
+  runOnReadRestart: false
 paths:
   camera:
-`, mediaMTXMetricsAddress, mediaMTXHTTPAddress, mediaMTXICEAddress, mediaMTXTestReaderLimit, runCommand)
+`, mediaMTXMetricsAddress, mediaMTXHTTPAddress, mediaMTXICEAddress, mediaMTXTestReaderLimit, runCommand, onRead)
 	if err := os.WriteFile(config, []byte(contents), 0o600); err != nil {
 		t.Fatalf("write MediaMTX config: %v", err)
 	}
@@ -818,6 +825,14 @@ paths:
 		"RSTREAM_MEDIAMTX_URL=http://"+mediaMTXHTTPAddress,
 		"RSTREAM_SOURCE_URL="+sourceURL,
 	)
+	if onRead != "" {
+		directory, err := os.MkdirTemp("/tmp", "read-integration-")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.RemoveAll(directory) })
+		command.Env = append(command.Env, readnotify.DirectoryEnvironmentVariable+"="+directory)
+	}
 	if dropFirstFEC {
 		command.Env = append(command.Env, "RSTREAM_BRIDGE_DROP_FIRST_FEC=1")
 	}
