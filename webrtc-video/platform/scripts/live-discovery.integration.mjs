@@ -670,7 +670,29 @@ try {
   }
   writeFileSync(
     join(runtime, "github.mjs"),
-    `const nativeFetch=globalThis.fetch.bind(globalThis);globalThis.fetch=async(input,init)=>{const request=new Request(input,init);const url=new URL(request.url);if(url.hostname==='api.github.com'){if(url.pathname!=='/user/memberships/orgs/qualification-org')throw new Error('Unexpected GitHub route');const actor=request.headers.get('authorization')?.split('member-')[1];return Response.json({state:actor==='outsider'?'pending':'active',organization:{id:42,login:'qualification-org'},user:{id:actor==='alice'?7:actor==='bob'?8:9}});}return nativeFetch(input,init);};`,
+    `import { appendFileSync } from 'node:fs';
+const trace=${JSON.stringify(join(output, "dependency-timing.jsonl"))};
+let observations=0;
+const nativeFetch=globalThis.fetch.bind(globalThis);
+globalThis.fetch=async(input,init)=>{
+  const request=new Request(input,init),url=new URL(request.url);
+  if(url.hostname==='api.github.com'){
+    if(url.pathname!=='/user/memberships/orgs/qualification-org')throw new Error('Unexpected GitHub route');
+    const actor=request.headers.get('authorization')?.split('member-')[1];
+    return Response.json({state:actor==='outsider'?'pending':'active',organization:{id:42,login:'qualification-org'},user:{id:actor==='alice'?7:actor==='bob'?8:9}});
+  }
+  const kind=url.pathname.startsWith('/api/projects/tunnels/resolve/')?'project':url.pathname.startsWith('/keyrings/turn/')?'turn-key':url.pathname==='/api/tunnels'?'inventory':null;
+  const startedAt=Date.now(),monotonic=performance.now();
+  let status=null;
+  try {
+    const response=await nativeFetch(input,init);
+    status=response.status;
+    return response;
+  } finally {
+    // Qualification-only, fixed fields: no endpoint, query, headers, body or error.
+    if(kind&&observations++<2000)appendFileSync(trace,JSON.stringify({kind,startedAt,headersMilliseconds:performance.now()-monotonic,status})+'\\n',{mode:0o600});
+  }
+};`,
     { mode: 0o600 },
   )
   stage = "start production Next.js"

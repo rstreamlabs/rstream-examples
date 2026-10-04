@@ -11,6 +11,7 @@ function fixture({ supported = true } = {}) {
   let canceled = 0
   let disconnected = 0
   const listeners = new Map()
+  const mediaListeners = new Map()
   const pending = []
   const element = supported
     ? {
@@ -20,6 +21,12 @@ function fixture({ supported = true } = {}) {
         },
         cancelVideoFrameCallback() {
           canceled++
+        },
+        addEventListener(kind, listener) {
+          mediaListeners.set(kind, listener)
+        },
+        removeEventListener(kind, listener) {
+          if (mediaListeners.get(kind) === listener) mediaListeners.delete(kind)
         },
       }
     : {}
@@ -103,6 +110,11 @@ function fixture({ supported = true } = {}) {
     canceled: () => canceled,
     disconnected: () => disconnected,
     pagehide: () => listeners.get("pagehide")?.(),
+    mediaEvent(kind, at) {
+      now = at
+      mediaListeners.get(kind)?.()
+    },
+    mediaListeners,
     async request(kind, at, headersAt, bodyAt, status) {
       now = at
       const promise = context.window.fetch(
@@ -151,6 +163,8 @@ async function connect(f) {
 test("separates navigation, authorization and first presentation without retaining credentials", async () => {
   const f = fixture()
   await connect(f)
+  f.mediaEvent("loadeddata", 270)
+  f.mediaEvent("playing", 275)
   f.frame(300)
   f.frame(600)
   const result = f.snapshot()
@@ -159,6 +173,8 @@ test("separates navigation, authorization and first presentation without retaini
   assert.equal(result.authorizationToExpectedDisplayMilliseconds, 205)
   assert.equal(result.authorizationMilliseconds, 50)
   assert.equal(result.peers[0].connectedAt, 250)
+  assert.equal(result.mediaEvents.length, 2)
+  assert.equal(result.mediaEvents[0].atMilliseconds, 270)
   assert.ok(!JSON.stringify(result).includes("never-retain"))
   assert.ok(!JSON.stringify(result).includes("edge.test"))
 })
@@ -189,11 +205,14 @@ test("cancel, pagehide and reinstall restore observers and reject late callbacks
   f.pagehide()
   f.stop()
   f.frame(300)
+  f.mediaEvent("playing", 310)
   assert.equal(f.canceled(), 1)
   assert.equal(f.snapshot().measurementValid, false)
   assert.equal(f.window.fetch, f.nativeFetch)
   assert.equal(f.window.RTCPeerConnection, f.Peer)
   assert.equal(peer.listeners.size, 0)
+  assert.equal(f.mediaListeners.size, 0)
+  assert.equal(f.snapshot().mediaEvents.length, 0)
   assert.ok(f.disconnected() >= 1)
   f.install()
   await connect(f)

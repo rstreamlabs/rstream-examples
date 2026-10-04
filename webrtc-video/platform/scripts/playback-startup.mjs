@@ -12,6 +12,8 @@ export function installPlaybackStartupTiming() {
   let armedAtMilliseconds = null
   let readyStateAtArm = null
   const longTasks = []
+  const mediaEvents = []
+  const videoListeners = []
   const taskObserver =
     typeof PerformanceObserver === "function" &&
     PerformanceObserver.supportedEntryTypes?.includes("longtask")
@@ -104,6 +106,20 @@ export function installPlaybackStartupTiming() {
     if (!supported) return
     armedAtMilliseconds = performance.now()
     readyStateAtArm = video.readyState
+    for (const kind of ["loadeddata", "playing"]) {
+      const listener = () => {
+        if (stopped || mediaEvents.length >= 8) return
+        mediaEvents.push({
+          kind,
+          atMilliseconds: performance.now(),
+          coveredByStatus: Boolean(
+            video.parentElement?.querySelector(":scope > .absolute"),
+          ),
+        })
+      }
+      video.addEventListener?.(kind, listener)
+      videoListeners.push(() => video.removeEventListener?.(kind, listener))
+    }
     callbackID = video.requestVideoFrameCallback((now, metadata) => {
       callbackID = null
       if (stopped || firstFrame) return
@@ -126,6 +142,7 @@ export function installPlaybackStartupTiming() {
     if (callbackID !== null) video.cancelVideoFrameCallback(callbackID)
     callbackID = null
     for (const remove of peerListeners) remove()
+    for (const remove of videoListeners) remove()
     window.removeEventListener("pagehide", stop)
     if (window.fetch === observedFetch) window.fetch = nativeFetch
     if (window.RTCPeerConnection === ObservedPeer)
@@ -162,9 +179,11 @@ export function installPlaybackStartupTiming() {
       )
       return {
         supported,
+        navigationTimeOrigin: performance.timeOrigin,
         armedAtMilliseconds,
         readyStateAtArm,
         longTasks,
+        mediaEvents,
         measurementValid: valid,
         authorization,
         whep,
