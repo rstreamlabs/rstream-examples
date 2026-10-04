@@ -15,9 +15,7 @@ GST_PKG_CONFIG_PACKAGES := \
 	gstreamer-base-1.0 \
 	gstreamer-app-1.0
 WEB_SOURCES := \
-	../shared/whep-client.ts \
-	../shared/quality-client.ts \
-	./internal/web/embed/app.ts \
+	$(wildcard ../shared/*.ts ./internal/web/embed/*.ts) \
 	./internal/web/embed/index.html \
 	./internal/web/embed/input.css \
 	./package.json \
@@ -37,7 +35,7 @@ endif
 
 check-go:
 	@command -v go >/dev/null 2>&1 || { \
-		echo "Go is required to build $(APP). Install Go 1.26+ and retry." >&2; \
+		echo "Go is required to build $(APP). Install Go 1.26.6+ and retry." >&2; \
 		exit 1; \
 	}
 
