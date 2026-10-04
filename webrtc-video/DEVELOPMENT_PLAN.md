@@ -386,6 +386,22 @@ code. Both fixtures now exchange gathered candidates, with bounded waits and
 cleanup, and the complete suite passes without excluding tests. Delivery-path
 qualification after these corrections is still required.
 
+The [first four uninstrumented runs at `96b5feb`](./distributor/qualification/evidence/96b5feb/feedback-summary.json)
+pass unchanged gates with identical images and clean runtime/host checks.
+Direct and source delay/jitter/loss now have median GCC loss estimates of
+1.88% and 2.65%, versus 17.63% and 6.53% in the preceding series. Signed interval
+clamping and feedback timing mean these estimates are not exact netem wire-drop
+ratios. Direct impairment has a 0.255 s transition freeze; source impairment has
+none. Source/direct capacity transitions have 2.123/2.859 s of disruption, with
+no steady frame drops, steady freezes or recovery freezes. GCC recovers its
+8 Mbit/s target in all cases; the source-impairment encoder holds 7.422 Mbit/s
+within its configured update hysteresis, while the other encoders return to
+8 Mbit/s. Socket limits are restored and owned containers removed. The direct
+capacity result is close to its existing transition gate, so repeats remain
+necessary before claiming stable delivery. No full-matrix, latency or resource
+comparison is inferred from these four passes. The native PRs currently report
+no remote CI checks; the passing race/lint results above are local verification.
+
 The discovery configuration review additionally reproduced valid display names
 being rejected or changed when environment expansion encounters YAML quotes or
 backslashes. A literal scalar preserves those names; the real configuration
