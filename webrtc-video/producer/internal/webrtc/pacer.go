@@ -24,8 +24,10 @@ type minimumBitratePacer struct {
 	writers        map[uint32]interceptor.RTPWriter
 }
 
-var _ gcc.Pacer = (*minimumBitratePacer)(nil)
-var _ gcc.RoundTripTimeObserver = (*minimumBitratePacer)(nil)
+var (
+	_ gcc.Pacer                 = (*minimumBitratePacer)(nil)
+	_ gcc.RoundTripTimeObserver = (*minimumBitratePacer)(nil)
+)
 
 func newMinimumBitratePacer(initialBitrate, minimumBitrate int) *minimumBitratePacer {
 	return newMinimumBitratePacerWithProtection(

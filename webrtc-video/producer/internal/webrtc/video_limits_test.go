@@ -47,8 +47,10 @@ func TestFixedH264PipelineHonorsReceiverEnvelope(t *testing.T) {
 			engine := &webrtc.MediaEngine{}
 			for i, profile := range test.receivers {
 				err := engine.RegisterCodec(webrtc.RTPCodecParameters{
-					RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000,
-						SDPFmtpLine: "packetization-mode=1;level-asymmetry-allowed=1;profile-level-id=" + profile},
+					RTPCodecCapability: webrtc.RTPCodecCapability{
+						MimeType: webrtc.MimeTypeH264, ClockRate: 90000,
+						SDPFmtpLine: "packetization-mode=1;level-asymmetry-allowed=1;profile-level-id=" + profile,
+					},
 					PayloadType: webrtc.PayloadType(96 + i),
 				}, webrtc.RTPCodecTypeVideo)
 				if err != nil {

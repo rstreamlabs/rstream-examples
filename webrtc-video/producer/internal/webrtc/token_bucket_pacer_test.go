@@ -50,6 +50,7 @@ func TestTokenBucketPacerWritesPrimaryAndRepairStreams(t *testing.T) {
 
 func TestTokenBucketPacerReportsRepairStreamIdentityAndSequence(t *testing.T) {
 	pacer := newTokenBucketPacer(10_000_000, 1, 16)
+	defer pacer.Close()
 	written := make(chan struct{}, 1)
 	writer := interceptor.RTPWriterFunc(func(
 		header *rtp.Header,
@@ -76,6 +77,11 @@ func TestTokenBucketPacerReportsRepairStreamIdentityAndSequence(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for RTX write")
 	}
+	// Receiving the writer notification does not synchronize the diagnostics
+	// recorded after Write returns. Close joins the worker before inspection.
+	if err := pacer.Close(); err != nil {
+		t.Fatalf("close pacer: %v", err)
+	}
 	stats := pacer.Stats()
 	if stats["pacerPrimarySSRC"] != uint32(10) ||
 		stats["pacerRetransmissionSSRC"] != uint32(11) ||
@@ -86,9 +92,6 @@ func TestTokenBucketPacerReportsRepairStreamIdentityAndSequence(t *testing.T) {
 		stats["pacerLastRetransmissionSequence"] != uint32(65535) ||
 		stats["pacerRetransmissionSequenceSamples"] != uint64(1) {
 		t.Fatalf("unexpected RTX sequence diagnostics: %+v", stats)
-	}
-	if err := pacer.Close(); err != nil {
-		t.Fatalf("close pacer: %v", err)
 	}
 }
 
