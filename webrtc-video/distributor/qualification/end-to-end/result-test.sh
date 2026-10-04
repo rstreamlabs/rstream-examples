@@ -124,6 +124,7 @@ render_result() {
   --argjson edge_auth true \
   --argjson connect_token_ttl_seconds 300 \
   --argjson working_tree_dirty false \
+  --argjson recording "${recording}" \
   --arg producer_image producer \
   --arg distributor_image '' \
   --arg browser_image browser \
@@ -152,6 +153,18 @@ render_result() {
 }
 
 jq -n '{enabled: false}' >"${fixture_directory}/source-formats.json"
+recording='{"enabled":false}'
+render_result "${fixture_directory}/samples.jsonl" | jq -e '.gates.recordingEvidence == true and .recording.enabled == false' >/dev/null
+recording='{"enabled":true,"segmentFiles":3,"bytes":1024,"storageLimitBytes":536870912}'
+render_result "${fixture_directory}/samples.jsonl" mediamtx | jq -e '.gates.recordingEvidence == true and .recording.segmentFiles == 3' >/dev/null
+render_result "${fixture_directory}/samples.jsonl" | jq -e '.gates.recordingEvidence == false and .passed == false' >/dev/null
+for recording in \
+  '{"enabled":true,"segmentFiles":0,"bytes":0,"storageLimitBytes":536870912}' \
+  '{"enabled":true,"segmentFiles":3,"bytes":536870913,"storageLimitBytes":536870912}' \
+  '{"enabled":true}' ; do
+  render_result "${fixture_directory}/samples.jsonl" mediamtx | jq -e '.gates.recordingEvidence == false and .passed == false' >/dev/null
+done
+recording='{"enabled":false}'
 expected_format=small
 render_result "${fixture_directory}/samples.jsonl" | jq -e '.gates.sourceFormats == false and .passed == false' >/dev/null
 expected_format=""

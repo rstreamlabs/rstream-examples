@@ -729,6 +729,15 @@ loss. Its short-lived credentials are removed locally after the processes finish
 
 ## Cross-cutting latency and resource criteria
 
+The resource collector now brackets the complete CPU/memory observation with
+phase snapshots. Samples crossing a phase boundary remain in whole-run totals
+but are excluded from phase comparisons; a regression covers the boundary during
+the PSS fallback read. The end-to-end qualifier can enable MediaMTX recording in
+a 512 MiB disposable tmpfs with the same fMP4 part/segment/retention settings as
+the sample. Enabled runs require nonzero segment evidence within the storage
+bound, and direct delivery rejects recording. Report/configuration fixtures and
+shell checks pass. Controlled probe/recording overhead measurements remain next.
+
 The optional qualification-only pixel timestamp probe is now maintained in
 `producer/qualification/adaptive-streaming/latency`, replacing its local proof
 of concept. It stamps I420 pixels immediately before encoding and reads a small

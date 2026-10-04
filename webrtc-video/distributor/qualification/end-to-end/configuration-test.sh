@@ -37,4 +37,27 @@ if [[ "${reproducible_builds}" != 3 ]]; then
   exit 1
 fi
 
+fixture_directory="$(mktemp -d "${TMPDIR:-/tmp}/rstream-recording-config.XXXXXX")"
+trap 'rm -rf "${fixture_directory}"' EXIT INT TERM
+for scenario in invalid direct; do
+  mode=mediamtx
+  recording=invalid
+  expected='RSTREAM_DISTRIBUTOR_RECORDING must be true or false'
+  if [[ "${scenario}" == direct ]]; then
+    mode=direct
+    recording=true
+    expected='recording qualification requires MediaMTX'
+  fi
+  if output="$(RSTREAM_CONTEXT=qualification RSTREAM_DISTRIBUTOR_MODE="${mode}" \
+    RSTREAM_DISTRIBUTOR_RECORDING="${recording}" \
+    "${script_directory}/run.sh" "${fixture_directory}/output" 2>&1)"; then
+    printf 'incompatible recording configuration was accepted\n' >&2
+    exit 1
+  fi
+  if [[ "${output}" != *"${expected}"* || -e "${fixture_directory}/output" ]]; then
+    printf 'recording configuration did not fail before creating runtime artifacts\n' >&2
+    exit 1
+  fi
+done
+
 printf 'MediaMTX qualification configuration tests passed\n'

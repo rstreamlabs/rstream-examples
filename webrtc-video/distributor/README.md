@@ -450,3 +450,21 @@ its digest is retained in the report. See the
 [measurement scope and clock/marker gates](../producer/qualification/adaptive-streaming/README.md#optional-pixel-based-latency-measurement)
 before interpreting these results. The probe is disabled by default and does
 not change production pipelines or the live player's buffering policy.
+
+For a bounded recording-cost comparison, add
+`RSTREAM_DISTRIBUTOR_RECORDING=true` in either MediaMTX mode. The qualification
+records fMP4 with one-second parts, five-second segments and five-minute retention
+in a disposable 512 MiB tmpfs. `recording.json` reports the resulting segment
+count and bytes; an enabled run with no recorded data fails. This measures
+recording during live viewing; playback and storage-fault behavior have separate
+platform integration checks. Direct delivery rejects this option.
+
+`resources.json` retains whole-run totals and also groups CPU, memory and task
+counts by phase. A sample spanning a phase change stays in whole-run totals but
+is excluded from phase comparisons, including when the change happens during
+the process-memory fallback read. Compare matching `phases.baseline` windows,
+source profiles and images when measuring probe or recording overhead. UTC
+sample times provide context; they are not used to calculate CPU utilization.
+Memory is labeled by measurement source: process PSS/RSS excludes the recording
+tmpfs, whose stored bytes are reported separately. These are host-specific
+measurements, not hardware-independent resource guarantees.

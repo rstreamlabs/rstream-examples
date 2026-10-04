@@ -145,10 +145,12 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
 (event("playback-ready")) as $playback_ready |
 (event("first-decoded-frame")) as $first_decoded_frame |
 (whep_event("DELETE")) as $whep_delete |
+($ARGS.named.recording // {enabled: false}) as $recording |
 {
   revision: $revision,
   mode: $mode,
   workingTreeDirty: $working_tree_dirty,
+  recording: $recording,
   profile: {
     edgeAuthentication: $edge_auth,
     edgeCredentialLifetimeSeconds: (if $edge_auth then $connect_token_ttl_seconds else null end),
@@ -270,6 +272,12 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     steadyRecoveryFreezeDurationDeltaSeconds: phase_delta_after("recovery"; capacity_transition_grace_milliseconds; "totalFreezesDurationSeconds")
   }),
   gates: {
+    recordingEvidence: ($recording.enabled == false or (
+      $recording.enabled == true and $mode != "direct" and
+      ($recording.segmentFiles | type) == "number" and $recording.segmentFiles > 0 and
+      ($recording.bytes | type) == "number" and $recording.bytes > 0 and
+      $recording.storageLimitBytes == 536870912 and $recording.bytes <= $recording.storageLimitBytes
+    )),
     sourceFormats: ($expected_format == "" or (
       $source_formats[0].enabled == true and $source_formats[0].networkProfile == $expected_format and $source_formats[0].passed == true
     )),

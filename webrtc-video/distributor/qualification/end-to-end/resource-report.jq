@@ -56,14 +56,22 @@ def component(samples):
     }
   };
 
+def report(samples):
+  (samples | group_by(.role) | map({key: .[0].role, value: component(.)}) | from_entries) as $components |
+  {
+    components: $components,
+    conservativePeak: {
+      cpuCoreRatio: ([$components[].cpuCoreRatio.maximum] | add),
+      residentBytes: ([$components[].residentBytes.maximum] | add),
+      tasks: ([$components[].tasks.maximum] | add)
+    }
+  };
+
 map(. + {role: role(.Name)}) |
 map(select(.role != null)) as $samples |
-($samples | group_by(.role) | map({key: .[0].role, value: component(.)}) | from_entries) as $components |
-{
-  components: $components,
-  conservativePeak: {
-    cpuCoreRatio: ([$components[].cpuCoreRatio.maximum] | add),
-    residentBytes: ([$components[].residentBytes.maximum] | add),
-    tasks: ([$components[].tasks.maximum] | add)
-  }
+[$samples[] | select((.samplePhase.name? | type) == "string")] as $phase_samples |
+report($samples) + {
+  phases: ($phase_samples | group_by(.samplePhase.name) |
+    map({key: .[0].samplePhase.name, value: report(.)}) | from_entries),
+  samplesWithoutStablePhase: (($samples | length) - ($phase_samples | length))
 }

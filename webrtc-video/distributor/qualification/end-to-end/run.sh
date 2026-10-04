@@ -36,6 +36,7 @@ source_jitter_milliseconds="${RSTREAM_DISTRIBUTOR_SOURCE_JITTER_MILLISECONDS:-0}
 source_queue_packets="${RSTREAM_DISTRIBUTOR_SOURCE_QUEUE_PACKETS:-256}"
 playout_delay_hint_seconds="${RSTREAM_DISTRIBUTOR_PLAYOUT_DELAY_HINT_SECONDS:-0}"
 latency_probe="${RSTREAM_DISTRIBUTOR_LATENCY_PROBE:-false}"
+recording="${RSTREAM_DISTRIBUTOR_RECORDING:-false}"
 quality_observer="${RSTREAM_DISTRIBUTOR_QUALITY_OBSERVER:-false}"
 expected_format="${RSTREAM_DISTRIBUTOR_EXPECT_FORMAT:-}"
 producer_config="${RSTREAM_DISTRIBUTOR_PRODUCER_CONFIG:-}"
@@ -53,6 +54,16 @@ if ! select_distribution_mode "${distribution_mode}"; then
   printf 'RSTREAM_DISTRIBUTOR_MODE must be direct, mediamtx, or mediamtx-native\n' >&2
   exit 1
 fi
+case "${recording}" in
+true)
+  if [[ "${uses_mediamtx}" != true ]]; then
+    printf 'recording qualification requires MediaMTX\n' >&2
+    exit 1
+  fi
+  ;;
+false) ;;
+*) printf 'RSTREAM_DISTRIBUTOR_RECORDING must be true or false\n' >&2; exit 1 ;;
+esac
 case "${edge_auth}" in
 true | false)
   ;;
@@ -354,6 +365,13 @@ sample_container_resources() {
   local resident_bytes_source
   local sample
   local samples
+  local phase_before
+  local phase_after
+  local started_at
+  local finished_at
+  local measured_samples=""
+  phase_before="$(cat "${control_directory}/phase.json")" || return 1
+  started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   if ! samples="$(docker stats --no-stream --format '{{json .}}' "${resource_container_names[@]}")"; then
     return 1
   fi
@@ -364,12 +382,19 @@ sample_container_resources() {
     if [[ "$(jq -r '(.MemUsage | split(" / ")[1]) == "0B"' <<<"${sample}")" == true ]]; then
       container_name="$(jq -er '.Name' <<<"${sample}")"
       read -r resident_bytes resident_bytes_source < <(process_resident_sample "${container_name}")
-      jq -c --argjson resident_bytes "${resident_bytes}" --arg resident_bytes_source "${resident_bytes_source}" \
-        '. + {ResidentBytes: $resident_bytes, ResidentBytesSource: $resident_bytes_source}' <<<"${sample}"
+      sample="$(jq -c --argjson resident_bytes "${resident_bytes}" --arg resident_bytes_source "${resident_bytes_source}" \
+        '. + {ResidentBytes: $resident_bytes, ResidentBytesSource: $resident_bytes_source}' <<<"${sample}")" || return 1
     else
-      jq -c '. + {ResidentBytesSource: "container-cgroup"}' <<<"${sample}"
+      sample="$(jq -c '. + {ResidentBytesSource: "container-cgroup"}' <<<"${sample}")" || return 1
     fi
+    measured_samples+="${sample}"$'\n'
   done <<<"${samples}"
+  finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  phase_after="$(cat "${control_directory}/phase.json")" || return 1
+  jq -c --argjson before "${phase_before}" --argjson after "${phase_after}" \
+    --arg started "${started_at}" --arg finished "${finished_at}" \
+    '. + {sampleStartedAt: $started, sampleFinishedAt: $finished,
+      samplePhase: (if $before == $after then $before else null end)}' <<<"${measured_samples}"
 }
 
 cleanup() {
@@ -574,6 +599,24 @@ if [[ "${quality_observer}" == true ]]; then
   unset quality_token quality_authorization
   quality_arguments=(--source-quality-file /runtime/source-quality.json)
 fi
+recording_arguments=()
+if [[ "${recording}" == true ]]; then
+  recording_uid=10001
+  recording_gid=10001
+  if [[ "${distribution_mode}" == mediamtx-native ]]; then
+    recording_uid="$(id -u)"
+    recording_gid="$(id -g)"
+  fi
+  recording_arguments+=(
+    --env MTX_PATHDEFAULTS_RECORD=true
+    --env 'MTX_PATHDEFAULTS_RECORDPATH=/recordings/%path/%Y-%m-%d_%H-%M-%S-%f'
+    --env MTX_PATHDEFAULTS_RECORDFORMAT=fmp4
+    --env MTX_PATHDEFAULTS_RECORDPARTDURATION=1s
+    --env MTX_PATHDEFAULTS_RECORDSEGMENTDURATION=5s
+    --env MTX_PATHDEFAULTS_RECORDDELETEAFTER=5m
+    --tmpfs "/recordings:rw,nosuid,nodev,noexec,size=512m,uid=${recording_uid},gid=${recording_gid},mode=0700"
+  )
+fi
 if [[ "${uses_adapter}" == true ]]; then
   docker run --detach \
     --name "${distributor_name}" \
@@ -585,6 +628,7 @@ if [[ "${uses_adapter}" == true ]]; then
     --tmpfs /tmp:rw,noexec,nosuid,size=16m \
     --env "RSTREAM_SOURCE_URL=${source_endpoint}" \
     --env RSTREAM_MEDIAMTX_URL=http://127.0.0.1:8889 \
+    ${recording_arguments[@]+"${recording_arguments[@]}"} \
     --mount "type=bind,source=${script_directory}/mediamtx.yml,target=/qualification/mediamtx.yml,readonly" \
     "${distributor_image}" /qualification/mediamtx.yml >/dev/null
   distributor_started=1
@@ -649,6 +693,7 @@ if [[ "${distribution_mode}" == mediamtx-native ]]; then
     --cap-drop ALL \
     --tmpfs /tmp:rw,noexec,nosuid,size=16m \
     --entrypoint /usr/local/bin/mediamtx \
+    ${recording_arguments[@]+"${recording_arguments[@]}"} \
     --mount "type=bind,source=${native_config},target=/qualification/native-mediamtx.json,readonly" \
     "${distributor_image}" /qualification/native-mediamtx.json >/dev/null
   distributor_started=1
@@ -860,6 +905,16 @@ if [[ "${browser_status}" != 0 ]]; then
 fi
 sleep 3
 capture_logs
+if [[ "${recording}" == true ]]; then
+  # Source teardown closes the current segment. Keep recorded bytes bounded and
+  # private; qualify real MP4 decoding separately in the playback integration.
+  docker exec "${distributor_name}" sh -ceu '
+    find /recordings -type f -name "*.mp4" -exec stat -c "%s" {} \; |
+      awk '\''{files++; bytes += $1} END {printf "{\"enabled\":true,\"segmentFiles\":%d,\"bytes\":%.0f,\"storageLimitBytes\":536870912}\n", files, bytes}'\''
+  ' >"${output_directory}/recording.json"
+else
+  printf '{"enabled":false}\n' >"${output_directory}/recording.json"
+fi
 if [[ "${uses_adapter}" == true ]]; then
   docker exec "${distributor_name}" wget -q -T 2 -O - http://127.0.0.1:9999/metrics \
     >"${output_directory}/adapter-metrics-final.prom"
@@ -969,6 +1024,7 @@ jq -s \
   --slurpfile browser "${output_directory}/browser.json" \
   --slurpfile signaling "${output_directory}/signaling-events.json" \
   --slurpfile resources "${output_directory}/resources.json" \
+  --argjson recording "$(cat "${output_directory}/recording.json")" \
   --argjson warmup_seconds "${warmup_seconds}" \
   --argjson phase_seconds "${duration_seconds}" \
   --argjson recovery_seconds "${recovery_seconds}" \

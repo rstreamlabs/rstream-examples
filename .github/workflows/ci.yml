@@ -56,6 +56,7 @@ jobs:
             webrtc-video/distributor/qualification/end-to-end/phase-test.sh
             webrtc-video/distributor/qualification/end-to-end/phase-container-test.sh
             webrtc-video/distributor/qualification/end-to-end/resource-report-test.sh
+            webrtc-video/distributor/qualification/end-to-end/resource-sampler-test.sh
             webrtc-video/distributor/qualification/end-to-end/result-test.sh
             webrtc-video/distributor/qualification/comparison/report-test.sh
             webrtc-video/distributor/qualification/comparison/run.sh
@@ -82,6 +83,7 @@ jobs:
           done
           webrtc-video/distributor/qualification/fanout/report-test.sh
           webrtc-video/distributor/qualification/end-to-end/resource-report-test.sh
+          webrtc-video/distributor/qualification/end-to-end/resource-sampler-test.sh
           webrtc-video/distributor/qualification/end-to-end/result-test.sh
           webrtc-video/distributor/qualification/end-to-end/configuration-test.sh
           webrtc-video/distributor/qualification/end-to-end/mode-test.sh

@@ -33,7 +33,25 @@ jq -s \
     .components.distributor.network.transmittedBytes == 1342177280 and
     .conservativePeak.cpuCoreRatio == 1.6 and
     .conservativePeak.residentBytes == 4194304 and
-    .conservativePeak.tasks == 15
+    .conservativePeak.tasks == 15 and
+    .phases == {} and .samplesWithoutStablePhase == 4
+  ' >/dev/null
+
+jq -c 'if .Name == "producer" and .CPUPerc == "25.00%" then
+  .samplePhase = {name: "warmup", startedAt: "2026-10-04T00:00:00Z"}
+  elif .Name == "distributor" then .samplePhase = null
+  else .samplePhase = {name: "baseline", startedAt: "2026-10-04T00:00:20Z"} end' \
+  "${fixture}" >"${fixture}.phases"
+trap 'rm -f "${fixture}" "${fixture}.phases"' EXIT INT TERM
+jq -s --arg producer_name producer --arg browser_name browser --arg distributor_name distributor \
+  -f "${script_directory}/resource-report.jq" "${fixture}.phases" | jq -e '
+    .components.producer.samples == 2 and
+    .phases.warmup.components.producer.cpuCoreRatio.average == 0.25 and
+    .phases.baseline.components.producer.cpuCoreRatio.average == 0.5 and
+    .phases.baseline.components.browser.samples == 1 and
+    .phases.baseline.components.distributor == null and
+    .phases.baseline.conservativePeak.cpuCoreRatio == 1.5 and
+    .samplesWithoutStablePhase == 1
   ' >/dev/null
 
 printf 'Resource report tests passed\n'
