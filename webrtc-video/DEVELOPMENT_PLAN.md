@@ -201,8 +201,24 @@ it does not claim the sample implements the full libwebrtc controller.
 The new regression fails before the change and passes afterward, with the full
 native race suite (Go 1.24.6) and zero golangci-lint 2.10.1 issues (Go 1.25.6).
 Producer and distributor pin the same published version with verified checksums;
-both full race suites and the sample GCC regression target pass.
-Fresh reference-profile delivery qualification is required before acceptance.
+both full race suites and the sample GCC regression target pass. The separate
+bridge race integration suite also passes against the MediaMTX 1.21.1 binary.
+The [four live trials at `4cf2b68`](./distributor/qualification/evidence/4cf2b68/received-throughput-backoff.json)
+retain three passes and one failure. The reference three-second down-hold passes
+with MediaMTX (1.435s initial freezes); direct delivery has 2.031s total freezes
+and still fails on a 0.589s counter increment collected after the transition
+cutoff. Both return to 720p30. With only downHold set to one second, direct and
+MediaMTX each pass every gate (1.548s / 1.316s initial freezes), with no steady or
+recovery freezes and no decoded-frame drops. The one-second setting still needs
+repetition and is not promoted to a public default. All acceptance thresholds
+remain unchanged; temporary socket settings and owned containers are cleaned up.
+
+For the direct reference failure, retained frame-callback diagnostics place the
+nearby display gaps before the steady cutoff, while the cumulative freeze count
+is sampled afterward. This suggests an attribution limit of one-second stats
+sampling near a phase boundary. Those browser observations have different
+semantics: investigate precise attribution without reclassifying the failed run
+or replacing the current gate with an unqualified correlation.
 
 Next, stabilize the initial capacity-drop transition and repeat direct/MediaMTX/TURN qualification. Do not
 claim that one successful fast-down run establishes a stable policy. Before adopting

@@ -167,9 +167,9 @@ budget. New access units that exceed the 225 ms admission envelope are dropped
 whole before packetization. Recovery resumes on a key frame once the queue can
 contain its most recently observed size plus 25% headroom.
 The report separately exposes encoder requests, complete frame drops, the
-key-frame reserve, actual packet residence time, and prospective sustained-rate
-backlog. These signals make the latency bound, sequence continuity, and egress
-rate directly verifiable.
+key-frame reserve, actual packet residence time, and projected service backlog.
+The admission estimate is not measured packet residence or end-to-end latency;
+retain those separate observations when checking sequence continuity and egress.
 
 The link moves through six measured phases:
 
@@ -255,29 +255,28 @@ A 4 Mbit/s bottleneck can therefore support less than 3.33 Mbit/s of media;
 the 2 Mbit/s encoder floor leaves room for packetization, reactive repair and
 transient overshoot. Actual convergence must be measured on the selected path.
 
-The sender uses one real-time envelope for media bursts and repair. The token
-bucket permits short bursts at 1.5 times its protected sustained target without
-changing the long-term allowance. Recorded samples distinguish the media target,
-modeled protected budget and burst envelope. Acknowledged-rate diagnostics count
+The sender shares one scheduler between media and repair. Its token-bucket
+refill rate is 1.5 times the modeled protected target; there is no separate
+long-term limiter at the lower unmultiplied target. Recorded samples distinguish
+the media target, modeled protected budget and scheduling ceiling. Actual traffic
+depends on encoded output and repair demand. Acknowledged-rate diagnostics count
 tracked RTP headers and payload, excluding untracked FEC and outer transport
 headers; they are not total network-throughput measurements.
 
-Pion's delay and loss estimators remain the primary congestion controller. A
-bounded feedback-loss guard closes one coordination gap between them: two
-consecutive valid TWCC reports above 10% loss reduce the current media target
-immediately, even if the delay estimator has not emitted a new callback. The
-guard ignores reports with fewer than 20 statuses and isolated spikes. After a
-second of reports below 2% loss, its cap rises in 5% steps every 200 ms until
-Pion's target takes over again. This prevents a transient queue from becoming a
-loss/RTX/FlexFEC amplification loop without replacing GCC's normal bandwidth
-estimate. The phase report exposes the guard target, peak reported loss, and
-every reduction and recovery.
+The pinned Pion fork's delay and loss estimators control congestion. Its loss
+controller reconciles overlapping missing reports and late receipts over bounded
+250 ms send-time observations; this does not buffer media. A completed observation
+can update the target even without a new delay-estimator callback. The historical
+`lossGuard*` fields now alias that reconciled loss controller's state, target,
+latest observed loss, reductions and recoveries. They do not represent another
+controller acting on raw TWCC symbols. Both delay and combined-target recovery
+remain bounded by acknowledged throughput.
 
 Encoder hysteresis cannot spend the same headroom twice. Startup validation
-therefore derives the largest safe decrease threshold from the selected repair
-ratio and the shared pacing envelope. The qualified profiles use immediate
-decreases; the `2/4` stress ratio consumes the complete 1.5× allowance, while
-the default `1/5` ratio retains margin for packetization and reactive repair.
+limits the decrease threshold to 33% under the shared 1.5× scheduling factor.
+FlexFEC is already included in the protected target, so its ratio does not
+reduce that allowance a second time. The reference profiles use immediate
+decreases; stronger repair ratios still consume additional link capacity.
 
 Pion distributes protected media packets across independent XOR groups when a
 profile uses several repair packets. In the `2/4` stress profile, each repair
