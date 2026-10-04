@@ -6,7 +6,7 @@ qualification do not establish compatibility with untested cameras, encoders,
 operating systems or networks.
 
 The remaining acceptance work is concentrated on repeated automatic-format
-delivery qualification, conservative standalone visible-startup measurement,
+delivery qualification, runtime validation of conservative standalone visible-startup measurement,
 and outstanding visual approval. Current direct, native/adaptive MediaMTX and local forced-relay media
 checks pass in their documented environments; hosted-runner connectivity and
 historical scheduling observations remain explicit boundaries below. The final route/browser regression
@@ -88,11 +88,15 @@ from transition attribution and remains unresolved. All owned resources and
 socket limits are restored. The Linux series using the integrated method is
 still running; all three video CI jobs pass at `125c181`.
 
-The standalone collector also needs the conservative visible-frame measurement
+The standalone collector now records the conservative visible-frame measurement
 already used by the dashboard. Browser callbacks can miss submitted frames;
-the exact-first diagnostic must stay unknown in that case, while an actually
-observed unobstructed visible frame can provide a conservative startup duration.
-Do not backfill visibility into old trials or infer physical display timing.
+the exact-first diagnostic stays unknown in that case, while an actually
+observed unobstructed visible frame provides a conservative startup duration.
+Raw visibility and timing evidence is required by the distributor gate; missing,
+hidden, covered or backdated observations fail. Repeated startup cases bring
+their viewer to the foreground before activation. All 177 collector tests,
+artifact sanitization and result fixtures pass. Fresh runtime validation remains
+pending. Old trials are not backfilled and physical display timing is not inferred.
 The current-dependency local forced-TURN trial at `18f6cc1` passes all 56 gates,
 including actual relay candidates at both endpoints, adaptation, recovery and
 session cleanup. It does not remove the separate hosted-runner TCP obstacle.

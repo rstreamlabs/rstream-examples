@@ -17,16 +17,25 @@ queue, recovery and network-loss gates are unchanged.
 
 First-picture timing is recorded separately in `signaling-events.json` under
 `startup`. A capture listener timestamps the actual Connect click and arms
-`requestVideoFrameCallback` before the player handles that click. The first
-callback preserves both its arrival time and the browser's expected display
-time. Missing or invalid observations remain explicit; later polling completion
-is not substituted for first presentation. A callback that has already missed
-the first presented frame is invalid for this measurement. MediaMTX end-to-end results include
-this record under `setup.presentation` and require valid presentation evidence.
+`requestVideoFrameCallback` before the player handles that click. Its first
+callback preserves arrival and expected display times. The exact first-submission
+diagnostic remains invalid when that callback has already missed a submitted
+frame: the [browser callback is best effort](https://wicg.github.io/video-rvfc/).
+
+The collector separately observes the first callback with ready, playing video
+in a visible document, a visible element and an unobstructed center inside the
+viewport. `requestToVisiblePresentationMilliseconds` uses the later of the
+observation and expected display times. This conservative observation does not
+backdate missed callbacks or assert physical display timing. Hidden or invalid
+frames keep the observer armed until a valid frame or teardown; missing evidence
+remains invalid. Distributor results include both measurements under
+`setup.presentation` and require the visible observation, with its raw timestamp
+and visibility evidence. Historical results are unchanged.
+
 These durations exclude page navigation, device-process startup and physical
 display scanout. They measure one fresh activation; repeat/cold/warm/churn
-qualification must still distinguish source lifecycle state. No startup-time
-performance threshold is implied by measurement validity.
+qualification distinguishes source lifecycle state. No startup-time performance
+threshold is implied by measurement validity.
 
 The distributor runner's `RSTREAM_DISTRIBUTOR_STARTUP_CYCLES=true` mode provides
 that repeated adaptive MediaMTX check using the same viewer/client bundle.

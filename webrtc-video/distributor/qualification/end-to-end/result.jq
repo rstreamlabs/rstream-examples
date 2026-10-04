@@ -383,11 +383,21 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     qualityEvidence: ([phase_summary("baseline"), phase_summary("source-network"), phase_summary("viewer-network"), phase_summary("recovery")] | map(select(. != null)) | all(.averageDecodedQP != null and .averageDecodedQP >= 0)),
     setupEvidence: ([$peer_created, $whep_post, $connected, $playback_ready, $first_decoded_frame] | all(. != null)),
     startupPresentationEvidence: (
-      $signaling[0].startup.measurementValid == true and
-      ($signaling[0].startup.requestToCallbackMilliseconds | type) == "number" and
-      $signaling[0].startup.requestToCallbackMilliseconds >= 0 and
-      ($signaling[0].startup.requestToExpectedDisplayMilliseconds | type) == "number" and
-      $signaling[0].startup.requestToExpectedDisplayMilliseconds >= 0
+      $signaling[0].startup as $startup |
+      $startup.firstVisibleFrame as $frame |
+      $startup.visiblePresentationValid == true and
+      ($startup.requestedAtMilliseconds | type == "number" and . >= 0) and
+      ([$frame.callbackMilliseconds, $frame.observedAtMilliseconds, $frame.expectedDisplayMilliseconds] |
+        all(type == "number" and isfinite and . >= $startup.requestedAtMilliseconds)) and
+      ($frame.width | type == "number" and . > 0) and
+      ($frame.height | type == "number" and . > 0) and
+      ($frame.presentedFrames | type == "number" and floor == . and . > 0) and
+      ([$frame.visibility.documentVisible, $frame.visibility.elementVisible,
+        $frame.visibility.centerInViewport, $frame.visibility.centerUnobstructed,
+        $frame.visibility.mediaReady, $frame.visibility.visible] | all(. == true)) and
+      ($startup.requestToVisiblePresentationMilliseconds | type == "number" and isfinite and . >= 0) and
+      $startup.requestToVisiblePresentationMilliseconds ==
+        (([$frame.observedAtMilliseconds, $frame.expectedDisplayMilliseconds] | max) - $startup.requestedAtMilliseconds)
     ),
     teardownEvidence: ($whep_delete != null and $whep_delete.durationMilliseconds >= 0),
     adapterIntegrity: (

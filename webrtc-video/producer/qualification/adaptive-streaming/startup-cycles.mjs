@@ -102,9 +102,10 @@ async function start(page, name, round) {
   report.cases.push(observation);
   await page.evaluate(installStartupTiming);
   try {
+    await page.bringToFront();
     await page.locator("#connect").click();
     await page.waitForFunction(
-      () => window.__rstreamStartupTiming.snapshot().firstFrame !== null,
+      () => window.__rstreamStartupTiming.snapshot().visiblePresentationValid,
       undefined,
       { timeout: 10000 },
     );
@@ -115,8 +116,8 @@ async function start(page, name, round) {
   }
   observation.after = await metrics();
   assert.ok(
-    observation.startup?.measurementValid,
-    "First frame measurement invalid",
+    observation.startup?.visiblePresentationValid,
+    "Visible frame measurement invalid",
   );
   assert.equal(
     observation.after.active,

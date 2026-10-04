@@ -14,7 +14,16 @@ jq -n '{
   startup: {
     measurementValid: true,
     requestToCallbackMilliseconds: 750,
-    requestToExpectedDisplayMilliseconds: 760
+    requestToExpectedDisplayMilliseconds: 760,
+    requestedAtMilliseconds: 100,
+    visiblePresentationValid: true,
+    requestToVisiblePresentationMilliseconds: 780,
+    firstVisibleFrame: {
+      callbackMilliseconds: 850, expectedDisplayMilliseconds: 860,
+      observedAtMilliseconds: 880, width: 1280, height: 720, presentedFrames: 1,
+      visibility: {documentVisible: true, elementVisible: true, centerInViewport: true,
+        centerUnobstructed: true, mediaReady: true, visible: true}
+    }
   },
   events: [
     {elapsedMilliseconds: 100, kind: "peer-created"},
@@ -169,6 +178,34 @@ for startup in null '{measurementValid: false}' '{measurementValid: true}' \
   ' >/dev/null
   mv "${fixture_directory}/signaling-original.json" "${fixture_directory}/signaling.json"
 done
+# Missing visibility and backdated timing cannot qualify; an unknown exact
+# compositor submission remains separate from a valid visible observation.
+cp "${fixture_directory}/signaling.json" "${fixture_directory}/signaling-original.json"
+for mutation in \
+  '.startup.visiblePresentationValid = false' \
+  '.startup.firstVisibleFrame.visibility.centerUnobstructed = false' \
+  '.startup.firstVisibleFrame.observedAtMilliseconds = null' \
+  '.startup.firstVisibleFrame.expectedDisplayMilliseconds = 50' \
+  '.startup.firstVisibleFrame.presentedFrames = 0' \
+  '.startup.requestToVisiblePresentationMilliseconds = 760'; do
+  jq "$mutation" "${fixture_directory}/signaling-original.json" >"${fixture_directory}/signaling.json"
+  render_result "${fixture_directory}/samples.jsonl" | jq -e '
+    .gates.startupPresentationEvidence == false and .passed == false
+  ' >/dev/null
+done
+jq '
+  .startup.measurementValid = false |
+  .startup.requestToCallbackMilliseconds = null |
+  .startup.requestToExpectedDisplayMilliseconds = null |
+  .startup.firstVisibleFrame.presentedFrames = 2
+' "${fixture_directory}/signaling-original.json" >"${fixture_directory}/signaling.json"
+render_result "${fixture_directory}/samples.jsonl" | jq -e '
+  .gates.startupPresentationEvidence == true and .passed == true and
+  .setup.presentation.measurementValid == false and
+  .setup.presentation.requestToExpectedDisplayMilliseconds == null and
+  .setup.presentation.requestToVisiblePresentationMilliseconds == 780
+' >/dev/null
+mv "${fixture_directory}/signaling-original.json" "${fixture_directory}/signaling.json"
 render_result "${fixture_directory}/samples.jsonl" | jq -e '.gates.recordingEvidence == true and .recording.enabled == false' >/dev/null
 recording='{"enabled":true,"segmentFiles":3,"bytes":1024,"storageLimitBytes":536870912}'
 render_result "${fixture_directory}/samples.jsonl" mediamtx | jq -e '.gates.recordingEvidence == true and .recording.segmentFiles == 3' >/dev/null
