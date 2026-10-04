@@ -159,7 +159,13 @@ every phase. A run whose p95 steal time exceeds 5% on either side fails: an
 encoder or browser that was not scheduled predictably cannot qualify the media
 pipeline or transport, regardless of its average frame rate. A 250 ms heartbeat
 also records shorter runtime pauses that aggregate CPU counters cannot expose,
-including pauses of a local container VM.
+including pauses of a local container VM. Heartbeat intervals use Linux boot
+time from `/proc/uptime` (10 ms resolution), independently of civil-clock
+adjustments. Each sample records `gapClock`, `bootMilliseconds`, and the measured
+`gapMilliseconds`; UTC `capturedAt` is retained for phase correlation only.
+Earlier artifacts without `gapClock` used realtime intervals and can therefore
+report a false scheduling failure when the host adjusts its clock. Their raw
+results remain unchanged; they do not establish monotonic scheduling evidence.
 
 The impairment schedule runs as one process inside the producer network
 namespace. It first holds a 32 Mbit/s profile with no added delay, jitter, or
