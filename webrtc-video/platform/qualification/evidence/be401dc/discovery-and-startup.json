@@ -1,0 +1,255 @@
+{
+  "schemaVersion": 1,
+  "scope": "Authenticated organization/discovered dashboard, production Next.js, real rstream producer tunnel, adaptive MediaMTX 1.21.1 and native headless Chromium on macOS. Membership and inventory requests previously exercised; live inventory is still read for every protected request. Producer process ready with low source preset. GitHub membership is a fixture; OAuth and physical capture/display are excluded.",
+  "producerImage": "sha256:b80c0841d31e3321ae60c0925c0416008a850d8c755288aa4f50440b4e5ad5e4",
+  "distributorImage": "sha256:68a7b830f07df9aeb90251bac262ebace14aa0525b6e57dca81755a1f25f058a",
+  "revision": "be401dc",
+  "qualificationPassed": false,
+  "failure": {
+    "passed": false,
+    "gates": {
+      "realDiscoveryWithoutEnrollment": true,
+      "sourceControlAndConcurrentSelection": true,
+      "sharedMediaMTXPlaybackAndEncoderLifecycle": true,
+      "historyDoesNotGrantSourceAccess": true,
+      "stableIdentityAndRename": true,
+      "liveOnlyWithoutHistoryWrites": true
+    },
+    "stage": "first presentation measurement",
+    "name": "AssertionError",
+    "commandStatus": null,
+    "message": "First presentation must be measured from navigation and authorization"
+  },
+  "runtime": {
+    "browserVersion": "153.0.8010.12",
+    "playwrightVersion": "1.63.0",
+    "nodeVersion": "v26.7.0",
+    "browserSelection": "bundled",
+    "startupTrace": false
+  },
+  "playback": {
+    "distribution": "mediamtx",
+    "startup": [
+      {
+        "actor": "alice",
+        "supported": true,
+        "navigationTimeOrigin": 1791130905228.4,
+        "armedAtMilliseconds": 424.5,
+        "readyStateAtArm": 0,
+        "longTasks": [
+          {
+            "startedAt": 486.89999997615814,
+            "duration": 58
+          },
+          {
+            "startedAt": 826.0999999642372,
+            "duration": 109
+          }
+        ],
+        "mediaEvents": [
+          {
+            "kind": "loadeddata",
+            "atMilliseconds": 1975.8999999761581,
+            "coveredByStatus": true
+          },
+          {
+            "kind": "playing",
+            "atMilliseconds": 1975.8999999761581,
+            "coveredByStatus": true
+          }
+        ],
+        "measurementValid": false,
+        "authorization": [
+          {
+            "startedAt": 552.1999999880791,
+            "headersAt": 825.6999999880791,
+            "status": 200,
+            "bodyReadAt": 826.0999999642372
+          }
+        ],
+        "whep": [
+          {
+            "startedAt": 945.5,
+            "headersAt": 1833.0999999642372,
+            "status": 201
+          }
+        ],
+        "peers": [
+          {
+            "createdAt": 925.6999999880791,
+            "connectedAt": 1848.699999988079
+          }
+        ],
+        "firstFrame": {
+          "callbackMilliseconds": 1977.6,
+          "observedAtMilliseconds": 1978.3999999761581,
+          "presentationMilliseconds": 1974.9,
+          "expectedDisplayMilliseconds": 1974.9,
+          "receiveMilliseconds": 1952.9,
+          "mediaTimeSeconds": 0.071,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 3
+        },
+        "navigationToExpectedDisplayMilliseconds": null,
+        "authorizationToExpectedDisplayMilliseconds": null,
+        "authorizationMilliseconds": null
+      },
+      {
+        "actor": "bob",
+        "supported": true,
+        "navigationTimeOrigin": 1791130907324.6,
+        "armedAtMilliseconds": 256.60000002384186,
+        "readyStateAtArm": 0,
+        "longTasks": [
+          {
+            "startedAt": 310,
+            "duration": 57
+          }
+        ],
+        "mediaEvents": [
+          {
+            "kind": "loadeddata",
+            "atMilliseconds": 717.6999999880791,
+            "coveredByStatus": true
+          },
+          {
+            "kind": "playing",
+            "atMilliseconds": 717.8000000119209,
+            "coveredByStatus": true
+          }
+        ],
+        "measurementValid": true,
+        "authorization": [
+          {
+            "startedAt": 373.5,
+            "headersAt": 624.8000000119209,
+            "status": 200,
+            "bodyReadAt": 625.1000000238419
+          }
+        ],
+        "whep": [
+          {
+            "startedAt": 635.3000000119209,
+            "headersAt": 644,
+            "status": 201
+          }
+        ],
+        "peers": [
+          {
+            "createdAt": 628.9000000357628,
+            "connectedAt": 648.9000000357628
+          }
+        ],
+        "firstFrame": {
+          "callbackMilliseconds": 714,
+          "observedAtMilliseconds": 717.3000000119209,
+          "presentationMilliseconds": 716.7,
+          "expectedDisplayMilliseconds": 716.7,
+          "receiveMilliseconds": 712.2,
+          "mediaTimeSeconds": 0,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1
+        },
+        "navigationToExpectedDisplayMilliseconds": 716.7,
+        "authorizationToExpectedDisplayMilliseconds": 343.20000000000005,
+        "authorizationMilliseconds": 251.60000002384186
+      }
+    ],
+    "startupScope": "Authenticated dashboard navigation after previous membership/inventory requests; live inventory is read again for each viewer; producer process ready; source selected low; OAuth excluded",
+    "viewers": [
+      {
+        "actor": "alice",
+        "at": 6244.599999964237,
+        "framesDecoded": 130,
+        "width": 1280,
+        "height": 720,
+        "localCandidateType": "prflx",
+        "remoteCandidateType": "host",
+        "framesPerSecond": 29.631109335816916
+      },
+      {
+        "actor": "bob",
+        "at": 4148.400000035763,
+        "framesDecoded": 103,
+        "width": 1280,
+        "height": 720,
+        "localCandidateType": "prflx",
+        "remoteCandidateType": "host",
+        "framesPerSecond": 29.632095888130515
+      }
+    ],
+    "activeEncoders": 1,
+    "afterSharedQualityChange": [
+      {
+        "actor": "alice",
+        "at": 11456.799999952316,
+        "framesDecoded": 286,
+        "width": 1280,
+        "height": 720,
+        "localCandidateType": "prflx",
+        "remoteCandidateType": "host",
+        "framesPerSecond": 29.98201079400015
+      },
+      {
+        "actor": "bob",
+        "at": 9360.699999988079,
+        "framesDecoded": 259,
+        "width": 1280,
+        "height": 720,
+        "localCandidateType": "prflx",
+        "remoteCandidateType": "host",
+        "framesPerSecond": 29.981012025955163
+      }
+    ],
+    "remainingMember": [
+      {
+        "actor": "bob",
+        "at": 14733,
+        "framesDecoded": 420,
+        "width": 1280,
+        "height": 720,
+        "localCandidateType": "prflx",
+        "remoteCandidateType": "host",
+        "framesPerSecond": 29.96603848994954
+      }
+    ],
+    "mediaMTXReaders": 2,
+    "sourceViewerLimit": 1,
+    "sharedQuality": "medium",
+    "continuesAfterFirstMemberCloses": true,
+    "pageErrors": 0,
+    "startupMeasurementValid": false,
+    "encoderStoppedAfterBrowserClosureMilliseconds": 37178.062332999994
+  },
+  "dependencyTimings": {
+    "project": {
+      "observations": 101,
+      "maximumHeadersMilliseconds": 517.7397500000006
+    },
+    "inventory": {
+      "observations": 78,
+      "maximumHeadersMilliseconds": 162.67175000000134
+    },
+    "turn-key": {
+      "observations": 3,
+      "maximumHeadersMilliseconds": 30.00604199999907
+    }
+  },
+  "interpretation": [
+    "All six functional gates pass: live discovery without enrollment, concurrent source selection, shared MediaMTX playback/encoder lifecycle, history never granting source access, stable identity/rename and live-only inventory without history writes. The harness now finishes these independent checks before reporting a failed startup measurement.",
+    "The initial reader still reports presentedFrames=3; exact first-submission timing remains invalid. The additional reader has valid first presentation at 716.7ms from navigation. Browser-observed authorization is 273.9ms and 251.6ms.",
+    "No three-second project-resolution response occurs in this trial: the largest of 101 traced resolution responses is about 518ms. Two coalesced real trials do not establish a worst case or percentile.",
+    "Both members sustain about 30 decoded fps with one source encoder; changing source quality is shared and the remaining member keeps playing after the first closes. No page errors are observed.",
+    "Forced destruction of the final browser context releases the source encoder after 37.178 seconds, within the existing finite recovery observation. This is abrupt disappearance, not an awaited application Stop/DELETE; it does not establish prompt graceful shutdown in the dashboard. The separate portable lifecycle tests qualify normal explicit closure.",
+    "GitHub membership remains a fixture; OAuth/SSO and hardware/physical display timing remain outside this qualification."
+  ],
+  "cleanup": {
+    "ownedContainersRemoved": true,
+    "linuxSocketLimitsRestored": {
+      "receive": 212992,
+      "send": 212992
+    }
+  }
+}

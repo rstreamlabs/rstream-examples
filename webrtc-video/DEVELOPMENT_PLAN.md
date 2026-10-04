@@ -84,6 +84,19 @@ the exact-first-submission gate remains failed and prior trials stay failed.
 Separating decoder startup batching from visible presentation, including the
 loading overlay, remains necessary before making an end-to-end startup claim.
 
+The [complete dashboard sequence at `be401dc`](./platform/qualification/evidence/be401dc/discovery-and-startup.json)
+passes all six functional gates after the harness defers the unchanged startup
+measurement assertion until the end. This includes shared playback and source
+quality, final encoder release, reconnect/rename, history access boundaries and
+live-only inventory without history writes. The overall result still fails the
+cold callback counter criterion. Authorization takes 274/252ms and the additional
+reader's first presentation is 717ms from navigation; the largest of 101 project
+responses is 518ms. The final forced browser-context destruction releases the
+encoder after 37.178 seconds through finite recovery. This is not graceful
+application Stop/DELETE or evidence of prompt dashboard shutdown; the portable
+explicit-close lifecycle cases remain separate. Repetition and visible-frame
+measurement, including the UI's loading overlay, remain acceptance work.
+
 Remove demonstrated serial waits, unnecessary polling and avoidable key-frame
 delays while retaining authentication, bounded cancellation, one shared upstream
 and demand-driven encoder shutdown. Do not keep capture, encoding or media
