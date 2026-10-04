@@ -5,6 +5,19 @@ import { createLatencyReport } from "../latency/report.mjs";
 const clocks = {
   producerBootHash: "c".repeat(64),
   receiverBootHash: "c".repeat(64),
+  producerMonotonicOffsetHash: "d".repeat(64),
+  receiverMonotonicOffsetHash: "d".repeat(64),
+  ...Object.fromEntries(
+    ["initialCalibration", "finalCalibration"].map((key, side) => [
+      key,
+      Array.from({ length: 7 }, (_, i) => ({
+        hostBeforeMilliseconds: 10000 + side * 10000 + i * 10,
+        hostAfterMilliseconds: 10002 + side * 10000 + i * 10,
+        browserNowMilliseconds: 10001 + side * 10000 + i * 10,
+        browserTimeOriginMilliseconds: 1790000000000,
+      })),
+    ]),
+  ),
 };
 
 function phase(name, start, latency = 100) {
@@ -14,10 +27,12 @@ function phase(name, start, latency = 100) {
       samples: Array.from({ length: 5 }, (_, frame) => {
         const source = start + index * 1000 + frame * 200;
         return {
-          sourceUnixMilliseconds: source,
-          expectedDisplayUnixMilliseconds: source + latency,
+          sourceMonotonicMilliseconds: source,
+          expectedDisplayMonotonicMilliseconds: source + latency,
+          expectedDisplayPerformanceMilliseconds: source + latency,
+          browserTimeOriginMilliseconds: 1790000000000,
           latencyMilliseconds: latency,
-          sampledClockOffsetMilliseconds: 0,
+          sampledWallClockOffsetMilliseconds: 0,
         };
       }),
       rejected: 0,
@@ -35,8 +50,10 @@ test("isolates phase intervals while retaining transition latency in the overall
   for (const index of [0, 13, 14, 27]) {
     for (const sample of snapshots[index].latency.samples) {
       sample.latencyMilliseconds = 1000;
-      sample.expectedDisplayUnixMilliseconds =
-        sample.sourceUnixMilliseconds + 1000;
+      sample.expectedDisplayMonotonicMilliseconds =
+        sample.sourceMonotonicMilliseconds + 1000;
+      sample.expectedDisplayPerformanceMilliseconds =
+        sample.expectedDisplayMonotonicMilliseconds;
     }
   }
   const report = createLatencyReport(snapshots, clocks, true);

@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { decodeMarker } from "./decode-marker.mjs";
+import { monotonicMilliseconds } from "./clock.mjs";
 
 const runtime = mkdtempSync(join(tmpdir(), "rstream-latency-stamp-"));
 try {
@@ -13,7 +14,7 @@ try {
   );
   for (const bitrate of [500, 8000]) {
     const file = join(runtime, `frame-${bitrate}.rgba`);
-    const before = Date.now();
+    const before = monotonicMilliseconds();
     execFileSync(
       "gst-launch-1.0",
       [
@@ -47,7 +48,7 @@ try {
         env: process.env,
       },
     );
-    const after = Date.now();
+    const after = monotonicMilliseconds();
     const frame = readFileSync(file);
     assert.equal(frame.length, 640 * 360 * 4);
     const crop = new Uint8Array(256 * 32 * 4);

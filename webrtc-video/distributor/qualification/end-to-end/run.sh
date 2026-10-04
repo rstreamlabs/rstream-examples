@@ -488,11 +488,13 @@ latency_arguments=()
 if [[ "${latency_probe}" == true ]]; then
   producer_boot_digest="$(docker exec "${producer_name}" sha256sum /proc/sys/kernel/random/boot_id)"
   producer_boot_hash="${producer_boot_digest%% *}"
-  if ! [[ "${producer_boot_hash}" =~ ^[a-f0-9]{64}$ ]]; then
+  producer_monotonic_digest="$(docker exec "${producer_name}" sha256sum /proc/self/timens_offsets)"
+  producer_monotonic_hash="${producer_monotonic_digest%% *}"
+  if ! [[ "${producer_boot_hash}" =~ ^[a-f0-9]{64}$ && "${producer_monotonic_hash}" =~ ^[a-f0-9]{64}$ ]]; then
     printf 'producer shared-clock identity is unavailable\n' >&2
     exit 1
   fi
-  latency_arguments=(--latency-probe enabled --producer-boot-hash "${producer_boot_hash}")
+  latency_arguments=(--latency-probe enabled --producer-boot-hash "${producer_boot_hash}" --producer-monotonic-offset-hash "${producer_monotonic_hash}")
 fi
 
 source_base=""

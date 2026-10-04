@@ -3,16 +3,23 @@ import { decodeMarker } from "./decode-marker.mjs";
 // Qualification page only. Requires producer and browser on one Linux host.
 // This measures a raw-frame marker to expected browser composition, not a
 // physical camera's exposure or a monitor's actual scanout.
-export function installLatencyProbe(video, sampleIntervalMilliseconds = 200) {
+export function installLatencyProbe(
+  video,
+  monotonicOffsetMilliseconds,
+  sampleIntervalMilliseconds = 200,
+) {
   if (!video?.requestVideoFrameCallback || !video?.cancelVideoFrameCallback)
     throw new TypeError(
       "Frame callbacks are required for latency qualification",
     );
   if (
+    !Number.isFinite(monotonicOffsetMilliseconds) ||
     !Number.isFinite(sampleIntervalMilliseconds) ||
     sampleIntervalMilliseconds < 100
   )
-    throw new TypeError("Latency sampling interval must be at least 100ms");
+    throw new TypeError(
+      "Latency probe requires clock alignment and a sampling interval of at least 100ms",
+    );
   const canvas = document.createElement("canvas");
   canvas.width = 256;
   canvas.height = 32;
@@ -49,13 +56,17 @@ export function installLatencyProbe(video, sampleIntervalMilliseconds = 200) {
             rejected++;
           } else {
             const presentation =
-              performance.timeOrigin + metadata.expectedDisplayTime;
+              monotonicOffsetMilliseconds + metadata.expectedDisplayTime;
             const sample = {
-              sourceUnixMilliseconds: marker.timestampMilliseconds,
-              expectedDisplayUnixMilliseconds: presentation,
+              sourceMonotonicMilliseconds: marker.timestampMilliseconds,
+              expectedDisplayMonotonicMilliseconds: presentation,
+              expectedDisplayPerformanceMilliseconds:
+                metadata.expectedDisplayTime,
+              browserTimeOriginMilliseconds: performance.timeOrigin,
               latencyMilliseconds: presentation - marker.timestampMilliseconds,
               callbackLatenessMilliseconds: now - metadata.expectedDisplayTime,
-              sampledClockOffsetMilliseconds: sampledClockOffset,
+              // Diagnostic only: wall-clock corrections do not measure delay.
+              sampledWallClockOffsetMilliseconds: sampledClockOffset,
               rtpTimestamp: Number.isFinite(metadata.rtpTimestamp)
                 ? metadata.rtpTimestamp
                 : null,

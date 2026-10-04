@@ -3,21 +3,25 @@ import test from "node:test";
 import { decodeMarker } from "../latency/decode-marker.mjs";
 import { installLatencyProbe } from "../latency/latency-probe.mjs";
 
-// Independent known vector: timestamp 1791067642390908us, CRC from zlib.
-const bytes = Buffer.from("5253010000065cf76e97e97cb229f8eb", "hex");
-const rgba = new Uint8ClampedArray(256 * 32 * 4);
-for (let bit = 0; bit < 128; bit++) {
-  const value = bytes[bit >> 3] & (1 << (7 - (bit % 8))) ? 235 : 16;
-  for (let y = 0; y < 8; y++)
-    for (let x = 0; x < 8; x++) {
-      const offset =
-        ((Math.floor(bit / 32) * 8 + y) * 256 + (bit % 32) * 8 + x) * 4;
-      rgba.set([value, value, value, 255], offset);
-    }
+// Independent known vector: monotonic timestamp 1234567890123us, CRC from zlib.
+const bytes = Buffer.from("525302000000011f71fb04cb65183fe6", "hex");
+function markerPixels(bytes) {
+  const rgba = new Uint8ClampedArray(256 * 32 * 4);
+  for (let bit = 0; bit < 128; bit++) {
+    const value = bytes[bit >> 3] & (1 << (7 - (bit % 8))) ? 235 : 16;
+    for (let y = 0; y < 8; y++)
+      for (let x = 0; x < 8; x++) {
+        const offset =
+          ((Math.floor(bit / 32) * 8 + y) * 256 + (bit % 32) * 8 + x) * 4;
+        rgba.set([value, value, value, 255], offset);
+      }
+  }
+  return rgba;
 }
+const rgba = markerPixels(bytes);
 
 test("timestamp decoding preserves microseconds and rejects a damaged checksum", () => {
-  assert.equal(decodeMarker(rgba).timestampMilliseconds, 1791067642390.908);
+  assert.equal(decodeMarker(rgba).timestampMilliseconds, 1234567890.123);
   const damaged = rgba.slice();
   for (let y = 27; y <= 28; y++)
     for (let x = 251; x <= 252; x++) {
@@ -26,10 +30,19 @@ test("timestamp decoding preserves microseconds and rejects a damaged checksum",
         damaged[offset + c] = 255 - damaged[offset + c];
     }
   assert.equal(decodeMarker(damaged), null);
+  // A checksum-valid version-1 wall-clock marker must never be reinterpreted
+  // as monotonic time when an old producer image is accidentally reused.
+  assert.equal(
+    decodeMarker(
+      markerPixels(Buffer.from("5253010000065cf76e97e97cb229f8eb", "hex")),
+    ),
+    null,
+  );
 });
 
 test("a paused collector stays bounded, drains once, and cancels late callbacks", () => {
   const previousDocument = globalThis.document;
+  const previousDateNow = Date.now;
   let draws = 0,
     requested = 0,
     cancelled = 0,
@@ -55,7 +68,7 @@ test("a paused collector stays bounded, drains once, and cancels late callbacks"
     },
   };
   try {
-    const probe = installLatencyProbe(video);
+    const probe = installLatencyProbe(video, 1234567900);
     const metadata = {
       width: 640,
       height: 360,
@@ -63,14 +76,29 @@ test("a paused collector stays bounded, drains once, and cancels late callbacks"
       rtpTimestamp: 500,
       mediaTime: 0,
     };
-    for (let frame = 0; frame < 40; frame++) callback(frame * 200, metadata);
+    for (let frame = 0; frame < 40; frame++) {
+      if (frame === 20) Date.now = () => previousDateNow() - 147;
+      callback(frame * 200, metadata);
+    }
     const report = probe.read();
     assert.equal(report.samples.length, 32);
     assert.equal(report.omitted, 8);
     assert.equal(report.rejected, 0);
+    assert(
+      report.samples.every(
+        (sample) =>
+          sample.latencyMilliseconds === report.samples[0].latencyMilliseconds,
+      ),
+    );
+    assert(
+      Math.abs(
+        report.samples[0].sampledWallClockOffsetMilliseconds -
+          report.samples[31].sampledWallClockOffsetMilliseconds,
+      ) > 145,
+    );
     assert.equal(
       report.samples[0].latencyMilliseconds,
-      performance.timeOrigin + 10 - 1791067642390.908,
+      1234567900 + 10 - 1234567890.123,
     );
     assert.equal(probe.read().samples.length, 0);
     // Calls faster than the configured sample rate don't read any pixels.
@@ -86,6 +114,7 @@ test("a paused collector stays bounded, drains once, and cancels late callbacks"
     assert.equal(requested, count);
     assert.equal(draws, 40);
   } finally {
+    Date.now = previousDateNow;
     if (previousDocument === undefined) delete globalThis.document;
     else globalThis.document = previousDocument;
   }

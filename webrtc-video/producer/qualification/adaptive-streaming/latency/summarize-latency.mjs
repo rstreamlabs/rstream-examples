@@ -1,15 +1,17 @@
+import { summarizeClockAlignment } from "./clock.mjs";
+
 // Offline qualification report. Preserve rejected/omitted measurements and
 // clock failures; never turn missing or negative latency into a zero value.
 export function summarizeLatency(
   snapshots,
   clocks,
-  { minimumSamples = 50, maximumClockOffsetMilliseconds = 5 } = {},
+  { minimumSamples = 50, maximumClockUncertaintyMilliseconds = 5 } = {},
 ) {
   if (
     !Number.isInteger(minimumSamples) ||
     minimumSamples < 1 ||
-    !Number.isFinite(maximumClockOffsetMilliseconds) ||
-    maximumClockOffsetMilliseconds <= 0
+    !Number.isFinite(maximumClockUncertaintyMilliseconds) ||
+    maximumClockUncertaintyMilliseconds <= 0
   )
     throw new TypeError("Invalid latency qualification bounds");
   const samples = [];
@@ -43,10 +45,12 @@ export function summarizeLatency(
     (sample) =>
       sample &&
       [
-        sample.sourceUnixMilliseconds,
-        sample.expectedDisplayUnixMilliseconds,
+        sample.sourceMonotonicMilliseconds,
+        sample.expectedDisplayMonotonicMilliseconds,
+        sample.expectedDisplayPerformanceMilliseconds,
+        sample.browserTimeOriginMilliseconds,
         sample.latencyMilliseconds,
-        sample.sampledClockOffsetMilliseconds,
+        sample.sampledWallClockOffsetMilliseconds,
       ].every(Number.isFinite),
   );
   malformed += samples.length - valid.length;
@@ -58,7 +62,10 @@ export function summarizeLatency(
   const maximumClockOffset = valid.length
     ? valid.reduce(
         (maximum, sample) =>
-          Math.max(maximum, Math.abs(sample.sampledClockOffsetMilliseconds)),
+          Math.max(
+            maximum,
+            Math.abs(sample.sampledWallClockOffsetMilliseconds),
+          ),
         0,
       )
     : null;
@@ -66,32 +73,49 @@ export function summarizeLatency(
     valid.length + rejected + malformed > 0
       ? valid.length / (valid.length + rejected + malformed)
       : 0;
+  const alignment = summarizeClockAlignment(
+    clocks?.initialCalibration,
+    clocks?.finalCalibration,
+    maximumClockUncertaintyMilliseconds,
+  );
   const gates = {
     sharedHostClock:
       typeof clocks?.producerBootHash === "string" &&
       /^[a-f0-9]{64}$/.test(clocks.producerBootHash) &&
-      clocks.producerBootHash === clocks.receiverBootHash,
+      clocks.producerBootHash === clocks.receiverBootHash &&
+      typeof clocks.producerMonotonicOffsetHash === "string" &&
+      /^[a-f0-9]{64}$/.test(clocks.producerMonotonicOffsetHash) &&
+      clocks.producerMonotonicOffsetHash === clocks.receiverMonotonicOffsetHash,
     enoughSamples: valid.length >= minimumSamples,
     clockAgreement:
-      maximumClockOffset !== null &&
-      maximumClockOffset <= maximumClockOffsetMilliseconds,
+      alignment.valid &&
+      valid.every(
+        (sample) =>
+          sample.browserTimeOriginMilliseconds ===
+            alignment.initial.browserTimeOriginMilliseconds &&
+          Math.abs(
+            sample.expectedDisplayMonotonicMilliseconds -
+              sample.expectedDisplayPerformanceMilliseconds -
+              alignment.offsetMilliseconds,
+          ) <= 0.001,
+      ),
     validTimestamps:
       malformed === 0 &&
       valid.every(
         (sample) =>
-          sample.sourceUnixMilliseconds > 0 &&
+          sample.sourceMonotonicMilliseconds > 0 &&
           sample.latencyMilliseconds >= 0 &&
           Math.abs(
             sample.latencyMilliseconds -
-              (sample.expectedDisplayUnixMilliseconds -
-                sample.sourceUnixMilliseconds),
+              (sample.expectedDisplayMonotonicMilliseconds -
+                sample.sourceMonotonicMilliseconds),
           ) <= 0.001,
       ),
     monotonicSource: valid.every(
       (sample, index) =>
         index === 0 ||
-        sample.sourceUnixMilliseconds >=
-          valid[index - 1].sourceUnixMilliseconds,
+        sample.sourceMonotonicMilliseconds >=
+          valid[index - 1].sourceMonotonicMilliseconds,
     ),
     markersReadable: decodedMarkerFraction >= 0.95,
     noOmittedSamples: omitted === 0,
@@ -99,14 +123,15 @@ export function summarizeLatency(
   return {
     measurementValid: Object.values(gates).every(Boolean),
     scope:
-      "Raw-frame marker before encoding to expected browser composition on a shared Linux host clock; excludes physical exposure and display scanout.",
+      "Raw-frame monotonic marker before encoding to expected browser composition on one Linux clock with bounded browser alignment; excludes physical exposure and display scanout.",
     gates,
     samples: valid.length,
     rejected,
     omitted,
     malformed,
     decodedMarkerFraction,
-    maximumClockOffsetMilliseconds: maximumClockOffset,
+    clockAlignment: alignment,
+    maximumWallClockOffsetMilliseconds: maximumClockOffset,
     maximumProbeMilliseconds,
     latencyMilliseconds: {
       minimum: latencies[0] ?? null,

@@ -21,6 +21,7 @@ import { redactError, redactSensitiveText } from "./lib/redaction.mjs";
 import { negotiatedVideoCodecs } from "./lib/sdp-codecs.mjs";
 import { installFrameDiagnostics } from "./lib/frame-diagnostics.mjs";
 import { createLatencyReport } from "./latency/report.mjs";
+import { calibrateBrowserClock, calibrationBounds } from "./latency/clock.mjs";
 
 const argumentsByName = parseArguments(process.argv.slice(2));
 const requestedURL = argumentsByName.get("url") || "";
@@ -87,7 +88,26 @@ if (latencyEnabled) {
     .digest("hex");
   if (producerBootHash !== receiverBootHash)
     throw new Error("producer and collector must share a Linux host clock");
-  latencyClocks = { producerBootHash, receiverBootHash };
+  const producerMonotonicOffsetHash = requiredArgument(
+    argumentsByName,
+    "producer-monotonic-offset-hash",
+  );
+  const receiverMonotonicOffsetHash = createHash("sha256")
+    .update(await readFile("/proc/self/timens_offsets"))
+    .digest("hex");
+  if (
+    !/^[a-f0-9]{64}$/.test(producerMonotonicOffsetHash) ||
+    producerMonotonicOffsetHash !== receiverMonotonicOffsetHash
+  )
+    throw new Error(
+      "producer and collector must share monotonic clock offsets",
+    );
+  latencyClocks = {
+    producerBootHash,
+    receiverBootHash,
+    producerMonotonicOffsetHash,
+    receiverMonotonicOffsetHash,
+  };
 }
 
 await mkdir(outputDirectory, { recursive: true });
@@ -408,6 +428,15 @@ try {
   let initialSample = null;
   await page.evaluate(installFrameDiagnostics);
   if (latencyEnabled) {
+    latencyClocks.initialCalibration = await calibrateBrowserClock(() =>
+      page.evaluate(() => ({
+        nowMilliseconds: performance.now(),
+        timeOriginMilliseconds: performance.timeOrigin,
+      })),
+    );
+    await page.evaluate((offset) => {
+      window.__rstreamLatencyClockOffsetMilliseconds = offset;
+    }, calibrationBounds(latencyClocks.initialCalibration).offsetMilliseconds);
     await page.evaluate(
       await readFile(new URL("./latency-probe.js", import.meta.url), "utf8"),
     );
@@ -507,6 +536,17 @@ try {
     );
   }
   if (latencyEnabled) {
+    latencyClocks.finalCalibration = await calibrateBrowserClock(() =>
+      page.evaluate(() => ({
+        nowMilliseconds: performance.now(),
+        timeOriginMilliseconds: performance.timeOrigin,
+      })),
+    ).catch((error) => {
+      latencyClocks.finalCalibrationFailure = redactError(
+        normalizeError(error),
+      ).message.slice(0, 512);
+      return null;
+    });
     const report = createLatencyReport(latencySnapshots, latencyClocks, true);
     await writeJSONAtomic(`${outputDirectory}/latency.json`, report);
     latencyReportWritten = true;

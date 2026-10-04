@@ -49,7 +49,7 @@ qualification browser and is stopped before session teardown.
 
 The distributor's end-to-end runner supports `RSTREAM_DISTRIBUTOR_LATENCY_PROBE=true`
 for direct, custom-adapter and native MediaMTX paths. It selects the matching
-720p30 qualification profile in `latency/config.latency.yaml`, which stamps a timestamp
+720p30 qualification profile in `latency/config.latency.yaml`, which stamps a Linux monotonic timestamp
 into a small patch of I420 pixels immediately before the encoder. The browser
 decodes that patch at most five times per second. This works across MediaMTX RTP
 timestamp rewriting and does not add a queue or change the public source profiles.
@@ -64,17 +64,29 @@ RSTREAM_DISTRIBUTOR_LATENCY_PROBE=true \
 qualification/end-to-end/run.sh /tmp/rstream-video-latency
 ```
 
-The producer and browser must share one Linux host clock. The runner compares
-hashes of their Linux boot identity; only hashes are retained. At every decoded
-marker the browser also checks its wall clock against its performance clock.
-Different hosts, clock jumps, negative or inconsistent latency, unreadable
-markers, missing observations and incomplete runs fail measurement validity.
+The producer, collector and browser must share one Linux monotonic clock. The
+runner compares hashes of their boot identity and `/proc/self/timens_offsets`
+(which must be readable); different time-namespace offsets are rejected. Before
+and after collection, seven bounded browser requests align `performance.now()`
+with the collector's `process.hrtime()`. Each request brackets the browser read
+between two host readings. The intersection of those intervals includes a 1ms
+browser timer-precision allowance and does not assume symmetric request delays.
+Initial and final intervals must overlap, and the reported worst-case alignment
+error must be at most 5ms. Each calibration has a two-second total deadline.
+
+The marker uses GLib's monotonic clock, as do libuv and Chromium on Linux.
+Adjustments to UTC therefore do not alter measured durations. The observed
+wall/performance-clock offset remains diagnostic data; it is not subtracted
+from samples. Different hosts/clock offsets, failed or inconsistent calibration,
+negative or inconsistent latency, unreadable markers, missing observations and
+incomplete runs fail measurement validity.
 Each measured phase requires at least 50 samples and 95% readable markers.
 Warmup and measurement phases must last at least 15 seconds. The report keeps
 invalid measurements and never substitutes zero for absent data.
 
-`latency.json` contains median, p95, p99 and maximum latency, the clock and marker
-gates, sampling overhead, and separate phase summaries. The first and last
+`latency.json` contains median, p95, p99 and maximum latency, raw calibration
+observations and their error bound, clock and marker gates, sampling overhead,
+and separate phase summaries. The first and last
 collector snapshot of each phase are excluded from its steady summary because
 they can span a boundary; they remain in the overall distribution. Raw marker
 observations remain in `samples.jsonl`. These are measurements from the raw-frame
@@ -87,6 +99,10 @@ without generating another frame callback. A reported maximum is therefore
 not a bound on the age of the displayed image during a freeze. An invalid
 latency report still allows collection and teardown to finish, then fails the
 runner's final `latencyMeasurement` gate with the other evidence preserved.
+Version-2 markers carry monotonic time. The decoder rejects version-1 UTC
+markers instead of silently mixing clock domains. Historical results retain
+their original revision, measurement method and verdict; they are not corrected
+retroactively using the new calibration.
 
 `RSTREAM_DISTRIBUTOR_PRODUCER_CONFIG` can select another producer profile. Its
 SHA-256 is recorded in the result. With latency enabled, a custom pipeline must

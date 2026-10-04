@@ -1,4 +1,4 @@
-# Qualification only: decoded pixels carry a pre-encoder UTC timestamp.
+# Qualification only: decoded pixels carry a pre-encoder monotonic timestamp.
 # Requires the qualification Docker image and a shared Linux host clock.
 server:
   listen: 127.0.0.1:8080

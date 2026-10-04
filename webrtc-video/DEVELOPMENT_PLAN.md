@@ -681,9 +681,21 @@ and a measured calibration error bound. Do not loosen the existing clock gate
 or retrospectively correct failed runs. GLib's
 [monotonic clock](https://docs.gtk.org/glib/func.get_monotonic_time.html) and
 [Chromium's Linux TimeTicks](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/base/time/time_now_posix.cc)
-provide the basis; the calibration and real-browser qualification are not yet
-implemented. Production streaming and its buffers do not need to change for
-this measurement correction.
+provide the basis. Production streaming and its buffers do not need to change
+for this measurement correction.
+
+The qualification implementation now stamps version-2 monotonic markers and
+aligns browser performance time with the collector's Linux monotonic clock
+using seven bracketed requests at each end of collection. It requires matching
+boot and time-namespace-offset hashes, overlapping initial/final clock bounds,
+and at most 5ms alignment uncertainty. The two-second calibration deadline
+prevents late responses from initiating more requests. A failed final calibration
+is retained as invalid measurement while normal teardown still completes.
+Tests cover asymmetric request delays, clock drift/navigation, missing or slow
+responses, namespace mismatch, old UTC markers, source reversals and a simulated
+wall-clock step that leaves monotonic latency unchanged. The full 116-test
+collector suite and end-to-end result-gate tests pass. Actual browser/media
+qualification is next; no production streaming buffer or quality policy changes.
 
 - Compare changes against the current path at equal source content and network
   conditions. Measure time to first frame separately from capture-to-display

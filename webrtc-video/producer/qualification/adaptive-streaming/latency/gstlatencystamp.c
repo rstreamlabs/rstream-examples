@@ -33,8 +33,9 @@ static guint32 marker_crc(const guint8 *bytes, gsize length) {
 
 static GstFlowReturn stamp_frame(GstVideoFilter *filter, GstVideoFrame *frame) {
   (void)filter;
-  guint8 bytes[MARKER_BYTES] = {0x52, 0x53, 1, 0};
-  const gint64 now = g_get_real_time();
+  /* Version 2 uses the Linux monotonic clock, not adjustable wall time. */
+  guint8 bytes[MARKER_BYTES] = {0x52, 0x53, 2, 0};
+  const gint64 now = g_get_monotonic_time();
   if (now <= 0) return GST_FLOW_ERROR;
   guint64 timestamp = (guint64)now;
   for (gint i = 11; i >= 4; i--) {
@@ -93,5 +94,5 @@ static gboolean plugin_init(GstPlugin *plugin) {
 }
 
 GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, latencystamp,
-    "Qualification-only raw-frame timestamp", plugin_init, "0.0.1", "MIT/X11",
+    "Qualification-only raw-frame timestamp", plugin_init, "0.0.2", "MIT/X11",
     PACKAGE, "https://github.com/rstreamlabs/rstream-examples")

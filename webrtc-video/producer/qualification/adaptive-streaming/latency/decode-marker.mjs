@@ -34,7 +34,7 @@ export function decodeMarker(rgba) {
   if (
     bytes[0] !== 0x52 ||
     bytes[1] !== 0x53 ||
-    bytes[2] !== 1 ||
+    bytes[2] !== 2 ||
     bytes[3] !== 0
   )
     return null;
