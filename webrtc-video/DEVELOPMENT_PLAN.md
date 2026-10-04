@@ -160,8 +160,24 @@ incomplete despite final 720p30 observations. Existing runs retain their origina
 results and all acceptance gates remain unchanged. Socket limits are restored and owned containers removed.
 The tracked-stream accounting fix is retained; 1s downHold remains experimental.
 
-Next, stabilize the initial capacity-drop transition and diagnose phase-file
-visibility in the harness, then repeat direct/MediaMTX/TURN qualification. Do not
+The [collector-local phase publication check at `f6555f4`](./distributor/qualification/evidence/f6555f4/phase-control.json)
+passes 100 atomic updates with 5,630 concurrent reads while removing the host
+source between updates. The repeated direct trial completes all collection and
+teardown steps with identical media images. It still fails playback: an initial
+2.539s freeze is reported after the transition window, followed by a 0.243s
+freeze during constrained delivery. There are no recovery freezes. This removes
+the live bind-mount dependency; it does not prove the original ENOENT cause.
+
+A deterministic policy regression additionally reproduces the down-hold timer
+restarting whenever congestion crosses another lower rung, although the active
+format is continuously unsupported. Downward evidence now survives changes
+among lower candidates, while sufficient bandwidth, missing estimates, manual
+selection and confirmed transitions still reset it. Upgrade hold, minimum dwell,
+all thresholds and reference configuration remain unchanged. The full producer
+race suite, focused policy checks, vet and formatting pass. Delivery validation
+of this timing correction remains required.
+
+Next, stabilize the initial capacity-drop transition and repeat direct/MediaMTX/TURN qualification. Do not
 claim that one successful fast-down run establishes a stable policy. Before adopting
 a further threshold or controller change, inspect acknowledged throughput, increase
 mode, receive-time ordering and encoder undershoot; a clean loss signal alone

@@ -346,7 +346,10 @@ headroom. The independent worker uses the lesser of the bandwidth estimate and
 the applied encoder target, so a loss-related bitrate hold also delays a format
 upgrade. The defaults above require three seconds of downshift evidence,
 fifteen seconds of upgrade evidence, 30% headroom, and ten seconds between
-confirmed automatic transitions. Manual selections bypass those automatic
+confirmed automatic transitions. Downshift evidence accumulates while the
+observed profile remains unsupported, even if the estimate crosses several
+lower profile thresholds. Sufficient bandwidth for the current profile or a
+missing estimate resets that evidence. Manual selections bypass those automatic
 holds; congestion control continues beneath the selected bitrate ceiling.
 An automatic ladder can also run without a `quality` section, leaving the UI
 selector hidden. These thresholds describe bandwidth, not CPU load or visual

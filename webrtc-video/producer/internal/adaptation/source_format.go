@@ -153,6 +153,7 @@ type formatPolicy struct {
 	lastTransition time.Time
 	candidate      string
 	candidateSince time.Time
+	candidateDown  bool
 }
 
 func newFormatPolicy(cfg config.SourceFormatConfig) (formatPolicy, error) {
@@ -177,6 +178,7 @@ func newFormatPolicy(cfg config.SourceFormatConfig) (formatPolicy, error) {
 func (p *formatPolicy) resetEvidence() {
 	p.candidate = ""
 	p.candidateSince = time.Time{}
+	p.candidateDown = false
 }
 
 func (p *formatPolicy) confirm(now time.Time, observed media.SourceFormat) {
@@ -235,7 +237,14 @@ func (p *formatPolicy) choose(now time.Time, bps int, observed media.SourceForma
 	}
 	target := p.cfg.Profiles[next]
 	if target.ID != p.candidate {
-		p.candidate, p.candidateSince = target.ID, now
+		// Down-hold measures how long the active format is unsupported. Moving
+		// between lower rungs does not make that format sustainable again;
+		// restarting the clock would delay a worsening congestion response.
+		// Upgrades still require sustained evidence for their exact next rung.
+		if p.candidate == "" || next > current || !p.candidateDown {
+			p.candidateSince = now
+		}
+		p.candidate, p.candidateDown = target.ID, next < current
 	}
 	hold := p.timings.DownHold
 	if next > current {

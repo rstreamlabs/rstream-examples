@@ -56,6 +56,57 @@ func TestFormatPolicyRequiresSustainedEvidenceAndDwell(t *testing.T) {
 	}
 }
 
+func TestFormatPolicyDownshiftEvidenceSurvivesLowerRungChanges(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		first  int
+		second int
+		want   string
+	}{
+		{name: "worsening capacity", first: 2_500_000, second: 900_000, want: "small"},
+		{name: "partial recovery below current profile", first: 900_000, second: 2_000_000, want: "medium"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := formatTestConfig()
+			cfg.Adaptive.DownHold = "1s"
+			policy, err := newFormatPolicy(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			large := cfg.Profiles[2].Format
+			now := time.Unix(100, 0)
+			policy.choose(now, test.first, large, "", false)
+			if _, ready := policy.choose(now.Add(600*time.Millisecond), test.second, large, "", false); ready {
+				t.Fatal("downshift before the evidence interval elapsed")
+			}
+			target, ready := policy.choose(now.Add(time.Second), test.second, large, "", false)
+			if !ready || target.ID != test.want {
+				t.Fatalf("continuously unsupported active format: target=%s ready=%v, want %s", target.ID, ready, test.want)
+			}
+		})
+	}
+}
+
+func TestFormatPolicySupportedCurrentProfileResetsDownshiftEvidence(t *testing.T) {
+	cfg := formatTestConfig()
+	cfg.Adaptive.DownHold = "1s"
+	policy, err := newFormatPolicy(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	large := cfg.Profiles[2].Format
+	now := time.Unix(100, 0)
+	policy.choose(now, 2_500_000, large, "", false)
+	policy.choose(now.Add(600*time.Millisecond), 3_500_000, large, "", false)
+	policy.choose(now.Add(time.Second), 900_000, large, "", false)
+	if _, ready := policy.choose(now.Add(1999*time.Millisecond), 900_000, large, "", false); ready {
+		t.Fatal("the earlier shortage survived a supported current format")
+	}
+	if target, ready := policy.choose(now.Add(2*time.Second), 900_000, large, "", false); !ready || target.ID != "small" {
+		t.Fatalf("new continuous shortage never settled: %+v %v", target, ready)
+	}
+}
+
 func TestFormatPolicyHeadroomMissingEstimateAndLateObservation(t *testing.T) {
 	cfg := formatTestConfig()
 	p, _ := newFormatPolicy(cfg)
