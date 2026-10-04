@@ -425,8 +425,13 @@ media/FEC, a retransmission stayed queued indefinitely. The targeted correction
 adds RTX to that wait; the existing scheduling ratios, admission bounds and
 repair expiry remain unchanged. The original implementation fails a virtual-
 time `synctest` regression, and the complete producer race suite passes with
-the correction. A broader retransmission-priority candidate remains isolated
-for network qualification; it is not part of the main sample's behavior.
+the correction. The [broader retransmission-priority experiment](./distributor/qualification/evidence/f2d9a28/repair-priority.json)
+is rejected after two passes and two failures with unchanged acceptance gates.
+Direct capacity has 3.289 s of disruption, including 0.935 s of steady-phase
+freezes; source capacity drops six steady frames (1.749%, above the 1% bound).
+Both delay/jitter/loss trials pass, but a single randomized run does not establish
+an improvement. The experiment remains on its isolated branch; only the narrow
+wakeup correction is retained in the main sample.
 
 ## Cross-cutting latency and resource criteria
 
