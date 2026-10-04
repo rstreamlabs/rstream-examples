@@ -287,15 +287,27 @@ export async function createTunnelToken(device: SourceDevice) {
 export async function createViewerToken(
   device: SourceIdentity,
   tunnel: Tunnel,
+  signal?: AbortSignal,
 ) {
-  return createDeviceConnectToken(device, tunnel, "^/whep(?:/[^/?#]{1,256})?$")
+  return createDeviceConnectToken(
+    device,
+    tunnel,
+    "^/whep(?:/[^/?#]{1,256})?$",
+    signal,
+  )
 }
 
 export async function createWHEPSourceToken(
   device: SourceIdentity,
   tunnel: Tunnel,
+  signal?: AbortSignal,
 ) {
-  return createDeviceConnectToken(device, tunnel, "^/whep(?:/[^/?#]{1,256})?$")
+  return createDeviceConnectToken(
+    device,
+    tunnel,
+    "^/whep(?:/[^/?#]{1,256})?$",
+    signal,
+  )
 }
 
 async function createDeviceConnectToken(
@@ -337,9 +349,13 @@ async function createDeviceConnectToken(
   } satisfies ExpiringConnectToken
 }
 
-async function createMediaMTXConnectToken(tunnel: Tunnel, path: string) {
+async function createMediaMTXConnectToken(
+  tunnel: Tunnel,
+  path: string,
+  signal?: AbortSignal,
+) {
   const env = requireRstreamEnv()
-  const rstream = await getRstreamClient()
+  const rstream = await getRstreamClient(signal)
   const escapedPath = escapeRegex(path)
   const issuedAt = new Date()
   const token = await rstream.auth.createAuthToken({
@@ -431,12 +447,13 @@ function requireMemoryQuota(key: string, maxCount: number, windowMs: number) {
   current.count += 1
 }
 
-export async function onlineTunnel(device: SourceDevice, signal?: AbortSignal) {
-  if ("inventory" in device)
-    return (
-      (await discoverDevices(device.id, signal)).sources.get(device.id)
-        ?.tunnel ?? null
-    )
+async function onlineTunnel(device: SourceDevice, signal?: AbortSignal) {
+  signal?.throwIfAborted()
+  // Every caller received this discovered source from findSourceDevice in the
+  // current request. Reuse that live, label-validated snapshot; history is never
+  // a source of authorization. Issued connect tokens still require this exact
+  // tunnel ID, online status and labels when used at the edge.
+  if ("inventory" in device) return device.tunnel
   requireRstreamEnv()
   const rstream = await getRstreamClient(signal)
   // Online state is read from rstream inventory and narrowed by stable labels.
@@ -471,7 +488,7 @@ export async function onlineTunnels(access: DeviceAccess) {
   })
 }
 
-export async function onlineMediaMTXTunnel() {
+export async function onlineMediaMTXTunnel(signal?: AbortSignal) {
   const env = requireRstreamEnv()
   if (
     env.VIDEO_DISTRIBUTOR !== "mediamtx" ||
@@ -479,7 +496,7 @@ export async function onlineMediaMTXTunnel() {
   ) {
     return null
   }
-  const rstream = await getRstreamClient()
+  const rstream = await getRstreamClient(signal)
   const activeTunnels = await rstream.tunnels.list({
     limit: 20,
     filters: {
@@ -527,9 +544,9 @@ export async function tunnelPayload(device: Device) {
   }
 }
 
-export async function turnPayload(deviceId: string) {
+export async function turnPayload(deviceId: string, signal?: AbortSignal) {
   const env = requireRstreamEnv()
-  const rstream = await getRstreamClient()
+  const rstream = await getRstreamClient(signal)
   requireMemoryQuota(
     `turn:${deviceId}`,
     maxTurnCredentialsPerWindow,
@@ -544,7 +561,7 @@ export async function turnPayload(deviceId: string) {
       env.RSTREAM_API_URL ??
       "https://rstream.io",
   )
-  const keyResponse = await boundedFetch(undefined, 16 * 1024)(keyring)
+  const keyResponse = await boundedFetch(signal, 16 * 1024)(keyring)
   if (!keyResponse.ok) throw new HTTPError(503, "TURN keyring is unavailable")
   const credentials = await rstream.turn.createCredentials({
     projectEndpoint: env.RSTREAM_PROJECT_ENDPOINT,
@@ -596,6 +613,7 @@ function withToken(rawUrl: string, token: string) {
 export async function viewerPayload(
   device: SourceDevice,
   distribution: ViewerDistributionPreference = "automatic",
+  signal?: AbortSignal,
 ) {
   const allowDirectFallback = requireRstreamEnv().MEDIAMTX_ALLOW_DIRECT_FALLBACK
   if (
@@ -606,7 +624,7 @@ export async function viewerPayload(
     throw new HTTPError(403, "This deployment requires MediaMTX playback.")
   }
   if (distribution === "automatic" && videoDistributorMode() === "mediamtx") {
-    const distributed = await mediaMTXViewerPayload(device)
+    const distributed = await mediaMTXViewerPayload(device, signal)
     if (distributed) return { ...distributed, allowDirectFallback }
     if (!allowDirectFallback)
       throw new HTTPError(
@@ -614,18 +632,18 @@ export async function viewerPayload(
         "MediaMTX is unavailable. Direct fallback is disabled.",
       )
   }
-  const direct = await directViewerPayload(device)
+  const direct = await directViewerPayload(device, signal)
   return direct ? { ...direct, allowDirectFallback } : null
 }
 
-async function directViewerPayload(device: SourceDevice) {
-  const tunnel = await onlineTunnel(device)
+async function directViewerPayload(device: SourceDevice, signal?: AbortSignal) {
+  const tunnel = await onlineTunnel(device, signal)
   if (!tunnel) {
     return null
   }
   const [credential, turn] = await Promise.all([
-    createViewerToken(device, tunnel),
-    turnPayload(device.id),
+    createViewerToken(device, tunnel, signal),
+    turnPayload(device.id, signal),
   ])
   const base = publicUrl(tunnel)
   if (!base) {
@@ -642,18 +660,21 @@ async function directViewerPayload(device: SourceDevice) {
   }
 }
 
-async function mediaMTXViewerPayload(device: SourceDevice) {
-  const endpoint = await mediaMTXViewerEndpoint()
+async function mediaMTXViewerPayload(
+  device: SourceDevice,
+  signal?: AbortSignal,
+) {
+  const endpoint = await mediaMTXViewerEndpoint(signal)
   if (!endpoint) {
     return null
   }
   const path = mediaMTXPath(device.id)
   const [accessCredential, mediaCredential, turn] = await Promise.all([
     endpoint.kind === "rstream"
-      ? createMediaMTXConnectToken(endpoint.tunnel, path)
+      ? createMediaMTXConnectToken(endpoint.tunnel, path, signal)
       : Promise.resolve(null),
     Promise.resolve(mediaMTXViewerCredential(device.id)),
-    turnPayload(device.id),
+    turnPayload(device.id, signal),
   ])
   const expiresAt = accessCredential
     ? earliestDate(accessCredential.expiresAt, mediaCredential.expiresAt)
@@ -669,7 +690,7 @@ async function mediaMTXViewerPayload(device: SourceDevice) {
   }
 }
 
-async function mediaMTXViewerEndpoint() {
+async function mediaMTXViewerEndpoint(signal?: AbortSignal) {
   const env = requireRstreamEnv()
   if (env.MEDIAMTX_EXPOSURE === "public") {
     return {
@@ -677,7 +698,7 @@ async function mediaMTXViewerEndpoint() {
       kind: "public" as const,
     }
   }
-  const tunnel = await onlineMediaMTXTunnel()
+  const tunnel = await onlineMediaMTXTunnel(signal)
   if (!tunnel) {
     return null
   }
@@ -688,15 +709,16 @@ async function mediaMTXViewerEndpoint() {
 export async function mediaMTXSourcePayload(
   device: SourceDevice,
   purpose: MediaMTXSourcePurpose,
+  signal?: AbortSignal,
 ) {
-  const tunnel = await onlineTunnel(device)
+  const tunnel = await onlineTunnel(device, signal)
   if (!tunnel) {
     return null
   }
   const credentials = await issueSourceCredentials(purpose, {
-    issueSource: () => createWHEPSourceToken(device, tunnel),
+    issueSource: () => createWHEPSourceToken(device, tunnel, signal),
     issueDestination: async () => mediaMTXPublisherCredential(device.id),
-    issueTURN: () => turnPayload(device.id),
+    issueTURN: () => turnPayload(device.id, signal),
   })
   const base = publicUrl(tunnel)
   if (!base) {

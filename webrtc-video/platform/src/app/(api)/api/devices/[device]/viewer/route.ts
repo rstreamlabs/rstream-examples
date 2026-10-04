@@ -20,7 +20,7 @@ const POST = withError(
     const distribution = viewerDistributionPreferenceSchema.parse(
       request.nextUrl.searchParams.get("distribution") ?? undefined,
     )
-    const payload = await viewerPayload(device, distribution)
+    const payload = await viewerPayload(device, distribution, request.signal)
     if (!payload) {
       throw new HTTPError(409, "Device is offline")
     }

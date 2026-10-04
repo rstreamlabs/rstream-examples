@@ -8,7 +8,13 @@ import {
   randomBytes,
   sign,
 } from "node:crypto"
-import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs"
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+  rmSync,
+} from "node:fs"
 import { createServer } from "node:net"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
@@ -45,6 +51,9 @@ let started = false,
   baseEnvironment
 const privateKey = generateKeyPairSync("ec", { namedCurve: "secp521r1" })
   .privateKey.export({ type: "pkcs8", format: "der" })
+  .toString("hex")
+const turnPublicKey = generateKeyPairSync("ec", { namedCurve: "secp521r1" })
+  .publicKey.export({ type: "spki", format: "der" })
   .toString("hex")
 async function stop() {
   if (!child) return
@@ -173,6 +182,8 @@ try {
     DEVICE_INVENTORY_MODE: "managed",
     DEVICE_DISCOVERY_HISTORY_ENABLED: "true",
     RSTREAM_CLIENT_ID: "qualification",
+    RSTREAM_API_URL: "https://control.qualification.invalid",
+    RSTREAM_TURN_KEYRING_BASE_URL: "https://control.qualification.invalid",
     RSTREAM_CLIENT_SECRET: privateKey,
     RSTREAM_PROJECT_ENDPOINT: "",
     RSTREAM_PROJECT_ID: "qualification-project",
@@ -204,13 +215,20 @@ try {
     { input: sql, stdio: ["pipe", "pipe", "pipe"] },
   )
   const inventoryPath = join(runtime, "inventory.json")
+  const callsPath = join(runtime, "upstream-calls.log")
+  const resetCalls = () => writeFileSync(callsPath, "")
+  const upstreamCalls = () =>
+    readFileSync(callsPath, "utf8").trim().split("\n").filter(Boolean).sort()
+  resetCalls()
   const setInventory = (value) =>
     writeFileSync(inventoryPath, JSON.stringify(value))
   setInventory([])
   writeFileSync(
     join(runtime, "upstreams.mjs"),
-    `import { readFileSync } from 'node:fs';
+    `import { readFileSync, appendFileSync } from 'node:fs';
  const inventoryPath=${JSON.stringify(inventoryPath)};
+ const callsPath=${JSON.stringify(callsPath)};
+ const count=kind=>appendFileSync(callsPath,kind+'\\n');
  const original=globalThis.fetch.bind(globalThis);globalThis.fetch=async(input,init)=>{
  const request=new Request(input,init),url=new URL(request.url);
  if(url.hostname==='api.github.com'){
@@ -218,9 +236,24 @@ try {
   return Response.json({state:actor==='outsider'?'pending':'active',organization:{id:42,login:'acme'},user:{id:actor==='alice'?7:actor==='bob'?8:9}});
  }
  if(url.hostname==='engine.qualification.invalid'){
+  const filters=JSON.parse(url.searchParams.get('params')??'{}').filters;
+  const distributor=filters?.name==='qualification-media';
+  count(distributor?'distribution':'inventory');
   const inventory=JSON.parse(readFileSync(inventoryPath,'utf8'));
   if(inventory.error)throw new Error('simulated engine outage');
+  if(distributor)return Response.json(inventory.length?[{id:'distribution-tunnel',client_id:'qualification-distributor',project_id:'qualification-project',name:'qualification-media',host:'distribution.qualification.invalid',status:'online',protocol:'http',publish:true,token_auth:true}]:[]);
   return Response.json(inventory);
+ }
+ if(url.hostname==='control.qualification.invalid'){
+  if(url.pathname==='/api/projects/tunnels/resolve/qualification-endpoint'){
+   count('project');
+   return Response.json({id:'qualification-project',workspaceId:'qualification',name:'Qualification',endpoint:'qualification-endpoint',url:'engine.qualification.invalid',domain:'engine.qualification.invalid',enginePort:443,turnDomain:'turn.qualification.invalid',turnRealm:'qualification',turnPort:3478,turnsPort:5349,status:'active',routing:'regional',provider:'other',plan:'pro',deployment:'shared'});
+  }
+  if(url.pathname==='/keyrings/turn/qualification.spki.der.hex'){
+   count('keyring');
+   return new Response(${JSON.stringify(turnPublicKey)});
+  }
+  throw new Error('Unexpected control-plane route');
  }
  if(url.hostname==='playback.qualification.invalid'){
   const token=request.headers.get('authorization')?.replace(/^Bearer /,'');
@@ -636,6 +669,7 @@ try {
     },
   }
   baseEnvironment.DEVICE_INVENTORY_MODE = "discovered"
+  baseEnvironment.RSTREAM_PROJECT_ENDPOINT = "qualification-endpoint"
   setInventory([discoveryTunnel])
   origin = await start("organization")
   const discovered = await request(origin, "alice", "/api/devices")
@@ -694,6 +728,7 @@ try {
   async function resolveDiscoveredSource(
     path = `devices/${discoveryID}`,
     signedPath = path,
+    purpose = "signaling",
   ) {
     const header = Buffer.from(
       JSON.stringify({
@@ -710,7 +745,7 @@ try {
         iss: "rstream-video-distributor",
         sub: "qualification",
         path: signedPath,
-        purpose: "signaling",
+        purpose,
         iat: now,
         nbf: now - 5,
         exp: now + 20,
@@ -733,7 +768,7 @@ try {
         Authorization: authorization,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ path, purpose: "signaling" }),
+      body: JSON.stringify({ path, purpose }),
       signal: AbortSignal.timeout(10000),
     })
     return {
@@ -741,8 +776,42 @@ try {
       body: response.status === 204 ? null : await response.json(),
     }
   }
+  resetCalls()
   const resolvedSource = await resolveDiscoveredSource()
   assert.equal(resolvedSource.status, 200)
+  assert.deepEqual(
+    upstreamCalls(),
+    ["inventory", "project"],
+    "Signaling resolves the project and live source once, without TURN",
+  )
+  for (let attempt = 0; attempt < 2; attempt++) {
+    resetCalls()
+    const session = await resolveDiscoveredSource(
+      undefined,
+      undefined,
+      "session",
+    )
+    assert.equal(session.status, 200)
+    assert.equal(session.body.iceServers.length, 1)
+    assert.deepEqual(
+      upstreamCalls(),
+      ["inventory", "keyring", "project"],
+      "Each source session rechecks live inventory and resolves its project exactly once",
+    )
+    resetCalls()
+    const viewer = await request(
+      origin,
+      "alice",
+      `/api/devices/${discoveryID}/viewer`,
+      {},
+    )
+    assert.equal(viewer.status, 200)
+    assert.deepEqual(
+      upstreamCalls(),
+      ["distribution", "inventory", "keyring", "project"],
+      "Each viewer rechecks source and distributor inventory while resolving its project exactly once",
+    )
+  }
   const sourceURL = new URL(resolvedSource.body.url)
   assert.equal(sourceURL.pathname, "/whep")
   const sourceClaims = JSON.stringify(

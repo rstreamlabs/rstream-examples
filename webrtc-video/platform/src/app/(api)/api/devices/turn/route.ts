@@ -5,7 +5,7 @@ import { withError } from "@/lib/error"
 
 const POST = withError(async (request: NextRequest) => {
   const device = await requireDevice(request)
-  const turn = await turnPayload(device.id)
+  const turn = await turnPayload(device.id, request.signal)
   return Response.json(turn, { status: 200 })
 })
 

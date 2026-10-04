@@ -437,7 +437,7 @@ async function qualifyPlayback() {
       distribution,
       startup: viewers.map(({ actor, startup }) => ({ actor, ...startup })),
       startupScope:
-        "Authenticated dashboard navigation; membership and inventory caches already warm; producer process ready; source selected low; OAuth excluded",
+        "Authenticated dashboard navigation after previous membership/inventory requests; live inventory is read again for each viewer; producer process ready; source selected low; OAuth excluded",
       viewers: await measure(viewers),
     }
     const quality = await request("alice", `/api/devices/${deviceID}/quality`)

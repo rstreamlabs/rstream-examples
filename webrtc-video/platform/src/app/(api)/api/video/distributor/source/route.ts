@@ -32,7 +32,7 @@ const POST = withError(async (request: NextRequest) => {
   if (!device) {
     throw new HTTPError(404, "Device not found.")
   }
-  const payload = await mediaMTXSourcePayload(device, purpose)
+  const payload = await mediaMTXSourcePayload(device, purpose, request.signal)
   if (!payload) {
     throw new HTTPError(409, "Device is offline.")
   }

@@ -16,6 +16,26 @@ export type PlatformRstreamOptions = {
   projectEndpoint?: string
 }
 
+// A request's AbortSignal is its lifetime/identity, not a cache key shared by
+// users or devices. Concurrent credential branches reuse project resolution;
+// another request gets a fresh client and a fresh control-plane lookup.
+export function requestScopedClient<T>(
+  create: (signal?: AbortSignal) => Promise<T>,
+) {
+  const requests = new WeakMap<AbortSignal, Promise<T>>()
+  return async (signal?: AbortSignal): Promise<T> => {
+    signal?.throwIfAborted()
+    let client = signal ? requests.get(signal) : undefined
+    if (!client) {
+      client = create(signal)
+      if (signal) requests.set(signal, client)
+    }
+    const resolved = await client
+    signal?.throwIfAborted()
+    return resolved
+  }
+}
+
 // The SDK accepts fetch injection on its control-plane client. Buffer only a
 // bounded body while the abort deadline is active, including stalled bodies.
 export function boundedFetch(

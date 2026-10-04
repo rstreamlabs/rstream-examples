@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "scope": "Authenticated organization/discovered dashboard, production Next.js, real rstream producer tunnel, adaptive MediaMTX 1.21.1 and native headless Chromium on macOS. Membership and inventory caches warm. Producer process ready with low source preset. GitHub membership is a fixture; OAuth and physical capture/display are excluded.",
+  "scope": "Authenticated organization/discovered dashboard, production Next.js, real rstream producer tunnel, adaptive MediaMTX 1.21.1 and native headless Chromium on macOS. Membership and inventory requests previously exercised; live inventory is still read for every protected request. Producer process ready with low source preset. GitHub membership is a fixture; OAuth and physical capture/display are excluded.",
   "producerImage": "sha256:b80c0841d31e3321ae60c0925c0416008a850d8c755288aa4f50440b4e5ad5e4",
   "distributorImage": "sha256:68a7b830f07df9aeb90251bac262ebace14aa0525b6e57dca81755a1f25f058a",
   "attempts": [

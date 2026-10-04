@@ -79,6 +79,13 @@ viewer feedback terminates at MediaMTX and cannot make one constrained viewer
 lower the shared encoder target. Producer OpenMetrics describe the first leg,
 while MediaMTX and browser telemetry describe the second.
 
+Viewer and source authorization reuse one rstream project resolution within
+each HTTP request. A discovered source's live, validated tunnel snapshot is
+reused while issuing that request's credentials; each subsequent request reads
+live inventory again. Client cancellation propagates through project, inventory
+and TURN-key requests. This avoids repeated setup calls without caching access
+decisions or short-lived credentials between requests.
+
 ## Stack
 
 - Next.js App Router
@@ -679,8 +686,9 @@ navigation-to-first-presentation and authorization-to-first-presentation timings
 with the authorization response and WHEP/peer milestones. A one-shot video frame
 callback must observe exactly the first presented frame; missing evidence or a
 retried startup fails the measurement. These timings cover an authenticated
-dashboard opening with an already running producer and warm membership/inventory
-caches, not OAuth sign-in or device process startup. The expected display time is
+dashboard opening with an already running producer after previous membership
+and inventory requests, not OAuth sign-in or device process startup. Every
+viewer request still reads live inventory. The expected display time is
 a browser compositor estimate, not a physical display measurement.
 To exercise discovery with the
 adaptive MediaMTX adapter, also set `RSTREAM_DISCOVERY_DISTRIBUTOR=mediamtx`.

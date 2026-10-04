@@ -156,11 +156,31 @@ valid: 1016.8ms from navigation and 703.3ms from authorization request, includin
 540.1ms to receive and parse authorization. The three observed authorization
 durations are 348.0–590.5ms. The production Next.js build and all 183 platform
 tests pass; membership is a fixture, while the source tunnel, routes, database,
-MediaMTX and media are real. These are warm membership/inventory caches and an
-already running producer, not OAuth or process boot. Authorization/source
+MediaMTX and media are real. Membership and inventory requests have already
+been exercised, but inventory is still fetched live for each protected request;
+the earlier "warm inventory cache" label was imprecise. The producer is already
+running; these are not OAuth or process-boot measurements. Authorization/source
 resolution attribution, exact cold presentation and target-network tests
 remain open. No application caching or media defaults were changed based on
 these small, incomplete timing samples.
+
+Review of the authorization path then identified repeated project resolution
+inside one request and a second inventory read for the same freshly discovered
+source. Project clients are now reused only under that HTTP request's
+AbortSignal; another request resolves again. The source's freshly validated
+tunnel snapshot is reused for credential issuance, whose edge scope still
+requires the exact tunnel ID, online status and labels. Cancellation also
+reaches viewer/source TURN-key fetches. Regression checks count real route
+dependencies: one project resolution and one source-inventory read per source
+request, plus the distinct distributor-inventory read for tunneled MediaMTX
+viewers. Two consecutive requests each refresh those dependencies. The complete
+access suite still rejects nonmembers, conflicting/offline devices, stale
+history and discovery outages. All 187 platform tests and the production build
+pass, including cancellation racing successful shared resolution. The initial
+new integration fixtures incorrectly counted the distinct distributor lookup
+as a redundant source read and then omitted its required client ID; both failed
+attempt logs are retained, and the corrected fixture passes. Timing against
+the real project remains the next validation step.
 
 - GitHub personal ownership or shared organization ownership, with bounded
   membership verification, explicit configuration and existing-device migration.
