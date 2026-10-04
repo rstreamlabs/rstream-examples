@@ -18,7 +18,7 @@ export type PlatformRstreamOptions = {
 
 // A request's AbortSignal is its lifetime/identity, not a cache key shared by
 // users or devices. Concurrent credential branches reuse project resolution;
-// another request gets a fresh client and a fresh control-plane lookup.
+// another request gets a fresh client, optionally joining an in-flight lookup.
 export function requestScopedClient<T>(
   create: (signal?: AbortSignal) => Promise<T>,
 ) {
@@ -33,6 +33,64 @@ export function requestScopedClient<T>(
     const resolved = await client
     signal?.throwIfAborted()
     return resolved
+  }
+}
+
+// Share only work that is still in progress. Each caller owns its subscription;
+// no caller can cancel another, and the last departure cancels upstream work.
+// Results and failures are discarded before subscribers are notified.
+export function coalesceInFlight<T>(load: (signal: AbortSignal) => Promise<T>) {
+  type Flight = {
+    controller: AbortController
+    waiters: number
+    result: Promise<T>
+  }
+  let current: Flight | undefined
+  return async (signal?: AbortSignal): Promise<T> => {
+    signal?.throwIfAborted()
+    if (!current) {
+      const controller = new AbortController()
+      const flight: Flight = {
+        controller,
+        waiters: 0,
+        result: Promise.resolve()
+          .then(() => {
+            controller.signal.throwIfAborted()
+            return load(controller.signal)
+          })
+          .finally(() => {
+            if (current === flight) current = undefined
+          }),
+      }
+      current = flight
+    }
+    const flight = current
+    flight.waiters++
+    return new Promise<T>((resolve, reject) => {
+      let finished = false
+      const finish = (deliver: () => void) => {
+        if (finished) return
+        finished = true
+        signal?.removeEventListener("abort", cancel)
+        flight.waiters--
+        if (flight.waiters === 0 && current === flight) {
+          current = undefined
+          flight.controller.abort()
+        }
+        deliver()
+      }
+      const cancel = () => finish(() => reject(signal!.reason))
+      signal?.addEventListener("abort", cancel, { once: true })
+      flight.result.then(
+        (value) =>
+          finish(() => {
+            if (signal?.aborted) reject(signal.reason)
+            else resolve(value)
+          }),
+        (error: unknown) => finish(() => reject(error)),
+      )
+      if (signal?.aborted) cancel()
+    })
   }
 }
 
@@ -146,27 +204,57 @@ class PlatformRstreamClient extends RstreamTunnelsClient {
   }
 }
 
-export async function createPlatformRstreamClient(
-  options: PlatformRstreamOptions,
-  signal?: AbortSignal,
-) {
-  signal?.throwIfAborted()
-  let project: TunnelsProject | undefined
-  if (options.projectEndpoint) {
-    const controlPlane = new RstreamClient({
-      apiUrl: options.apiUrl,
-      credentials: options.credentials,
-      fetch: boundedFetch(signal),
-    })
-    project = await controlPlane.tunnels.projects.resolveByEndpoint(
-      options.projectEndpoint,
-    )
-    if (options.projectId && options.projectId !== project.id)
+export function platformRstreamClientFactory() {
+  let resolution:
+    | {
+        options: PlatformRstreamOptions
+        resolve: (signal?: AbortSignal) => Promise<TunnelsProject>
+      }
+    | undefined
+  return async (options: PlatformRstreamOptions, signal?: AbortSignal) => {
+    signal?.throwIfAborted()
+    let project: TunnelsProject | undefined
+    if (options.projectEndpoint) {
+      const previous = resolution?.options
+      if (
+        !previous ||
+        previous.apiUrl !== options.apiUrl ||
+        previous.credentials.clientId !== options.credentials.clientId ||
+        previous.credentials.clientSecret !==
+          options.credentials.clientSecret ||
+        previous.projectEndpoint !== options.projectEndpoint
+      ) {
+        // Only one configuration is retained. In-flight requests using an older
+        // configuration keep their own bounded operation and cannot replace it.
+        const snapshot = {
+          ...options,
+          credentials: { ...options.credentials },
+        }
+        resolution = {
+          options: snapshot,
+          resolve: coalesceInFlight(async (sharedSignal) => {
+            const controlPlane = new RstreamClient({
+              apiUrl: snapshot.apiUrl,
+              credentials: snapshot.credentials,
+              fetch: boundedFetch(sharedSignal),
+            })
+            return controlPlane.tunnels.projects.resolveByEndpoint(
+              snapshot.projectEndpoint!,
+            )
+          }),
+        }
+      }
+      project = await resolution!.resolve(signal)
+      signal?.throwIfAborted()
+      if (options.projectId && options.projectId !== project.id)
+        throw new Error(
+          "rstream project ID and endpoint identify different projects",
+        )
+    }
+    if (!options.engine && !project)
       throw new Error(
-        "rstream project ID and endpoint identify different projects",
+        "An rstream engine or managed project endpoint is required",
       )
+    return new PlatformRstreamClient(options, project, signal)
   }
-  if (!options.engine && !project)
-    throw new Error("An rstream engine or managed project endpoint is required")
-  return new PlatformRstreamClient(options, project, signal)
 }

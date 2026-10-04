@@ -42,6 +42,16 @@ on separate hosts to be synchronized. Preserve every attempt, including failures
 report the distribution and sample count, not just the fastest observation.
 No numerical acceptance target has yet been specified.
 
+The dashboard now resolves its project once per HTTP request and reuses the
+discovered source snapshot already validated in that request. Identical project
+lookups can additionally join an in-progress operation across concurrent routes,
+with independent subscriber cancellation and a bounded upstream deadline. No
+completed project result, failure, source inventory or viewer credential is
+cached by this optimization. Unit tests cover cancellation/completion races,
+last-subscriber shutdown, retries and configuration/credential isolation; all
+193 platform unit tests, the production build and full access/database
+integration suite pass. Its effect on actual startup is measured separately.
+
 Remove demonstrated serial waits, unnecessary polling and avoidable key-frame
 delays while retaining authentication, bounded cancellation, one shared upstream
 and demand-driven encoder shutdown. Do not keep capture, encoding or media

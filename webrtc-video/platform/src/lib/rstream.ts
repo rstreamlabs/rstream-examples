@@ -2,14 +2,16 @@ import "server-only"
 
 import { rstreamEnv } from "@/lib/env"
 import {
-  createPlatformRstreamClient,
+  platformRstreamClientFactory,
   requestScopedClient,
 } from "@/lib/bounded-rstream"
+
+const createClient = platformRstreamClientFactory()
 
 export const getRstreamClient = requestScopedClient(
   async (signal?: AbortSignal) => {
     const env = rstreamEnv()
-    return createPlatformRstreamClient(
+    return createClient(
       {
         apiUrl: env.RSTREAM_API_URL ?? "https://rstream.io",
         credentials: {

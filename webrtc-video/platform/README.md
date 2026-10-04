@@ -82,9 +82,13 @@ while MediaMTX and browser telemetry describe the second.
 Viewer and source authorization reuse one rstream project resolution within
 each HTTP request. A discovered source's live, validated tunnel snapshot is
 reused while issuing that request's credentials; each subsequent request reads
-live inventory again. Client cancellation propagates through project, inventory
-and TURN-key requests. This avoids repeated setup calls without caching access
-decisions or short-lived credentials between requests.
+live inventory again. Concurrent requests can join the same in-progress project
+resolution for identical application credentials and project configuration;
+completed results and failures are never reused. Cancellation releases only that
+request's subscription and stops the shared lookup when its final subscriber
+leaves. Client cancellation also propagates through inventory and TURN-key
+requests. This avoids repeated setup calls without caching access decisions or
+short-lived credentials between requests.
 
 ## Stack
 
