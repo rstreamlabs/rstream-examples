@@ -339,6 +339,21 @@ checks, producer/distributor race suites, no-embedded build, separate actual
 MediaMTX 1.21.1 integration, and 92 qualification/sanitizer checks pass. New live
 network qualification is required before attributing improvements to this change.
 
+The [four targeted runs at clean revision `42761dc`](./distributor/qualification/evidence/42761dc/loss-summary.json)
+pass their existing end-to-end gates with identical images. Source/direct
+4 Mbit/s capacity transitions have 2.006/2.606 s of disruption and no steady
+frame drops. Source 60 ms delay / 15 ms jitter / 1% loss has no freezes; the
+direct case has no constrained freezes and 0.536 s during recovery, within the
+existing recovery gate. All restore the 8 Mbit/s target and pass runtime/host
+integrity. Socket limits are restored and owned containers removed.
+These are single runs, not repeat qualification. In particular, median loss
+estimates remain 17.63% directly and 6.53% to the adapter while the qdiscs drop
+about 1.15% of packets. The corrected deterministic defects do not fully explain
+this live discrepancy. Further evidence must distinguish late receipt across
+observation boundaries, retransmission feedback and actual receiver-side drops;
+none is yet established as the cause. This unresolved fidelity issue prevents
+a stabilized result despite the four passing media runs.
+
 The discovery configuration review additionally reproduced valid display names
 being rejected or changed when environment expansion encounters YAML quotes or
 backslashes. A literal scalar preserves those names; the real configuration
