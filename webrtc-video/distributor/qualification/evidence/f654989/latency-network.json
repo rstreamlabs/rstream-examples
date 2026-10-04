@@ -1,0 +1,931 @@
+{
+  "purpose": "Retain all four initial impaired-network pixel-latency trials, including delivery and measurement failures",
+  "revision": "f654989b077f",
+  "phaseSeconds": 30,
+  "warmupSeconds": 20,
+  "recoverySeconds": 45,
+  "repetitions": 1,
+  "passed": false,
+  "stabilized": false,
+  "udpSocketLimitsRestored": true,
+  "ownedContainersRemoved": true,
+  "interpretation": "Thirty-second measurement phases provide sufficient marker samples across capacity transients; these are not repeats of the earlier fifteen-second series. Direct impairment retains two transition freezes totaling 0.674 s and fails the unchanged 2% phase gate. Source capacity rejects a 200.213 ms reversal in a checksum-valid pixel timestamp while RTP and media time advance. The older timestamp exactly matches a previously sampled marker. Concealment or frame/pixel association requires investigation; do not classify this as a clock jump or publish its latency distribution as valid. Source impairment and direct capacity pass. Distributions sample newly presented frames and do not bound image age during freezes.",
+  "cases": [
+    {
+      "case": "direct-impairment",
+      "latencySHA256": "1223c9c173f173db3270561e5c7e559f85fb6404061af87b4b369758367105b5",
+      "samplesSHA256": "87d0162330c4f2cd2f3231fe2f98a7bb53c7a5bc594e338a71780e9f4bb76493",
+      "latency": {
+        "measurementValid": true,
+        "scope": "Raw-frame marker before encoding to expected browser composition on a shared Linux host clock; excludes physical exposure and display scanout.",
+        "gates": {
+          "sharedHostClock": true,
+          "enoughSamples": true,
+          "clockAgreement": true,
+          "validTimestamps": true,
+          "monotonicSource": true,
+          "markersReadable": true,
+          "noOmittedSamples": true
+        },
+        "samples": 591,
+        "rejected": 0,
+        "omitted": 0,
+        "malformed": 0,
+        "decodedMarkerFraction": 1,
+        "maximumClockOffsetMilliseconds": 0.89990234375,
+        "maximumProbeMilliseconds": 3.199999988079071,
+        "latencyMilliseconds": {
+          "minimum": 19.31982421875,
+          "median": 51.177978515625,
+          "p95": 106.5859375,
+          "p99": 139.673828125,
+          "maximum": 140.458740234375
+        },
+        "phases": {
+          "warmup": {
+            "measurementValid": true,
+            "scope": "Raw-frame marker before encoding to expected browser composition on a shared Linux host clock; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 90,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "maximumClockOffsetMilliseconds": 0.89990234375,
+            "maximumProbeMilliseconds": 2.800000011920929,
+            "latencyMilliseconds": {
+              "minimum": 35.364990234375,
+              "median": 41.1669921875,
+              "p95": 42.708984375,
+              "p99": 42.8779296875,
+              "maximum": 42.8779296875
+            }
+          },
+          "baseline": {
+            "measurementValid": true,
+            "scope": "Raw-frame marker before encoding to expected browser composition on a shared Linux host clock; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 135,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "maximumClockOffsetMilliseconds": 0.60009765625,
+            "maximumProbeMilliseconds": 2.4000000059604645,
+            "latencyMilliseconds": {
+              "minimum": 31.673828125,
+              "median": 39.85400390625,
+              "p95": 41.328857421875,
+              "p99": 41.52001953125,
+              "maximum": 41.597900390625
+            }
+          },
+          "viewer-network": {
+            "measurementValid": true,
+            "scope": "Raw-frame marker before encoding to expected browser composition on a shared Linux host clock; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 128,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "maximumClockOffsetMilliseconds": 0.5,
+            "maximumProbeMilliseconds": 2.5999999940395355,
+            "latencyMilliseconds": {
+              "minimum": 101.873779296875,
+              "median": 106.057861328125,
+              "p95": 106.970947265625,
+              "p99": 140.14892578125,
+              "maximum": 140.31884765625
+            }
+          },
+          "recovery": {
+            "measurementValid": true,
+            "scope": "Raw-frame marker before encoding to expected browser composition on a shared Linux host clock; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 199,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "maximumClockOffsetMilliseconds": 0.60009765625,
+            "maximumProbeMilliseconds": 3.199999988079071,
+            "latencyMilliseconds": {
+              "minimum": 19.3369140625,
+              "median": 53.186767578125,
+              "p95": 55.121826171875,
+              "p99": 55.272705078125,
+              "maximum": 55.44189453125
+            }
+          }
+        }
+      },
+      "resultSHA256": "c7b755379f5a2ab7820fa464a3f20d53f1586e041e3bcb62534bf3ee2e96f22e",
+      "passed": false,
+      "gates": {
+        "latencyMeasurement": true,
+        "media": true,
+        "playback": false,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": false,
+        "sourceTargetRecovery": true
+      },
+      "revision": "f654989b077ffb9e801c4e4a145fa22c100ab7e6",
+      "workingTreeDirty": false,
+      "profile": {
+        "edgeAuthentication": true,
+        "edgeCredentialLifetimeSeconds": 365,
+        "warmupSeconds": 20,
+        "phaseSeconds": 30,
+        "recoverySeconds": 45,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "51e66e0e8d9365db8e9fff3a73ceec025c394949646786389a2356c7aef812e5",
+        "latencyProbe": true,
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": true,
+          "capacityKbps": 0,
+          "delayMilliseconds": 60,
+          "jitterMilliseconds": 15,
+          "lossPercent": 1,
+          "queuePackets": 256
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "images": {
+        "producer": "sha256:e60dba3c967d4df643eb2bf764399dffcbfe4c4c802a1dd0aa5d3a3011de1543",
+        "distributor": null,
+        "browser": "sha256:f545ca856d35700757472391a263cfa96dc8243c9cbe19c87905751318fccae4"
+      },
+      "network": {
+        "enabled": true,
+        "scope": "producer-to-browser",
+        "capacityKbps": 0,
+        "delayMilliseconds": 60,
+        "jitterMilliseconds": 15,
+        "lossPercent": 1,
+        "queuePackets": 256,
+        "nackCountDelta": 2959,
+        "packetsLostNetChange": 292,
+        "framesDecodedDelta": 878,
+        "framesDroppedDelta": 0,
+        "freezeCountDelta": 2,
+        "freezeDurationDeltaSeconds": 0.674,
+        "baselineFreezeCountDelta": 0,
+        "baselineFreezeDurationDeltaSeconds": 0,
+        "recoveryFramesDecodedDelta": 1300,
+        "recoveryFreezeCountDelta": 0,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyStateFramesDecodedDelta": 787,
+        "steadyStateFramesDroppedDelta": 0,
+        "steadyStateFreezeCountDelta": 0,
+        "steadyStateFreezeDurationDeltaSeconds": 0,
+        "steadyRecoveryFreezeCountDelta": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "freezeRatio": 0.02246666666666667,
+        "frameDropRatio": 0,
+        "steadyStateFrameDropRatio": 0,
+        "capacityTransitionFramesDropped": 0,
+        "capacityTransitionDroppedFrameDurationSeconds": 0,
+        "capacityTransitionDisruptionSeconds": 0.674,
+        "recoveryFreezeRatio": 0,
+        "phase": "viewer-network"
+      },
+      "qdisc": {
+        "packets": 54202,
+        "drops": 572
+      }
+    },
+    {
+      "case": "source-capacity",
+      "latencySHA256": "ecacb891c3a0c274c4df6ecc0704ae6bccc247606d35fe55c93385888b2c504b",
+      "samplesSHA256": "a55ccc817e136264164b1df4ab660af589a79cbd17be3f2b2db190dcc9a1e19e",
+      "latency": {
+        "measurementValid": false,
+        "scope": "Raw-frame marker before encoding to expected browser composition on a shared Linux host clock; excludes physical exposure and display scanout.",
+        "gates": {
+          "sharedHostClock": true,
+          "enoughSamples": true,
+          "clockAgreement": true,
+          "validTimestamps": true,
+          "monotonicSource": false,
+          "markersReadable": true,
+          "noOmittedSamples": true
+        },
+        "samples": 589,
+        "rejected": 0,
+        "omitted": 0,
+        "malformed": 0,
+        "decodedMarkerFraction": 1,
+        "maximumClockOffsetMilliseconds": 1.099853515625,
+        "maximumProbeMilliseconds": 24.099999994039536,
+        "latencyMilliseconds": {
+          "minimum": 29.409912109375,
+          "median": 57.072998046875,
+          "p95": 92.844970703125,
+          "p99": 577.8818359375,
+          "maximum": 2210.883056640625
+        },
+        "phases": {
+          "warmup": {
+            "measurementValid": true,
+            "scope": "Raw-frame marker before encoding to expected browser composition on a shared Linux host clock; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 91,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "maximumClockOffsetMilliseconds": 1.099853515625,
+            "maximumProbeMilliseconds": 2.0999999940395355,
+            "latencyMilliseconds": {
+              "minimum": 29.409912109375,
+              "median": 46.380126953125,
+              "p95": 47.15185546875,
+              "p99": 47.226806640625,
+              "maximum": 47.226806640625
+            }
+          },
+          "baseline": {
+            "measurementValid": true,
+            "scope": "Raw-frame marker before encoding to expected browser composition on a shared Linux host clock; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 134,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "maximumClockOffsetMilliseconds": 1,
+            "maximumProbeMilliseconds": 2.2000000178813934,
+            "latencyMilliseconds": {
+              "minimum": 37.056884765625,
+              "median": 44.112060546875,
+              "p95": 45.489990234375,
+              "p99": 46.26416015625,
+              "maximum": 46.39208984375
+            }
+          },
+          "source-network": {
+            "measurementValid": false,
+            "scope": "Raw-frame marker before encoding to expected browser composition on a shared Linux host clock; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": false,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 125,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "maximumClockOffsetMilliseconds": 0.900146484375,
+            "maximumProbeMilliseconds": 24.099999994039536,
+            "latencyMilliseconds": {
+              "minimum": 42.60791015625,
+              "median": 76.44677734375,
+              "p95": 193.989990234375,
+              "p99": 1460.670166015625,
+              "maximum": 2210.883056640625
+            }
+          },
+          "recovery": {
+            "measurementValid": true,
+            "scope": "Raw-frame marker before encoding to expected browser composition on a shared Linux host clock; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 200,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "maximumClockOffsetMilliseconds": 1,
+            "maximumProbeMilliseconds": 2.4000000059604645,
+            "latencyMilliseconds": {
+              "minimum": 39.7880859375,
+              "median": 58.097900390625,
+              "p95": 92.474853515625,
+              "p99": 93.321044921875,
+              "maximum": 93.407958984375
+            }
+          }
+        }
+      },
+      "passed": false,
+      "resultUnavailable": "Collector marked latency invalid and exited before the runner aggregated final media/runtime/resource gates; those gates are not inferred as passing.",
+      "failureSHA256": "64d390381a5cb7553a75996b5e206a16e009170fdde687b1cfba7aa5c92f95a4",
+      "sourceMarkerRegressions": [
+        {
+          "previous": {
+            "sourceUnixMilliseconds": 1791081578469.63,
+            "expectedDisplayUnixMilliseconds": 1791081579930.3,
+            "latencyMilliseconds": 1460.670166015625,
+            "callbackLatenessMilliseconds": 0,
+            "sampledClockOffsetMilliseconds": 0.400146484375,
+            "rtpTimestamp": 1614657765,
+            "mediaTimeSeconds": 54.887,
+            "width": 1280,
+            "height": 720,
+            "minimumContrast": 255
+          },
+          "current": {
+            "sourceUnixMilliseconds": 1791081578269.417,
+            "expectedDisplayUnixMilliseconds": 1791081580480.3,
+            "latencyMilliseconds": 2210.883056640625,
+            "callbackLatenessMilliseconds": 0,
+            "sampledClockOffsetMilliseconds": 0.800048828125,
+            "rtpTimestamp": 1614702765,
+            "mediaTimeSeconds": 55.388,
+            "width": 1280,
+            "height": 720,
+            "minimumContrast": 251
+          }
+        }
+      ]
+    },
+    {
+      "case": "source-impairment",
+      "latencySHA256": "ec43296efea7b6e9651030505e753516febe4b5b5d3c132b63131204b5557a72",
+      "samplesSHA256": "79163d9afc4f30180aea208b9345d59c8bd81540a0d9d4230170afa7f1c70d29",
+      "latency": {
+        "measurementValid": true,
+        "scope": "Raw-frame marker before encoding to expected browser composition on a shared Linux host clock; excludes physical exposure and display scanout.",
+        "gates": {
+          "sharedHostClock": true,
+          "enoughSamples": true,
+          "clockAgreement": true,
+          "validTimestamps": true,
+          "monotonicSource": true,
+          "markersReadable": true,
+          "noOmittedSamples": true
+        },
+        "samples": 599,
+        "rejected": 0,
+        "omitted": 0,
+        "malformed": 0,
+        "decodedMarkerFraction": 1,
+        "maximumClockOffsetMilliseconds": 1.699951171875,
+        "maximumProbeMilliseconds": 2.5,
+        "latencyMilliseconds": {
+          "minimum": 24.387939453125,
+          "median": 45.31298828125,
+          "p95": 127.343994140625,
+          "p99": 127.81005859375,
+          "maximum": 211.5419921875
+        },
+        "phases": {
+          "warmup": {
+            "measurementValid": true,
+            "scope": "Raw-frame marker before encoding to expected browser composition on a shared Linux host clock; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 90,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "maximumClockOffsetMilliseconds": 1.699951171875,
+            "maximumProbeMilliseconds": 2.2000000178813934,
+            "latencyMilliseconds": {
+              "minimum": 28.927978515625,
+              "median": 46.35595703125,
+              "p95": 47.10107421875,
+              "p99": 47.223876953125,
+              "maximum": 47.223876953125
+            }
+          },
+          "baseline": {
+            "measurementValid": true,
+            "scope": "Raw-frame marker before encoding to expected browser composition on a shared Linux host clock; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 136,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "maximumClockOffsetMilliseconds": 1.60009765625,
+            "maximumProbeMilliseconds": 2.4000000059604645,
+            "latencyMilliseconds": {
+              "minimum": 40.720947265625,
+              "median": 45.02099609375,
+              "p95": 46.447021484375,
+              "p99": 46.673095703125,
+              "maximum": 46.697998046875
+            }
+          },
+          "source-network": {
+            "measurementValid": true,
+            "scope": "Raw-frame marker before encoding to expected browser composition on a shared Linux host clock; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 134,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "maximumClockOffsetMilliseconds": 1,
+            "maximumProbeMilliseconds": 2.2000000178813934,
+            "latencyMilliseconds": {
+              "minimum": 92.35302734375,
+              "median": 126.89404296875,
+              "p95": 127.748046875,
+              "p99": 127.93798828125,
+              "maximum": 144.253173828125
+            }
+          },
+          "recovery": {
+            "measurementValid": true,
+            "scope": "Raw-frame marker before encoding to expected browser composition on a shared Linux host clock; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 201,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "maximumClockOffsetMilliseconds": 1,
+            "maximumProbeMilliseconds": 2.4000000059604645,
+            "latencyMilliseconds": {
+              "minimum": 24.387939453125,
+              "median": 42.06689453125,
+              "p95": 126.18994140625,
+              "p99": 126.785888671875,
+              "maximum": 126.951904296875
+            }
+          }
+        }
+      },
+      "resultSHA256": "cbb3e4ff54da09e71fead49dd512767ff48aa36d0ad8feeba7aa1d23f1182ef4",
+      "passed": true,
+      "gates": {
+        "latencyMeasurement": true,
+        "media": true,
+        "playback": true,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": true,
+        "sourceTargetRecovery": true
+      },
+      "revision": "f654989b077ffb9e801c4e4a145fa22c100ab7e6",
+      "workingTreeDirty": false,
+      "profile": {
+        "edgeAuthentication": true,
+        "edgeCredentialLifetimeSeconds": 365,
+        "warmupSeconds": 20,
+        "phaseSeconds": 30,
+        "recoverySeconds": 45,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "51e66e0e8d9365db8e9fff3a73ceec025c394949646786389a2356c7aef812e5",
+        "latencyProbe": true,
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        },
+        "sourceNetwork": {
+          "enabled": true,
+          "capacityKbps": 0,
+          "delayMilliseconds": 60,
+          "jitterMilliseconds": 15,
+          "lossPercent": 1,
+          "queuePackets": 256
+        }
+      },
+      "images": {
+        "producer": "sha256:e60dba3c967d4df643eb2bf764399dffcbfe4c4c802a1dd0aa5d3a3011de1543",
+        "distributor": "sha256:e111a71c8fe758595044088198d95a29b0348e4fa91284cfc55764f91bfcff42",
+        "browser": "sha256:f545ca856d35700757472391a263cfa96dc8243c9cbe19c87905751318fccae4"
+      },
+      "network": {
+        "enabled": true,
+        "scope": "producer-to-adapter",
+        "capacityKbps": 0,
+        "delayMilliseconds": 60,
+        "jitterMilliseconds": 15,
+        "lossPercent": 1,
+        "queuePackets": 256,
+        "twccFeedbackPacketsDelta": 303,
+        "adaptiveBitrateUpdatesDelta": 5,
+        "pacerSentRetransmissionDelta": 279,
+        "pacerSentFECDelta": 3926,
+        "framesDecodedDelta": 877,
+        "framesDroppedDelta": 0,
+        "freezeCountDelta": 0,
+        "freezeDurationDeltaSeconds": 0,
+        "baselineFreezeCountDelta": 0,
+        "baselineFreezeDurationDeltaSeconds": 0,
+        "recoveryFramesDecodedDelta": 1304,
+        "recoveryFreezeCountDelta": 0,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyStateFramesDecodedDelta": 786,
+        "steadyStateFramesDroppedDelta": 0,
+        "steadyStateFreezeCountDelta": 0,
+        "steadyStateFreezeDurationDeltaSeconds": 0,
+        "steadyRecoveryFreezeCountDelta": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "freezeRatio": 0,
+        "frameDropRatio": 0,
+        "steadyStateFrameDropRatio": 0,
+        "capacityTransitionFramesDropped": 0,
+        "capacityTransitionDroppedFrameDurationSeconds": 0,
+        "capacityTransitionDisruptionSeconds": 0,
+        "recoveryFreezeRatio": 0,
+        "phase": "source-network"
+      },
+      "qdisc": {
+        "packets": 23597,
+        "drops": 247
+      }
+    },
+    {
+      "case": "direct-capacity",
+      "latencySHA256": "e3344cc36772da7e361e1654b16f1a851b0c23efd675b12f539069e391ed70af",
+      "samplesSHA256": "ba04ad4f0fc12794335f11978b97fad4fb60372826f835a7e2a197e10c5bcf08",
+      "latency": {
+        "measurementValid": true,
+        "scope": "Raw-frame marker before encoding to expected browser composition on a shared Linux host clock; excludes physical exposure and display scanout.",
+        "gates": {
+          "sharedHostClock": true,
+          "enoughSamples": true,
+          "clockAgreement": true,
+          "validTimestamps": true,
+          "monotonicSource": true,
+          "markersReadable": true,
+          "noOmittedSamples": true
+        },
+        "samples": 574,
+        "rejected": 0,
+        "omitted": 0,
+        "malformed": 0,
+        "decodedMarkerFraction": 1,
+        "maximumClockOffsetMilliseconds": 1.099853515625,
+        "maximumProbeMilliseconds": 3,
+        "latencyMilliseconds": {
+          "minimum": 12.421875,
+          "median": 56.90283203125,
+          "p95": 92.841796875,
+          "p99": 177.6259765625,
+          "maximum": 2077.6201171875
+        },
+        "phases": {
+          "warmup": {
+            "measurementValid": true,
+            "scope": "Raw-frame marker before encoding to expected browser composition on a shared Linux host clock; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 89,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "maximumClockOffsetMilliseconds": 1,
+            "maximumProbeMilliseconds": 2.2000000178813934,
+            "latencyMilliseconds": {
+              "minimum": 12.421875,
+              "median": 45.25,
+              "p95": 46.28076171875,
+              "p99": 46.541015625,
+              "maximum": 46.541015625
+            }
+          },
+          "baseline": {
+            "measurementValid": true,
+            "scope": "Raw-frame marker before encoding to expected browser composition on a shared Linux host clock; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 133,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "maximumClockOffsetMilliseconds": 1.099853515625,
+            "maximumProbeMilliseconds": 2.5,
+            "latencyMilliseconds": {
+              "minimum": 36.89501953125,
+              "median": 44.385009765625,
+              "p95": 45.469970703125,
+              "p99": 45.751953125,
+              "maximum": 45.77001953125
+            }
+          },
+          "viewer-network": {
+            "measurementValid": true,
+            "scope": "Raw-frame marker before encoding to expected browser composition on a shared Linux host clock; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 119,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "maximumClockOffsetMilliseconds": 1.099853515625,
+            "maximumProbeMilliseconds": 2.300000011920929,
+            "latencyMilliseconds": {
+              "minimum": 44.362060546875,
+              "median": 60.345947265625,
+              "p95": 93.866943359375,
+              "p99": 427.666015625,
+              "maximum": 2077.6201171875
+            }
+          },
+          "recovery": {
+            "measurementValid": true,
+            "scope": "Raw-frame marker before encoding to expected browser composition on a shared Linux host clock; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 196,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "maximumClockOffsetMilliseconds": 1.099853515625,
+            "maximumProbeMilliseconds": 2.4000000059604645,
+            "latencyMilliseconds": {
+              "minimum": 23.1298828125,
+              "median": 58.262939453125,
+              "p95": 92.468017578125,
+              "p99": 93.260986328125,
+              "maximum": 93.2890625
+            }
+          }
+        }
+      },
+      "resultSHA256": "47070f7a161bb018b54238c34e86d4dc5081907206cc7b39abe31eea04d6b96e",
+      "passed": true,
+      "gates": {
+        "latencyMeasurement": true,
+        "media": true,
+        "playback": true,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": true,
+        "sourceTargetRecovery": true
+      },
+      "revision": "f654989b077ffb9e801c4e4a145fa22c100ab7e6",
+      "workingTreeDirty": false,
+      "profile": {
+        "edgeAuthentication": true,
+        "edgeCredentialLifetimeSeconds": 365,
+        "warmupSeconds": 20,
+        "phaseSeconds": 30,
+        "recoverySeconds": 45,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "51e66e0e8d9365db8e9fff3a73ceec025c394949646786389a2356c7aef812e5",
+        "latencyProbe": true,
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": true,
+          "capacityKbps": 4000,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 256
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "images": {
+        "producer": "sha256:e60dba3c967d4df643eb2bf764399dffcbfe4c4c802a1dd0aa5d3a3011de1543",
+        "distributor": null,
+        "browser": "sha256:f545ca856d35700757472391a263cfa96dc8243c9cbe19c87905751318fccae4"
+      },
+      "network": {
+        "enabled": true,
+        "scope": "producer-to-browser",
+        "capacityKbps": 4000,
+        "delayMilliseconds": 0,
+        "jitterMilliseconds": 0,
+        "lossPercent": 0,
+        "queuePackets": 256,
+        "nackCountDelta": 345,
+        "packetsLostNetChange": 678,
+        "framesDecodedDelta": 804,
+        "framesDroppedDelta": 0,
+        "freezeCountDelta": 1,
+        "freezeDurationDeltaSeconds": 2.731,
+        "baselineFreezeCountDelta": 0,
+        "baselineFreezeDurationDeltaSeconds": 0,
+        "recoveryFramesDecodedDelta": 1302,
+        "recoveryFreezeCountDelta": 0,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyStateFramesDecodedDelta": 798,
+        "steadyStateFramesDroppedDelta": 0,
+        "steadyStateFreezeCountDelta": 0,
+        "steadyStateFreezeDurationDeltaSeconds": 0,
+        "steadyRecoveryFreezeCountDelta": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "freezeRatio": 0.09103333333333333,
+        "frameDropRatio": 0,
+        "steadyStateFrameDropRatio": 0,
+        "capacityTransitionFramesDropped": 0,
+        "capacityTransitionDroppedFrameDurationSeconds": 0,
+        "capacityTransitionDisruptionSeconds": 2.731,
+        "recoveryFreezeRatio": 0,
+        "phase": "viewer-network"
+      },
+      "qdisc": {
+        "packets": 17880,
+        "drops": 1038
+      }
+    }
+  ]
+}

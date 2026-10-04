@@ -445,6 +445,18 @@ which is retained as measurement overhead. Production readers do not use it.
 Repeated controlled resource comparisons and impaired-network latency remain
 pending; the earlier direct impairment freeze remains an open delivery failure.
 
+The [four initial impaired-network latency trials](./distributor/qualification/evidence/f654989/latency-network.json)
+retain two passes (source delay/jitter/loss and direct capacity), one direct
+impairment delivery failure (0.674 s transition freezes), and one source-capacity
+measurement failure. These use 30 s phases for sufficient marker samples across
+capacity transients, not the earlier 15 s profile. The source-capacity timestamp
+regresses by 200.213 ms to an earlier checksum-valid marker while RTP/media time
+advance. The cause remains unproven; its latency distribution is invalid, not a
+publishable delay bound. The collector now retains a complete report when marker
+gates fail, allowing the runner to collect teardown/resource/media evidence
+before its unchanged latency gate fails. Frame-latency percentiles must be read
+alongside freeze durations because callbacks sample newly presented frames.
+
 - Compare changes against the current path at equal source content and network
   conditions. Measure time to first frame separately from capture-to-display
   latency, and report transition freezes and recovery time.

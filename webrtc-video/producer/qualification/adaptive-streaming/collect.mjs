@@ -497,10 +497,8 @@ try {
     const report = createLatencyReport(latencySnapshots, latencyClocks, true);
     await writeJSONAtomic(`${outputDirectory}/latency.json`, report);
     latencyReportWritten = true;
-    if (!report.measurementValid)
-      throw new Error(
-        "latency measurement failed its clock, marker or sampling gates",
-      );
+    // Invalid measurements remain a failed gate in the runner's final result.
+    // Finish collection so teardown, network and resource evidence is retained.
   }
 } catch (error) {
   const normalized = redactError(normalizeError(error));

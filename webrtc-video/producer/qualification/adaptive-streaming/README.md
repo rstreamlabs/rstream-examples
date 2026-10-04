@@ -81,6 +81,12 @@ observations remain in `samples.jsonl`. These are measurements from the raw-fram
 stamp to the browser's **expected composition time**, excluding physical camera
 exposure, capture/scaling before the stamp and display scanout. They are not a
 glass-to-glass measurement or proof of latency on a different host/device.
+The distribution samples newly presented frames. It must be read alongside
+frame gaps and freeze durations: an image that remains frozen grows older
+without generating another frame callback. A reported maximum is therefore
+not a bound on the age of the displayed image during a freeze. An invalid
+latency report still allows collection and teardown to finish, then fails the
+runner's final `latencyMeasurement` gate with the other evidence preserved.
 
 `RSTREAM_DISTRIBUTOR_PRODUCER_CONFIG` can select another producer profile. Its
 SHA-256 is recorded in the result. With latency enabled, a custom pipeline must
