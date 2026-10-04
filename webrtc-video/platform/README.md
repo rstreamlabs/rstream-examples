@@ -695,17 +695,26 @@ Optionally run `npx playwright-core install chromium` and set
 `RSTREAM_DISCOVERY_BROWSER=bundled` to use the browser matched to the pinned
 Playwright package, or set it to an explicit Chrome/Chromium executable to
 include direct playback from the discovered producer, decoded 720p frame cadence
-and encoder shutdown after the viewer closes. Browser runs also retain
-navigation-to-first-presentation and authorization-to-first-presentation timings,
-with the authorization response and WHEP/peer milestones. A one-shot video frame
-callback must observe exactly the first presented frame; missing evidence or a
-retried startup fails the measurement. Independent lifecycle/discovery scenarios
+and encoder shutdown after the viewer closes. Browser runs retain the first
+observed video frame callback with the video visible in the viewport, its center
+unobstructed, and the loading overlay absent. The reported time is the later of
+the browser's expected display time and the observation after visibility checks:
+a conservative startup estimate, not an exact physical display measurement.
+Navigation, authorization and WHEP/peer milestones are retained. The historical
+exact-first-submission diagnostic remains separate and requires a callback frame
+counter of one; decoder/compositor batching can leave it unknown even when the
+visible observation is valid. Missing visible evidence or a retried startup
+fails the measurement. Independent lifecycle/discovery scenarios
 still run before that final gate, retaining their results alongside a failed
 startup measurement. These timings cover an authenticated
 dashboard opening with an already running producer after previous membership
 and inventory requests, not OAuth sign-in or device process startup. Every
-viewer request still reads live inventory. The expected display time is
-a browser compositor estimate, not a physical display measurement.
+viewer request still reads live inventory. The check also exercises three
+same-page cycles: selecting an offline history fixture unmounts the player and
+executes its normal WHEP DELETE, then selecting the live source reopens it after
+the encoder has stopped. It records click-to-visible-frame time, deletion and
+encoder release separately. These cycles retain the configured production idle
+grace and check its completion within a 15-second qualification allowance.
 The runtime report retains the actual browser, Playwright and Node.js versions,
 including on failed measurements, so results from an older installed browser
 are not mistaken for the currently pinned browser.
@@ -724,8 +733,8 @@ encoder after the last leaves. Both persistent-history and live-only inventory
 checks still run. GitHub membership remains a fixture. Neither variant forces
 a relay path. First prepare adequate Linux UDP socket limits
 as described in the [distribution prerequisites](../distributor/README.md#technical-qualification).
-Abrupt browser closure can use the producer's bounded ICE recovery grace period
-before it stops the encoder; the result records this elapsed time.
+These graceful UI closures do not measure abrupt browser loss, which can use the
+producer's longer bounded ICE recovery grace period before stopping the encoder.
 
 To additionally exercise full-page viewing in Chromium, Firefox and WebKit:
 

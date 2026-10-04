@@ -332,6 +332,17 @@ async function device(actor = "alice") {
 async function qualifyPlayback() {
   const browserSelection = process.env.RSTREAM_DISCOVERY_BROWSER
   if (!browserSelection) return null
+  // A history-only row exercises the actual device-selection/unmount path.
+  // It has no tunnel and can never grant source access.
+  await db.query(
+    'INSERT INTO discovered_devices ("projectId", "deviceId", name, "tunnelName", "firstSeenAt", "lastSeenAt") VALUES ($1,$2,$3,$4,now(),now())',
+    [
+      baseEnvironment.RSTREAM_PROJECT_ID,
+      randomUUID(),
+      "Offline qualification source",
+      "offline-qualification",
+    ],
+  )
   const { chromium } = require("playwright-core")
   const executablePath =
     browserSelection === "bundled"
@@ -391,7 +402,7 @@ async function qualifyPlayback() {
               video?.readyState >= 2 &&
               video.videoWidth === 1280 &&
               video.videoHeight === 720 &&
-              window.__playbackStartup.snapshot().firstFrame !== null
+              window.__playbackStartup.snapshot().firstVisibleFrame !== null
             )
           },
           undefined,
@@ -475,11 +486,90 @@ async function qualifyPlayback() {
       })
     }
     const observation = {
+      schemaVersion: 2,
       distribution,
       startup: viewers.map(({ actor, startup }) => ({ actor, ...startup })),
       startupScope:
         "Authenticated dashboard navigation after previous membership/inventory requests; live inventory is read again for each viewer; producer process ready; source selected low; OAuth excluded",
       viewers: await measure(viewers),
+    }
+    const closePlayer = async ({ page }) => {
+      await page.evaluate(() => {
+        window.__qualificationClose = { requestedAt: null, result: null }
+        window.addEventListener(
+          "rstream:whep-close",
+          (event) => {
+            const {
+              outcome,
+              status,
+              durationMilliseconds,
+              credentialRefreshFailed,
+              distributor,
+            } = event.detail
+            window.__qualificationClose.result = {
+              outcome,
+              status,
+              durationMilliseconds,
+              credentialRefreshFailed,
+              distributor,
+              observedAt: performance.now(),
+            }
+          },
+          { once: true },
+        )
+      })
+      const button = page.getByRole("button", {
+        name: /^Offline qualification source/,
+      })
+      await button.evaluate((element) =>
+        element.addEventListener(
+          "click",
+          () => {
+            window.__qualificationClose.requestedAt = performance.now()
+          },
+          { capture: true, once: true },
+        ),
+      )
+      await button.click()
+      await page.waitForFunction(
+        () => window.__qualificationClose.result !== null,
+        undefined,
+        { timeout: 8000 },
+      )
+      const closed = await page.evaluate(() => window.__qualificationClose)
+      assert.ok(closed.requestedAt !== null)
+      assert.equal(closed.result.distributor, distribution)
+      assert.equal(closed.result.outcome, "deleted")
+      assert.equal(closed.result.credentialRefreshFailed, false)
+      assert.ok(
+        closed.result.durationMilliseconds <= 6000,
+        "Close must retain the bounded cleanup budget",
+      )
+      await page
+        .locator(".video-player")
+        .waitFor({ state: "detached", timeout: 1000 })
+      return {
+        ...closed.result,
+        selectionToDeletionMilliseconds:
+          closed.result.observedAt - closed.requestedAt,
+      }
+    }
+    const waitForIdleEncoder = async () => {
+      const startedAt = performance.now()
+      await until(
+        "encoder stops after acknowledged player closure",
+        async () => {
+          const state = await request("bob", `/api/devices/${deviceID}/quality`)
+          return state.status === 200 && state.body.activeEncoders === 0
+        },
+        15000,
+      )
+      const observedMilliseconds = performance.now() - startedAt
+      assert.ok(
+        observedMilliseconds < 15000,
+        "Graceful source release exceeds its qualification allowance",
+      )
+      return observedMilliseconds
     }
     const quality = await request("alice", `/api/devices/${deviceID}/quality`)
     assert.equal(quality.status, 200)
@@ -528,7 +618,7 @@ async function qualifyPlayback() {
         (await request("outsider", `/api/devices/${deviceID}/metrics`)).status,
         403,
       )
-      await viewers[0].context.close()
+      observation.firstMemberClosure = await closePlayer(viewers[0])
       await readers(1)
       observation.remainingMember = await measure(viewers.slice(1))
       assert.equal(
@@ -543,10 +633,62 @@ async function qualifyPlayback() {
       observation.sharedQuality = "medium"
       observation.continuesAfterFirstMemberCloses = true
     }
+    const remaining = viewers.at(-1)
+    observation.samePageCycles = []
+    for (let cycle = 0; cycle < 3; cycle++) {
+      const closed = await closePlayer(remaining)
+      const encoderIdleAfterDeletionMilliseconds = await waitForIdleEncoder()
+      const item = {
+        cycle: cycle + 1,
+        closed,
+        encoderIdleAfterDeletionMilliseconds,
+        startup: null,
+      }
+      observation.samePageCycles.push(item)
+      await remaining.page.evaluate(installPlaybackStartupTiming)
+      const button = remaining.page.getByRole("button", {
+        name: /^Discovery source/,
+      })
+      await button.evaluate((element) =>
+        element.addEventListener(
+          "click",
+          () => {
+            window.__playbackStartup.markActivation()
+          },
+          { capture: true, once: true },
+        ),
+      )
+      try {
+        await button.click()
+        await remaining.page.waitForFunction(
+          () => window.__playbackStartup.snapshot().firstVisibleFrame !== null,
+          undefined,
+          { timeout: 45000 },
+        )
+      } finally {
+        item.startup = await remaining.page
+          .evaluate(() => window.__playbackStartup.snapshot())
+          .catch(() => null)
+        json("playback-observation.json", observation)
+      }
+      assert.equal(
+        (await request("bob", `/api/devices/${deviceID}/quality`)).body
+          .activeEncoders,
+        1,
+      )
+    }
+    observation.afterSamePageCycles = await measure([remaining])
+    observation.finalMemberClosure = await closePlayer(remaining)
+    observation.finalEncoderIdleAfterDeletionMilliseconds =
+      await waitForIdleEncoder()
     observation.pageErrors = pageErrors
-    observation.startupMeasurementValid = viewers.every(
-      ({ startup }) => startup?.measurementValid,
-    )
+    observation.startupMeasurementValid =
+      viewers.every(({ startup }) => startup?.visiblePresentationValid) &&
+      observation.samePageCycles.every(
+        ({ startup }) =>
+          startup?.visiblePresentationValid &&
+          startup.activationToVisiblePresentationMilliseconds !== null,
+      )
     json("playback-observation.json", observation)
     assert.equal(pageErrors, 0)
     return observation
@@ -811,7 +953,9 @@ globalThis.fetch=async(input,init)=>{
       const quality = await request("alice", `/api/devices/${deviceID}/quality`)
       return quality.status === 200 && quality.body.activeEncoders === 0
     })
-    playback.encoderStoppedAfterBrowserClosureMilliseconds =
+    // Graceful UI closure and encoder idle are measured before browser cleanup.
+    // This is only a final confirmation, not an abrupt-browser-close measurement.
+    playback.postBrowserCleanupIdleCheckMilliseconds =
       performance.now() - closedAt
     gates[
       distributed
@@ -874,9 +1018,9 @@ globalThis.fetch=async(input,init)=>{
     stage = "first presentation measurement"
     assert.ok(
       playback.startupMeasurementValid,
-      "First presentation must be measured from navigation and authorization",
+      "Visible presentation must be measured from navigation, authorization and same-page activation",
     )
-    gates.firstPresentationMeasurement = true
+    gates.visiblePresentationMeasurement = true
   }
   abort.signal.throwIfAborted()
   result = {

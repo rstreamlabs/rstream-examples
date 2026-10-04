@@ -97,6 +97,15 @@ application Stop/DELETE or evidence of prompt dashboard shutdown; the portable
 explicit-close lifecycle cases remain separate. Repetition and visible-frame
 measurement, including the UI's loading overlay, remain acceptance work.
 
+The next dashboard qualifier separates exact first submission from the first
+observed unobstructed visible frame. It never backdates a delayed callback or an
+image hidden by the loading overlay, and retains the historical counter-based
+diagnostic without reclassifying previous failed trials. All 198 platform unit
+tests pass, including visibility, callback delay, activation ordering and invalid
+sequences. Three real same-page device-selection cycles now measure activation,
+normal player unmount/DELETE and encoder idle separately. Runtime qualification
+of this measurement and lifecycle sequence is pending.
+
 Remove demonstrated serial waits, unnecessary polling and avoidable key-frame
 delays while retaining authentication, bounded cancellation, one shared upstream
 and demand-driven encoder shutdown. Do not keep capture, encoding or media

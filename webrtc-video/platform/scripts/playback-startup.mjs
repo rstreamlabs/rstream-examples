@@ -8,6 +8,9 @@ export function installPlaybackStartupTiming() {
   let video = null
   let callbackID = null
   let firstFrame = null
+  let firstVisibleFrame = null
+  let activationRequestedAtMilliseconds = null
+  let activationMarks = 0
   let supported = null
   let armedAtMilliseconds = null
   let readyStateAtArm = null
@@ -34,6 +37,7 @@ export function installPlaybackStartupTiming() {
   const peerListeners = []
   window.__discoveryPeers = []
   const finite = (value) => (Number.isFinite(value) ? value : null)
+  const installedAtMilliseconds = performance.now()
   performance.mark?.("rstream-startup-probe-installed")
   const classify = (input, init) => {
     try {
@@ -98,6 +102,94 @@ export function installPlaybackStartupTiming() {
       )
     }
   }
+  const visibility = () => {
+    const rect = video.getBoundingClientRect()
+    const center = {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+    }
+    let elementVisible = video.isConnected && rect.width > 0 && rect.height > 0
+    for (
+      let element = video;
+      element && elementVisible;
+      element = element.parentElement
+    ) {
+      const style = window.getComputedStyle(element)
+      if (
+        style.display === "none" ||
+        style.visibility !== "visible" ||
+        Number(style.opacity) === 0
+      )
+        elementVisible = false
+    }
+    const centerInViewport =
+      center.x >= 0 &&
+      center.y >= 0 &&
+      center.x < window.innerWidth &&
+      center.y < window.innerHeight
+    const state = {
+      documentVisible: document.visibilityState === "visible",
+      elementVisible,
+      centerInViewport,
+      centerUnobstructed:
+        centerInViewport &&
+        document.elementFromPoint(center.x, center.y) === video,
+      coveredByStatus: Boolean(
+        video.parentElement?.querySelector(":scope > .absolute"),
+      ),
+      mediaReady:
+        video.readyState >= 2 &&
+        !video.paused &&
+        video.videoWidth > 0 &&
+        video.videoHeight > 0,
+    }
+    return {
+      ...state,
+      visible:
+        state.documentVisible &&
+        state.elementVisible &&
+        state.centerInViewport &&
+        state.centerUnobstructed &&
+        !state.coveredByStatus &&
+        state.mediaReady,
+    }
+  }
+  const validFrame = (frame) =>
+    Boolean(
+      Number.isFinite(frame?.callbackMilliseconds) &&
+      Number.isFinite(frame?.observedAtMilliseconds) &&
+      Number.isFinite(frame?.expectedDisplayMilliseconds) &&
+      frame.width > 0 &&
+      frame.height > 0 &&
+      Number.isInteger(frame.presentedFrames) &&
+      frame.presentedFrames > 0,
+    )
+  const onFrame = (now, metadata) => {
+    callbackID = null
+    if (stopped || firstVisibleFrame) return
+    const frame = {
+      callbackMilliseconds: finite(now),
+      presentationMilliseconds: finite(metadata.presentationTime),
+      expectedDisplayMilliseconds: finite(metadata.expectedDisplayTime),
+      receiveMilliseconds: finite(metadata.receiveTime),
+      mediaTimeSeconds: finite(metadata.mediaTime),
+      width: finite(metadata.width),
+      height: finite(metadata.height),
+      presentedFrames: finite(metadata.presentedFrames),
+      visibility: visibility(),
+      // Read after visibility/layout checks. A delayed callback or a loading
+      // overlay must never produce a timestamp earlier than this observation.
+      observedAtMilliseconds: performance.now(),
+    }
+    if (!firstFrame) {
+      firstFrame = frame
+      performance.mark?.("rstream-startup-first-callback")
+    }
+    if (frame.visibility.visible && validFrame(frame)) {
+      firstVisibleFrame = frame
+      performance.mark?.("rstream-startup-first-visible-callback")
+    } else callbackID = video.requestVideoFrameCallback(onFrame)
+  }
   const observeVideo = () => {
     if (stopped || video) return
     video = document.querySelector(".video-player-picture > video")
@@ -121,22 +213,7 @@ export function installPlaybackStartupTiming() {
       video.addEventListener?.(kind, listener)
       videoListeners.push(() => video.removeEventListener?.(kind, listener))
     }
-    callbackID = video.requestVideoFrameCallback((now, metadata) => {
-      callbackID = null
-      if (stopped || firstFrame) return
-      firstFrame = {
-        callbackMilliseconds: finite(now),
-        observedAtMilliseconds: performance.now(),
-        presentationMilliseconds: finite(metadata.presentationTime),
-        expectedDisplayMilliseconds: finite(metadata.expectedDisplayTime),
-        receiveMilliseconds: finite(metadata.receiveTime),
-        mediaTimeSeconds: finite(metadata.mediaTime),
-        width: finite(metadata.width),
-        height: finite(metadata.height),
-        presentedFrames: finite(metadata.presentedFrames),
-      }
-      performance.mark?.("rstream-startup-first-callback")
-    })
+    callbackID = video.requestVideoFrameCallback(onFrame)
   }
   const observer = new MutationObserver(observeVideo)
   const stop = () => {
@@ -155,11 +232,16 @@ export function installPlaybackStartupTiming() {
   }
   window.__playbackStartup = {
     stop,
+    markActivation() {
+      if (stopped) return
+      activationMarks++
+      activationRequestedAtMilliseconds = performance.now()
+    },
     snapshot() {
       const auth = authorization[0]
       const post = whep[0]
       const display = firstFrame?.expectedDisplayMilliseconds
-      const valid = Boolean(
+      const sequenceValid = Boolean(
         supported &&
         authorization.length === 1 &&
         whep.length === 1 &&
@@ -174,6 +256,15 @@ export function installPlaybackStartupTiming() {
         auth.bodyReadAt >= auth.headersAt &&
         post.startedAt >= auth.bodyReadAt &&
         post.headersAt >= post.startedAt &&
+        armedAtMilliseconds !== null &&
+        armedAtMilliseconds <= auth.startedAt &&
+        readyStateAtArm === 0 &&
+        activationMarks <= 1 &&
+        (activationRequestedAtMilliseconds === null ||
+          activationRequestedAtMilliseconds <= auth.startedAt),
+      )
+      const valid = Boolean(
+        sequenceValid &&
         Number.isFinite(display) &&
         display >= post.headersAt &&
         Number.isFinite(firstFrame?.callbackMilliseconds) &&
@@ -182,18 +273,51 @@ export function installPlaybackStartupTiming() {
         firstFrame?.height > 0 &&
         firstFrame?.presentedFrames === 1,
       )
+      const visible = firstVisibleFrame
+      const visiblePresentationValid = Boolean(
+        sequenceValid &&
+        validFrame(visible) &&
+        visible.visibility.visible &&
+        visible.callbackMilliseconds >= post.headersAt &&
+        visible.expectedDisplayMilliseconds >= post.headersAt &&
+        visible.observedAtMilliseconds >= post.headersAt,
+      )
+      const visibleAt = visiblePresentationValid
+        ? Math.max(
+            visible.expectedDisplayMilliseconds,
+            visible.observedAtMilliseconds,
+          )
+        : null
       return {
+        schemaVersion: 2,
         supported,
+        installedAtMilliseconds,
+        activationRequestedAtMilliseconds,
         navigationTimeOrigin: performance.timeOrigin,
         armedAtMilliseconds,
         readyStateAtArm,
         longTasks,
         mediaEvents,
         measurementValid: valid,
+        exactFirstSubmissionMeasured: valid,
+        authorizationResponseMilliseconds: sequenceValid
+          ? auth.bodyReadAt - auth.startedAt
+          : null,
         authorization,
         whep,
         peers,
         firstFrame,
+        firstVisibleFrame,
+        visiblePresentationValid,
+        visiblePresentationScope:
+          "First observed unoccluded video frame callback; later of browser expected-display time and observation after visibility checks. Conservative startup estimate, not exact first submission or physical display latency.",
+        navigationToVisiblePresentationMilliseconds: visibleAt,
+        authorizationToVisiblePresentationMilliseconds:
+          visibleAt === null ? null : visibleAt - auth.startedAt,
+        activationToVisiblePresentationMilliseconds:
+          visibleAt === null || activationRequestedAtMilliseconds === null
+            ? null
+            : visibleAt - activationRequestedAtMilliseconds,
         navigationToExpectedDisplayMilliseconds: valid ? display : null,
         authorizationToExpectedDisplayMilliseconds: valid
           ? display - auth.startedAt

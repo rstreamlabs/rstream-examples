@@ -13,8 +13,29 @@ function fixture({ supported = true } = {}) {
   const listeners = new Map()
   const mediaListeners = new Map()
   const pending = []
+  const state = {
+    covered: false,
+    obstructed: false,
+    hidden: false,
+    offscreen: false,
+    documentVisible: true,
+  }
   const element = supported
     ? {
+        isConnected: true,
+        readyState: 0,
+        paused: false,
+        videoWidth: 1280,
+        videoHeight: 720,
+        parentElement: { querySelector: () => (state.covered ? {} : null) },
+        getBoundingClientRect() {
+          return {
+            left: 0,
+            top: state.offscreen ? 2000 : 0,
+            width: 128,
+            height: 72,
+          }
+        },
         requestVideoFrameCallback(fn) {
           frame = fn
           return 1
@@ -48,6 +69,13 @@ function fixture({ supported = true } = {}) {
     new Promise((resolve, reject) => pending.push({ args, resolve, reject }))
   const context = {
     window: {
+      innerWidth: 1000,
+      innerHeight: 1000,
+      getComputedStyle: () => ({
+        display: state.hidden ? "none" : "block",
+        visibility: "visible",
+        opacity: "1",
+      }),
       fetch: nativeFetch,
       RTCPeerConnection: Peer,
       addEventListener(kind, fn) {
@@ -58,6 +86,10 @@ function fixture({ supported = true } = {}) {
       },
     },
     document: {
+      get visibilityState() {
+        return state.documentVisible ? "visible" : "hidden"
+      },
+      elementFromPoint: () => (state.obstructed ? {} : element),
       querySelector: (selector) => {
         assert.equal(selector, ".video-player-picture > video")
         return video
@@ -97,6 +129,7 @@ function fixture({ supported = true } = {}) {
     },
     frame(at, fields = {}) {
       now = at
+      element.readyState = 2
       frame?.(at, {
         expectedDisplayTime: at + 5,
         width: 1280,
@@ -115,6 +148,8 @@ function fixture({ supported = true } = {}) {
       mediaListeners.get(kind)?.()
     },
     mediaListeners,
+    state,
+    element,
     async request(kind, at, headersAt, bodyAt, status) {
       now = at
       const promise = context.window.fetch(
@@ -149,7 +184,8 @@ function fixture({ supported = true } = {}) {
   }
 }
 
-async function connect(f) {
+async function connect(f, armedAt) {
+  if (armedAt !== undefined) f.clock(armedAt)
   f.attach()
   await f.request("auth", 100, 140, 150)
   f.clock(160)
@@ -172,11 +208,89 @@ test("separates navigation, authorization and first presentation without retaini
   assert.equal(result.navigationToExpectedDisplayMilliseconds, 305)
   assert.equal(result.authorizationToExpectedDisplayMilliseconds, 205)
   assert.equal(result.authorizationMilliseconds, 50)
+  assert.equal(result.visiblePresentationValid, true)
+  assert.equal(result.navigationToVisiblePresentationMilliseconds, 305)
+  assert.equal(result.authorizationToVisiblePresentationMilliseconds, 205)
   assert.equal(result.peers[0].connectedAt, 250)
   assert.equal(result.mediaEvents.length, 2)
   assert.equal(result.mediaEvents[0].atMilliseconds, 270)
   assert.ok(!JSON.stringify(result).includes("never-retain"))
   assert.ok(!JSON.stringify(result).includes("edge.test"))
+})
+
+test("a hidden first compositor frame cannot stand in for visible presentation", async () => {
+  for (const field of [
+    "covered",
+    "obstructed",
+    "hidden",
+    "offscreen",
+    "documentVisible",
+  ]) {
+    const f = fixture()
+    await connect(f)
+    f.state[field] = field !== "documentVisible"
+    f.frame(300)
+    assert.equal(
+      f.snapshot().measurementValid,
+      true,
+      "Keep the separate exact-counter diagnostic",
+    )
+    assert.equal(f.snapshot().visiblePresentationValid, false)
+    f.state[field] = field === "documentVisible"
+    f.frame(360, { presentedFrames: 3, expectedDisplayTime: 350 })
+    assert.equal(f.snapshot().visiblePresentationValid, true)
+    assert.equal(
+      f.snapshot().navigationToVisiblePresentationMilliseconds,
+      360,
+      "Never backdate visibility to a compositor estimate from before the check",
+    )
+    assert.equal(f.snapshot().firstFrame.presentedFrames, 1)
+    assert.equal(f.snapshot().firstVisibleFrame.presentedFrames, 3)
+    f.stop()
+  }
+})
+
+test("a startup burst retains unknown exact submission while measuring visible presentation conservatively", async () => {
+  const f = fixture()
+  await connect(f)
+  f.frame(300, { presentedFrames: 3, expectedDisplayTime: 295 })
+  const result = f.snapshot()
+  assert.equal(result.measurementValid, false)
+  assert.equal(result.navigationToExpectedDisplayMilliseconds, null)
+  assert.equal(result.visiblePresentationValid, true)
+  assert.equal(result.navigationToVisiblePresentationMilliseconds, 300)
+})
+
+test("same-page activation is measured from the click, without accepting late or repeated markers", async () => {
+  for (const invalid of [null, "late", "repeated"]) {
+    const f = fixture()
+    f.clock(80)
+    f.window.__playbackStartup.markActivation()
+    await connect(f)
+    if (invalid) {
+      f.clock(270)
+      f.window.__playbackStartup.markActivation()
+    }
+    f.frame(300)
+    assert.equal(f.snapshot().visiblePresentationValid, !invalid)
+    assert.equal(
+      f.snapshot().activationToVisiblePresentationMilliseconds,
+      invalid ? null : 225,
+    )
+  }
+})
+
+test("visible presentation refuses paused, detached or nonfinite media and a late observer", async () => {
+  for (const field of ["paused", "detached", "empty", "late", "nonfinite"]) {
+    const f = fixture()
+    await connect(f, field === "late" ? 200 : undefined)
+    if (field === "paused") f.element.paused = true
+    if (field === "detached") f.element.isConnected = false
+    if (field === "empty") f.element.videoWidth = 0
+    f.frame(300, field === "nonfinite" ? { expectedDisplayTime: NaN } : {})
+    assert.equal(f.snapshot().visiblePresentationValid, false)
+    f.stop()
+  }
 })
 
 test("late or missing frame evidence cannot establish first presentation", async () => {
@@ -214,6 +328,8 @@ test("cancel, pagehide and reinstall restore observers and reject late callbacks
   assert.equal(f.mediaListeners.size, 0)
   assert.equal(f.snapshot().mediaEvents.length, 0)
   assert.ok(f.disconnected() >= 1)
+  f.element.readyState = 0
+  f.clock(0)
   f.install()
   await connect(f)
   f.frame(350)
@@ -231,6 +347,7 @@ test("failed authorization, repeated attempts or missing body completion invalid
     else delete f.snapshot().authorization[0].bodyReadAt
     f.frame(300)
     assert.equal(f.snapshot().measurementValid, false)
+    assert.equal(f.snapshot().visiblePresentationValid, false)
   }
 })
 
