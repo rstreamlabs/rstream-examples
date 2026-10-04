@@ -1155,6 +1155,30 @@ reproduced handshake defect caused that particular startup failure.
 Earlier Go 1.26 packaging/media evidence remains revision-specific: the merged
 toolchain still needs its final packaging and repeated playback qualification.
 
+The [current hosted relay attempt at `82c9c40`](./producer/qualification/adaptive-streaming/evidence/82c9c40/hosted-relay.json)
+again fails before tunnel publication, so it produces no media measurements.
+It uses the bounded-handshake backport: four deadline failures are logged,
+the first about 15 seconds after container startup and the following ones about
+20 seconds apart with the configured five-second retry delay. The runner's
+authentication, project and DNS checks pass; TLS/QUIC and engine checks fail,
+and the token is not expired. Original socket limits are restored. To identify
+the next discriminating check without exposing endpoint/error text, the public
+diagnostic now adds fixed error categories, DNS address families and the selected
+transport. All 131 collector tests and artifact sanitization pass; classification
+does not itself establish a network root cause.
+
+The [current native MediaMTX regression at `82c9c40`](./distributor/qualification/evidence/82c9c40/native-current.json)
+passes all 22 gates through a real authenticated producer tunnel with the same
+current media images as the recent adaptive path. Its fixed 5 Mbit/s source
+decodes at 30 fps with no observed loss, decoded drops or freezes. The 30-second
+baseline has 49.67ms median / 51.14ms p95 monotonic marker latency, with at most
+1.395ms alignment uncertainty. WHEP deletion takes 12ms and the native source
+session is absent after teardown. Initial first presentation still takes
+2.787s, including about 1.985s after the peer connects; this passes measurement
+validity but is not an optimized native start. No impairment or forced TURN is
+injected in this finite local observation. Owned containers are removed and
+socket limits restored; prior failed trials remain unchanged.
+
 The resource collector now brackets the complete CPU/memory observation with
 phase snapshots. Samples crossing a phase boundary remain in whole-run totals
 but are excluded from phase comparisons; a regression covers the boundary during
