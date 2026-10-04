@@ -9,6 +9,23 @@ export function installPlaybackStartupTiming() {
   let callbackID = null
   let firstFrame = null
   let supported = null
+  let armedAtMilliseconds = null
+  let readyStateAtArm = null
+  const longTasks = []
+  const taskObserver =
+    typeof PerformanceObserver === "function" &&
+    PerformanceObserver.supportedEntryTypes?.includes("longtask")
+      ? new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            if (longTasks.length < 64)
+              longTasks.push({
+                startedAt: entry.startTime,
+                duration: entry.duration,
+              })
+          }
+        })
+      : null
+  taskObserver?.observe({ type: "longtask", buffered: true })
   const authorization = []
   const whep = []
   const peers = []
@@ -85,11 +102,14 @@ export function installPlaybackStartupTiming() {
     observer.disconnect()
     supported = typeof video.requestVideoFrameCallback === "function"
     if (!supported) return
+    armedAtMilliseconds = performance.now()
+    readyStateAtArm = video.readyState
     callbackID = video.requestVideoFrameCallback((now, metadata) => {
       callbackID = null
       if (stopped || firstFrame) return
       firstFrame = {
         callbackMilliseconds: finite(now),
+        observedAtMilliseconds: performance.now(),
         expectedDisplayMilliseconds: finite(metadata.expectedDisplayTime),
         width: finite(metadata.width),
         height: finite(metadata.height),
@@ -102,6 +122,7 @@ export function installPlaybackStartupTiming() {
     if (stopped) return
     stopped = true
     observer.disconnect()
+    taskObserver?.disconnect()
     if (callbackID !== null) video.cancelVideoFrameCallback(callbackID)
     callbackID = null
     for (const remove of peerListeners) remove()
@@ -141,6 +162,9 @@ export function installPlaybackStartupTiming() {
       )
       return {
         supported,
+        armedAtMilliseconds,
+        readyStateAtArm,
+        longTasks,
         measurementValid: valid,
         authorization,
         whep,

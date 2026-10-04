@@ -382,10 +382,6 @@ async function qualifyPlayback() {
           startup ?? { measurementValid: false },
         )
       }
-      assert.ok(
-        startup?.measurementValid,
-        "First presentation must be measured from navigation and authorization",
-      )
       viewers.push({ actor, page, context, startup })
     }
     const sample = (page) =>
@@ -507,6 +503,10 @@ async function qualifyPlayback() {
       observation.continuesAfterFirstMemberCloses = true
     }
     assert.equal(pageErrors, 0)
+    assert.ok(
+      viewers.every(({ startup }) => startup?.measurementValid),
+      "First presentation must be measured from navigation and authorization",
+    )
     return observation
   } finally {
     abort.signal.removeEventListener("abort", stopOnAbort)
