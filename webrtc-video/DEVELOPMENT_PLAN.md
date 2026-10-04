@@ -58,6 +58,18 @@ under investigation.
   tests and TypeScript checks pass afterward. Three real Chromium polls change
   from three aborted requests to three completed requests with the same hidden
   quality UI state. This does not suppress genuine network failures.
+- The final production build passes at `c585c3c`. Its real route/database check
+  exposes a fixture readiness race: the PostgreSQL image's temporary Unix-only
+  initialization server can satisfy `pg_isready` before shutting down. All four
+  database harnesses now wait for the final TCP listener. Three controlled
+  delayed-init checks reproduce Unix readiness while TCP still refuses it,
+  then verify the final TCP query. The corrected access suite passes before
+  commit and again at clean `e86dd7d`, covering migrations, fresh deployment,
+  discovery/history concurrency and user/organization authorization. The
+  [readiness and final-route record](./platform/qualification/evidence/e86dd7d/postgres-readiness.json)
+  retains the original failed run and two diagnostic shell-fixture setup
+  failures. Application code and migrations are unchanged; formatting, shell
+  syntax and owned-container cleanup checks pass.
 
 ## Implemented: project discovery
 

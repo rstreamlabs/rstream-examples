@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "revision": "e86dd7d66013caade313ab0f047f40c227e17f45",
+  "nodeVersion": "v26.7.0",
+  "productionBuildRevision": "c585c3cc18a331d926cc55a10d8931e2d80ff1d3",
+  "applicationCodeUnchangedSinceProductionBuild": true,
+  "postgresReadiness": {
+    "image": "postgres:17-alpine",
+    "imageID": "sha256:25a89970a83255ae96484d709005bb35aa71f7455f941bc1634514f31c5d5c62",
+    "passed": true,
+    "cases": [
+      {
+        "repetition": 1,
+        "unixReadySeconds": 0.6798771250178106,
+        "tcpExitWhileUnixReady": 2,
+        "tcpReadySeconds": 3.9473050420056097,
+        "finalTCPQueryPassed": true,
+        "containerRemoved": true
+      },
+      {
+        "repetition": 2,
+        "unixReadySeconds": 0.6986340419971384,
+        "tcpExitWhileUnixReady": 2,
+        "tcpReadySeconds": 3.9593155829934403,
+        "finalTCPQueryPassed": true,
+        "containerRemoved": true
+      },
+      {
+        "repetition": 3,
+        "unixReadySeconds": 0.786072124959901,
+        "tcpExitWhileUnixReady": 2,
+        "tcpReadySeconds": 3.9691809579962865,
+        "finalTCPQueryPassed": true,
+        "containerRemoved": true
+      }
+    ]
+  },
+  "changes": [
+    "All four isolated platform/database harnesses wait for PostgreSQL at 127.0.0.1 over TCP, including the shell runner's final readiness assertion.",
+    "The official image's temporary initialization server listens only on a Unix socket, so a default pg_isready can succeed before that server shuts down and the final listener starts.",
+    "Production application behavior, migrations and configured databases are unchanged."
+  ],
+  "checks": [
+    "The three controlled delayed-init cases accept Unix sockets after 0.68\u20130.79 seconds while TCP readiness returns exit 2, then accept TCP and execute SELECT 1 after 3.95\u20133.97 seconds.",
+    "The production Next.js build passes. Both corrected access-suite runs pass existing-device migration, fresh deployment, owner constraints, concurrent discovery history, live-only inventory, outage handling, user isolation, shared organization access, nonmember denial, mutation origin and watch-token scoping.",
+    "Changed scripts pass Prettier; the shell harness passes bash syntax validation. All owned PostgreSQL containers are removed."
+  ],
+  "scope": [
+    "Real Next.js routes and PostgreSQL are used; upstream GitHub/engine HTTP is substituted in these access tests. Actual OAuth/SSO and browser playback are outside this route check.",
+    "A separate controlled readiness fixture is diagnostic evidence, not another application or production database. Its two shell-fixture setup failures are retained; the final SQL fixture avoids executing from the bind mount."
+  ],
+  "logs": [
+    {
+      "label": "production-build",
+      "file": "rstream-platform-final-c585c3c-build.log",
+      "sha256": "cb431082770f5d2e78e55814170c5e37cdfc6c6edc5a6151f4b4cf10c0e4bea5",
+      "outcome": "passed at clean c585c3c"
+    },
+    {
+      "label": "initial-access",
+      "file": "rstream-platform-final-c585c3c-access.log",
+      "sha256": "272a99468a6a52ea824b333b7a5e917f6dfb3b1693bdbc79b654186cee7ad7ba",
+      "outcome": "failed before correction: temporary PostgreSQL Unix socket became ready before final server"
+    },
+    {
+      "label": "corrected-access",
+      "file": "rstream-platform-final-c585c3c-access-fixed.log",
+      "sha256": "5e6f7ba3634dbfa0a0c9b1f302d8228c0e3968920c63cda61f866b53af3bc6da",
+      "outcome": "passed before test-only changes were committed"
+    },
+    {
+      "label": "clean-access",
+      "file": "rstream-platform-final-e86dd7d-access.log",
+      "sha256": "5e6f7ba3634dbfa0a0c9b1f302d8228c0e3968920c63cda61f866b53af3bc6da",
+      "outcome": "passed at clean e86dd7d"
+    },
+    {
+      "label": "readiness-fixture-first",
+      "file": "rstream-postgres-readiness-c585c3c.log",
+      "sha256": "cc89f02d24ec4d3921cbd689cc5501e56197795585459411e02e79bee62f5001",
+      "outcome": "fixture failed: initialization script could not execute; no TCP-readiness verdict"
+    },
+    {
+      "label": "readiness-fixture-second",
+      "file": "rstream-postgres-readiness-c585c3c-v2.log",
+      "sha256": "c0ee2a49895445c4026dca9a84b5728163d3b20f4848663bad3afcb36a68dfbb",
+      "outcome": "fixture failed: bind-mounted shell script execution denied; no TCP-readiness verdict"
+    },
+    {
+      "label": "readiness-fixture-sql",
+      "file": "rstream-postgres-readiness-c585c3c-v3.log",
+      "sha256": "f5136006fc56a9d36684bdd6d7ad2b9933f9dfbd2e01805635f63df2b4c81ae2",
+      "outcome": "passed: three delayed SQL-initialization cases"
+    }
+  ]
+}
