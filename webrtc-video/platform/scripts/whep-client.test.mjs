@@ -1039,6 +1039,145 @@ test("WHEP close waits for concurrent resource creation and deletes it exactly o
   assert.equal(closeResults[0].outcome, "deleted")
 })
 
+test("WHEP stop drains an abort-aware initial POST so its server resource can be deleted", async () => {
+  const requests = []
+  const peer = new FakePeer()
+  let releasePOST
+  let postSignal
+  let bodyCanceled = false
+  const client = new WHEPClient({
+    endpoint: "https://edge.example/whep",
+    iceServers: [],
+    authorization: "",
+    onError: assert.fail,
+    onTrack: assert.fail,
+    peerFactory: () => peer,
+    fetch: async (input, init) => {
+      requests.push({ input: String(input), method: init.method })
+      if (init.method === "POST") {
+        postSignal = init.signal
+        return new Promise((resolve, reject) => {
+          init.signal.addEventListener(
+            "abort",
+            () => reject(init.signal.reason),
+            { once: true },
+          )
+          releasePOST = () =>
+            resolve(
+              response(
+                new ReadableStream({
+                  cancel() {
+                    bodyCanceled = true
+                  },
+                }),
+                201,
+                {
+                  "Content-Type": "application/sdp",
+                  ETag: '"generation-1"',
+                  Location: "/whep/stop-during-create",
+                },
+              ),
+            )
+        })
+      }
+      return response(null, 204)
+    },
+  })
+  const starting = client.start()
+  const rejectedStart = assert.rejects(starting)
+  await eventually(() => postSignal)
+  const closing = client.close()
+  const abortedBeforeResponse = postSignal.aborted
+  releasePOST()
+  const result = await closing
+  await rejectedStart
+  assert.equal(
+    abortedBeforeResponse,
+    false,
+    "stop discarded the only way to identify the new server resource",
+  )
+  assert.equal(result.outcome, "deleted")
+  assert.deepEqual(
+    requests.map((request) => request.method),
+    ["POST", "DELETE"],
+  )
+  assert.equal(bodyCanceled, true)
+  assert.equal(peer.remoteDescription, null)
+  assert.equal(peer.closed, true)
+})
+
+test("WHEP stop bounds an uninterruptible POST and cleans up a later Location", async () => {
+  const methods = []
+  const peer = new FakePeer()
+  let releasePOST
+  let postSignal
+  const client = new WHEPClient({
+    endpoint: "https://edge.example/whep",
+    iceServers: [],
+    authorization: "",
+    onError: assert.fail,
+    onTrack: assert.fail,
+    peerFactory: () => peer,
+    requestTimeoutMs: 30,
+    fetch: async (_input, init) => {
+      methods.push(init.method)
+      if (init.method === "POST") {
+        postSignal = init.signal
+        return new Promise((resolve) => {
+          releasePOST = () =>
+            resolve(
+              response(initialAnswer, 201, {
+                "Content-Type": "application/sdp",
+                ETag: '"generation-1"',
+                Location: "/whep/late-after-stop",
+              }),
+            )
+        })
+      }
+      return response(null, 204)
+    },
+  })
+  const starting = client.start()
+  const rejectedStart = assert.rejects(starting)
+  await eventually(() => postSignal)
+  const started = performance.now()
+  const closed = await client.close()
+  assert.equal(closed.outcome, "timed-out")
+  assert.ok(performance.now() - started < 500, "close exceeded its deadline")
+  assert.equal(peer.closed, true)
+  assert.equal(postSignal.aborted, true)
+  releasePOST()
+  await rejectedStart
+  assert.deepEqual(methods, ["POST", "DELETE"])
+})
+
+test("WHEP stop never follows a late initial redirect", async () => {
+  const methods = []
+  let releasePOST
+  const client = new WHEPClient({
+    endpoint: "https://edge.example/whep",
+    iceServers: [],
+    authorization: "",
+    onError: assert.fail,
+    onTrack: assert.fail,
+    peerFactory: () => new FakePeer(),
+    fetch: async (_input, init) => {
+      methods.push(init.method)
+      return new Promise((resolve) => {
+        releasePOST = () =>
+          resolve(response(null, 307, { Location: "/new-whep" }))
+      })
+    },
+  })
+  const starting = client.start()
+  const rejectedStart = assert.rejects(starting, /closed/)
+  await eventually(() => releasePOST)
+  const closing = client.close()
+  releasePOST()
+  await Promise.all([rejectedStart, closing])
+  assert.deepEqual(methods, ["POST"])
+})
+
 test("WHEP client exposes bounded server retry guidance after saturation", async () => {
   const requests = []
   const closeResults = []

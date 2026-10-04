@@ -81,12 +81,38 @@ fixing a reader arriving just after the previous key frame. Cancellation,
 path isolation, duplicate-owner exclusion, stale socket recovery and shutdown
 checks pass with the race detector; three real MediaMTX integration runs show
 prompt requests for both first and additional readers with one source session.
-Both Go race suites and static checks pass. Browser first-picture measurements
-of this change remain next; no startup improvement is claimed from signaling
-tests alone. The qualification adapter configuration now explicitly matches
+Both Go race suites, the full real MediaMTX race integration suite and static
+checks pass. The [browser measurements at clean `50c8128`](./distributor/qualification/evidence/50c8128/first-picture.json)
+show 542.8–785.7ms first presentation in three fresh producer-process trials,
+versus 2310.6ms for the preceding adapter reference. Six immediate same-page
+reopens measure 124.8–133.1ms, and six readers joining an active shared source
+measure 146.4–187.8ms. Six source reactivations inside an already running
+producer measure 370.6–751.5ms. Warm operations retain exactly one source
+session; the final reader releases the encoder after the configured idle grace.
+All four full delivery runs pass (three adapter and one direct, the latter
+265.0ms). The adapter's short baseline CPU observations remain 0.352–0.358 core,
+compared with 0.360 for the preceding reference. These local small samples do
+not establish deployment percentiles, activation CPU peaks, physical latency
+or Next.js authorization time. The qualification adapter configuration explicitly matches
 the bundled 250ms track-gather timeout. The earlier adapter qualifier omitted
 that setting (native already set it); its first-picture evidence remains valid
 for the recorded configuration.
+
+Cancellation observation was extended beyond MediaMTX's 15-second on-demand
+setup deadline, rather than accepting an immediate idle sample that could
+precede delayed source creation. This revealed about 11.3–11.4 seconds of
+continued source activity when stopping during the initial WHEP POST. The
+shared client's immediate fetch abort discarded the future `Location`, leaving
+MediaMTX to time out its unfinished peer. The client now drains an already
+issued POST within its existing five-second maximum close budget, captures
+and deletes that resource, and never follows a redirect after stop. Network
+failure without a known resource is reported as unconfirmed (`request-error`).
+An abort-aware reproduction fails before the change; regressions also cover a
+late response after the close deadline, one DELETE, response-body cancellation
+and no new POST on a late redirect. All 178 platform unit tests and TypeScript
+checks pass. Real cancellation timing with this client change is the next
+integration check. Page disappearance or a lost response still requires the
+server's finite handshake timeout; draining cannot recover an unknown URL.
 
 - GitHub personal ownership or shared organization ownership, with bounded
   membership verification, explicit configuration and existing-device migration.

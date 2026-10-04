@@ -120,6 +120,7 @@ export class WHEPClient {
   private readonly allowLegacyWildcardETag: boolean;
   private readonly allowInsecureHTTP: boolean;
   private abort = new AbortController();
+  private initialAbort = new AbortController();
   private closed = false;
   private closePromise: Promise<WHEPCloseResult> | null = null;
   private credentialExpiresAt: number | null;
@@ -131,6 +132,7 @@ export class WHEPClient {
   private iceCredentialExpiresAt: number | null;
   private iceRestartTimer: ReturnType<typeof setTimeout> | null = null;
   private initialRequest: Promise<void> | null = null;
+  private initialRequestFailed = false;
   private patchTimer: ReturnType<typeof setTimeout> | null = null;
   private patchQueue: Promise<void> = Promise.resolve();
   private remoteDeletePromise: Promise<RemoteDeleteResult> | null = null;
@@ -197,6 +199,7 @@ export class WHEPClient {
           this.captureSessionURL(result);
         }
       } catch (error) {
+        this.initialRequestFailed = result === null;
         if (result) {
           await discardResponse(result.response);
         }
@@ -205,6 +208,7 @@ export class WHEPClient {
         settleInitialRequest();
       }
       if (this.closed) {
+        await discardResponse(result.response);
         await Promise.resolve();
         await this.cleanupLateSession();
         throw new Error("WHEP client is closed");
@@ -295,12 +299,20 @@ export class WHEPClient {
       await waitForAbortable(this.patchQueue, signal);
     } catch {
       signalingSettled = false;
+    } finally {
+      // An in-flight POST must first yield its Location so it can be deleted.
+      // Abort it only after it settles or exhausts the bounded close budget.
+      this.initialAbort.abort();
     }
     const session = this.sessionURL;
     if (!signalingSettled) {
       result = closeResult("timed-out", startedAt, false);
     } else if (!session) {
-      result = closeResult("not-established", startedAt, false);
+      result = closeResult(
+        this.initialRequestFailed ? "request-error" : "not-established",
+        startedAt,
+        false,
+      );
     } else {
       if (this.refreshCredentials) {
         try {
@@ -420,7 +432,7 @@ export class WHEPClient {
         "Content-Type": "application/sdp",
       },
       method: "POST",
-      signal: this.abort.signal,
+      signal: this.initialAbort.signal,
     });
   }
 
@@ -847,6 +859,9 @@ export class WHEPClient {
       }
       const location = response.headers.get("location");
       await discardResponse(response);
+      // Closing may drain an already issued POST, but must never follow a
+      // redirect and create a new resource after the user has stopped.
+      this.requireOpen();
       if (!location) {
         throw new Error("WHEP redirect omitted Location");
       }
