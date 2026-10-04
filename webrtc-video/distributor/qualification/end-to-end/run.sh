@@ -1133,6 +1133,7 @@ jq -s \
   --argjson edge_auth "${edge_auth}" \
   --argjson connect_token_ttl_seconds "${connect_token_ttl_seconds}" \
   --argjson working_tree_dirty "${working_tree_dirty}" \
+  --argjson native_boundary_required true \
   --arg producer_image "$(docker image inspect --format '{{.Id}}' "${producer_image}")" \
   --arg distributor_image "$(if [[ "${uses_mediamtx}" == true ]]; then docker image inspect --format '{{.Id}}' "${distributor_image}"; fi)" \
   --arg browser_image "$(docker image inspect --format '{{.Id}}' "${browser_image}")" \

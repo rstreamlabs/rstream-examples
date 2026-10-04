@@ -161,7 +161,7 @@ export function installTransitionBoundary() {
       return {
         schemaVersion: 1,
         scope:
-          "Native counters around four seconds after first browser phase observation; diagnostic only",
+          "Native counters around four seconds after first browser phase observation",
         graceMilliseconds,
         bracketMilliseconds,
         timeOriginMilliseconds: performance.timeOrigin,

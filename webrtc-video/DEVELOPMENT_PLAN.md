@@ -49,7 +49,7 @@ increments from actual steady freezes before selecting a timing policy. The
 host phase marker, including in the earlier comparison, has whole-second
 precision and cannot establish millisecond-accurate network activation. Public
 down-hold and disruption budgets remain unchanged.
-The collector now records this boundary probe as diagnostic evidence only.
+The collector first records this boundary probe as diagnostic evidence only.
 Twenty-one focused tests cover stale/native timestamps, ambiguous counters,
 stream replacement, deadlines, overlapping requests, phase changes and teardown.
 The [first MediaMTX runtime at `f3488c0`](./distributor/qualification/evidence/f3488c0/mediamtx-format-boundary.json)
@@ -64,6 +64,15 @@ The independent hosted crossover is still running. Existing acceptance gates
 and failed historical verdicts remain unchanged. The new collector tests pass
 in CI; its initial CI failure is formatting-only in `collect.mjs` and is
 corrected without altering the measured behavior.
+The current runner now requires a verified native boundary for steady capacity
+and recovery accounting, with explicit stream identity, native timestamps,
+monotonic counters, agreement with regular samples and post-boundary coverage.
+The old interval calculation remains visible alongside the new deltas; no
+historical verdict is rewritten and no disruption budget is changed. Result
+fixtures reproduce the coarse-sampling false attribution and still reject late
+freezes, dropped-frame excess, unavailable/ambiguous counters, stream changes,
+clock changes and truncated observation. Fresh runtime qualification of the
+integrated acceptance method is still required.
 The current-dependency local forced-TURN trial at `18f6cc1` passes all 56 gates,
 including actual relay candidates at both endpoints, adaptation, recovery and
 session cleanup. It does not remove the separate hosted-runner TCP obstacle.

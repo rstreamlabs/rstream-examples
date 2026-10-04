@@ -129,6 +129,7 @@ render_result() {
   --argjson edge_auth true \
   --argjson connect_token_ttl_seconds 300 \
   --argjson working_tree_dirty false \
+  --argjson native_boundary_required "${native_boundary_required:-false}" \
   --argjson recording "${recording}" \
   --arg producer_image producer \
   --arg distributor_image '' \
@@ -624,6 +625,157 @@ jq -c '.transitionBoundary = {status: "invalid", reason: "stats-outside-boundary
 render_result "${fixture_directory}/boundary-diagnostic-samples.jsonl" | jq -e '
   .transitionBoundaryDiagnostics.viewerNetwork.reason == "stats-outside-boundary" and
   .gates.playback == true and .passed == true
+' >/dev/null
+
+# A freeze ends at 13.4s, before the 14s cutoff, but the 1Hz collector only
+# observes its counter at 14s. The native bracket proves its earlier attribution.
+native_boundary_required=true
+jq -sc '
+  .[0] as $base |
+  def native(at; frozen): {
+    id: "video", ssrc: 123, collectedAtMilliseconds: at,
+    framesDecoded: (((at / 1000 + 1) * 30) | floor), framesDropped: 0,
+    freezeCount: (if frozen then 1 else 0 end),
+    totalFreezesDurationSeconds: (if frozen then 1.5 else 0 end)
+  };
+  range(0; 60) as $i |
+  (if $i < 10 then "baseline" elif $i < 30 then "viewer-network" else "recovery" end) as $phase |
+  (if $i < 10 then 0 elif $i < 30 then 10000 else 30000 end) as $start |
+  $base + {
+    phase: $phase, phaseStartedAt: "fixture", elapsedMilliseconds: ($i * 1000),
+    bytesReceived: (($i + 1) * 1000000),
+    encoderTargetKbps: (if $i < 10 then 8000 elif $i < 30 then 2000 else 7000 end),
+    videoStats: native($i * 1000; $i >= 14),
+    framePresentation: {timeOriginMilliseconds: 1000000, sampledAtMilliseconds: ($i * 1000 + 1)},
+    transitionBoundary: {
+      schemaVersion: 1, phase: $phase, phaseStartedAt: "fixture",
+      status: (if $i * 1000 < $start + 4100 then "pending" else "valid" end),
+      graceMilliseconds: 4000, bracketMilliseconds: 250, timeOriginMilliseconds: 1000000,
+      observedAtMilliseconds: $start, cutoffMilliseconds: ($start + 4000),
+      before: native($start + 3850; $i >= 10),
+      after: native($start + 4100; $i >= 10)
+    }
+  } | . as $s | reduce ["framesDecoded", "framesDropped", "freezeCount", "totalFreezesDurationSeconds"][] as $key (. ; .[$key] = $s.videoStats[$key]) |
+  .qpSum = .framesDecoded * 25
+' "${fixture_directory}/samples.jsonl" >"${fixture_directory}/native-boundary-samples.jsonl"
+render_result "${fixture_directory}/native-boundary-samples.jsonl" | jq -e '
+  .passed == true and .gates.transitionBoundaryEvidence == true and
+  .profile.steadyCounterMethod == "native-four-second-boundary" and
+  .transitionBoundaryEvidence.viewerNetwork.measurementValid == true and
+  .transitionBoundaryEvidence.viewerNetwork.legacySampledDeltas.freezeCount == 1 and
+  .transitionBoundaryEvidence.viewerNetwork.legacySampledDeltas.totalFreezesDurationSeconds == 1.5 and
+  .viewerNetwork.steadyStateFreezeCountDelta == 0 and
+  .viewerNetwork.steadyStateFreezeDurationDeltaSeconds == 0 and
+  .viewerNetwork.freezeDurationDeltaSeconds == 1.5 and
+  .profile.acceptance.capacityTransitionGraceMilliseconds == 4000 and
+  .profile.acceptance.maximumCapacityTransitionDisruptionSeconds == 3
+' >/dev/null
+
+# No legacy fallback when new measurements are required but missing or invalid.
+for mutation in \
+  'del(.transitionBoundary)' \
+  '.transitionBoundary.status = "invalid"' \
+  '.transitionBoundary.after.collectedAtMilliseconds = .transitionBoundary.before.collectedAtMilliseconds' \
+  '.transitionBoundary.after.collectedAtMilliseconds = (.transitionBoundary.cutoffMilliseconds + 251)' \
+  '.transitionBoundary.before.collectedAtMilliseconds = .transitionBoundary.cutoffMilliseconds' \
+  '.transitionBoundary.before.freezeCount -= 1' \
+  '.transitionBoundary.after.ssrc = 456' \
+  '.transitionBoundary.graceMilliseconds = 5000' \
+  '.transitionBoundary.observedAtMilliseconds += 500' \
+  '.transitionBoundary.phase = "wrong"' \
+  '.framePresentation.timeOriginMilliseconds += 1000' \
+  'del(.videoStats.framesDropped)' \
+  '.videoStats = null' \
+  '.framesDecoded += 1' \
+  'if .elapsedMilliseconds == 20000 then .videoStats.collectedAtMilliseconds = 18000 else . end' \
+  'if .elapsedMilliseconds == 20000 then .videoStats.framesDecoded = 1 | .framesDecoded = 1 else . end'; do
+  jq -c "if .phase == \"viewer-network\" then ${mutation} else . end" \
+    "${fixture_directory}/native-boundary-samples.jsonl" >"${fixture_directory}/invalid-native-boundary.jsonl"
+  render_result "${fixture_directory}/invalid-native-boundary.jsonl" | jq -e '
+    .gates.transitionBoundaryEvidence == false and
+    .transitionBoundaryEvidence.viewerNetwork.measurementValid == false and
+    .viewerNetwork.steadyStateFreezeCountDelta == null and .passed == false
+  ' >/dev/null
+done
+
+# A real late freeze, including one spanning the cutoff and finishing later,
+# remains a nonzero native increment and fails even with a valid bracket.
+for from in 15000 20000 35000; do
+  jq -c --argjson from "$from" '
+    if .elapsedMilliseconds >= $from then
+      .freezeCount += 1 | .totalFreezesDurationSeconds += 0.4 |
+      .videoStats.freezeCount += 1 | .videoStats.totalFreezesDurationSeconds += 0.4
+    else . end |
+    if .phase == "recovery" and $from < 30000 then
+      .transitionBoundary.before.freezeCount += 1 | .transitionBoundary.before.totalFreezesDurationSeconds += 0.4 |
+      .transitionBoundary.after.freezeCount += 1 | .transitionBoundary.after.totalFreezesDurationSeconds += 0.4
+    else . end
+  ' "${fixture_directory}/native-boundary-samples.jsonl" >"${fixture_directory}/late-native-freeze.jsonl"
+  render_result "${fixture_directory}/late-native-freeze.jsonl" | jq -e '
+    .gates.transitionBoundaryEvidence == true and
+    .gates.playback == false and .passed == false
+  ' >/dev/null
+done
+
+# A changed counter during the bracket is uncertainty, not a measured zero.
+jq -c 'if .phase == "recovery" then .transitionBoundary.after.framesDropped = 1 else . end' \
+  "${fixture_directory}/native-boundary-samples.jsonl" >"${fixture_directory}/invalid-native-boundary.jsonl"
+render_result "${fixture_directory}/invalid-native-boundary.jsonl" | jq -e '
+  .gates.transitionBoundaryEvidence == false and .passed == false
+' >/dev/null
+
+jq -c 'select(.phase != "viewer-network" or .elapsedMilliseconds <= 14000)' \
+  "${fixture_directory}/native-boundary-samples.jsonl" >"${fixture_directory}/short-native-boundary.jsonl"
+render_result "${fixture_directory}/short-native-boundary.jsonl" | jq -e '
+  .gates.transitionBoundaryEvidence == false and .passed == false
+' >/dev/null
+
+# Source impairment uses the same native measurement, with its own causality.
+jq -c '
+  if .phase == "viewer-network" then
+    .phase = "source-network" | .transitionBoundary.phase = "source-network"
+  else . end |
+  .twccFeedbackPackets = (.elapsedMilliseconds + 1) |
+  .adaptiveBitrateUpdates = (.elapsedMilliseconds + 1)
+' "${fixture_directory}/native-boundary-samples.jsonl" >"${fixture_directory}/native-source-boundary.jsonl"
+jq '.scope = "producer-to-adapter"' "${fixture_directory}/network.json" >"${fixture_directory}/native-source-network.json"
+render_result "${fixture_directory}/native-source-boundary.jsonl" mediamtx \
+  "${fixture_directory}/native-browser.json" "${fixture_directory}/native-source-profile.json" \
+  "${fixture_directory}/native-network.json" "${fixture_directory}/native-source-network.json" | jq -e '
+  .gates.transitionBoundaryEvidence == true and .gates.sourceNetworkResponse == true and
+  .sourceNetwork.steadyStateFreezeCountDelta == 0 and .passed == true
+' >/dev/null
+
+# Post-boundary dropped frames still consume the unchanged one-percent budget.
+jq -c '
+  if .elapsedMilliseconds >= 20000 then
+    .framesDropped += 100 | .videoStats.framesDropped += 100
+  else . end |
+  if .phase == "recovery" then
+    .transitionBoundary.before.framesDropped += 100 | .transitionBoundary.after.framesDropped += 100
+  else . end
+' "${fixture_directory}/native-boundary-samples.jsonl" >"${fixture_directory}/late-native-drops.jsonl"
+render_result "${fixture_directory}/late-native-drops.jsonl" | jq -e '
+  .gates.transitionBoundaryEvidence == true and
+  .viewerNetwork.steadyStateFramesDroppedDelta == 100 and
+  .viewerNetwork.steadyStateFrameDropRatio > 0.01 and
+  .gates.viewerNetworkRecovery == false and .passed == false
+' >/dev/null
+
+# Continuous delay/loss uses whole-phase budgets; only recovery needs a boundary.
+jq '.delayMilliseconds = 10' "${fixture_directory}/network.json" >"${fixture_directory}/delayed-network.json"
+jq -c '
+  .freezeCount = 0 | .totalFreezesDurationSeconds = 0 |
+  .videoStats.freezeCount = 0 | .videoStats.totalFreezesDurationSeconds = 0 |
+  .transitionBoundary.before.freezeCount = 0 | .transitionBoundary.before.totalFreezesDurationSeconds = 0 |
+  .transitionBoundary.after.freezeCount = 0 | .transitionBoundary.after.totalFreezesDurationSeconds = 0 |
+  if .phase == "viewer-network" then .transitionBoundary.after.framesDropped = 1 else . end
+' "${fixture_directory}/native-boundary-samples.jsonl" >"${fixture_directory}/delayed-native-boundary.jsonl"
+render_result "${fixture_directory}/delayed-native-boundary.jsonl" direct \
+  "${fixture_directory}/browser.json" "${fixture_directory}/native-source-profile.json" \
+  "${fixture_directory}/delayed-network.json" | jq -e '
+  .transitionBoundaryEvidence.viewerNetwork.measurementValid == false and
+  .gates.transitionBoundaryEvidence == true and .passed == true
 ' >/dev/null
 
 printf 'End-to-end result tests passed\n'

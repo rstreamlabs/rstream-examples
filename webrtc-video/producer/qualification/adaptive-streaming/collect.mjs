@@ -745,6 +745,20 @@ async function collectSample(activePage, phase = null) {
       framePresentation: window.__rstreamFrameDiagnostics?.drain() ?? null,
       transitionBoundary:
         window.__rstreamTransitionBoundary?.snapshot() ?? null,
+      videoStats: inbound
+        ? {
+            id: inbound.id,
+            ssrc: inbound.ssrc ?? null,
+            collectedAtMilliseconds:
+              typeof inbound.timestamp === "number"
+                ? inbound.timestamp - performance.timeOrigin
+                : null,
+            framesDecoded: inbound.framesDecoded ?? null,
+            framesDropped: inbound.framesDropped ?? null,
+            freezeCount: inbound.freezeCount ?? null,
+            totalFreezesDurationSeconds: inbound.totalFreezesDuration ?? null,
+          }
+        : null,
       latency: window.__rstreamLatencyProbe?.read() ?? null,
       framesDropped: inbound?.framesDropped || 0,
       framesPerSecond: inbound?.framesPerSecond || 0,

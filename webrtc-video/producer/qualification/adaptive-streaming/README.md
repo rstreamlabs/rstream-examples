@@ -86,9 +86,20 @@ Missing counters, cached or late timestamps, a changed stream, unfinished calls
 and counter increments across the bracket remain invalid observations. There
 are at most two extra calls per phase; timers and pending results are invalidated
 on phase changes or teardown. A freeze still in progress at the boundary remains
-a later native-counter increment when rendering resumes. These records are
-diagnostic only: the existing sampled-counter gates and their failed historical
-verdicts are unchanged. They follow the W3C definitions of
+a later native-counter increment when rendering resumes. Fresh distributor runs
+require validated `transitionBoundaryEvidence` for steady capacity measurements
+and recovery. Validation checks native stream identity, clock/counter continuity,
+agreement with regular samples, and at least two samples after the bracket.
+Steady freeze/drop deltas use that boundary; the decoded-frame denominator starts
+at the later snapshot, conservatively omitting the bracket's decoded frames.
+An invalid required measurement fails the run without falling back to coarse
+polling. Continuous delay/loss still uses its whole-phase impairment budget.
+
+The four-second transition window, three-second disruption limit and subsequent
+zero-freeze requirement are unchanged. Reports retain `legacySampledDeltas` to
+show the earlier interval attribution, and `profile.steadyCounterMethod` names
+the method used. Historical results and verdicts remain unchanged, including
+the initial diagnostic-only probe trials. This follows the W3C definitions of
 [statistics timestamps](https://www.w3.org/TR/webrtc-stats/#basic-concepts) and
 [native freeze duration](https://www.w3.org/TR/webrtc-stats/#dom-rtcinboundrtpstreamstats-totalfreezesduration).
 
