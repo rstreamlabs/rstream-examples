@@ -831,6 +831,46 @@ owned containers are removed and socket limits restored to 212992 bytes.
 
 ## Cross-cutting latency and resource criteria
 
+### Hosted Linux and integration with main
+
+The sample branch is available as draft PR #34. Its first push unexpectedly
+triggered the repository's Vercel preview integration. That single preview was
+deleted with user approval and its URL now returns `DEPLOYMENT_NOT_FOUND`.
+`platform/vercel.json` disables automatic deployment specifically for the
+qualification branch; other branches retain their existing configuration.
+No production promotion was performed.
+
+The hosted qualification workflow now uses Node.js 24, prepares adequate UDP
+socket limits and restores their original values, removes prepared credential
+files after failed or successful setup, and leaves authentication outside the
+artifact upload. CI uses the same pinned MediaMTX 1.21.1 image as the distributor
+and installs the libav decoder required by the real source-format tests.
+
+The [hosted comparison at `378fa2f`](./producer/qualification/adaptive-streaming/evidence/378fa2f/hosted-linux.json)
+retains one direct pass and one relay setup failure on Ubuntu 24.04/x86-64.
+Direct passes all 57 fixed-format gates with a zero playout-delay hint, 29.97 fps
+and an 8 Mbit/s encoder target on the healthy baseline. Impaired playback has
+1.55% frozen time; healthy, constrained and recovery playback have none. The
+maximum observed encoder frame gap is 37.22 ms. This independent host result
+does not establish the cause of the previous Mac scheduling pauses. The relay
+producer never publishes its tunnel URL within the 90-second setup deadline;
+only local HTTP/metrics startup is logged. No media measurements are available
+for that failed case. Both jobs remove credentials and restore socket limits.
+
+The branch also incorporates main's Go 1.27, rstream-go 1.30.0, DTLS patch and
+security updates, preserving the newer Pion forks and npm overrides. The local
+distributor race suite, both module checks and both Go vet checks pass. The
+producer's first complete race run retains an initial ICE-connect timeout in
+`TestWHEPTrickleICEAndRestartKeepOnePeerConnection`; three isolated repetitions
+pass. Hosted platform and distributor CI pass after correcting one formatting
+issue. Hosted producer unit and race suites pass; its static analysis then
+identifies an unused initial quality-policy value in a cancellation test.
+The test now uses only its rebuilt policy and checks constructor errors. Ten
+focused race repetitions and the full producer static analysis pass locally.
+The final CI run and merged dependency network checks remain in progress.
+Earlier Go 1.26 packaging/media evidence remains revision-specific: the merged
+toolchain still needs its final packaging and repeated playback qualification.
+
 The resource collector now brackets the complete CPU/memory observation with
 phase snapshots. Samples crossing a phase boundary remain in whole-run totals
 but are excluded from phase comparisons; a regression covers the boundary during

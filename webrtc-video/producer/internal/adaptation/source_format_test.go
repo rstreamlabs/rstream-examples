@@ -202,10 +202,13 @@ func receiveFormatRequest(t *testing.T, s *heldFormatController) pendingFormatRe
 }
 
 func TestFormatWorkerCancelsSupersededRequestsWithoutBlockingBitrate(t *testing.T) {
-	cfg, quality := testQualityPolicy(t)
+	cfg, _ := testQualityPolicy(t)
 	formats := formatTestConfig()
 	cfg.Quality.Presets[0].SourceProfile = "small"
-	quality, _ = NewQualityPolicy(cfg)
+	quality, err := NewQualityPolicy(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
 	large := formats.Profiles[2].Format
 	source := &heldFormatController{state: media.SourceFormatState{Running: true, Requested: large, Observed: large}, requests: make(chan pendingFormatRequest, 4)}
 	logger := logs.NewLogger(logs.NewHub(32), false)
