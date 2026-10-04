@@ -151,7 +151,8 @@ try {
   let ready = false
   for (let i = 0; i < 100; i++) {
     try {
-      docker("exec", name, "pg_isready", "-U", "postgres")
+      // Wait for the final TCP listener, not the temporary init server.
+      docker("exec", name, "pg_isready", "-h", "127.0.0.1", "-U", "postgres")
       ready = true
       break
     } catch {

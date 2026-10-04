@@ -177,12 +177,13 @@ docker run --detach \
   "${postgres_image}" >/dev/null
 postgres_started=1
 for _ in $(seq 1 60); do
-  if docker exec "${postgres_name}" pg_isready -U qualification -d webrtc_video_platform >/dev/null 2>&1; then
+  # The image's temporary initialization server accepts Unix sockets only.
+  if docker exec "${postgres_name}" pg_isready -h 127.0.0.1 -U qualification -d webrtc_video_platform >/dev/null 2>&1; then
     break
   fi
   sleep 0.5
 done
-if ! docker exec "${postgres_name}" pg_isready -U qualification -d webrtc_video_platform >/dev/null 2>&1; then
+if ! docker exec "${postgres_name}" pg_isready -h 127.0.0.1 -U qualification -d webrtc_video_platform >/dev/null 2>&1; then
   printf 'PostgreSQL did not become ready\n' >&2
   docker inspect --format 'state={{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}} oom={{.State.OOMKilled}}' \
     "${postgres_name}" >&2 || true

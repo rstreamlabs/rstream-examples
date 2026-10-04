@@ -590,7 +590,16 @@ try {
   databaseStarted = true
   await until("PostgreSQL readiness", async () => {
     try {
-      docker("exec", databaseName, "pg_isready", "-U", "postgres")
+      // Wait for the final TCP listener, not the temporary init server.
+      docker(
+        "exec",
+        databaseName,
+        "pg_isready",
+        "-h",
+        "127.0.0.1",
+        "-U",
+        "postgres",
+      )
       return true
     } catch {
       return false

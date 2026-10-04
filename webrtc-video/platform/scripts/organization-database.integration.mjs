@@ -32,7 +32,8 @@ try {
   let ready = false
   for (let attempt = 0; attempt < 60; attempt++) {
     try {
-      docker("exec", name, "pg_isready", "-U", "postgres")
+      // The image's initialization server accepts Unix sockets only.
+      docker("exec", name, "pg_isready", "-h", "127.0.0.1", "-U", "postgres")
       ready = true
       break
     } catch {
