@@ -410,8 +410,24 @@ capture-to-display latency measurements.
 The preceding run at `889dd50` completed the same format transitions but failed
 its final diagnostics gate: the harness did not correlate the expected metrics
 503 responses during the deliberate MediaMTX outage. It remains a failed run.
+
 The updated gate requires matching method, URL, response status, time and outage
 phase; the successful run also verifies metrics disappearance and recovery.
+
+The [current manual-format regression at clean `18338c8`](./platform/qualification/evidence/18338c8/manual-source-formats.json)
+passes the full provisioned Next.js path with nine selections through MediaMTX
+and nine through direct fallback. Two MediaMTX viewers share one encoder; their
+18 presentation observations reach the requested dimensions within 532.1ms.
+The nine direct observations reach them within 461.1ms. Maximum presentation
+gaps are 133.4ms and 100.1ms respectively, with no sampled media/RTP timestamp
+regression or MediaStream replacement. Every selected 360p15, 540p24 and 720p30
+format satisfies the existing cadence, confirmed source-state and quality gates.
+Distributor interruption, direct fallback and MediaMTX recovery also pass,
+without unexpected browser diagnostics. All owned containers are removed and
+socket limits restored. Eight current desktop/mobile, normal/full-page captures
+are retained privately. This finite manual-switch regression does not establish
+automatic network adaptation, initial startup latency, physical hardware support
+or user visual approval.
 The [automatic-ladder trials at `7cb827b`](./distributor/qualification/evidence/7cb827b/automatic-formats.json)
 now observe the source quality API independently from decoded dimensions and
 cadence. The 4 Mbit/s MediaMTX source case passes 720p30 → 540p24 → 720p30

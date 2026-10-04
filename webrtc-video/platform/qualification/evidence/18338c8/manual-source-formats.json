@@ -1,0 +1,956 @@
+{
+  "schemaVersion": 1,
+  "revision": "18338c8614673f573f80999cf42ffbe35341aa00",
+  "passed": true,
+  "workingTreeDirty": false,
+  "scope": "Production Next.js build and isolated PostgreSQL, real provisioned producer tunnel and MediaMTX 1.21.1, followed by direct fallback; manual source-format selection on synthetic H.264 video.",
+  "browser": "Google Chrome for Testing 153.0.8010.12",
+  "node": "v26.7.0",
+  "producerImage": "sha256:30b5687656432edeab176c532c30df8818e2d56a02fa07f39509ea6ad0edcaea",
+  "distributorImage": "sha256:68a7b830f07df9aeb90251bac262ebace14aa0525b6e57dca81755a1f25f058a",
+  "milestones": [
+    "navigation-started",
+    "quality-started",
+    "quality-passed",
+    "mediamtx-playing",
+    "mediamtx-stop-requested",
+    "mediamtx-stopped",
+    "direct-fallback-playing",
+    "direct-source-formats-passed",
+    "mediamtx-restarted",
+    "platform-reload-requested",
+    "mediamtx-recovered",
+    "browser-close-requested"
+  ],
+  "unexpectedBrowserDiagnostics": 0,
+  "cases": [
+    {
+      "delivery": "mediamtx",
+      "viewers": 2,
+      "selections": [
+        {
+          "mode": "low",
+          "bitrateCeilingKbps": 1000,
+          "appliedKbps": 1000,
+          "receivedKbps": 779.8825910067663,
+          "framesPerSecond": [
+            14.29388221841052,
+            14.29388221841052
+          ],
+          "target": {
+            "id": "small",
+            "width": 640,
+            "height": 360,
+            "frameRate": {
+              "numerator": 15,
+              "denominator": 1
+            }
+          },
+          "observations": [
+            {
+              "expected": {
+                "id": "small",
+                "width": 640,
+                "height": 360,
+                "frameRate": {
+                  "numerator": 15,
+                  "denominator": 1
+                }
+              },
+              "frames": 195,
+              "firstTargetMilliseconds": 314.5000000238415,
+              "longestGapMilliseconds": 83.40000000000055,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 195,
+              "streamReplaced": false,
+              "durationMilliseconds": 12775.300000011921
+            },
+            {
+              "expected": {
+                "id": "small",
+                "width": 640,
+                "height": 360,
+                "frameRate": {
+                  "numerator": 15,
+                  "denominator": 1
+                }
+              },
+              "frames": 195,
+              "firstTargetMilliseconds": 303,
+              "longestGapMilliseconds": 100,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 195,
+              "streamReplaced": false,
+              "durationMilliseconds": 12775.200000047684
+            }
+          ]
+        },
+        {
+          "mode": "medium",
+          "bitrateCeilingKbps": 3000,
+          "appliedKbps": 3000,
+          "receivedKbps": 2896.858246903491,
+          "framesPerSecond": [
+            22.823984526112184,
+            22.823984526112184
+          ],
+          "target": {
+            "id": "medium",
+            "width": 960,
+            "height": 540,
+            "frameRate": {
+              "numerator": 24,
+              "denominator": 1
+            }
+          },
+          "observations": [
+            {
+              "expected": {
+                "id": "medium",
+                "width": 960,
+                "height": 540,
+                "frameRate": {
+                  "numerator": 24,
+                  "denominator": 1
+                }
+              },
+              "frames": 244,
+              "firstTargetMilliseconds": 497.7000000000007,
+              "longestGapMilliseconds": 66.70000000000073,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 244,
+              "streamReplaced": false,
+              "durationMilliseconds": 10458.599999964237
+            },
+            {
+              "expected": {
+                "id": "medium",
+                "width": 960,
+                "height": 540,
+                "frameRate": {
+                  "numerator": 24,
+                  "denominator": 1
+                }
+              },
+              "frames": 246,
+              "firstTargetMilliseconds": 503.39999999999964,
+              "longestGapMilliseconds": 66.70000000000073,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 246,
+              "streamReplaced": false,
+              "durationMilliseconds": 10459
+            }
+          ]
+        },
+        {
+          "mode": "high",
+          "bitrateCeilingKbps": 6000,
+          "appliedKbps": 4934,
+          "receivedKbps": 5671.526464760075,
+          "framesPerSecond": [
+            28.46079380445305,
+            28.46630518977537
+          ],
+          "target": {
+            "id": "large",
+            "width": 1280,
+            "height": 720,
+            "frameRate": {
+              "numerator": 30,
+              "denominator": 1
+            }
+          },
+          "observations": [
+            {
+              "expected": {
+                "id": "large",
+                "width": 1280,
+                "height": 720,
+                "frameRate": {
+                  "numerator": 30,
+                  "denominator": 1
+                }
+              },
+              "frames": 300,
+              "firstTargetMilliseconds": 351.5,
+              "longestGapMilliseconds": 66.70000000000073,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 300,
+              "streamReplaced": false,
+              "durationMilliseconds": 10151.5
+            },
+            {
+              "expected": {
+                "id": "large",
+                "width": 1280,
+                "height": 720,
+                "frameRate": {
+                  "numerator": 30,
+                  "denominator": 1
+                }
+              },
+              "frames": 299,
+              "firstTargetMilliseconds": 323.1999999761574,
+              "longestGapMilliseconds": 50.10000000000582,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 299,
+              "streamReplaced": false,
+              "durationMilliseconds": 10152.300000011921
+            }
+          ]
+        },
+        {
+          "mode": "low",
+          "bitrateCeilingKbps": 1000,
+          "appliedKbps": 1000,
+          "receivedKbps": 761.9051018699745,
+          "framesPerSecond": [
+            14.184397163120567,
+            14.187116564417177
+          ],
+          "target": {
+            "id": "small",
+            "width": 640,
+            "height": 360,
+            "frameRate": {
+              "numerator": 15,
+              "denominator": 1
+            }
+          },
+          "observations": [
+            {
+              "expected": {
+                "id": "small",
+                "width": 640,
+                "height": 360,
+                "frameRate": {
+                  "numerator": 15,
+                  "denominator": 1
+                }
+              },
+              "frames": 166,
+              "firstTargetMilliseconds": 395.2000000238404,
+              "longestGapMilliseconds": 99.90000000000146,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 166,
+              "streamReplaced": false,
+              "durationMilliseconds": 10744.900000035763
+            },
+            {
+              "expected": {
+                "id": "small",
+                "width": 640,
+                "height": 360,
+                "frameRate": {
+                  "numerator": 15,
+                  "denominator": 1
+                }
+              },
+              "frames": 148,
+              "firstTargetMilliseconds": 366.49999996423867,
+              "longestGapMilliseconds": 133.40000000000146,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 148,
+              "streamReplaced": false,
+              "durationMilliseconds": 10744.399999976158
+            }
+          ]
+        },
+        {
+          "mode": "auto",
+          "bitrateCeilingKbps": 6000,
+          "appliedKbps": 6000,
+          "receivedKbps": 5979.249327068317,
+          "framesPerSecond": [
+            28.482852160434025,
+            28.488372093023255
+          ],
+          "target": {
+            "id": "large",
+            "width": 1280,
+            "height": 720,
+            "frameRate": {
+              "numerator": 30,
+              "denominator": 1
+            }
+          },
+          "observations": [
+            {
+              "expected": {
+                "id": "large",
+                "width": 1280,
+                "height": 720,
+                "frameRate": {
+                  "numerator": 30,
+                  "denominator": 1
+                }
+              },
+              "frames": 294,
+              "firstTargetMilliseconds": 493.59999999999854,
+              "longestGapMilliseconds": 83.40000000000146,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 294,
+              "streamReplaced": false,
+              "durationMilliseconds": 10255.699999988079
+            },
+            {
+              "expected": {
+                "id": "large",
+                "width": 1280,
+                "height": 720,
+                "frameRate": {
+                  "numerator": 30,
+                  "denominator": 1
+                }
+              },
+              "frames": 294,
+              "firstTargetMilliseconds": 532.0999999761552,
+              "longestGapMilliseconds": 116.70000000000437,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 294,
+              "streamReplaced": false,
+              "durationMilliseconds": 10255.399999976158
+            }
+          ]
+        },
+        {
+          "mode": "medium",
+          "bitrateCeilingKbps": 3000,
+          "appliedKbps": 3000,
+          "receivedKbps": 2908.589358706025,
+          "framesPerSecond": [
+            22.937548188126446,
+            22.941970310391362
+          ],
+          "target": {
+            "id": "medium",
+            "width": 960,
+            "height": 540,
+            "frameRate": {
+              "numerator": 24,
+              "denominator": 1
+            }
+          },
+          "observations": [
+            {
+              "expected": {
+                "id": "medium",
+                "width": 960,
+                "height": 540,
+                "frameRate": {
+                  "numerator": 24,
+                  "denominator": 1
+                }
+              },
+              "frames": 248,
+              "firstTargetMilliseconds": 367.00000003576133,
+              "longestGapMilliseconds": 66.66599999999744,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 248,
+              "streamReplaced": false,
+              "durationMilliseconds": 10227.200000047684
+            },
+            {
+              "expected": {
+                "id": "medium",
+                "width": 960,
+                "height": 540,
+                "frameRate": {
+                  "numerator": 24,
+                  "denominator": 1
+                }
+              },
+              "frames": 248,
+              "firstTargetMilliseconds": 355.39999995231483,
+              "longestGapMilliseconds": 66.69999999999709,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 248,
+              "streamReplaced": false,
+              "durationMilliseconds": 10227.099999964237
+            }
+          ]
+        },
+        {
+          "mode": "low",
+          "bitrateCeilingKbps": 1000,
+          "appliedKbps": 1000,
+          "receivedKbps": 742.4307251916432,
+          "framesPerSecond": [
+            14.146434716115465,
+            14.146434716115465
+          ],
+          "target": {
+            "id": "small",
+            "width": 640,
+            "height": 360,
+            "frameRate": {
+              "numerator": 15,
+              "denominator": 1
+            }
+          },
+          "observations": [
+            {
+              "expected": {
+                "id": "small",
+                "width": 640,
+                "height": 360,
+                "frameRate": {
+                  "numerator": 15,
+                  "denominator": 1
+                }
+              },
+              "frames": 168,
+              "firstTargetMilliseconds": 383.39999998807616,
+              "longestGapMilliseconds": 83.5,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 168,
+              "streamReplaced": false,
+              "durationMilliseconds": 10930
+            },
+            {
+              "expected": {
+                "id": "small",
+                "width": 640,
+                "height": 360,
+                "frameRate": {
+                  "numerator": 15,
+                  "denominator": 1
+                }
+              },
+              "frames": 168,
+              "firstTargetMilliseconds": 371.49999997616396,
+              "longestGapMilliseconds": 100,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 168,
+              "streamReplaced": false,
+              "durationMilliseconds": 10929.699999988079
+            }
+          ]
+        },
+        {
+          "mode": "high",
+          "bitrateCeilingKbps": 6000,
+          "appliedKbps": 6000,
+          "receivedKbps": 5942.522859891034,
+          "framesPerSecond": [
+            28.504944735311227,
+            28.51047323506594
+          ],
+          "target": {
+            "id": "large",
+            "width": 1280,
+            "height": 720,
+            "frameRate": {
+              "numerator": 30,
+              "denominator": 1
+            }
+          },
+          "observations": [
+            {
+              "expected": {
+                "id": "large",
+                "width": 1280,
+                "height": 720,
+                "frameRate": {
+                  "numerator": 30,
+                  "denominator": 1
+                }
+              },
+              "frames": 293,
+              "firstTargetMilliseconds": 382.1000000000058,
+              "longestGapMilliseconds": 66.70000000001164,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 293,
+              "streamReplaced": false,
+              "durationMilliseconds": 10142.899999976158
+            },
+            {
+              "expected": {
+                "id": "large",
+                "width": 1280,
+                "height": 720,
+                "frameRate": {
+                  "numerator": 30,
+                  "denominator": 1
+                }
+              },
+              "frames": 293,
+              "firstTargetMilliseconds": 387.1999999999971,
+              "longestGapMilliseconds": 83.30000000000291,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 293,
+              "streamReplaced": false,
+              "durationMilliseconds": 10142.900000035763
+            }
+          ]
+        },
+        {
+          "mode": "auto",
+          "bitrateCeilingKbps": 6000,
+          "appliedKbps": 6000,
+          "receivedKbps": 6002.588273064573,
+          "framesPerSecond": [
+            28.471818710052297,
+            28.4773343665246
+          ],
+          "target": {
+            "id": "large",
+            "width": 1280,
+            "height": 720,
+            "frameRate": {
+              "numerator": 30,
+              "denominator": 1
+            }
+          },
+          "observations": [
+            {
+              "expected": {
+                "id": "large",
+                "width": 1280,
+                "height": 720,
+                "frameRate": {
+                  "numerator": 30,
+                  "denominator": 1
+                }
+              },
+              "frames": 305,
+              "firstTargetMilliseconds": 1.8000000000029104,
+              "longestGapMilliseconds": 50.10000000000582,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 305,
+              "streamReplaced": false,
+              "durationMilliseconds": 10140.899999976158
+            },
+            {
+              "expected": {
+                "id": "large",
+                "width": 1280,
+                "height": 720,
+                "frameRate": {
+                  "numerator": 30,
+                  "denominator": 1
+                }
+              },
+              "frames": 304,
+              "firstTargetMilliseconds": 40.69999995231046,
+              "longestGapMilliseconds": 50.10000000000582,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 304,
+              "streamReplaced": false,
+              "durationMilliseconds": 10141.599999964237
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "delivery": "direct",
+      "viewers": 1,
+      "selections": [
+        {
+          "mode": "low",
+          "bitrateCeilingKbps": 1000,
+          "appliedKbps": 1000,
+          "receivedKbps": null,
+          "framesPerSecond": [
+            14.2966069386199
+          ],
+          "target": {
+            "id": "small",
+            "width": 640,
+            "height": 360,
+            "frameRate": {
+              "numerator": 15,
+              "denominator": 1
+            }
+          },
+          "observations": [
+            {
+              "expected": {
+                "id": "small",
+                "width": 640,
+                "height": 360,
+                "frameRate": {
+                  "numerator": 15,
+                  "denominator": 1
+                }
+              },
+              "frames": 123,
+              "firstTargetMilliseconds": 293.2000000238477,
+              "longestGapMilliseconds": 100.10000000000582,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 123,
+              "streamReplaced": false,
+              "durationMilliseconds": 7950.5
+            }
+          ]
+        },
+        {
+          "mode": "medium",
+          "bitrateCeilingKbps": 3000,
+          "appliedKbps": 3000,
+          "receivedKbps": null,
+          "framesPerSecond": [
+            22.75356729656768
+          ],
+          "target": {
+            "id": "medium",
+            "width": 960,
+            "height": 540,
+            "frameRate": {
+              "numerator": 24,
+              "denominator": 1
+            }
+          },
+          "observations": [
+            {
+              "expected": {
+                "id": "medium",
+                "width": 960,
+                "height": 540,
+                "frameRate": {
+                  "numerator": 24,
+                  "denominator": 1
+                }
+              },
+              "frames": 185,
+              "firstTargetMilliseconds": 437.2000000119151,
+              "longestGapMilliseconds": 83.29999999998836,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 185,
+              "streamReplaced": false,
+              "durationMilliseconds": 7946.699999988079
+            }
+          ]
+        },
+        {
+          "mode": "high",
+          "bitrateCeilingKbps": 6000,
+          "appliedKbps": 6000,
+          "receivedKbps": null,
+          "framesPerSecond": [
+            28.411287205257054
+          ],
+          "target": {
+            "id": "large",
+            "width": 1280,
+            "height": 720,
+            "frameRate": {
+              "numerator": 30,
+              "denominator": 1
+            }
+          },
+          "observations": [
+            {
+              "expected": {
+                "id": "large",
+                "width": 1280,
+                "height": 720,
+                "frameRate": {
+                  "numerator": 30,
+                  "denominator": 1
+                }
+              },
+              "frames": 226,
+              "firstTargetMilliseconds": 369.59999998807325,
+              "longestGapMilliseconds": 66.69999999998254,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 226,
+              "streamReplaced": false,
+              "durationMilliseconds": 7852.299999952316
+            }
+          ]
+        },
+        {
+          "mode": "low",
+          "bitrateCeilingKbps": 1000,
+          "appliedKbps": 1000,
+          "receivedKbps": null,
+          "framesPerSecond": [
+            14.288435892550963
+          ],
+          "target": {
+            "id": "small",
+            "width": 640,
+            "height": 360,
+            "frameRate": {
+              "numerator": 15,
+              "denominator": 1
+            }
+          },
+          "observations": [
+            {
+              "expected": {
+                "id": "small",
+                "width": 640,
+                "height": 360,
+                "frameRate": {
+                  "numerator": 15,
+                  "denominator": 1
+                }
+              },
+              "frames": 123,
+              "firstTargetMilliseconds": 330.70000003575115,
+              "longestGapMilliseconds": 83.39999999999418,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 123,
+              "streamReplaced": false,
+              "durationMilliseconds": 7949.100000023842
+            }
+          ]
+        },
+        {
+          "mode": "auto",
+          "bitrateCeilingKbps": 6000,
+          "appliedKbps": 6000,
+          "receivedKbps": null,
+          "framesPerSecond": [
+            28.54923286074966
+          ],
+          "target": {
+            "id": "large",
+            "width": 1280,
+            "height": 720,
+            "frameRate": {
+              "numerator": 30,
+              "denominator": 1
+            }
+          },
+          "observations": [
+            {
+              "expected": {
+                "id": "large",
+                "width": 1280,
+                "height": 720,
+                "frameRate": {
+                  "numerator": 30,
+                  "denominator": 1
+                }
+              },
+              "frames": 228,
+              "firstTargetMilliseconds": 456.99999998806743,
+              "longestGapMilliseconds": 66.70000000001164,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 228,
+              "streamReplaced": false,
+              "durationMilliseconds": 7938.799999952316
+            }
+          ]
+        },
+        {
+          "mode": "medium",
+          "bitrateCeilingKbps": 3000,
+          "appliedKbps": 3000,
+          "receivedKbps": null,
+          "framesPerSecond": [
+            22.911051212938006
+          ],
+          "target": {
+            "id": "medium",
+            "width": 960,
+            "height": 540,
+            "frameRate": {
+              "numerator": 24,
+              "denominator": 1
+            }
+          },
+          "observations": [
+            {
+              "expected": {
+                "id": "medium",
+                "width": 960,
+                "height": 540,
+                "frameRate": {
+                  "numerator": 24,
+                  "denominator": 1
+                }
+              },
+              "frames": 192,
+              "firstTargetMilliseconds": 328.6000000357744,
+              "longestGapMilliseconds": 66.60000000000582,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 192,
+              "streamReplaced": false,
+              "durationMilliseconds": 7975.700000047684
+            }
+          ]
+        },
+        {
+          "mode": "low",
+          "bitrateCeilingKbps": 1000,
+          "appliedKbps": 1000,
+          "receivedKbps": null,
+          "framesPerSecond": [
+            14.310246136233543
+          ],
+          "target": {
+            "id": "small",
+            "width": 640,
+            "height": 360,
+            "frameRate": {
+              "numerator": 15,
+              "denominator": 1
+            }
+          },
+          "observations": [
+            {
+              "expected": {
+                "id": "small",
+                "width": 640,
+                "height": 360,
+                "frameRate": {
+                  "numerator": 15,
+                  "denominator": 1
+                }
+              },
+              "frames": 122,
+              "firstTargetMilliseconds": 362.2999999880849,
+              "longestGapMilliseconds": 100.10000000000582,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 122,
+              "streamReplaced": false,
+              "durationMilliseconds": 7958.799999952316
+            }
+          ]
+        },
+        {
+          "mode": "high",
+          "bitrateCeilingKbps": 6000,
+          "appliedKbps": 6000,
+          "receivedKbps": null,
+          "framesPerSecond": [
+            28.49941837921675
+          ],
+          "target": {
+            "id": "large",
+            "width": 1280,
+            "height": 720,
+            "frameRate": {
+              "numerator": 30,
+              "denominator": 1
+            }
+          },
+          "observations": [
+            {
+              "expected": {
+                "id": "large",
+                "width": 1280,
+                "height": 720,
+                "frameRate": {
+                  "numerator": 30,
+                  "denominator": 1
+                }
+              },
+              "frames": 225,
+              "firstTargetMilliseconds": 461.1000000119093,
+              "longestGapMilliseconds": 66.70000000001164,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 225,
+              "streamReplaced": false,
+              "durationMilliseconds": 7904.300000011921
+            }
+          ]
+        },
+        {
+          "mode": "auto",
+          "bitrateCeilingKbps": 6000,
+          "appliedKbps": 6000,
+          "receivedKbps": null,
+          "framesPerSecond": [
+            28.654404646660215
+          ],
+          "target": {
+            "id": "large",
+            "width": 1280,
+            "height": 720,
+            "frameRate": {
+              "numerator": 30,
+              "denominator": 1
+            }
+          },
+          "observations": [
+            {
+              "expected": {
+                "id": "large",
+                "width": 1280,
+                "height": 720,
+                "frameRate": {
+                  "numerator": 30,
+                  "denominator": 1
+                }
+              },
+              "frames": 235,
+              "firstTargetMilliseconds": 19.431999988068128,
+              "longestGapMilliseconds": 50.10000000000582,
+              "mediaTimeRegressions": 0,
+              "rtpTimestampRegressions": 0,
+              "rtpSamples": 235,
+              "streamReplaced": false,
+              "durationMilliseconds": 7850.699999988079
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "screenshots": {
+    "source-formats-direct-full-page-desktop.png": "3c4c127296675e2426ef2a0fdc27dbf07ecb73f0e2b6e1ab8812eef590902edd",
+    "source-formats-direct-full-page-mobile.png": "d2d2352b3a0daa0372cc35155d84bcea6de003a01b4f0ede6349a644de1c01eb",
+    "source-formats-direct-inline-desktop.png": "1a05408113c089c0dd435c2ae59c4cdc262d0adc8a66147ef23e549a2d395521",
+    "source-formats-direct-inline-mobile.png": "292349f60dc873822f86164e4c5de54d6fa0b43243bf9a268b970ace7d2244c0",
+    "source-formats-mediamtx-full-page-desktop.png": "695edb1f490207d776f41729429b3070c7587bda76fe301c1686673ff255ccba",
+    "source-formats-mediamtx-full-page-mobile.png": "161f8f976caeed0801f6019b685d2fe950305bf88454893708dce7c9a48018b6",
+    "source-formats-mediamtx-inline-desktop.png": "8afc8db3f4b0c697cf682fc59c9204ac61638bc828a438aae77cba29c9d3c47e",
+    "source-formats-mediamtx-inline-mobile.png": "152094bcd927f5e4b89a16a99f54e935aaf0b1dbe4e9992ca5fd988750eebd1d"
+  },
+  "sha256": {
+    "summary.json": "5cbdd97d31c2262e45682a9f7370432df6de5b9950463647b3a57e12232aae8b",
+    "browser.json": "5f74611ace0b7b1ba1ee7aed39bb58d8d3503761c12d08f4696080ce00e7a6ce",
+    "source-format-transitions-mediamtx.json": "7422cf3379f04e23d0ca67524f6b0dde98e058533620de62cfae04173bc51d25",
+    "source-format-transitions-direct.json": "a2e1211caf10767295a9e0a6e69a382a0522c435e24a1747f78333651db95e93",
+    "producer.log": "e0aa9b29fd05255b0aa748ae42d36658fdea2c641b0877201cb2406337d644d0",
+    "mediamtx.log": "12e47a0c71af85ba898b64871b138bfd11bd5963c31c7efb95a70a43cde465a9",
+    "stack.log": "53daebbbea819d8ff96c5253ebe3ef3216667d9377b523325eb3a83ce3914d17"
+  },
+  "cleanup": {
+    "ownedContainersRemoved": true,
+    "socketLimitsRestored": {
+      "receive": 212992,
+      "send": 212992
+    }
+  },
+  "boundaries": [
+    "One finite current-revision regression, not percentile or physical capture-to-display qualification.",
+    "Time to the requested displayed resolution includes the control selection; it is not initial stream startup latency.",
+    "Source state, displayed dimensions and sustained cadence are asserted by the runner; observation counters in requested profile metadata are not used as proof of applied state.",
+    "Automatic congestion-driven format changes, forced TURN, physical cameras and actual OAuth/SSO remain separate.",
+    "The session is seeded only in the isolated test database. No real user session or production deployment is changed.",
+    "Captures are current evidence; outstanding user visual acceptance is not implied by successful automation."
+  ]
+}
