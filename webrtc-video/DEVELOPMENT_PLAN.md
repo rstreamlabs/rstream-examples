@@ -11,6 +11,9 @@ and the guide-command audit. Inventory and replay presentation are accepted;
 the separate quality/format/metrics visual review remains pending. The current
 automatic-format series has five complete passes in six trials and retains one
 baseline browser-presentation freeze; it is not an all-green release result.
+The latest fixed-format latency series validates measurement in all four cases
+and passes delivery in three; a 193ms source-capacity recovery freeze remains
+under investigation.
 
 ## Implemented; final regression qualification pending
 
@@ -630,8 +633,9 @@ The optional qualification-only pixel timestamp probe is now maintained in
 of concept. It stamps I420 pixels immediately before encoding and reads a small
 crop at 5 Hz through browser frame callbacks. Reports retain raw observations,
 phase distributions, sampling overhead and invalid/incomplete runs. A shared
-Linux boot identity, wall/performance clock agreement and marker integrity are
-required. Its scope excludes camera exposure, capture/scaling before the stamp
+Linux boot identity, matching time-namespace offsets, bounded browser alignment
+to the monotonic clock and marker integrity are required. Its scope excludes
+camera exposure, capture/scaling before the stamp
 and physical display scanout. Production pipelines and buffering are unchanged.
 The 100-test harness suite, artifact sanitization and result/negative-gate tests
 pass; the plugin builds on Linux and macOS and survives actual H.264 encode /
@@ -694,8 +698,40 @@ is retained as invalid measurement while normal teardown still completes.
 Tests cover asymmetric request delays, clock drift/navigation, missing or slow
 responses, namespace mismatch, old UTC markers, source reversals and a simulated
 wall-clock step that leaves monotonic latency unchanged. The full 116-test
-collector suite and end-to-end result-gate tests pass. Actual browser/media
-qualification is next; no production streaming buffer or quality policy changes.
+collector suite and end-to-end result-gate tests pass. No production streaming
+buffer or quality policy changes.
+
+The [four monotonic-clock trials at `4a0d83a`](./distributor/qualification/evidence/4a0d83a/latency-network.json)
+validate the instrument in every phase: alignment uncertainty is 1.298–1.423ms,
+with no rejected, omitted, malformed or reversed marker. Three cases pass all
+unchanged gates. Direct and adaptive MediaMTX delay/jitter/loss have no freezes
+or dropped decoded frames; direct 4 Mbit/s capacity has 1.007s initial-transition
+freezes and no subsequent freeze or drop. All cases restore the 8 Mbit/s target.
+The source-capacity case fails playback only: its accepted initial transition
+has 1.495s freezes plus six dropped frames, but recovery adds a separate 193ms
+freeze. The [frame diagnostic](./distributor/qualification/evidence/4a0d83a/recovery-freeze.json)
+shows a 194ms receive-time gap for one frame of RTP progression, 1.3ms decoder
+processing and 187.744ms marker latency. No new packet loss, NACK or decoded drop
+accompanies it. This places delay before completed receipt but does not identify
+its cause; encoder/transport/adapter timing and host scheduling remain to examine.
+Three trials reach 7–8.6ms wall-clock offsets without invalidating monotonic
+alignment. Earlier failed measurements remain unchanged. Resources include the
+probe and do not establish its isolated cost; socket limits are restored and
+owned containers removed.
+
+The standalone marker command initially fails on macOS because
+[GLib](https://raw.githubusercontent.com/GNOME/glib/main/glib/gmain.c) uses
+`mach_absolute_time` and current
+[libuv](https://raw.githubusercontent.com/libuv/libuv/v1.x/src/unix/darwin.c) uses
+`mach_continuous_time`, which need not agree after sleep. It now explicitly
+requires Linux before creating
+artifacts or invoking GStreamer. The README distinguishes macOS compilation
+checks from Linux timestamp verification. This is a qualification-tool boundary,
+not a restriction on production macOS streaming or browser support.
+The standalone Linux check passes actual H.264 encode/decode at 500 and
+8000 kbit/s, including timestamp bounds, checksum corruption and ambiguous-pixel
+rejection. The isolated fixture initially lacked `h264parse`; installing its
+GStreamer package fixes that setup error, and the README lists the dependency.
 
 - Compare changes against the current path at equal source content and network
   conditions. Measure time to first frame separately from capture-to-display

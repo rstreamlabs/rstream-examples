@@ -1,0 +1,137 @@
+{
+  "case": "source-capacity",
+  "revision": "4a0d83ad3dc6ed988acc7e06eb9d48e473807654",
+  "passed": false,
+  "events": [
+    {
+      "reportedAtElapsedMilliseconds": 99915,
+      "freezeDurationIncrementSeconds": 0.19299999999999984,
+      "framePresentation": {
+        "timeOriginMilliseconds": 1791098887073.9,
+        "sampledAtMilliseconds": 105429.09999999404,
+        "frames": 22,
+        "maximumFrameGapMilliseconds": 183.29999999998836,
+        "maximumTimerDelayMilliseconds": 17.30000001192093,
+        "latest": {
+          "callbackMilliseconds": 105415,
+          "presentationMilliseconds": 105415.5,
+          "expectedDisplayMilliseconds": 105415,
+          "receiveMilliseconds": 105405.6,
+          "processingSeconds": 0.0024,
+          "mediaSeconds": 102.862,
+          "rtpTimestamp": 4108959545,
+          "presentedFrames": 2989
+        },
+        "events": [
+          {
+            "kind": "frame-gap",
+            "gapMilliseconds": 183.29999999998836,
+            "previous": {
+              "callbackMilliseconds": 105131.6,
+              "presentationMilliseconds": 105132.3,
+              "expectedDisplayMilliseconds": 105131.6,
+              "receiveMilliseconds": 105121.4,
+              "processingSeconds": 0.0013,
+              "mediaSeconds": 102.697,
+              "rtpTimestamp": 4108944545,
+              "presentedFrames": 2985
+            },
+            "current": {
+              "callbackMilliseconds": 105314.9,
+              "presentationMilliseconds": 105329.4,
+              "expectedDisplayMilliseconds": 105315,
+              "receiveMilliseconds": 105315.4,
+              "processingSeconds": 0.0013,
+              "mediaSeconds": 102.73,
+              "rtpTimestamp": 4108947545,
+              "presentedFrames": 2986
+            }
+          }
+        ],
+        "omittedEvents": 0
+      },
+      "latencySamples": [
+        {
+          "sourceMonotonicMilliseconds": 231688911.635,
+          "expectedDisplayMonotonicMilliseconds": 231688981.961,
+          "expectedDisplayPerformanceMilliseconds": 104531.6,
+          "browserTimeOriginMilliseconds": 1791098887073.9,
+          "latencyMilliseconds": 70.32600000500679,
+          "callbackLatenessMilliseconds": 16.69999999999709,
+          "sampledWallClockOffsetMilliseconds": -1.599853515625,
+          "rtpTimestamp": 4108887545,
+          "mediaTimeSeconds": 102.064,
+          "width": 1280,
+          "height": 720,
+          "minimumContrast": 255
+        },
+        {
+          "sourceMonotonicMilliseconds": 231689144.409,
+          "expectedDisplayMonotonicMilliseconds": 231689215.361,
+          "expectedDisplayPerformanceMilliseconds": 104765,
+          "browserTimeOriginMilliseconds": 1791098887073.9,
+          "latencyMilliseconds": 70.95199999213219,
+          "callbackLatenessMilliseconds": 16.60000000000582,
+          "sampledWallClockOffsetMilliseconds": -1,
+          "rtpTimestamp": 4108908545,
+          "mediaTimeSeconds": 102.298,
+          "width": 1280,
+          "height": 720,
+          "minimumContrast": 244.33333333333331
+        },
+        {
+          "sourceMonotonicMilliseconds": 231689376.792,
+          "expectedDisplayMonotonicMilliseconds": 231689415.261,
+          "expectedDisplayPerformanceMilliseconds": 104964.9,
+          "browserTimeOriginMilliseconds": 1791098887073.9,
+          "latencyMilliseconds": 38.46900001168251,
+          "callbackLatenessMilliseconds": 16.70000000001164,
+          "sampledWallClockOffsetMilliseconds": -0.7998046875,
+          "rtpTimestamp": 4108929545,
+          "mediaTimeSeconds": 102.531,
+          "width": 1280,
+          "height": 720,
+          "minimumContrast": 247.66666666666663
+        },
+        {
+          "sourceMonotonicMilliseconds": 231689577.617,
+          "expectedDisplayMonotonicMilliseconds": 231689765.361,
+          "expectedDisplayPerformanceMilliseconds": 105315,
+          "browserTimeOriginMilliseconds": 1791098887073.9,
+          "latencyMilliseconds": 187.74399998784065,
+          "callbackLatenessMilliseconds": -0.10000000000582077,
+          "sampledWallClockOffsetMilliseconds": -1.5,
+          "rtpTimestamp": 4108947545,
+          "mediaTimeSeconds": 102.73,
+          "width": 1280,
+          "height": 720,
+          "minimumContrast": 247.66666666666669
+        }
+      ],
+      "precedingCounters": {
+        "framesDropped": 6,
+        "packetsLost": 0,
+        "nackCount": 0,
+        "twccReportedLost": 203,
+        "pacerMaximumPrimaryDelayMilliseconds": 44.597542,
+        "encodedKeyFrames": 57,
+        "encoderTargetKbps": 8000
+      },
+      "currentCounters": {
+        "framesDropped": 6,
+        "packetsLost": 0,
+        "nackCount": 0,
+        "twccReportedLost": 203,
+        "pacerMaximumPrimaryDelayMilliseconds": 78.103833,
+        "encodedKeyFrames": 58,
+        "encoderTargetKbps": 8000
+      }
+    }
+  ],
+  "interpretation": [
+    "The recovery failure is a native freeze increment of 193 ms, with a frame callback gap of 183.3 ms. The corresponding RTP timestamp advances by 3000 (one 30 fps frame); its receive time advances by 194.0 ms while decoder processing remains 1.3 ms.",
+    "The marker on that frame measures 187.744 ms before encoding to expected composition. Browser timer lateness is at most 17.3 ms in the snapshot. This locates delay before completed frame receipt; it does not identify encoding, transport, adapter or host scheduling as the cause.",
+    "No new browser packet loss, NACK, TWCC loss or dropped decoded frame accompanies this snapshot. The maximum primary packet residence rises from 44.598 to 78.104 ms and one encoded key frame is reported in the interval. These cumulative, once-per-second observations cannot establish causation.",
+    "The separate six dropped decoded frames all occur at the initial capacity step, which passes its original disruption gate. They do not explain the recovery failure."
+  ]
+}

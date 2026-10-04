@@ -1,0 +1,51 @@
+{
+  "scope": "Standalone version-2 marker integrity across H.264 encode/decode; not a WebRTC latency or performance qualification",
+  "source": "4a0d83a with the Linux-only standalone verifier guard",
+  "passed": true,
+  "platform": "linux/arm64",
+  "image": "sha256:2d3d5d0d32949310cd9322e86c1c215bc5223e4703eb764ea00f1152fd2df833",
+  "versions": {
+    "node": "24.21.0",
+    "glib": "2.74.6",
+    "gstreamer": "1.22.0"
+  },
+  "logSHA256": "68a8981dcbe2aac4ed908eacee649efd9cc54c35a4f476139d802535e82ad600",
+  "checks": [
+    "Actual marker survives H.264 at 500 and 8000 kbit/s",
+    "Timestamp falls within the monotonic interval surrounding the pipeline invocation",
+    "Corrupted timestamp bits fail CRC validation",
+    "Ambiguous low-contrast pixels are rejected",
+    "Invalid crop size is rejected"
+  ],
+  "markers": [
+    {
+      "bitrate": 500,
+      "marker": {
+        "timestampMilliseconds": 232881175.399,
+        "minimumContrast": 229
+      },
+      "check": "encode-decode-only"
+    },
+    {
+      "bitrate": 8000,
+      "marker": {
+        "timestampMilliseconds": 232881433.165,
+        "minimumContrast": 251
+      },
+      "check": "encode-decode-only"
+    }
+  ],
+  "warnings": [
+    "The read-only fixture reports Fontconfig cache-directory warnings; both bitrate cases and all assertions complete successfully."
+  ],
+  "precedingFailures": [
+    {
+      "platform": "darwin/arm64",
+      "result": "The original standalone verifier fails its lower timestamp bound because Node/libuv and GLib use different monotonic clocks. The script now rejects non-Linux platforms explicitly before creating artifacts or starting GStreamer; this rejection was verified."
+    },
+    {
+      "platform": "linux/arm64",
+      "result": "The first isolated verification image lacks h264parse. Its failed run is retained locally. Installing the GStreamer bad-plugins package supplies the parser; the final check above passes and the README states this dependency."
+    }
+  ]
+}

@@ -125,8 +125,11 @@ cc -shared -fPIC -O2 -Wall -Wextra -Werror \
 GST_PLUGIN_PATH="${latency_artifacts}" node latency/verify-marker.mjs
 ```
 
-Use the `.dylib` extension when compiling on macOS. The check
-requires `gst-launch-1.0`, x264 and the libav decoder. It verifies timestamp/CRC
+Compilation can also be checked on macOS with the `.dylib` extension, but
+`verify-marker.mjs` requires Linux: Node/libuv and GLib do not share the same
+monotonic clock on macOS. This restriction applies only to latency qualification,
+not to the producer or viewers. The Linux check requires `gst-launch-1.0`, x264,
+the H.264 parser and the libav decoder. It verifies timestamp/CRC
 integrity at 500 and 8000 kbit/s, corruption rejection, and removes its temporary
 decoded frames. Do not put compiled plugin binaries in the repository.
 

@@ -1,0 +1,2248 @@
+{
+  "purpose": "Qualify version-2 monotonic marker measurement with bounded browser clock alignment under capacity and delay/jitter/loss changes",
+  "revision": "4a0d83ad3dc6ed988acc7e06eb9d48e473807654",
+  "nativeRevision": "94d47092806b2dffccb6150dd813d29b978c8dfc",
+  "passed": false,
+  "passedCases": 3,
+  "latencyMeasurementValidInAllCases": true,
+  "udpSocketLimitsRestored": true,
+  "ownedContainersRemoved": true,
+  "interpretation": [
+    "All four cases have valid marker measurements, including every collected phase. Maximum browser alignment uncertainty is 1.298 to 1.423 ms, inside the unchanged 5 ms limit. No rejected, omitted, malformed or reversed markers occur.",
+    "Three cases pass all unchanged gates: direct delay/jitter/loss, adaptive MediaMTX source delay/jitter/loss, and direct 4 Mbit/s capacity. The fourth fails playback only: a 193 ms freeze during source-capacity recovery. Its latency measurement remains valid; a valid instrument does not establish successful delivery.",
+    "The delay/jitter/loss cases use 60 ms one-way delay, 15 ms jitter and 1% random loss. Neither has a freeze or dropped decoded frame. Baseline/impaired median marker-to-expected-composition latency is 45.197/108.976 ms direct and 48.275/130.343 ms with the custom adapter. These are individual synthetic same-host observations, not hardware-independent guarantees or a path ranking.",
+    "Direct capacity has 1.007 s of initial-transition freezes, then no steady constrained or recovery freeze and no dropped decoded frame. Source capacity has 1.495 s initial-transition freezes plus six dropped decoded frames (1.695 s disruption), then the separate 193 ms recovery failure. All four restore the 8 Mbit/s encoder target.",
+    "Three trials reach 7.0 to 8.6 ms of wall/performance-clock difference while monotonic calibration stays valid. This diagnostic is no longer used to measure latency. Earlier UTC-marker failures retain their original invalid verdicts; no retrospective offset correction is applied.",
+    "The source-capacity recovery frame arrives 194 ms after the preceding frame, with a 33.3 ms RTP timestamp advance and 1.3 ms decoder processing. Its measured pre-encoding-to-composition delay is 187.744 ms. No new loss/NACK/drop accompanies it. See the retained diagnostic; encoding, transport, adapter and host scheduling causation remains unresolved.",
+    "No acceptance gate or production transport, buffering, source-quality or encoder policy changes between cases. This fixed 720p30 series uses 2\u20138 Mbit/s adaptation, FEC 5/1 and 20/30/30/45-second phases; it does not qualify the optional format ladder.",
+    "Whole-run CPU/memory includes the qualification probe. It does not isolate probe, format-switch or recording overhead, and the distribution performanceEnvironment gate checks transport-buffer warnings rather than per-phase host scheduling."
+  ],
+  "cases": [
+    {
+      "case": "direct-impairment",
+      "revision": "4a0d83ad3dc6ed988acc7e06eb9d48e473807654",
+      "workingTreeDirty": false,
+      "mode": "direct",
+      "passed": true,
+      "publishable": true,
+      "images": {
+        "producer": "sha256:818dd252c9bb494d63122fef1eb516ad63887d51496f47f9fe2c675c9713bb4f",
+        "distributor": null,
+        "browser": "sha256:1e582d18b7304eb5248f571a1a5989697fe87462185a80c1060fe48be2864e76"
+      },
+      "profile": {
+        "edgeAuthentication": true,
+        "edgeCredentialLifetimeSeconds": 365,
+        "warmupSeconds": 20,
+        "phaseSeconds": 30,
+        "recoverySeconds": 45,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "eace3c1bba6f697dc724a1ae690cbef4e82cf6d12c0f8fd0c3049bf1d3652ff3",
+        "latencyProbe": true,
+        "sourceQualityObserved": false,
+        "expectedNetworkFormat": null,
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": true,
+          "capacityKbps": 0,
+          "delayMilliseconds": 60,
+          "jitterMilliseconds": 15,
+          "lossPercent": 1,
+          "queuePackets": 256
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "gates": {
+        "sourceFormats": true,
+        "sourceQualityEvidence": true,
+        "latencyMeasurement": true,
+        "media": true,
+        "playback": true,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": true,
+        "sourceTargetRecovery": true
+      },
+      "setup": {
+        "peerCreatedMilliseconds": 112,
+        "whepPostDurationMilliseconds": 252,
+        "whepPostCompletedMilliseconds": 376,
+        "connectedMilliseconds": 381,
+        "playbackReadyMilliseconds": 439,
+        "firstDecodedFrameMilliseconds": 443,
+        "postToConnectedMilliseconds": 5,
+        "peerToFirstDecodedFrameMilliseconds": 331
+      },
+      "teardown": {
+        "whepDeleteDurationMilliseconds": 636,
+        "whepDeleteCompletedMilliseconds": 130288
+      },
+      "resources": {
+        "components": {
+          "browser": {
+            "samples": 42,
+            "cpuCoreRatio": {
+              "average": 0.22947619047619053,
+              "p95": 0.2995,
+              "maximum": 0.3118
+            },
+            "residentBytes": {
+              "average": 595036920.6857141,
+              "p95": 610480947.2,
+              "maximum": 611424665.6,
+              "sources": [
+                "container-cgroup"
+              ]
+            },
+            "tasks": {
+              "maximum": 131
+            },
+            "network": {
+              "receivedBytes": 174000000,
+              "transmittedBytes": 1070000
+            }
+          },
+          "producer": {
+            "samples": 42,
+            "cpuCoreRatio": {
+              "average": 0.367507142857143,
+              "p95": 0.3797,
+              "maximum": 0.3825
+            },
+            "residentBytes": {
+              "average": 58680559.908571415,
+              "p95": 62044241.92,
+              "maximum": 62159585.28,
+              "sources": [
+                "container-cgroup"
+              ]
+            },
+            "tasks": {
+              "maximum": 37
+            },
+            "network": {
+              "receivedBytes": 1020000,
+              "transmittedBytes": 172000000
+            }
+          }
+        },
+        "conservativePeak": {
+          "cpuCoreRatio": 0.6943,
+          "residentBytes": 673584250.88,
+          "tasks": 168
+        }
+      },
+      "phases": {
+        "baseline": {
+          "samples": 30,
+          "durationMilliseconds": 29267,
+          "receivedBitrateKbps": 9376.120545324085,
+          "decodedFramesPerSecond": 29.965490142481293,
+          "averageDecodedQP": 7.9429874572405925,
+          "framesPerSecond": {
+            "minimum": 29,
+            "maximum": 31
+          },
+          "encoderTargetKbps": {
+            "first": 8000,
+            "last": 8000,
+            "minimum": 8000,
+            "maximum": 8000,
+            "medianLast10Seconds": 8000,
+            "sustainedMinimumLast10Seconds": 8000
+          },
+          "twccTargetKbps": {
+            "first": 8000,
+            "last": 8000,
+            "minimum": 8000,
+            "maximum": 8000,
+            "medianLast10Seconds": 8000,
+            "sustainedMinimumLast10Seconds": 8000
+          },
+          "jitterMilliseconds": {
+            "average": 12.400000000000006,
+            "maximum": 13
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0,
+            "maximum": 0
+          },
+          "nacks": 2,
+          "packetsLostNetChange": 20,
+          "framesDropped": 0,
+          "freezes": 0,
+          "freezeDurationSeconds": 0
+        },
+        "sourceNetwork": null,
+        "viewerNetwork": {
+          "samples": 30,
+          "durationMilliseconds": 29239,
+          "receivedBitrateKbps": 13005.668319709976,
+          "decodedFramesPerSecond": 30.028386743732685,
+          "averageDecodedQP": 11.71753986332574,
+          "framesPerSecond": {
+            "minimum": 29,
+            "maximum": 31
+          },
+          "encoderTargetKbps": {
+            "first": 6539,
+            "last": 6539,
+            "minimum": 6539,
+            "maximum": 6539,
+            "medianLast10Seconds": 6539,
+            "sustainedMinimumLast10Seconds": 6539
+          },
+          "twccTargetKbps": {
+            "first": 6539.478,
+            "last": 8000,
+            "minimum": 6539.478,
+            "maximum": 8000,
+            "medianLast10Seconds": 8000,
+            "sustainedMinimumLast10Seconds": 8000
+          },
+          "jitterMilliseconds": {
+            "average": 23.066666666666674,
+            "maximum": 26
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 60.366666666666674,
+            "maximum": 89
+          },
+          "nacks": 2920,
+          "packetsLostNetChange": 288,
+          "framesDropped": 0,
+          "freezes": 0,
+          "freezeDurationSeconds": 0
+        },
+        "recovery": {
+          "samples": 44,
+          "durationMilliseconds": 43362,
+          "receivedBitrateKbps": 9202.776993681104,
+          "decodedFramesPerSecond": 30.00322863336562,
+          "averageDecodedQP": 8.421214450422752,
+          "framesPerSecond": {
+            "minimum": 29,
+            "maximum": 30
+          },
+          "encoderTargetKbps": {
+            "first": 6539,
+            "last": 8000,
+            "minimum": 6539,
+            "maximum": 8000,
+            "medianLast10Seconds": 8000,
+            "sustainedMinimumLast10Seconds": 8000
+          },
+          "twccTargetKbps": {
+            "first": 8000,
+            "last": 8000,
+            "minimum": 8000,
+            "maximum": 8000,
+            "medianLast10Seconds": 8000,
+            "sustainedMinimumLast10Seconds": 8000
+          },
+          "jitterMilliseconds": {
+            "average": 11.659090909090914,
+            "maximum": 13
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0.06818181818181818,
+            "maximum": 1
+          },
+          "nacks": 0,
+          "packetsLostNetChange": 0,
+          "framesDropped": 0,
+          "freezes": 0,
+          "freezeDurationSeconds": 0
+        }
+      },
+      "totalFreezesDurationSeconds": 0,
+      "framesDropped": 0,
+      "artifactSHA256": {
+        "result.json": "b42dfc30f39d4429003ac90114f5ba3e9fc5465204b31d88df74d3251948881a",
+        "samples.jsonl": "54e431f57bd9fa1f079fb99148f1eb32cd2d776ddf581e2e4990b6a0bf58d043",
+        "latency.json": "812abcbc08e049ff64418fa7d5dafb31371c5e124d303ca69c9f8abc8ab23cb9"
+      },
+      "latency": {
+        "measurementValid": true,
+        "scope": "Raw-frame monotonic marker before encoding to expected browser composition on one Linux clock with bounded browser alignment; excludes physical exposure and display scanout.",
+        "gates": {
+          "sharedHostClock": true,
+          "enoughSamples": true,
+          "clockAgreement": true,
+          "validTimestamps": true,
+          "monotonicSource": true,
+          "markersReadable": true,
+          "noOmittedSamples": true
+        },
+        "samples": 590,
+        "rejected": 0,
+        "omitted": 0,
+        "malformed": 0,
+        "decodedMarkerFraction": 1,
+        "clockAlignment": {
+          "valid": true,
+          "maximumErrorMilliseconds": 1.4004999995231628,
+          "offsetMilliseconds": 231944434.9135,
+          "browserPrecisionMilliseconds": 1,
+          "initial": {
+            "lowerOffsetMilliseconds": 231944433.637,
+            "upperOffsetMilliseconds": 231944436.19000003,
+            "offsetMilliseconds": 231944434.9135,
+            "browserTimeOriginMilliseconds": 1791099247043.7
+          },
+          "final": {
+            "lowerOffsetMilliseconds": 231944433.513,
+            "upperOffsetMilliseconds": 231944436.191,
+            "offsetMilliseconds": 231944434.852,
+            "browserTimeOriginMilliseconds": 1791099247043.7
+          }
+        },
+        "maximumWallClockOffsetMilliseconds": 8.599853515625,
+        "maximumProbeMilliseconds": 3,
+        "latencyMilliseconds": {
+          "minimum": 23.681500017642975,
+          "median": 45.13850003480911,
+          "p95": 111.4355000257492,
+          "p99": 126.64950001239777,
+          "maximum": 128.78850001096725
+        },
+        "enabled": true,
+        "collectionComplete": true,
+        "phaseBoundaryPolicy": "Exclude the first and last collected snapshot of each phase from phase summaries; retain them in the overall result.",
+        "phases": {
+          "warmup": {
+            "measurementValid": true,
+            "scope": "Raw-frame monotonic marker before encoding to expected browser composition on one Linux clock with bounded browser alignment; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 91,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "clockAlignment": {
+              "valid": true,
+              "maximumErrorMilliseconds": 1.4004999995231628,
+              "offsetMilliseconds": 231944434.9135,
+              "browserPrecisionMilliseconds": 1,
+              "initial": {
+                "lowerOffsetMilliseconds": 231944433.637,
+                "upperOffsetMilliseconds": 231944436.19000003,
+                "offsetMilliseconds": 231944434.9135,
+                "browserTimeOriginMilliseconds": 1791099247043.7
+              },
+              "final": {
+                "lowerOffsetMilliseconds": 231944433.513,
+                "upperOffsetMilliseconds": 231944436.191,
+                "offsetMilliseconds": 231944434.852,
+                "browserTimeOriginMilliseconds": 1791099247043.7
+              }
+            },
+            "maximumWallClockOffsetMilliseconds": 2.099853515625,
+            "maximumProbeMilliseconds": 2.4000000059604645,
+            "latencyMilliseconds": {
+              "minimum": 30.184500008821487,
+              "median": 46.29150003194809,
+              "p95": 47.21950000524521,
+              "p99": 47.41550001502037,
+              "maximum": 47.41550001502037
+            }
+          },
+          "baseline": {
+            "measurementValid": true,
+            "scope": "Raw-frame monotonic marker before encoding to expected browser composition on one Linux clock with bounded browser alignment; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 133,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "clockAlignment": {
+              "valid": true,
+              "maximumErrorMilliseconds": 1.4004999995231628,
+              "offsetMilliseconds": 231944434.9135,
+              "browserPrecisionMilliseconds": 1,
+              "initial": {
+                "lowerOffsetMilliseconds": 231944433.637,
+                "upperOffsetMilliseconds": 231944436.19000003,
+                "offsetMilliseconds": 231944434.9135,
+                "browserTimeOriginMilliseconds": 1791099247043.7
+              },
+              "final": {
+                "lowerOffsetMilliseconds": 231944433.513,
+                "upperOffsetMilliseconds": 231944436.191,
+                "offsetMilliseconds": 231944434.852,
+                "browserTimeOriginMilliseconds": 1791099247043.7
+              }
+            },
+            "maximumWallClockOffsetMilliseconds": 3.800048828125,
+            "maximumProbeMilliseconds": 2.7999999821186066,
+            "latencyMilliseconds": {
+              "minimum": 36.60450002551079,
+              "median": 45.19749999046326,
+              "p95": 46.34450000524521,
+              "p99": 46.49550002813339,
+              "maximum": 46.5164999961853
+            }
+          },
+          "viewer-network": {
+            "measurementValid": true,
+            "scope": "Raw-frame monotonic marker before encoding to expected browser composition on one Linux clock with bounded browser alignment; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 130,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "clockAlignment": {
+              "valid": true,
+              "maximumErrorMilliseconds": 1.4004999995231628,
+              "offsetMilliseconds": 231944434.9135,
+              "browserPrecisionMilliseconds": 1,
+              "initial": {
+                "lowerOffsetMilliseconds": 231944433.637,
+                "upperOffsetMilliseconds": 231944436.19000003,
+                "offsetMilliseconds": 231944434.9135,
+                "browserTimeOriginMilliseconds": 1791099247043.7
+              },
+              "final": {
+                "lowerOffsetMilliseconds": 231944433.513,
+                "upperOffsetMilliseconds": 231944436.191,
+                "offsetMilliseconds": 231944434.852,
+                "browserTimeOriginMilliseconds": 1791099247043.7
+              }
+            },
+            "maximumWallClockOffsetMilliseconds": 5.300048828125,
+            "maximumProbeMilliseconds": 2.300000011920929,
+            "latencyMilliseconds": {
+              "minimum": 77.73949998617172,
+              "median": 108.97550001740456,
+              "p95": 111.92350003123283,
+              "p99": 128.05750000476837,
+              "maximum": 128.17450001835823
+            }
+          },
+          "recovery": {
+            "measurementValid": true,
+            "scope": "Raw-frame monotonic marker before encoding to expected browser composition on one Linux clock with bounded browser alignment; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 199,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "clockAlignment": {
+              "valid": true,
+              "maximumErrorMilliseconds": 1.4004999995231628,
+              "offsetMilliseconds": 231944434.9135,
+              "browserPrecisionMilliseconds": 1,
+              "initial": {
+                "lowerOffsetMilliseconds": 231944433.637,
+                "upperOffsetMilliseconds": 231944436.19000003,
+                "offsetMilliseconds": 231944434.9135,
+                "browserTimeOriginMilliseconds": 1791099247043.7
+              },
+              "final": {
+                "lowerOffsetMilliseconds": 231944433.513,
+                "upperOffsetMilliseconds": 231944436.191,
+                "offsetMilliseconds": 231944434.852,
+                "browserTimeOriginMilliseconds": 1791099247043.7
+              }
+            },
+            "maximumWallClockOffsetMilliseconds": 8.599853515625,
+            "maximumProbeMilliseconds": 2.4000000059604645,
+            "latencyMilliseconds": {
+              "minimum": 23.681500017642975,
+              "median": 42.38050001859665,
+              "p95": 43.72350001335144,
+              "p99": 44.02750000357628,
+              "maximum": 44.11550000309944
+            }
+          }
+        }
+      },
+      "clockIdentity": {
+        "producerBootHash": "99172e6cd3616c2c156107d5c379773fd380ea0d21fba95d88f8f30655057ed7",
+        "receiverBootHash": "99172e6cd3616c2c156107d5c379773fd380ea0d21fba95d88f8f30655057ed7",
+        "producerMonotonicOffsetHash": "bd9f74ac5eaa3df538867b32ee7d9240020020a199963645d7ab92f008209ac5",
+        "receiverMonotonicOffsetHash": "bd9f74ac5eaa3df538867b32ee7d9240020020a199963645d7ab92f008209ac5"
+      },
+      "networkCountersIncludingTransition": {
+        "enabled": true,
+        "scope": "producer-to-browser",
+        "capacityKbps": 0,
+        "delayMilliseconds": 60,
+        "jitterMilliseconds": 15,
+        "lossPercent": 1,
+        "queuePackets": 256,
+        "nackCountDelta": 3013,
+        "packetsLostNetChange": 287,
+        "framesDecodedDelta": 878,
+        "framesDroppedDelta": 0,
+        "freezeCountDelta": 0,
+        "freezeDurationDeltaSeconds": 0,
+        "baselineFreezeCountDelta": 0,
+        "baselineFreezeDurationDeltaSeconds": 0,
+        "recoveryFramesDecodedDelta": 1301,
+        "recoveryFreezeCountDelta": 0,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyStateFramesDecodedDelta": 787,
+        "steadyStateFramesDroppedDelta": 0,
+        "steadyStateFreezeCountDelta": 0,
+        "steadyStateFreezeDurationDeltaSeconds": 0,
+        "steadyRecoveryFreezeCountDelta": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "freezeRatio": 0,
+        "frameDropRatio": 0,
+        "steadyStateFrameDropRatio": 0,
+        "capacityTransitionFramesDropped": 0,
+        "capacityTransitionDroppedFrameDurationSeconds": 0,
+        "capacityTransitionDisruptionSeconds": 0,
+        "recoveryFreezeRatio": 0,
+        "phase": "viewer-network"
+      }
+    },
+    {
+      "case": "source-capacity",
+      "revision": "4a0d83ad3dc6ed988acc7e06eb9d48e473807654",
+      "workingTreeDirty": false,
+      "mode": "mediamtx",
+      "passed": false,
+      "publishable": false,
+      "images": {
+        "producer": "sha256:818dd252c9bb494d63122fef1eb516ad63887d51496f47f9fe2c675c9713bb4f",
+        "distributor": "sha256:ff93ecc81678d944520d9f43e59c0605538403ca8d23c60bab3787f79b3848ac",
+        "browser": "sha256:1e582d18b7304eb5248f571a1a5989697fe87462185a80c1060fe48be2864e76"
+      },
+      "profile": {
+        "edgeAuthentication": true,
+        "edgeCredentialLifetimeSeconds": 365,
+        "warmupSeconds": 20,
+        "phaseSeconds": 30,
+        "recoverySeconds": 45,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "eace3c1bba6f697dc724a1ae690cbef4e82cf6d12c0f8fd0c3049bf1d3652ff3",
+        "latencyProbe": true,
+        "sourceQualityObserved": false,
+        "expectedNetworkFormat": null,
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        },
+        "sourceNetwork": {
+          "enabled": true,
+          "capacityKbps": 4000,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 256
+        }
+      },
+      "gates": {
+        "sourceFormats": true,
+        "sourceQualityEvidence": true,
+        "latencyMeasurement": true,
+        "media": true,
+        "playback": false,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": true,
+        "sourceTargetRecovery": true
+      },
+      "setup": {
+        "peerCreatedMilliseconds": 111,
+        "whepPostDurationMilliseconds": 317,
+        "whepPostCompletedMilliseconds": 441,
+        "connectedMilliseconds": 505,
+        "playbackReadyMilliseconds": 2471,
+        "firstDecodedFrameMilliseconds": 2474,
+        "postToConnectedMilliseconds": 64,
+        "peerToFirstDecodedFrameMilliseconds": 2363
+      },
+      "teardown": {
+        "whepDeleteDurationMilliseconds": 13,
+        "whepDeleteCompletedMilliseconds": 132732
+      },
+      "resources": {
+        "components": {
+          "browser": {
+            "samples": 41,
+            "cpuCoreRatio": {
+              "average": 0.17363170731707323,
+              "p95": 0.222,
+              "maximum": 0.2347
+            },
+            "residentBytes": {
+              "average": 602048861.6585364,
+              "p95": 620547276.8,
+              "maximum": 621490995.2,
+              "sources": [
+                "container-cgroup"
+              ]
+            },
+            "tasks": {
+              "maximum": 132
+            },
+            "network": {
+              "receivedBytes": 97500000,
+              "transmittedBytes": 194000
+            }
+          },
+          "distributor": {
+            "samples": 41,
+            "cpuCoreRatio": {
+              "average": 0.12540000000000004,
+              "p95": 0.142,
+              "maximum": 0.1479
+            },
+            "residentBytes": {
+              "average": 52523427.590243906,
+              "p95": 55165583.36,
+              "maximum": 55721328.64,
+              "sources": [
+                "container-cgroup"
+              ]
+            },
+            "tasks": {
+              "maximum": 41
+            },
+            "network": {
+              "receivedBytes": 124000000,
+              "transmittedBytes": 96300000
+            }
+          },
+          "producer": {
+            "samples": 41,
+            "cpuCoreRatio": {
+              "average": 0.3552268292682927,
+              "p95": 0.3691,
+              "maximum": 0.4929
+            },
+            "residentBytes": {
+              "average": 55785266.20097559,
+              "p95": 57430507.52,
+              "maximum": 57766051.84,
+              "sources": [
+                "container-cgroup"
+              ]
+            },
+            "tasks": {
+              "maximum": 38
+            },
+            "network": {
+              "receivedBytes": 387000,
+              "transmittedBytes": 126000000
+            }
+          }
+        },
+        "conservativePeak": {
+          "cpuCoreRatio": 0.8755,
+          "residentBytes": 734978375.6800001,
+          "tasks": 211
+        }
+      },
+      "phases": {
+        "baseline": {
+          "samples": 30,
+          "durationMilliseconds": 29251,
+          "receivedBitrateKbps": 7558.147071894978,
+          "decodedFramesPerSecond": 30.016067826740965,
+          "averageDecodedQP": 7.946469248291572,
+          "framesPerSecond": {
+            "minimum": 29,
+            "maximum": 30
+          },
+          "encoderTargetKbps": {
+            "first": 8000,
+            "last": 8000,
+            "minimum": 8000,
+            "maximum": 8000,
+            "medianLast10Seconds": 8000,
+            "sustainedMinimumLast10Seconds": 8000
+          },
+          "twccTargetKbps": {
+            "first": 8000,
+            "last": 8000,
+            "minimum": 8000,
+            "maximum": 8000,
+            "medianLast10Seconds": 8000,
+            "sustainedMinimumLast10Seconds": 8000
+          },
+          "jitterMilliseconds": {
+            "average": 1.233333333333334,
+            "maximum": 2
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0.06666666666666667,
+            "maximum": 1
+          },
+          "nacks": 0,
+          "packetsLostNetChange": 0,
+          "framesDropped": 0,
+          "freezes": 0,
+          "freezeDurationSeconds": 0
+        },
+        "sourceNetwork": {
+          "samples": 30,
+          "durationMilliseconds": 29250,
+          "receivedBitrateKbps": 2013.5108376068376,
+          "decodedFramesPerSecond": 29.05982905982906,
+          "averageDecodedQP": 21.550588235294118,
+          "framesPerSecond": {
+            "minimum": 2,
+            "maximum": 33
+          },
+          "encoderTargetKbps": {
+            "first": 2636,
+            "last": 2000,
+            "minimum": 2000,
+            "maximum": 2880,
+            "medianLast10Seconds": 2093,
+            "sustainedMinimumLast10Seconds": 2000
+          },
+          "twccTargetKbps": {
+            "first": 2636.533,
+            "last": 2243.175,
+            "minimum": 2009.9840000000002,
+            "maximum": 3306.464,
+            "medianLast10Seconds": 2457.5465,
+            "sustainedMinimumLast10Seconds": 2046.397
+          },
+          "jitterMilliseconds": {
+            "average": 4.866666666666669,
+            "maximum": 45
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0.1,
+            "maximum": 1
+          },
+          "nacks": 0,
+          "packetsLostNetChange": 0,
+          "framesDropped": 6,
+          "freezes": 3,
+          "freezeDurationSeconds": 1.495
+        },
+        "viewerNetwork": null,
+        "recovery": {
+          "samples": 45,
+          "durationMilliseconds": 44398,
+          "receivedBitrateKbps": 6166.554349295014,
+          "decodedFramesPerSecond": 30.023874949322042,
+          "averageDecodedQP": 11.523630907726933,
+          "framesPerSecond": {
+            "minimum": 27,
+            "maximum": 32
+          },
+          "encoderTargetKbps": {
+            "first": 2000,
+            "last": 8000,
+            "minimum": 2000,
+            "maximum": 8000,
+            "medianLast10Seconds": 8000,
+            "sustainedMinimumLast10Seconds": 8000
+          },
+          "twccTargetKbps": {
+            "first": 2403.497,
+            "last": 8000,
+            "minimum": 2403.497,
+            "maximum": 8000,
+            "medianLast10Seconds": 8000,
+            "sustainedMinimumLast10Seconds": 8000
+          },
+          "jitterMilliseconds": {
+            "average": 1.7777777777777783,
+            "maximum": 14
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0,
+            "maximum": 0
+          },
+          "nacks": 0,
+          "packetsLostNetChange": 0,
+          "framesDropped": 0,
+          "freezes": 1,
+          "freezeDurationSeconds": 0.19299999999999984
+        }
+      },
+      "totalFreezesDurationSeconds": 1.688,
+      "framesDropped": 6,
+      "artifactSHA256": {
+        "result.json": "46bab771d6b481d4ea6ef0d2bcafd09fd458a4a2c639ae08d9d82668a4e0c463",
+        "samples.jsonl": "4e8c890a5d93005396386099e4059fffa167a44c2bb9f31ffbe007eb9193d63d",
+        "latency.json": "bde72dcdf7f2f94c0f958448ecd7c802cba3231b42b8b402a646123a7cd83274"
+      },
+      "latency": {
+        "measurementValid": true,
+        "scope": "Raw-frame monotonic marker before encoding to expected browser composition on one Linux clock with bounded browser alignment; excludes physical exposure and display scanout.",
+        "gates": {
+          "sharedHostClock": true,
+          "enoughSamples": true,
+          "clockAgreement": true,
+          "validTimestamps": true,
+          "monotonicSource": true,
+          "markersReadable": true,
+          "noOmittedSamples": true
+        },
+        "samples": 600,
+        "rejected": 0,
+        "omitted": 0,
+        "malformed": 0,
+        "decodedMarkerFraction": 1,
+        "clockAlignment": {
+          "valid": true,
+          "maximumErrorMilliseconds": 1.298000007867813,
+          "offsetMilliseconds": 231584450.361,
+          "browserPrecisionMilliseconds": 1,
+          "initial": {
+            "lowerOffsetMilliseconds": 231584449.06300002,
+            "upperOffsetMilliseconds": 231584451.659,
+            "offsetMilliseconds": 231584450.361,
+            "browserTimeOriginMilliseconds": 1791098887073.9
+          },
+          "final": {
+            "lowerOffsetMilliseconds": 231584449.125,
+            "upperOffsetMilliseconds": 231584451.616,
+            "offsetMilliseconds": 231584450.3705,
+            "browserTimeOriginMilliseconds": 1791098887073.9
+          }
+        },
+        "maximumWallClockOffsetMilliseconds": 4.400146484375,
+        "maximumProbeMilliseconds": 4.299999982118607,
+        "latencyMilliseconds": {
+          "minimum": 34.80900001525879,
+          "median": 54.28200000524521,
+          "p95": 73.95299997925758,
+          "p99": 240.6749999821186,
+          "maximum": 1540.908999979496
+        },
+        "enabled": true,
+        "collectionComplete": true,
+        "phaseBoundaryPolicy": "Exclude the first and last collected snapshot of each phase from phase summaries; retain them in the overall result.",
+        "phases": {
+          "warmup": {
+            "measurementValid": true,
+            "scope": "Raw-frame monotonic marker before encoding to expected browser composition on one Linux clock with bounded browser alignment; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 92,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "clockAlignment": {
+              "valid": true,
+              "maximumErrorMilliseconds": 1.298000007867813,
+              "offsetMilliseconds": 231584450.361,
+              "browserPrecisionMilliseconds": 1,
+              "initial": {
+                "lowerOffsetMilliseconds": 231584449.06300002,
+                "upperOffsetMilliseconds": 231584451.659,
+                "offsetMilliseconds": 231584450.361,
+                "browserTimeOriginMilliseconds": 1791098887073.9
+              },
+              "final": {
+                "lowerOffsetMilliseconds": 231584449.125,
+                "upperOffsetMilliseconds": 231584451.616,
+                "offsetMilliseconds": 231584450.3705,
+                "browserTimeOriginMilliseconds": 1791098887073.9
+              }
+            },
+            "maximumWallClockOffsetMilliseconds": 4.400146484375,
+            "maximumProbeMilliseconds": 2.300000011920929,
+            "latencyMilliseconds": {
+              "minimum": 37.59499999880791,
+              "median": 42.194000005722046,
+              "p95": 43.06800001859665,
+              "p99": 43.16399997472763,
+              "maximum": 43.16399997472763
+            }
+          },
+          "baseline": {
+            "measurementValid": true,
+            "scope": "Raw-frame monotonic marker before encoding to expected browser composition on one Linux clock with bounded browser alignment; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 136,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "clockAlignment": {
+              "valid": true,
+              "maximumErrorMilliseconds": 1.298000007867813,
+              "offsetMilliseconds": 231584450.361,
+              "browserPrecisionMilliseconds": 1,
+              "initial": {
+                "lowerOffsetMilliseconds": 231584449.06300002,
+                "upperOffsetMilliseconds": 231584451.659,
+                "offsetMilliseconds": 231584450.361,
+                "browserTimeOriginMilliseconds": 1791098887073.9
+              },
+              "final": {
+                "lowerOffsetMilliseconds": 231584449.125,
+                "upperOffsetMilliseconds": 231584451.616,
+                "offsetMilliseconds": 231584450.3705,
+                "browserTimeOriginMilliseconds": 1791098887073.9
+              }
+            },
+            "maximumWallClockOffsetMilliseconds": 4.400146484375,
+            "maximumProbeMilliseconds": 2.300000011920929,
+            "latencyMilliseconds": {
+              "minimum": 34.80900001525879,
+              "median": 41.125,
+              "p95": 42.081999987363815,
+              "p99": 42.256999999284744,
+              "maximum": 42.28099998831749
+            }
+          },
+          "source-network": {
+            "measurementValid": true,
+            "scope": "Raw-frame monotonic marker before encoding to expected browser composition on one Linux clock with bounded browser alignment; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 130,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "clockAlignment": {
+              "valid": true,
+              "maximumErrorMilliseconds": 1.298000007867813,
+              "offsetMilliseconds": 231584450.361,
+              "browserPrecisionMilliseconds": 1,
+              "initial": {
+                "lowerOffsetMilliseconds": 231584449.06300002,
+                "upperOffsetMilliseconds": 231584451.659,
+                "offsetMilliseconds": 231584450.361,
+                "browserTimeOriginMilliseconds": 1791098887073.9
+              },
+              "final": {
+                "lowerOffsetMilliseconds": 231584449.125,
+                "upperOffsetMilliseconds": 231584451.616,
+                "offsetMilliseconds": 231584450.3705,
+                "browserTimeOriginMilliseconds": 1791098887073.9
+              }
+            },
+            "maximumWallClockOffsetMilliseconds": 2.60009765625,
+            "maximumProbeMilliseconds": 2.4000000059604645,
+            "latencyMilliseconds": {
+              "minimum": 38.91499999165535,
+              "median": 73.36399999260902,
+              "p95": 74.33300000429153,
+              "p99": 874.2719999849796,
+              "maximum": 1540.908999979496
+            }
+          },
+          "recovery": {
+            "measurementValid": true,
+            "scope": "Raw-frame monotonic marker before encoding to expected browser composition on one Linux clock with bounded browser alignment; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 205,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "clockAlignment": {
+              "valid": true,
+              "maximumErrorMilliseconds": 1.298000007867813,
+              "offsetMilliseconds": 231584450.361,
+              "browserPrecisionMilliseconds": 1,
+              "initial": {
+                "lowerOffsetMilliseconds": 231584449.06300002,
+                "upperOffsetMilliseconds": 231584451.659,
+                "offsetMilliseconds": 231584450.361,
+                "browserTimeOriginMilliseconds": 1791098887073.9
+              },
+              "final": {
+                "lowerOffsetMilliseconds": 231584449.125,
+                "upperOffsetMilliseconds": 231584451.616,
+                "offsetMilliseconds": 231584450.3705,
+                "browserTimeOriginMilliseconds": 1791098887073.9
+              }
+            },
+            "maximumWallClockOffsetMilliseconds": 3.2998046875,
+            "maximumProbeMilliseconds": 4.299999982118607,
+            "latencyMilliseconds": {
+              "minimum": 37.74500000476837,
+              "median": 55.287999987602234,
+              "p95": 73.01700001955032,
+              "p99": 86.858000010252,
+              "maximum": 187.74399998784065
+            }
+          }
+        }
+      },
+      "clockIdentity": {
+        "producerBootHash": "99172e6cd3616c2c156107d5c379773fd380ea0d21fba95d88f8f30655057ed7",
+        "receiverBootHash": "99172e6cd3616c2c156107d5c379773fd380ea0d21fba95d88f8f30655057ed7",
+        "producerMonotonicOffsetHash": "bd9f74ac5eaa3df538867b32ee7d9240020020a199963645d7ab92f008209ac5",
+        "receiverMonotonicOffsetHash": "bd9f74ac5eaa3df538867b32ee7d9240020020a199963645d7ab92f008209ac5"
+      },
+      "networkCountersIncludingTransition": {
+        "enabled": true,
+        "scope": "producer-to-adapter",
+        "capacityKbps": 4000,
+        "delayMilliseconds": 0,
+        "jitterMilliseconds": 0,
+        "lossPercent": 0,
+        "queuePackets": 256,
+        "twccFeedbackPacketsDelta": 303,
+        "adaptiveBitrateUpdatesDelta": 19,
+        "pacerSentRetransmissionDelta": 193,
+        "pacerSentFECDelta": 2848,
+        "framesDecodedDelta": 850,
+        "framesDroppedDelta": 6,
+        "freezeCountDelta": 3,
+        "freezeDurationDeltaSeconds": 1.495,
+        "baselineFreezeCountDelta": 0,
+        "baselineFreezeDurationDeltaSeconds": 0,
+        "recoveryFramesDecodedDelta": 1333,
+        "recoveryFreezeCountDelta": 1,
+        "recoveryFreezeDurationDeltaSeconds": 0.19299999999999984,
+        "steadyStateFramesDecodedDelta": 786,
+        "steadyStateFramesDroppedDelta": 0,
+        "steadyStateFreezeCountDelta": 0,
+        "steadyStateFreezeDurationDeltaSeconds": 0,
+        "steadyRecoveryFreezeCountDelta": 1,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0.19299999999999984,
+        "freezeRatio": 0.049833333333333334,
+        "frameDropRatio": 0.007009345794392523,
+        "steadyStateFrameDropRatio": 0,
+        "capacityTransitionFramesDropped": 6,
+        "capacityTransitionDroppedFrameDurationSeconds": 0.19989293849658316,
+        "capacityTransitionDisruptionSeconds": 1.6948929384965832,
+        "recoveryFreezeRatio": 0.0042888888888888855,
+        "phase": "source-network"
+      }
+    },
+    {
+      "case": "source-impairment",
+      "revision": "4a0d83ad3dc6ed988acc7e06eb9d48e473807654",
+      "workingTreeDirty": false,
+      "mode": "mediamtx",
+      "passed": true,
+      "publishable": true,
+      "images": {
+        "producer": "sha256:818dd252c9bb494d63122fef1eb516ad63887d51496f47f9fe2c675c9713bb4f",
+        "distributor": "sha256:ff93ecc81678d944520d9f43e59c0605538403ca8d23c60bab3787f79b3848ac",
+        "browser": "sha256:1e582d18b7304eb5248f571a1a5989697fe87462185a80c1060fe48be2864e76"
+      },
+      "profile": {
+        "edgeAuthentication": true,
+        "edgeCredentialLifetimeSeconds": 365,
+        "warmupSeconds": 20,
+        "phaseSeconds": 30,
+        "recoverySeconds": 45,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "eace3c1bba6f697dc724a1ae690cbef4e82cf6d12c0f8fd0c3049bf1d3652ff3",
+        "latencyProbe": true,
+        "sourceQualityObserved": false,
+        "expectedNetworkFormat": null,
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        },
+        "sourceNetwork": {
+          "enabled": true,
+          "capacityKbps": 0,
+          "delayMilliseconds": 60,
+          "jitterMilliseconds": 15,
+          "lossPercent": 1,
+          "queuePackets": 256
+        }
+      },
+      "gates": {
+        "sourceFormats": true,
+        "sourceQualityEvidence": true,
+        "latencyMeasurement": true,
+        "media": true,
+        "playback": true,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": true,
+        "sourceTargetRecovery": true
+      },
+      "setup": {
+        "peerCreatedMilliseconds": 93,
+        "whepPostDurationMilliseconds": 746,
+        "whepPostCompletedMilliseconds": 850,
+        "connectedMilliseconds": 911,
+        "playbackReadyMilliseconds": 2670,
+        "firstDecodedFrameMilliseconds": 2673,
+        "postToConnectedMilliseconds": 61,
+        "peerToFirstDecodedFrameMilliseconds": 2580
+      },
+      "teardown": {
+        "whepDeleteDurationMilliseconds": 14,
+        "whepDeleteCompletedMilliseconds": 131864
+      },
+      "resources": {
+        "components": {
+          "browser": {
+            "samples": 41,
+            "cpuCoreRatio": {
+              "average": 0.17334146341463416,
+              "p95": 0.1816,
+              "maximum": 0.2087
+            },
+            "residentBytes": {
+              "average": 598542525.8146343,
+              "p95": 617716121.6,
+              "maximum": 618869555.2,
+              "sources": [
+                "container-cgroup"
+              ]
+            },
+            "tasks": {
+              "maximum": 132
+            },
+            "network": {
+              "receivedBytes": 109000000,
+              "transmittedBytes": 196000
+            }
+          },
+          "distributor": {
+            "samples": 41,
+            "cpuCoreRatio": {
+              "average": 0.12729756097560976,
+              "p95": 0.1449,
+              "maximum": 0.1454
+            },
+            "residentBytes": {
+              "average": 58192387.496585354,
+              "p95": 59527659.52,
+              "maximum": 60366520.32,
+              "sources": [
+                "container-cgroup"
+              ]
+            },
+            "tasks": {
+              "maximum": 39
+            },
+            "network": {
+              "receivedBytes": 138000000,
+              "transmittedBytes": 107000000
+            }
+          },
+          "producer": {
+            "samples": 41,
+            "cpuCoreRatio": {
+              "average": 0.35166341463414635,
+              "p95": 0.3635,
+              "maximum": 0.3741
+            },
+            "residentBytes": {
+              "average": 52170492.25365854,
+              "p95": 53676605.44,
+              "maximum": 54840524.8,
+              "sources": [
+                "container-cgroup"
+              ]
+            },
+            "tasks": {
+              "maximum": 38
+            },
+            "network": {
+              "receivedBytes": 390000,
+              "transmittedBytes": 139000000
+            }
+          }
+        },
+        "conservativePeak": {
+          "cpuCoreRatio": 0.7282,
+          "residentBytes": 734076600.32,
+          "tasks": 209
+        }
+      },
+      "phases": {
+        "baseline": {
+          "samples": 30,
+          "durationMilliseconds": 29244,
+          "receivedBitrateKbps": 7574.430036930652,
+          "decodedFramesPerSecond": 29.92066748734783,
+          "averageDecodedQP": 7.942857142857143,
+          "framesPerSecond": {
+            "minimum": 28,
+            "maximum": 30
+          },
+          "encoderTargetKbps": {
+            "first": 8000,
+            "last": 8000,
+            "minimum": 8000,
+            "maximum": 8000,
+            "medianLast10Seconds": 8000,
+            "sustainedMinimumLast10Seconds": 8000
+          },
+          "twccTargetKbps": {
+            "first": 8000,
+            "last": 8000,
+            "minimum": 8000,
+            "maximum": 8000,
+            "medianLast10Seconds": 8000,
+            "sustainedMinimumLast10Seconds": 8000
+          },
+          "jitterMilliseconds": {
+            "average": 1.3000000000000005,
+            "maximum": 6
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0,
+            "maximum": 0
+          },
+          "nacks": 0,
+          "packetsLostNetChange": 0,
+          "framesDropped": 0,
+          "freezes": 0,
+          "freezeDurationSeconds": 0
+        },
+        "sourceNetwork": {
+          "samples": 30,
+          "durationMilliseconds": 29243,
+          "receivedBitrateKbps": 3653.9342748691993,
+          "decodedFramesPerSecond": 29.955886878911194,
+          "averageDecodedQP": 18.054794520547944,
+          "framesPerSecond": {
+            "minimum": 29,
+            "maximum": 31
+          },
+          "encoderTargetKbps": {
+            "first": 4849,
+            "last": 3897,
+            "minimum": 3897,
+            "maximum": 4849,
+            "medianLast10Seconds": 3897,
+            "sustainedMinimumLast10Seconds": 3897
+          },
+          "twccTargetKbps": {
+            "first": 4849.301,
+            "last": 6161.196,
+            "minimum": 4049.632,
+            "maximum": 6161.196,
+            "medianLast10Seconds": 6161.196,
+            "sustainedMinimumLast10Seconds": 6113.961
+          },
+          "jitterMilliseconds": {
+            "average": 10.466666666666672,
+            "maximum": 17
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0.1,
+            "maximum": 1
+          },
+          "nacks": 0,
+          "packetsLostNetChange": 0,
+          "framesDropped": 0,
+          "freezes": 0,
+          "freezeDurationSeconds": 0
+        },
+        "viewerNetwork": null,
+        "recovery": {
+          "samples": 44,
+          "durationMilliseconds": 43355,
+          "receivedBitrateKbps": 6935.844262484143,
+          "decodedFramesPerSecond": 30.054203667397072,
+          "averageDecodedQP": 9.582501918649271,
+          "framesPerSecond": {
+            "minimum": 29,
+            "maximum": 32
+          },
+          "encoderTargetKbps": {
+            "first": 3897,
+            "last": 8000,
+            "minimum": 3897,
+            "maximum": 8000,
+            "medianLast10Seconds": 8000,
+            "sustainedMinimumLast10Seconds": 8000
+          },
+          "twccTargetKbps": {
+            "first": 6223.599,
+            "last": 8000,
+            "minimum": 6223.599,
+            "maximum": 8000,
+            "medianLast10Seconds": 8000,
+            "sustainedMinimumLast10Seconds": 8000
+          },
+          "jitterMilliseconds": {
+            "average": 1.0909090909090917,
+            "maximum": 7
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0,
+            "maximum": 0
+          },
+          "nacks": 0,
+          "packetsLostNetChange": 0,
+          "framesDropped": 0,
+          "freezes": 0,
+          "freezeDurationSeconds": 0
+        }
+      },
+      "totalFreezesDurationSeconds": 0,
+      "framesDropped": 0,
+      "artifactSHA256": {
+        "result.json": "70b55f384588d8970b9af3666d4e76352d85c7058425386fcabbacc61406c1d3",
+        "samples.jsonl": "48879273b2ba9a0ac056e2c1ba3373acc7482ac4f210049cd7825166312723e9",
+        "latency.json": "efbfd2eea2b7cd2f07619c7eb432cbb8ec1e165ee86e74b3a6032776205e1a99"
+      },
+      "latency": {
+        "measurementValid": true,
+        "scope": "Raw-frame monotonic marker before encoding to expected browser composition on one Linux clock with bounded browser alignment; excludes physical exposure and display scanout.",
+        "gates": {
+          "sharedHostClock": true,
+          "enoughSamples": true,
+          "clockAgreement": true,
+          "validTimestamps": true,
+          "monotonicSource": true,
+          "markersReadable": true,
+          "noOmittedSamples": true
+        },
+        "samples": 598,
+        "rejected": 0,
+        "omitted": 0,
+        "malformed": 0,
+        "decodedMarkerFraction": 1,
+        "clockAlignment": {
+          "valid": true,
+          "maximumErrorMilliseconds": 1.3804999887943268,
+          "offsetMilliseconds": 232085982.7045,
+          "browserPrecisionMilliseconds": 1,
+          "initial": {
+            "lowerOffsetMilliseconds": 232085981.413,
+            "upperOffsetMilliseconds": 232085983.996,
+            "offsetMilliseconds": 232085982.7045,
+            "browserTimeOriginMilliseconds": 1791099388583.8
+          },
+          "final": {
+            "lowerOffsetMilliseconds": 232085981.324,
+            "upperOffsetMilliseconds": 232085983.956,
+            "offsetMilliseconds": 232085982.64,
+            "browserTimeOriginMilliseconds": 1791099388583.8
+          }
+        },
+        "maximumWallClockOffsetMilliseconds": 7.699951171875,
+        "maximumProbeMilliseconds": 4.399999976158142,
+        "latencyMilliseconds": {
+          "minimum": 28.64149996638298,
+          "median": 48.28049999475479,
+          "p95": 130.74849998950958,
+          "p99": 130.97249999642372,
+          "maximum": 131.14849999547005
+        },
+        "enabled": true,
+        "collectionComplete": true,
+        "phaseBoundaryPolicy": "Exclude the first and last collected snapshot of each phase from phase summaries; retain them in the overall result.",
+        "phases": {
+          "warmup": {
+            "measurementValid": true,
+            "scope": "Raw-frame monotonic marker before encoding to expected browser composition on one Linux clock with bounded browser alignment; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 92,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "clockAlignment": {
+              "valid": true,
+              "maximumErrorMilliseconds": 1.3804999887943268,
+              "offsetMilliseconds": 232085982.7045,
+              "browserPrecisionMilliseconds": 1,
+              "initial": {
+                "lowerOffsetMilliseconds": 232085981.413,
+                "upperOffsetMilliseconds": 232085983.996,
+                "offsetMilliseconds": 232085982.7045,
+                "browserTimeOriginMilliseconds": 1791099388583.8
+              },
+              "final": {
+                "lowerOffsetMilliseconds": 232085981.324,
+                "upperOffsetMilliseconds": 232085983.956,
+                "offsetMilliseconds": 232085982.64,
+                "browserTimeOriginMilliseconds": 1791099388583.8
+              }
+            },
+            "maximumWallClockOffsetMilliseconds": 2.60009765625,
+            "maximumProbeMilliseconds": 3,
+            "latencyMilliseconds": {
+              "minimum": 31.996499985456467,
+              "median": 49.04849997162819,
+              "p95": 49.844499975442886,
+              "p99": 49.953500002622604,
+              "maximum": 49.953500002622604
+            }
+          },
+          "baseline": {
+            "measurementValid": true,
+            "scope": "Raw-frame monotonic marker before encoding to expected browser composition on one Linux clock with bounded browser alignment; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 134,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "clockAlignment": {
+              "valid": true,
+              "maximumErrorMilliseconds": 1.3804999887943268,
+              "offsetMilliseconds": 232085982.7045,
+              "browserPrecisionMilliseconds": 1,
+              "initial": {
+                "lowerOffsetMilliseconds": 232085981.413,
+                "upperOffsetMilliseconds": 232085983.996,
+                "offsetMilliseconds": 232085982.7045,
+                "browserTimeOriginMilliseconds": 1791099388583.8
+              },
+              "final": {
+                "lowerOffsetMilliseconds": 232085981.324,
+                "upperOffsetMilliseconds": 232085983.956,
+                "offsetMilliseconds": 232085982.64,
+                "browserTimeOriginMilliseconds": 1791099388583.8
+              }
+            },
+            "maximumWallClockOffsetMilliseconds": 4.300048828125,
+            "maximumProbeMilliseconds": 2.4000000059604645,
+            "latencyMilliseconds": {
+              "minimum": 43.50450000166893,
+              "median": 48.27549996972084,
+              "p95": 49.12149998545647,
+              "p99": 49.192499965429306,
+              "maximum": 49.27250000834465
+            }
+          },
+          "source-network": {
+            "measurementValid": true,
+            "scope": "Raw-frame monotonic marker before encoding to expected browser composition on one Linux clock with bounded browser alignment; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 132,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "clockAlignment": {
+              "valid": true,
+              "maximumErrorMilliseconds": 1.3804999887943268,
+              "offsetMilliseconds": 232085982.7045,
+              "browserPrecisionMilliseconds": 1,
+              "initial": {
+                "lowerOffsetMilliseconds": 232085981.413,
+                "upperOffsetMilliseconds": 232085983.996,
+                "offsetMilliseconds": 232085982.7045,
+                "browserTimeOriginMilliseconds": 1791099388583.8
+              },
+              "final": {
+                "lowerOffsetMilliseconds": 232085981.324,
+                "upperOffsetMilliseconds": 232085983.956,
+                "offsetMilliseconds": 232085982.64,
+                "browserTimeOriginMilliseconds": 1791099388583.8
+              }
+            },
+            "maximumWallClockOffsetMilliseconds": 6,
+            "maximumProbeMilliseconds": 4.399999976158142,
+            "latencyMilliseconds": {
+              "minimum": 77.09449997544289,
+              "median": 130.3425000011921,
+              "p95": 130.9704999923706,
+              "p99": 131.0174999833107,
+              "maximum": 131.14849999547005
+            }
+          },
+          "recovery": {
+            "measurementValid": true,
+            "scope": "Raw-frame monotonic marker before encoding to expected browser composition on one Linux clock with bounded browser alignment; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 202,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "clockAlignment": {
+              "valid": true,
+              "maximumErrorMilliseconds": 1.3804999887943268,
+              "offsetMilliseconds": 232085982.7045,
+              "browserPrecisionMilliseconds": 1,
+              "initial": {
+                "lowerOffsetMilliseconds": 232085981.413,
+                "upperOffsetMilliseconds": 232085983.996,
+                "offsetMilliseconds": 232085982.7045,
+                "browserTimeOriginMilliseconds": 1791099388583.8
+              },
+              "final": {
+                "lowerOffsetMilliseconds": 232085981.324,
+                "upperOffsetMilliseconds": 232085983.956,
+                "offsetMilliseconds": 232085982.64,
+                "browserTimeOriginMilliseconds": 1791099388583.8
+              }
+            },
+            "maximumWallClockOffsetMilliseconds": 7.699951171875,
+            "maximumProbeMilliseconds": 2.5999999940395355,
+            "latencyMilliseconds": {
+              "minimum": 28.64149996638298,
+              "median": 45.269499987363815,
+              "p95": 129.2025000154972,
+              "p99": 129.92849999666214,
+              "maximum": 130.06450000405312
+            }
+          }
+        }
+      },
+      "clockIdentity": {
+        "producerBootHash": "99172e6cd3616c2c156107d5c379773fd380ea0d21fba95d88f8f30655057ed7",
+        "receiverBootHash": "99172e6cd3616c2c156107d5c379773fd380ea0d21fba95d88f8f30655057ed7",
+        "producerMonotonicOffsetHash": "bd9f74ac5eaa3df538867b32ee7d9240020020a199963645d7ab92f008209ac5",
+        "receiverMonotonicOffsetHash": "bd9f74ac5eaa3df538867b32ee7d9240020020a199963645d7ab92f008209ac5"
+      },
+      "networkCountersIncludingTransition": {
+        "enabled": true,
+        "scope": "producer-to-adapter",
+        "capacityKbps": 0,
+        "delayMilliseconds": 60,
+        "jitterMilliseconds": 15,
+        "lossPercent": 1,
+        "queuePackets": 256,
+        "twccFeedbackPacketsDelta": 302,
+        "adaptiveBitrateUpdatesDelta": 3,
+        "pacerSentRetransmissionDelta": 303,
+        "pacerSentFECDelta": 3945,
+        "framesDecodedDelta": 876,
+        "framesDroppedDelta": 0,
+        "freezeCountDelta": 0,
+        "freezeDurationDeltaSeconds": 0,
+        "baselineFreezeCountDelta": 0,
+        "baselineFreezeDurationDeltaSeconds": 0,
+        "recoveryFramesDecodedDelta": 1303,
+        "recoveryFreezeCountDelta": 0,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyStateFramesDecodedDelta": 786,
+        "steadyStateFramesDroppedDelta": 0,
+        "steadyStateFreezeCountDelta": 0,
+        "steadyStateFreezeDurationDeltaSeconds": 0,
+        "steadyRecoveryFreezeCountDelta": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "freezeRatio": 0,
+        "frameDropRatio": 0,
+        "steadyStateFrameDropRatio": 0,
+        "capacityTransitionFramesDropped": 0,
+        "capacityTransitionDroppedFrameDurationSeconds": 0,
+        "capacityTransitionDisruptionSeconds": 0,
+        "recoveryFreezeRatio": 0,
+        "phase": "source-network"
+      }
+    },
+    {
+      "case": "direct-capacity",
+      "revision": "4a0d83ad3dc6ed988acc7e06eb9d48e473807654",
+      "workingTreeDirty": false,
+      "mode": "direct",
+      "passed": true,
+      "publishable": true,
+      "images": {
+        "producer": "sha256:818dd252c9bb494d63122fef1eb516ad63887d51496f47f9fe2c675c9713bb4f",
+        "distributor": null,
+        "browser": "sha256:1e582d18b7304eb5248f571a1a5989697fe87462185a80c1060fe48be2864e76"
+      },
+      "profile": {
+        "edgeAuthentication": true,
+        "edgeCredentialLifetimeSeconds": 365,
+        "warmupSeconds": 20,
+        "phaseSeconds": 30,
+        "recoverySeconds": 45,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "eace3c1bba6f697dc724a1ae690cbef4e82cf6d12c0f8fd0c3049bf1d3652ff3",
+        "latencyProbe": true,
+        "sourceQualityObserved": false,
+        "expectedNetworkFormat": null,
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": true,
+          "capacityKbps": 4000,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 256
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "gates": {
+        "sourceFormats": true,
+        "sourceQualityEvidence": true,
+        "latencyMeasurement": true,
+        "media": true,
+        "playback": true,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": true,
+        "sourceTargetRecovery": true
+      },
+      "setup": {
+        "peerCreatedMilliseconds": 105,
+        "whepPostDurationMilliseconds": 238,
+        "whepPostCompletedMilliseconds": 355,
+        "connectedMilliseconds": 360,
+        "playbackReadyMilliseconds": 415,
+        "firstDecodedFrameMilliseconds": 418,
+        "postToConnectedMilliseconds": 5,
+        "peerToFirstDecodedFrameMilliseconds": 313
+      },
+      "teardown": {
+        "whepDeleteDurationMilliseconds": 398,
+        "whepDeleteCompletedMilliseconds": 130060
+      },
+      "resources": {
+        "components": {
+          "browser": {
+            "samples": 42,
+            "cpuCoreRatio": {
+              "average": 0.2056238095238095,
+              "p95": 0.2418,
+              "maximum": 0.2726
+            },
+            "residentBytes": {
+              "average": 599917792.304762,
+              "p95": 618869555.2,
+              "maximum": 620652134.4,
+              "sources": [
+                "container-cgroup"
+              ]
+            },
+            "tasks": {
+              "maximum": 132
+            },
+            "network": {
+              "receivedBytes": 123000000,
+              "transmittedBytes": 503000
+            }
+          },
+          "producer": {
+            "samples": 42,
+            "cpuCoreRatio": {
+              "average": 0.36279523809523806,
+              "p95": 0.3775,
+              "maximum": 0.3825
+            },
+            "residentBytes": {
+              "average": 56969633.401904754,
+              "p95": 63113789.44,
+              "maximum": 63606620.16,
+              "sources": [
+                "container-cgroup"
+              ]
+            },
+            "tasks": {
+              "maximum": 37
+            },
+            "network": {
+              "receivedBytes": 462000,
+              "transmittedBytes": 125000000
+            }
+          }
+        },
+        "conservativePeak": {
+          "cpuCoreRatio": 0.6551,
+          "residentBytes": 684258754.56,
+          "tasks": 169
+        }
+      },
+      "phases": {
+        "baseline": {
+          "samples": 30,
+          "durationMilliseconds": 29259,
+          "receivedBitrateKbps": 9394.140332889026,
+          "decodedFramesPerSecond": 30.007860829146587,
+          "averageDecodedQP": 7.9407744874715265,
+          "framesPerSecond": {
+            "minimum": 29,
+            "maximum": 30
+          },
+          "encoderTargetKbps": {
+            "first": 8000,
+            "last": 8000,
+            "minimum": 8000,
+            "maximum": 8000,
+            "medianLast10Seconds": 8000,
+            "sustainedMinimumLast10Seconds": 8000
+          },
+          "twccTargetKbps": {
+            "first": 8000,
+            "last": 8000,
+            "minimum": 8000,
+            "maximum": 8000,
+            "medianLast10Seconds": 8000,
+            "sustainedMinimumLast10Seconds": 8000
+          },
+          "jitterMilliseconds": {
+            "average": 12.433333333333339,
+            "maximum": 13
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0,
+            "maximum": 0
+          },
+          "nacks": 0,
+          "packetsLostNetChange": 0,
+          "framesDropped": 0,
+          "freezes": 0,
+          "freezeDurationSeconds": 0
+        },
+        "sourceNetwork": null,
+        "viewerNetwork": {
+          "samples": 30,
+          "durationMilliseconds": 29262,
+          "receivedBitrateKbps": 3053.5375572414737,
+          "decodedFramesPerSecond": 29.628870207094526,
+          "averageDecodedQP": 21.155709342560552,
+          "framesPerSecond": {
+            "minimum": 3,
+            "maximum": 47
+          },
+          "encoderTargetKbps": {
+            "first": 2579,
+            "last": 2322,
+            "minimum": 2000,
+            "maximum": 3223,
+            "medianLast10Seconds": 2454,
+            "sustainedMinimumLast10Seconds": 2322
+          },
+          "twccTargetKbps": {
+            "first": 2579.881,
+            "last": 2356.236,
+            "minimum": 2000,
+            "maximum": 3414.149,
+            "medianLast10Seconds": 2716.499,
+            "sustainedMinimumLast10Seconds": 2356.236
+          },
+          "jitterMilliseconds": {
+            "average": 27.200000000000014,
+            "maximum": 32
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 38.56666666666667,
+            "maximum": 330
+          },
+          "nacks": 112,
+          "packetsLostNetChange": 157,
+          "framesDropped": 0,
+          "freezes": 2,
+          "freezeDurationSeconds": 1.007
+        },
+        "recovery": {
+          "samples": 44,
+          "durationMilliseconds": 43388,
+          "receivedBitrateKbps": 7805.555637503458,
+          "decodedFramesPerSecond": 30.03134507237024,
+          "averageDecodedQP": 11.292402148887183,
+          "framesPerSecond": {
+            "minimum": 29,
+            "maximum": 31
+          },
+          "encoderTargetKbps": {
+            "first": 2322,
+            "last": 8000,
+            "minimum": 2322,
+            "maximum": 8000,
+            "medianLast10Seconds": 8000,
+            "sustainedMinimumLast10Seconds": 8000
+          },
+          "twccTargetKbps": {
+            "first": 2531.053,
+            "last": 8000,
+            "minimum": 2531.053,
+            "maximum": 8000,
+            "medianLast10Seconds": 8000,
+            "sustainedMinimumLast10Seconds": 8000
+          },
+          "jitterMilliseconds": {
+            "average": 11.090909090909099,
+            "maximum": 15
+          },
+          "roundTripTimeMilliseconds": {
+            "average": 0,
+            "maximum": 0
+          },
+          "nacks": 0,
+          "packetsLostNetChange": 0,
+          "framesDropped": 0,
+          "freezes": 0,
+          "freezeDurationSeconds": 0
+        }
+      },
+      "totalFreezesDurationSeconds": 1.007,
+      "framesDropped": 0,
+      "artifactSHA256": {
+        "result.json": "a31d0960e7a4c1fabd2914d3b7c85014d6ac6bf5fabc406948d3b743d247d649",
+        "samples.jsonl": "80e82babbe1e8c38667dab26d83ce15da16f1981f4367bf22d3de2ac9de342a9",
+        "latency.json": "2c157deb2815bb9347ce2d8d98153688e12a038bacda48b5ee5b9b91b517234b"
+      },
+      "latency": {
+        "measurementValid": true,
+        "scope": "Raw-frame monotonic marker before encoding to expected browser composition on one Linux clock with bounded browser alignment; excludes physical exposure and display scanout.",
+        "gates": {
+          "sharedHostClock": true,
+          "enoughSamples": true,
+          "clockAgreement": true,
+          "validTimestamps": true,
+          "monotonicSource": true,
+          "markersReadable": true,
+          "noOmittedSamples": true
+        },
+        "samples": 577,
+        "rejected": 0,
+        "omitted": 0,
+        "malformed": 0,
+        "decodedMarkerFraction": 1,
+        "clockAlignment": {
+          "valid": true,
+          "maximumErrorMilliseconds": 1.423000007867813,
+          "offsetMilliseconds": 232226131.264,
+          "browserPrecisionMilliseconds": 1,
+          "initial": {
+            "lowerOffsetMilliseconds": 232226129.981,
+            "upperOffsetMilliseconds": 232226132.54700002,
+            "offsetMilliseconds": 232226131.264,
+            "browserTimeOriginMilliseconds": 1791099528723.4
+          },
+          "final": {
+            "lowerOffsetMilliseconds": 232226129.912,
+            "upperOffsetMilliseconds": 232226132.687,
+            "offsetMilliseconds": 232226131.2995,
+            "browserTimeOriginMilliseconds": 1791099528723.4
+          }
+        },
+        "maximumWallClockOffsetMilliseconds": 7,
+        "maximumProbeMilliseconds": 6,
+        "latencyMilliseconds": {
+          "minimum": 18.52599999308586,
+          "median": 57.863999992609024,
+          "p95": 74.70899999141693,
+          "p99": 290.16600000858307,
+          "maximum": 1591.7289999723434
+        },
+        "enabled": true,
+        "collectionComplete": true,
+        "phaseBoundaryPolicy": "Exclude the first and last collected snapshot of each phase from phase summaries; retain them in the overall result.",
+        "phases": {
+          "warmup": {
+            "measurementValid": true,
+            "scope": "Raw-frame monotonic marker before encoding to expected browser composition on one Linux clock with bounded browser alignment; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 86,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "clockAlignment": {
+              "valid": true,
+              "maximumErrorMilliseconds": 1.423000007867813,
+              "offsetMilliseconds": 232226131.264,
+              "browserPrecisionMilliseconds": 1,
+              "initial": {
+                "lowerOffsetMilliseconds": 232226129.981,
+                "upperOffsetMilliseconds": 232226132.54700002,
+                "offsetMilliseconds": 232226131.264,
+                "browserTimeOriginMilliseconds": 1791099528723.4
+              },
+              "final": {
+                "lowerOffsetMilliseconds": 232226129.912,
+                "upperOffsetMilliseconds": 232226132.687,
+                "offsetMilliseconds": 232226131.2995,
+                "browserTimeOriginMilliseconds": 1791099528723.4
+              }
+            },
+            "maximumWallClockOffsetMilliseconds": 1,
+            "maximumProbeMilliseconds": 2.4000000059604645,
+            "latencyMilliseconds": {
+              "minimum": 22.203999996185303,
+              "median": 58.752000004053116,
+              "p95": 60.41200000047684,
+              "p99": 60.743000000715256,
+              "maximum": 60.743000000715256
+            }
+          },
+          "baseline": {
+            "measurementValid": true,
+            "scope": "Raw-frame monotonic marker before encoding to expected browser composition on one Linux clock with bounded browser alignment; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 127,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "clockAlignment": {
+              "valid": true,
+              "maximumErrorMilliseconds": 1.423000007867813,
+              "offsetMilliseconds": 232226131.264,
+              "browserPrecisionMilliseconds": 1,
+              "initial": {
+                "lowerOffsetMilliseconds": 232226129.981,
+                "upperOffsetMilliseconds": 232226132.54700002,
+                "offsetMilliseconds": 232226131.264,
+                "browserTimeOriginMilliseconds": 1791099528723.4
+              },
+              "final": {
+                "lowerOffsetMilliseconds": 232226129.912,
+                "upperOffsetMilliseconds": 232226132.687,
+                "offsetMilliseconds": 232226131.2995,
+                "browserTimeOriginMilliseconds": 1791099528723.4
+              }
+            },
+            "maximumWallClockOffsetMilliseconds": 2,
+            "maximumProbeMilliseconds": 2.300000011920929,
+            "latencyMilliseconds": {
+              "minimum": 18.52599999308586,
+              "median": 57.61699998378754,
+              "p95": 59.613999992609024,
+              "p99": 59.79399999976158,
+              "maximum": 59.89999997615814
+            }
+          },
+          "viewer-network": {
+            "measurementValid": true,
+            "scope": "Raw-frame monotonic marker before encoding to expected browser composition on one Linux clock with bounded browser alignment; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 129,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "clockAlignment": {
+              "valid": true,
+              "maximumErrorMilliseconds": 1.423000007867813,
+              "offsetMilliseconds": 232226131.264,
+              "browserPrecisionMilliseconds": 1,
+              "initial": {
+                "lowerOffsetMilliseconds": 232226129.981,
+                "upperOffsetMilliseconds": 232226132.54700002,
+                "offsetMilliseconds": 232226131.264,
+                "browserTimeOriginMilliseconds": 1791099528723.4
+              },
+              "final": {
+                "lowerOffsetMilliseconds": 232226129.912,
+                "upperOffsetMilliseconds": 232226132.687,
+                "offsetMilliseconds": 232226131.2995,
+                "browserTimeOriginMilliseconds": 1791099528723.4
+              }
+            },
+            "maximumWallClockOffsetMilliseconds": 3.7998046875,
+            "maximumProbeMilliseconds": 6,
+            "latencyMilliseconds": {
+              "minimum": 38.430999994277954,
+              "median": 73.10300001502037,
+              "p95": 171.66399997472763,
+              "p99": 1091.716000020504,
+              "maximum": 1591.7289999723434
+            }
+          },
+          "recovery": {
+            "measurementValid": true,
+            "scope": "Raw-frame monotonic marker before encoding to expected browser composition on one Linux clock with bounded browser alignment; excludes physical exposure and display scanout.",
+            "gates": {
+              "sharedHostClock": true,
+              "enoughSamples": true,
+              "clockAgreement": true,
+              "validTimestamps": true,
+              "monotonicSource": true,
+              "markersReadable": true,
+              "noOmittedSamples": true
+            },
+            "samples": 199,
+            "rejected": 0,
+            "omitted": 0,
+            "malformed": 0,
+            "decodedMarkerFraction": 1,
+            "clockAlignment": {
+              "valid": true,
+              "maximumErrorMilliseconds": 1.423000007867813,
+              "offsetMilliseconds": 232226131.264,
+              "browserPrecisionMilliseconds": 1,
+              "initial": {
+                "lowerOffsetMilliseconds": 232226129.981,
+                "upperOffsetMilliseconds": 232226132.54700002,
+                "offsetMilliseconds": 232226131.264,
+                "browserTimeOriginMilliseconds": 1791099528723.4
+              },
+              "final": {
+                "lowerOffsetMilliseconds": 232226129.912,
+                "upperOffsetMilliseconds": 232226132.687,
+                "offsetMilliseconds": 232226131.2995,
+                "browserTimeOriginMilliseconds": 1791099528723.4
+              }
+            },
+            "maximumWallClockOffsetMilliseconds": 7,
+            "maximumProbeMilliseconds": 2.5,
+            "latencyMilliseconds": {
+              "minimum": 39.83900001645088,
+              "median": 55.841000020504,
+              "p95": 73.72699999809265,
+              "p99": 74.17300000786781,
+              "maximum": 74.2829999923706
+            }
+          }
+        }
+      },
+      "clockIdentity": {
+        "producerBootHash": "99172e6cd3616c2c156107d5c379773fd380ea0d21fba95d88f8f30655057ed7",
+        "receiverBootHash": "99172e6cd3616c2c156107d5c379773fd380ea0d21fba95d88f8f30655057ed7",
+        "producerMonotonicOffsetHash": "bd9f74ac5eaa3df538867b32ee7d9240020020a199963645d7ab92f008209ac5",
+        "receiverMonotonicOffsetHash": "bd9f74ac5eaa3df538867b32ee7d9240020020a199963645d7ab92f008209ac5"
+      },
+      "networkCountersIncludingTransition": {
+        "enabled": true,
+        "scope": "producer-to-browser",
+        "capacityKbps": 4000,
+        "delayMilliseconds": 0,
+        "jitterMilliseconds": 0,
+        "lossPercent": 0,
+        "queuePackets": 256,
+        "nackCountDelta": 140,
+        "packetsLostNetChange": 211,
+        "framesDecodedDelta": 867,
+        "framesDroppedDelta": 0,
+        "freezeCountDelta": 2,
+        "freezeDurationDeltaSeconds": 1.007,
+        "baselineFreezeCountDelta": 0,
+        "baselineFreezeDurationDeltaSeconds": 0,
+        "recoveryFramesDecodedDelta": 1303,
+        "recoveryFreezeCountDelta": 0,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyStateFramesDecodedDelta": 786,
+        "steadyStateFramesDroppedDelta": 0,
+        "steadyStateFreezeCountDelta": 0,
+        "steadyStateFreezeDurationDeltaSeconds": 0,
+        "steadyRecoveryFreezeCountDelta": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "freezeRatio": 0.03356666666666666,
+        "frameDropRatio": 0,
+        "steadyStateFrameDropRatio": 0,
+        "capacityTransitionFramesDropped": 0,
+        "capacityTransitionDroppedFrameDurationSeconds": 0,
+        "capacityTransitionDisruptionSeconds": 1.007,
+        "recoveryFreezeRatio": 0,
+        "phase": "viewer-network"
+      }
+    }
+  ]
+}

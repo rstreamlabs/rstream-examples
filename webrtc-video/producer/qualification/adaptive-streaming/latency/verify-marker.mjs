@@ -6,6 +6,13 @@ import { join } from "node:path";
 import { decodeMarker } from "./decode-marker.mjs";
 import { monotonicMilliseconds } from "./clock.mjs";
 
+// GLib and libuv share CLOCK_MONOTONIC on Linux. On macOS, their
+// mach_absolute_time / mach_continuous_time clocks differ across sleep.
+if (process.platform !== "linux")
+  throw new Error(
+    "Monotonic marker verification requires Linux; compile-only checks may run on macOS",
+  );
+
 const runtime = mkdtempSync(join(tmpdir(), "rstream-latency-stamp-"));
 try {
   assert.ok(
