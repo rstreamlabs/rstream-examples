@@ -666,8 +666,16 @@ rstream APIs, tunnel publication and producer HTTP controls are real. This check
 does not exercise video playback or an organization's actual OAuth/SSO policy.
 Optionally set `RSTREAM_DISCOVERY_BROWSER` to a Chrome/Chromium executable to
 include direct playback from the discovered producer, decoded 720p frame cadence
-and encoder shutdown after the viewer closes. This does not force a relay path
-or qualify MediaMTX distribution. First prepare adequate Linux UDP socket limits
+and encoder shutdown after the viewer closes. To exercise discovery with the
+adaptive MediaMTX adapter, also set `RSTREAM_DISCOVERY_DISTRIBUTOR=mediamtx`.
+That variant uses the documented local stack helper (including its production
+build and temporary HTTPS callback tunnel), so its local ports must be free.
+It opens separate browser sessions for two organization members, checks one
+encoder for two MediaMTX readers, synchronizes a source-quality change, denies
+a nonmember, preserves playback when the first member leaves and stops the
+encoder after the last leaves. Both persistent-history and live-only inventory
+checks still run. GitHub membership remains a fixture. Neither variant forces
+a relay path. First prepare adequate Linux UDP socket limits
 as described in the [distribution prerequisites](../distributor/README.md#technical-qualification).
 Abrupt browser closure can use the producer's bounded ICE recovery grace period
 before it stops the encoder; the result records this elapsed time.

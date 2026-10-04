@@ -31,6 +31,13 @@ assert.ok(
 )
 const image = process.env.RSTREAM_DISCOVERY_PRODUCER_IMAGE
 assert.ok(image, "RSTREAM_DISCOVERY_PRODUCER_IMAGE is required")
+const distribution = process.env.RSTREAM_DISCOVERY_DISTRIBUTOR ?? "direct"
+assert.ok(["direct", "mediamtx"].includes(distribution))
+const distributed = distribution === "mediamtx"
+assert.ok(
+  !distributed || process.env.RSTREAM_DISCOVERY_BROWSER,
+  "MediaMTX qualification requires RSTREAM_DISCOVERY_BROWSER",
+)
 const require = createRequire(join(root, "package.json"))
 const {
   RstreamClient,
@@ -63,6 +70,9 @@ let producerSequence = 0
 let result
 let stage = "setup"
 let playback = null
+let stackState = null
+let stackSequence = 0
+let childFailure = null
 const command = (file, args, options = {}) =>
   execFileSync(file, args, {
     encoding: "utf8",
@@ -105,18 +115,105 @@ async function stopNext() {
   if (!child) return
   const active = child
   child = null
+  if (stackState) {
+    const logs = spawnSync("docker", ["logs", stackState.containerName], {
+      encoding: "utf8",
+      timeout: 10000,
+      maxBuffer: 4 * 1024 * 1024,
+    })
+    if (logs.status === 0)
+      writeFileSync(
+        join(runtime, `mediamtx-${stackSequence}.log`),
+        logs.stdout + logs.stderr,
+        { mode: 0o600 },
+      )
+  }
   if (active.exitCode !== null || active.signalCode !== null) return
   const exited = new Promise((resolve) => active.once("exit", resolve))
   active.kill("SIGTERM")
-  const timer = setTimeout(() => active.kill("SIGKILL"), 10000)
+  // The stack helper first stops MediaMTX, then its two owned process groups.
+  // Give that bounded shutdown sequence time to complete before escalation.
+  const timer = setTimeout(
+    () => active.kill("SIGKILL"),
+    distributed ? 45000 : 10000,
+  )
   try {
     await exited
+    assert.notEqual(
+      active.signalCode,
+      "SIGKILL",
+      "Next.js stack shutdown timed out",
+    )
+    if (stackState) {
+      assert.equal(
+        docker(
+          "ps",
+          "--all",
+          "--quiet",
+          "--filter",
+          `name=^/${stackState.containerName}$`,
+        ),
+        "",
+        "MediaMTX container survived stack shutdown",
+      )
+      stackState = null
+    }
   } finally {
     clearTimeout(timer)
   }
 }
 async function startNext(remember) {
   await stopNext()
+  childFailure = null
+  if (distributed) {
+    stackSequence++
+    const stateFile = join(runtime, `stack-${remember}.json`)
+    origin = "http://localhost:3000"
+    child = spawn(
+      process.execPath,
+      [
+        join(root, "scripts/run-local-mediamtx.mjs"),
+        "--exposure",
+        "public",
+        "--next-mode",
+        "production",
+        "--state-file",
+        stateFile,
+      ],
+      {
+        cwd: root,
+        env: {
+          ...baseEnvironment,
+          NEXTAUTH_URL: origin,
+          DEVICE_DISCOVERY_HISTORY_ENABLED: String(remember),
+          // Next.js is started by the helper; only its GitHub HTTP calls are
+          // substituted. The resolver, rstream and MediaMTX are real.
+          NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import=${JSON.stringify(join(runtime, "github.mjs"))}`,
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    )
+    child.once("error", (error) => {
+      childFailure = error
+    })
+    for (const stream of [child.stdout, child.stderr])
+      stream.on("data", (chunk) => {
+        nextLog = (nextLog + chunk).slice(-64000)
+      })
+    await until(
+      "MediaMTX stack readiness",
+      async () => {
+        if (childFailure) throw childFailure
+        if (child.exitCode !== null || child.signalCode !== null)
+          throw new Error("MediaMTX stack exited before readiness")
+        if (!existsSync(stateFile)) return false
+        stackState = JSON.parse(readFileSync(stateFile, "utf8"))
+        return stackState.ready === true
+      },
+      240000,
+    )
+    return
+  }
   const server = createServer()
   await new Promise((resolve, reject) => {
     server.once("error", reject)
@@ -147,11 +244,15 @@ async function startNext(remember) {
       stdio: ["ignore", "pipe", "pipe"],
     },
   )
+  child.once("error", (error) => {
+    childFailure = error
+  })
   for (const stream of [child.stdout, child.stderr])
     stream.on("data", (chunk) => {
       nextLog = (nextLog + chunk).slice(-32000)
     })
   await until("Next.js readiness", async () => {
+    if (childFailure) throw childFailure
     if (child.exitCode !== null)
       throw new Error("Next.js exited before readiness")
     try {
@@ -231,37 +332,49 @@ async function qualifyPlayback() {
   abort.signal.addEventListener("abort", stopOnAbort, { once: true })
   try {
     abort.signal.throwIfAborted()
-    const context = await browser.newContext()
-    await context.addCookies([
-      { name: "next-auth.session-token", value: sessions.bob, url: origin },
-    ])
-    await context.addInitScript(() => {
-      const NativePeer = window.RTCPeerConnection
-      window.__discoveryPeers = []
-      window.RTCPeerConnection = class extends NativePeer {
-        constructor(...args) {
-          super(...args)
-          window.__discoveryPeers.push(this)
-        }
-      }
-    })
-    const page = await context.newPage()
+    const viewers = []
     let pageErrors = 0
-    page.on("pageerror", () => pageErrors++)
-    await page.goto(origin, { waitUntil: "domcontentloaded", timeout: 30000 })
-    await page.waitForFunction(
-      () => {
-        const video = document.querySelector("video")
-        return (
-          video?.readyState >= 2 &&
-          video.videoWidth === 1280 &&
-          video.videoHeight === 720
-        )
-      },
-      undefined,
-      { timeout: 45000 },
-    )
-    const sample = () =>
+    for (const actor of distributed ? ["alice", "bob"] : ["bob"]) {
+      const context = await browser.newContext()
+      await context.addCookies([
+        {
+          name: "next-auth.session-token",
+          value: sessions[actor],
+          url: origin,
+        },
+      ])
+      await context.addInitScript(() => {
+        const NativePeer = window.RTCPeerConnection
+        window.__discoveryPeers = []
+        window.RTCPeerConnection = class extends NativePeer {
+          constructor(...args) {
+            super(...args)
+            window.__discoveryPeers.push(this)
+          }
+        }
+      })
+      const page = await context.newPage()
+      page.on("pageerror", () => pageErrors++)
+      await page.goto(origin, { waitUntil: "domcontentloaded", timeout: 30000 })
+      if (distributed)
+        await page
+          .getByText("Distribution path: MediaMTX", { exact: true })
+          .waitFor({ timeout: 45000 })
+      await page.waitForFunction(
+        () => {
+          const video = document.querySelector("video")
+          return (
+            video?.readyState >= 2 &&
+            video.videoWidth === 1280 &&
+            video.videoHeight === 720
+          )
+        },
+        undefined,
+        { timeout: 45000 },
+      )
+      viewers.push({ actor, page, context })
+    }
+    const sample = (page) =>
       page.evaluate(async () => {
         const peer = window.__discoveryPeers.find(
           (value) => value.connectionState === "connected",
@@ -293,36 +406,97 @@ async function qualifyPlayback() {
           remoteCandidateType: remote?.candidateType,
         }
       })
-    const before = await sample()
-    await delay(3000, undefined, { signal: abort.signal })
-    const after = await sample()
-    const framesPerSecond =
-      ((after.framesDecoded - before.framesDecoded) * 1000) /
-      (after.at - before.at)
-    assert.ok(
-      framesPerSecond >= 24,
-      "Discovered producer must sustain at least 24 decoded fps",
-    )
-    assert.equal(after.width, 1280)
-    assert.equal(after.height, 720)
-    assert.equal(pageErrors, 0)
+    const measure = async (active) => {
+      const before = await Promise.all(active.map(({ page }) => sample(page)))
+      await delay(3000, undefined, { signal: abort.signal })
+      const after = await Promise.all(active.map(({ page }) => sample(page)))
+      return after.map((value, index) => {
+        const framesPerSecond =
+          ((value.framesDecoded - before[index].framesDecoded) * 1000) /
+          (value.at - before[index].at)
+        assert.ok(
+          framesPerSecond >= 24,
+          "Each discovered viewer must sustain at least 24 decoded fps",
+        )
+        assert.equal(value.width, 1280)
+        assert.equal(value.height, 720)
+        return { actor: active[index].actor, ...value, framesPerSecond }
+      })
+    }
+    const observation = { distribution, viewers: await measure(viewers) }
     const quality = await request("alice", `/api/devices/${deviceID}/quality`)
     assert.equal(quality.status, 200)
     assert.equal(quality.body.activeEncoders, 1)
-    return {
-      framesPerSecond,
-      width: after.width,
-      height: after.height,
-      localCandidateType: after.localCandidateType,
-      remoteCandidateType: after.remoteCandidateType,
-      activeEncoders: quality.body.activeEncoders,
+    observation.activeEncoders = quality.body.activeEncoders
+    if (distributed) {
+      const readers = async (expected) => {
+        await until(`${expected} MediaMTX readers`, async () => {
+          const metrics = await request(
+            "bob",
+            `/api/devices/${deviceID}/metrics`,
+          )
+          return (
+            metrics.status === 200 &&
+            metrics.body.state === "ready" &&
+            metrics.body.readers === expected
+          )
+        })
+      }
+      await readers(2)
+      const select = viewers[0].page.getByLabel("Source quality", {
+        exact: true,
+      })
+      await select.selectOption("medium")
+      await until(
+        "shared quality across separate member sessions",
+        async () => {
+          const state = await request("bob", `/api/devices/${deviceID}/quality`)
+          return (
+            state.status === 200 &&
+            state.body.selected === "medium" &&
+            state.body.activeEncoders === 1 &&
+            (await viewers[1].page
+              .getByLabel("Source quality", { exact: true })
+              .inputValue()) === "medium"
+          )
+        },
+      )
+      observation.afterSharedQualityChange = await measure(viewers)
+      assert.equal(
+        (await request("outsider", `/api/devices/${deviceID}/viewer`, {}))
+          .status,
+        403,
+      )
+      assert.equal(
+        (await request("outsider", `/api/devices/${deviceID}/metrics`)).status,
+        403,
+      )
+      await viewers[0].context.close()
+      await readers(1)
+      observation.remainingMember = await measure(viewers.slice(1))
+      assert.equal(
+        (await request("bob", `/api/devices/${deviceID}/quality`)).body
+          .activeEncoders,
+        1,
+      )
+      // maxViewers=1 in the source profile makes a second upstream session
+      // impossible; two measured MediaMTX readers therefore share one uplink.
+      observation.mediaMTXReaders = 2
+      observation.sourceViewerLimit = 1
+      observation.sharedQuality = "medium"
+      observation.continuesAfterFirstMemberCloses = true
     }
+    assert.equal(pageErrors, 0)
+    return observation
   } finally {
     abort.signal.removeEventListener("abort", stopOnAbort)
     await browser.close()
   }
 }
-const safetyTimer = setTimeout(() => process.emit("SIGTERM"), 8 * 60 * 1000)
+const safetyTimer = setTimeout(
+  () => process.emit("SIGTERM"),
+  (distributed ? 15 : 8) * 60 * 1000,
+)
 const abort = new AbortController()
 for (const signal of ["SIGINT", "SIGTERM"])
   process.on(signal, () => abort.abort(new Error("Qualification interrupted")))
@@ -536,7 +710,7 @@ try {
     "low",
   )
   gates.sourceControlAndConcurrentSelection = true
-  stage = "direct playback from discovered producer"
+  stage = `${distribution} playback from discovered producer`
   playback = await qualifyPlayback()
   if (playback) {
     const closedAt = performance.now()
@@ -546,7 +720,11 @@ try {
     })
     playback.encoderStoppedAfterBrowserClosureMilliseconds =
       performance.now() - closedAt
-    gates.directPlaybackAndEncoderLifecycle = true
+    gates[
+      distributed
+        ? "sharedMediaMTXPlaybackAndEncoderLifecycle"
+        : "directPlaybackAndEncoderLifecycle"
+    ] = true
   }
   stopProducer()
   await until("offline history", async () => (await device())?.online === false)
@@ -606,6 +784,16 @@ try {
     workingTreeDirty:
       command("git", ["status", "--porcelain"], { cwd: root }) !== "",
     image: docker("image", "inspect", "--format", "{{.Id}}", image),
+    distribution,
+    distributorImage: distributed
+      ? docker(
+          "image",
+          "inspect",
+          "--format",
+          "{{.Id}}",
+          "rstream-video-distributor:local",
+        )
+      : null,
     githubMembership: "fixture",
     mediaPlayback: playback ?? "not exercised",
     nextBuild: readFileSync(join(root, ".next/BUILD_ID"), "utf8").trim(),
@@ -667,6 +855,21 @@ try {
         join(output, `producer-${i}.log`),
         command(process.execPath, [sanitize], {
           input: readFileSync(join(runtime, `producer-${i}.log`), "utf8"),
+        }),
+        { mode: 0o600 },
+      )
+    } catch {
+      process.exitCode = 1
+    }
+  }
+  for (let i = 1; i <= stackSequence; i++) {
+    const log = join(runtime, `mediamtx-${i}.log`)
+    if (!existsSync(log)) continue
+    try {
+      writeFileSync(
+        join(output, `mediamtx-${i}.log`),
+        command(process.execPath, [sanitize], {
+          input: readFileSync(log, "utf8"),
         }),
         { mode: 0o600 },
       )

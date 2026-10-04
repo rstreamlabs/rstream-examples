@@ -621,7 +621,9 @@ async function runLocalMediaMTX() {
       }`,
     )
     console.log(
-      "Create a device, then run the producer command shown by the UI.",
+      process.env.DEVICE_INVENTORY_MODE === "discovered"
+        ? "Run a producer with the discovery profile and this rstream project; it will appear automatically."
+        : "Create a device, then run the producer command shown by the UI.",
     )
     console.log(
       `Press Ctrl-C here to stop Next.js, MediaMTX, and ${
