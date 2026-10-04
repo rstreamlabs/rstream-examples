@@ -6,9 +6,11 @@ qualification do not establish compatibility with untested cameras, encoders,
 operating systems or networks.
 
 The remaining acceptance work is concentrated on repeated network/latency
-qualification, intermittent native connectivity, final route/browser regressions
-and the guide-command audit. Bounded shutdown for the reproduced blocked native
-transport write is now verified in both samples. Inventory and replay
+qualification, the automatic-format timing decision, intermittent native
+connectivity and final route/browser regressions. Static Linux packaging and
+its H.264/AV1 source checks are complete, and the guide build/toolchain/plugin
+instructions have been verified or corrected. Bounded shutdown for the
+reproduced blocked native transport write is verified in both samples. Inventory and replay
 presentation are accepted;
 the separate quality/format/metrics visual review remains pending. The current
 automatic-format series has five complete passes in six trials and retains one
@@ -1134,39 +1136,30 @@ empty, loading, unavailable and playing states. Local implementation and tests
 can proceed to produce a reviewable result; visual acceptance remains pending
 until the user approves it.
 
-## Final acceptance
+## Static Linux packaging and AV1 profiles
 
-- Re-run relevant Go race/lifecycle checks, TypeScript/build checks, PostgreSQL
-  and authorization integration tests and browser workflows.
-- Complete native MediaMTX, adaptive upstream, direct and forced-relay network
-  qualification. Investigate the retained source-congestion failures and reject
-  runs with host scheduling interference; never relax gates to get a pass.
-- Keep a curated validation record with revisions, measured results, failed
-  attempts and remaining hardware/identity-provider qualification boundaries.
-- Verify all documented commands and default/public versus internal profiles.
-  No production deployment or public-demo configuration change is included.
-- Complete the documented static Linux distribution builds. The audit finds
-  their former GStreamer default at 1.28.1 and x264 following the moving stable
-  branch. Revision `605a55f` pins GStreamer 1.28.7, libaom 3.15.1 and an immutable
-  x264 commit, verifies both source archive digests and requires digests for
-  custom versions. Invalid inputs and a deliberately incorrect archive digest
-  are rejected before compilation. `make dist-linux-arm64` passes; the static
-  executable streams actual 720p H.264 and AV1 in a scratch filesystem, releases
-  its WHEP session and exits normally on SIGTERM. H.264 reaches 30 fps; AV1 reaches
-  only a median 8 fps on this machine, so this is functionality evidence, not AV1
-  performance acceptance. The [final `make dist` at clean `8d252c3`](./producer/qualification/evidence/8d252c3/static-linux.json)
-  passes for both architectures with the updated viewer. All four scratch-runtime
-  cases (ARM64/AMD64 × H.264/AV1) encode and decode actual video, delete their WHEP
-  resource, then exit normally in 126–155ms after SIGTERM. Their browser logs are
-  empty; no packet loss, decoded drop or freeze is observed. H.264 is 30 fps and
-  AV1 8 fps on both, with AV1 source output also near 8 fps. This localizes the
-  cadence limitation before browser decoding, not to a proven CPU or codec cause.
-  AMD64 runs under architecture emulation. Investigate the AV1 profile cadence
-  separately; these short tests do not establish latency or network robustness.
-  The first ARM64 build started just before its unchanged source bytes were
-  committed; the final builds/checks use a clean revision. Guide content builds
-  successfully, and all three documented netem commands pass on an isolated
-  dummy interface. All owned runtime containers are removed.
+The static-distribution audit found GStreamer still at 1.28.1 and x264 following
+the moving stable branch. Revision `605a55f` pins GStreamer 1.28.7, libaom 3.15.1 and an immutable
+x264 commit, verifies both source archive digests and requires digests for
+custom versions. Invalid inputs and a deliberately incorrect archive digest
+are rejected before compilation. `make dist-linux-arm64` passes; the static
+executable streams actual 720p H.264 and AV1 in a scratch filesystem, releases
+its WHEP session and exits normally on SIGTERM. H.264 reaches 30 fps; AV1 reaches
+only a median 8 fps on this machine, so this is functionality evidence, not AV1
+performance acceptance. The [final `make dist` at clean `8d252c3`](./producer/qualification/evidence/8d252c3/static-linux.json)
+passes for both architectures with the updated viewer. All four scratch-runtime
+cases (ARM64/AMD64 × H.264/AV1) encode and decode actual video, delete their WHEP
+resource, then exit normally in 126–155ms after SIGTERM. Their browser logs are
+empty; no packet loss, decoded drop or freeze is observed. H.264 is 30 fps and
+AV1 8 fps on both, with AV1 source output also near 8 fps. This localizes the
+cadence limitation before browser decoding, not to a proven CPU or codec cause.
+AMD64 runs under architecture emulation. The AV1 cadence needed investigation;
+the comparison below resolves it. These short tests do not establish latency
+or network robustness.
+The first ARM64 build started just before its unchanged source bytes were
+committed; the final builds/checks use a clean revision. Guide content builds
+successfully, and all three documented netem commands pass on an isolated
+dummy interface. All owned runtime containers are removed.
 
 
 The [AV1 comparison and corrected references at `27fa72c`](./producer/qualification/evidence/27fa72c/av1-rate-control.json)
@@ -1187,3 +1180,21 @@ The nine focused quality-client tests also pass on Linux Node 24.21. Debian
 bookworm installs the documented libcamera plugin and loads `libcamerasrc`
 (version 0.0.3); this checks its package/plugin availability, not physical camera
 access. The final guide build contains six collections and 136 documents.
+
+## Final acceptance
+
+- Re-run relevant Go race/lifecycle checks, TypeScript/build checks, PostgreSQL
+  and authorization integration tests and browser workflows.
+- Complete native MediaMTX, adaptive upstream, direct and forced-relay network
+  qualification. Investigate the retained source-congestion failures and reject
+  runs with host scheduling interference; never relax gates to get a pass.
+- Keep a curated validation record with revisions, measured results, failed
+  attempts and remaining hardware/identity-provider qualification boundaries.
+- Verify all documented commands and default/public versus internal profiles.
+  No production deployment or public-demo configuration change is included.
+- Static Linux builds and the test-pattern H.264/AV1 runtime checks are complete
+  at `27fa72c`; camera plugin availability is checked separately, without claiming
+  physical camera or native AMD64 performance qualification.
+- Obtain the outstanding quality/format/metrics visual acceptance. Discovery and
+  replay presentation are already accepted; OAuth/SSO policy and physical-device
+  qualification remain explicit deployment/target-environment boundaries.
