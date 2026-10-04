@@ -116,8 +116,15 @@ failure closes the newly created session; no extra live buffering is added.
 The forwarding pipeline has bounded packet, repair, and worker queues. It
 reorders media for at most 300 ms, retries NACK feedback at a bounded cadence,
 expires missing packets after one second, and stops instead of accumulating an
-unbounded live-stream backlog. PLI and FIR requests cross back to the source;
-viewer NACK and TWCC remain local to the MediaMTX hop.
+unbounded live-stream backlog. PLI and FIR received from MediaMTX cross back to
+the source; viewer NACK and TWCC remain local to the MediaMTX hop. This is not
+end-to-end forwarding of every viewer's key-frame request: MediaMTX 1.21.1
+[consumes reader RTCP without forwarding PLI upstream](https://github.com/bluenviron/mediamtx/blob/v1.21.1/internal/protocols/webrtc/outbound_track.go)
+and [generates its own periodic source PLI every two seconds](https://github.com/bluenviron/mediamtx/blob/v1.21.1/internal/protocols/webrtc/inbound_track.go).
+An established viewer connection can therefore still wait for the next
+decodable key frame. First-picture timing is measured separately from
+steady-state latency; reducing the source GOP interval also changes encoding
+cost and compression efficiency, so it requires a measured tradeoff.
 
 The reference configuration admits at most eight readers on one device path.
 That boundary is deliberate: the fan-out qualification drives a decoder-valid

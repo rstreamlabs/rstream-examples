@@ -55,9 +55,23 @@ Connect click is handled. It retains click, callback and expected-display
 timestamps separately from the older decoded-frame polling milestone. Missing,
 invalid or canceled observations remain invalid rather than becoming zero
 latency. The MediaMTX result requires this evidence; callback/lifecycle and
-result-gate regressions pass. This instrument still needs real-browser checks
-and repeated cold/reopen/join measurements before any startup optimization can
-be claimed.
+result-gate regressions pass (129 collector tests and the complete result
+fixtures). The [first browser measurements at `8790162`](./distributor/qualification/evidence/8790162/first-picture.json)
+pass all delivery gates: click-to-expected-display is 298.3ms direct,
+2293.6ms with the adapter and 2748.2ms with native MediaMTX. These are one fresh
+activation per path with the producer HTTP endpoint already ready, excluding
+Next.js viewer credential issuance. They do not establish percentiles or a
+startup guarantee. Socket limits are restored and owned containers removed.
+
+MediaMTX 1.21.1 consumes reader PLI without forwarding it upstream and generates
+source PLI on a two-second timer. The adapter forwards the latter correctly,
+but its earlier documentation did not distinguish those boundaries. Both
+MediaMTX observations have a substantial connected-to-first-frame gap. Next,
+correlate key-frame arrival and qualify demand-triggered source requests using
+supported integration points, with coalescing/cancellation and bounded resource
+use. Compare any shorter GOP against quality and CPU before changing defaults;
+do not substitute continuous encoding or old-frame replay for rapid live
+activation. Repeated cold/reopen/join measurements remain required.
 
 - GitHub personal ownership or shared organization ownership, with bounded
   membership verification, explicit configuration and existing-device migration.
@@ -916,8 +930,12 @@ the pending connection on cancellation, joins that callback and detaches it
 before transferring ownership to the established channel. All four original
 failure cases now pass ten race repetitions, as do established-channel lifetime
 checks, the full SDK root race suite and repository-wide vet/static analysis.
-The sample has not yet consumed that fix; the relay startup cause is not yet
-established by this independently reproduced defect.
+All eight SDK CI jobs subsequently pass, including Linux race/lifecycle and
+cross-platform checks. The sample has not yet consumed that fix. The hosted
+relay diagnostic at `a4aed7b` passes authentication/project/DNS checks but fails
+TLS, QUIC and engine access from the runner host; its token is not expired.
+This does not identify the address/network failure, nor prove the independently
+reproduced handshake defect caused that particular startup failure.
 Earlier Go 1.26 packaging/media evidence remains revision-specific: the merged
 toolchain still needs its final packaging and repeated playback qualification.
 
