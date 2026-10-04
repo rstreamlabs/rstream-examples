@@ -512,6 +512,7 @@ func (p *tokenBucketPacer) run() {
 						availableBytes, lastUpdate = p.refill(availableBytes, lastUpdate, time.Now(), 0, p.bytesPerSecond())
 						pending = applyRateChange(pending)
 					case pending = <-p.forwardErrorCorrectionQueue:
+					case pending = <-p.retransmissionQueue:
 					case pending = <-p.regularQueue:
 					}
 				} else {

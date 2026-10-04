@@ -6,6 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/pion/interceptor"
@@ -1672,4 +1673,51 @@ func setSyntheticQueuedBytes(pacer *tokenBucketPacer, bytes int64) {
 	pacer.queuedPrimaryServiceNs.Store(
 		queueDelayAtRate(bytes, pacer.sustainedBytesPerSecond()).Nanoseconds(),
 	)
+}
+
+func TestTokenBucketPacerWakesForRTXWhileAwaitingFEC(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		pacer := newTokenBucketPacer(10_000_000, 1, 16)
+		defer pacer.Close()
+		pacer.configureForwardErrorCorrection(flexFECProtection{mediaPackets: 5, repairPackets: 1})
+		written := make(chan uint32, 6)
+		writer := interceptor.RTPWriterFunc(func(header *rtp.Header, payload []byte, _ interceptor.Attributes) (int, error) {
+			written <- header.SSRC
+			return header.MarshalSize() + len(payload), nil
+		})
+		pacer.AddStream(10, writer)
+		pacer.AddStream(11, writer)
+		pacer.markRetransmissionStream(11)
+		for sequence := uint16(0); sequence < 5; sequence++ {
+			if _, err := pacer.Write(&rtp.Header{SSRC: 10, SequenceNumber: sequence}, []byte{1}, nil); err != nil {
+				t.Fatal(err)
+			}
+		}
+		// The worker must now be parked awaiting a repair packet for this group.
+		synctest.Wait()
+		for range 5 {
+			select {
+			case ssrc := <-written:
+				if ssrc != 10 {
+					t.Fatalf("primary SSRC = %d", ssrc)
+				}
+			default:
+				t.Fatal("primary group did not drain")
+			}
+		}
+		// No further media or FEC arrives. A pending FEC group must not prevent
+		// a later NACK from waking the worker and repairing the existing video.
+		if _, err := pacer.Write(&rtp.Header{SSRC: 11, SequenceNumber: 100}, []byte{0, 1}, nil); err != nil {
+			t.Fatal(err)
+		}
+		synctest.Wait()
+		select {
+		case ssrc := <-written:
+			if ssrc != 11 {
+				t.Fatalf("repair SSRC = %d", ssrc)
+			}
+		default:
+			t.Fatal("RTX remained blocked behind absent FEC and media")
+		}
+	})
 }

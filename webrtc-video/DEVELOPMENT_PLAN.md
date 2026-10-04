@@ -419,6 +419,15 @@ being rejected or changed when environment expansion encounters YAML quotes or
 backslashes. A literal scalar preserves those names; the real configuration
 loader regression covers quotes, backslashes, punctuation and UTF-8.
 
+A deterministic concurrency regression also found that an idle pacer awaiting
+the FEC packet for its last protected group did not wake for RTX. With no new
+media/FEC, a retransmission stayed queued indefinitely. The targeted correction
+adds RTX to that wait; the existing scheduling ratios, admission bounds and
+repair expiry remain unchanged. The original implementation fails a virtual-
+time `synctest` regression, and the complete producer race suite passes with
+the correction. A broader retransmission-priority candidate remains isolated
+for network qualification; it is not part of the main sample's behavior.
+
 ## Cross-cutting latency and resource criteria
 
 The optional qualification-only pixel timestamp probe is now maintained in
