@@ -282,13 +282,9 @@ jobs:
 
   automatic-formats:
     if: ${{ inputs.automatic_format_comparison }}
-    name: Direct source formats (${{ matrix.down_hold }})
+    name: Direct source formats (paired 1s/3s)
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
-    strategy:
-      fail-fast: false
-      matrix:
-        down_hold: [1s, 3s]
+    timeout-minutes: 45
     steps:
       - name: Check out the tested revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -317,16 +313,14 @@ jobs:
           sudo sysctl -w \
             "net.core.rmem_max=$((receive_limit > 7500000 ? receive_limit : 7500000))" \
             "net.core.wmem_max=$((send_limit > 7500000 ? send_limit : 7500000))"
-      - name: Compare automatic formats in three complete trials
+      - name: Compare automatic formats in six interleaved trials
         id: comparison
         continue-on-error: true
-        env:
-          DOWN_HOLD: ${{ matrix.down_hold }}
         shell: bash
         run: |
           set -euo pipefail
           webrtc-video/producer/qualification/adaptive-streaming/formats/compare-direct.sh \
-            "$DOWN_HOLD" "${RUNNER_TEMP}/video-format-comparison"
+            paired "${RUNNER_TEMP}/video-format-comparison"
       - name: Restore limits and retain runner metadata
         if: always() && steps.sockets.outputs.receive_limit != ''
         env:
@@ -349,7 +343,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: video-direct-formats-${{ matrix.down_hold }}-${{ github.run_id }}
+          name: video-direct-formats-paired-${{ github.run_id }}
           path: ${{ runner.temp }}/video-format-comparison
           if-no-files-found: error
           retention-days: 14

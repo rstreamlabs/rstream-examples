@@ -6,8 +6,8 @@ video_directory="$(cd "${script_directory}/../../../.." && pwd -P)"
 runner="${RSTREAM_FORMAT_QUALIFICATION_RUNNER:-${video_directory}/distributor/qualification/end-to-end/run.sh}"
 down_hold="${1:-}"
 output_directory="${2:-}"
-if [[ "${down_hold}" != 1s && "${down_hold}" != 3s ]]; then
-  printf 'down-hold comparison accepts only 1s or 3s\n' >&2
+if [[ "${down_hold}" != 1s && "${down_hold}" != 3s && "${down_hold}" != paired ]]; then
+  printf 'down-hold comparison accepts only 1s, 3s or paired\n' >&2
   exit 1
 fi
 if [[ -z "${output_directory}" || -e "${output_directory}" ]]; then
@@ -25,10 +25,17 @@ if [[ "$(grep -Ec '^      downHold: 3s$' "${script_directory}/config.automatic.y
   printf 'automatic profile changed; revalidate the comparison\n' >&2
   exit 1
 fi
-sed "s/^      downHold: 3s$/      downHold: ${down_hold}/" \
-  "${script_directory}/config.automatic.yaml" >"${profile_directory}/producer.yaml"
-chmod 0600 "${profile_directory}/producer.yaml"
-for run in 1 2 3; do
+holds=("${down_hold}" "${down_hold}" "${down_hold}")
+if [[ "${down_hold}" == paired ]]; then
+  # Reuse the same runner and cached images, counterbalancing adjacent pairs.
+  holds=(1s 3s 3s 1s 1s 3s)
+fi
+for index in "${!holds[@]}"; do
+  run=$((index + 1))
+  trial_hold="${holds[index]}"
+  sed "s/^      downHold: 3s$/      downHold: ${trial_hold}/" \
+    "${script_directory}/config.automatic.yaml" >"${profile_directory}/producer.yaml"
+  chmod 0600 "${profile_directory}/producer.yaml"
   status=0
   RSTREAM_CONTEXT='' \
   RSTREAM_DISTRIBUTOR_CONTROL_PATH=local \
@@ -56,21 +63,28 @@ for run in 1 2 3; do
   RSTREAM_DISTRIBUTOR_PRODUCER_CONFIG="${profile_directory}/producer.yaml" \
     "${runner}" "${output_directory}/run-${run}" >"${output_directory}/run-${run}.log" 2>&1 || status=$?
   if [[ ! -s "${output_directory}/run-${run}/result.json" ]]; then
-    jq -cn --argjson run "${run}" --argjson status "${status}" \
-      '{run: $run, status: $status, result: null}' >>"${output_directory}/records.jsonl"
+    jq -cn --argjson run "${run}" --argjson status "${status}" --arg hold "${trial_hold}" \
+      '{run: $run, downHold: $hold, status: $status, result: null}' >>"${output_directory}/records.jsonl"
     # Setup did not complete: retain it without retrying the same prerequisite.
     break
   fi
-  jq -c --argjson run "${run}" --argjson status "${status}" \
-    '{run: $run, status: $status, result: .}' \
+  jq -c --argjson run "${run}" --argjson status "${status}" --arg hold "${trial_hold}" \
+    '{run: $run, downHold: $hold, status: $status, result: .}' \
     "${output_directory}/run-${run}/result.json" >>"${output_directory}/records.jsonl"
 done
-jq -s --arg down_hold "${down_hold}" '{
-  schemaVersion: 1,
+jq -s --arg down_hold "${down_hold}" --argjson requested_runs "${#holds[@]}" '
+  (length == $requested_runs and all(.[]; .result != null) and
+    ([.[].result.images.producer] | unique | length == 1) and
+    ([.[].result.images.browser] | unique | length == 1) and
+    all(.[]; (.result.images.producer | type == "string") and
+      (.result.images.browser | type == "string"))) as $same_images |
+{
+  schemaVersion: 2,
   scope: "direct WebRTC on an isolated Docker bridge; no tunnel, TURN or edge authentication",
   downHold: $down_hold,
-  requestedRuns: 3,
-  passed: (length == 3 and all(.[];
+  requestedRuns: $requested_runs,
+  sameImages: $same_images,
+  passed: ($same_images and length == $requested_runs and all(.[];
     .status == 0 and .result.passed == true and
     .result.profile.controlPath == "local" and .result.profile.edgeAuthentication == false)),
   runs: .

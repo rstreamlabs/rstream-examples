@@ -497,8 +497,9 @@ shared adaptive source. The public provisioning example remains unchanged.
 
 The `Video qualification` workflow also provides
 `automatic_format_comparison=true`: a dedicated direct-only comparison of
-one-second and three-second down-holds, with three full trials each on hosted
-Linux. Other workflow inputs apply to the usual fixed-format qualification and
+one-second and three-second down-holds, with three full trials each on one hosted
+Linux runner. The order is 1s / 3s / 3s / 1s / 1s / 3s; the report requires the same
+producer and browser image digests in every trial. Other workflow inputs apply to the usual fixed-format qualification and
 are unused in this comparison. This job needs no secrets. It fixes the source
 ladder, 1.5 Mbit/s capacity, zero injected loss/delay and zero playout-delay hint,
 retains every attempted result and restores the runner's socket limits. No
@@ -506,9 +507,12 @@ production default changes as a side effect. Its local equivalent, after the
 host's socket-limit preparation, is:
 
 ```bash
-../producer/qualification/adaptive-streaming/formats/compare-direct.sh 1s /tmp/video-formats-1s
-../producer/qualification/adaptive-streaming/formats/compare-direct.sh 3s /tmp/video-formats-3s
+../producer/qualification/adaptive-streaming/formats/compare-direct.sh paired /tmp/video-formats-paired
 ```
+
+Use `1s` or `3s` instead of `paired` to run only three trials of one setting.
+Any failed delivery gate fails the aggregate comparison; completed failures are
+retained and the remaining trials still run. An incomplete setup stops the series.
 
 The collector reads the existing quality API with a separate, short-lived
 path-scoped credential that stays in a private file outside the evidence.

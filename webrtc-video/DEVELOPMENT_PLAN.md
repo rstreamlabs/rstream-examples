@@ -28,6 +28,12 @@ renderer using 5.46 CPU cores; a controlled comparison remains pending.
 The latest fixed-format latency series validates measurement in all four cases
 and passes delivery in three; a 193ms source-capacity recovery freeze remains
 under investigation.
+The independent hosted direct comparison at `18338c8` passes three of three
+one-second down-hold trials and fails three of three three-second trials on
+late sampled freeze counters. All six format ladders recover. The groups use
+different runners and image builds; total freeze durations overlap, so a
+same-runner, same-image interleaved comparison is the next controlled check.
+No production timing changes from this observation.
 
 ## Implemented; final regression qualification pending
 
@@ -603,9 +609,31 @@ The dedicated hosted comparison runs three complete direct trials for each
 of the one-second and three-second down-holds, with the same ladder, 1.5 Mbit/s
 capacity and unchanged delivery/format gates. Every attempted trial is retained;
 incomplete setup stops its series instead of triggering identical retries.
-This independent Linux comparison is pending. It cannot by itself qualify
-MediaMTX, TURN, edge access or physical source hardware, and does not change
-the public three-second setting.
+The [independent hosted Linux comparison at `18338c8`](./distributor/qualification/evidence/18338c8/hosted-direct-formats.json)
+completes all six trials: 3/3 passes at one second and 0/3 at three seconds.
+All six retain one session, reach 360p15 and recover 720p30 with the source
+target. Baseline, recovery, source-format and cleanup gates pass. Every
+three-second trial fails playback and viewer recovery because the freeze
+counter increases after the four-second transition accounting window.
+Initial total freezes are 1.300–2.014s at one second and 1.461–1.805s at three
+seconds; those overlapping ranges do not establish a uniform improvement.
+The first confirmed small-format observation occurs 3.235–3.704s after phase
+start at one second, versus 4.619–4.932s at three seconds. Observation sampling
+is about once per second. Browser frame gaps and counter attribution remain
+separate: the third three-second gap ends near the phase boundary, so the
+sampled late counter does not by itself prove a new steady-state freeze.
+
+Maximum observed JavaScript timer delays are 0.7–2.6ms across the trials,
+without reproducing the earlier large scheduling event. However, each timing
+group runs on a different hosted runner and separately built media images.
+Phase-averaged producer CPU also differs substantially between those runners.
+The comparison now offers a six-trial 1s / 3s / 3s / 1s / 1s / 3s sequence on
+one runner, rejects image-digest changes, retains completed failures and stops
+after incomplete setup. Fixtures cover the ordering, image changes, retained
+failed trials and incomplete setup. Public timing and delivery gates remain
+unchanged. These direct diagnostics cannot qualify MediaMTX, TURN, edge access
+or physical source hardware; their initial presentation measurements exclude
+Next.js authorization and do not qualify rapid repeated activation.
 
 1. Define optional format profiles with bitrate ceiling, dimensions and frame
    rate. Existing bitrate-only configurations must remain unchanged. Expose
