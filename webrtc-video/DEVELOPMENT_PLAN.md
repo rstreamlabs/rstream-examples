@@ -17,7 +17,9 @@ automatic-format series at `02fdf82` has five complete passes in six trials and
 retains one 208ms recovery freeze coincident with a 167ms JavaScript timer delay
 at the recurring ten-minute event. All six format ladders and source-target
 recoveries pass; the complete series remains failed and the public timing is
-unchanged pending attribution.
+unchanged pending attribution. The extended TURN diagnostic at `c585c3c` passes
+all 56 fixed-format gates. Its periodic pause coincides with an unrelated host
+renderer using 5.46 CPU cores; a controlled comparison remains pending.
 The latest fixed-format latency series validates measurement in all four cases
 and passes delivery in three; a 193ms source-capacity recovery freeze remains
 under investigation.
@@ -790,6 +792,30 @@ in 13.124 seconds with no further freeze. Maximum encoder frame spacing is
 43.545ms across the trial. The published native shutdown revision is in the
 producer image. Owned containers are removed and socket limits restored.
 This single direct result does not resolve the retained TURN/matrix failures.
+
+The [complete extended TURN diagnostic at `c585c3c`](./producer/qualification/adaptive-streaming/evidence/c585c3c/extended-relay-diagnostic.json)
+passes all 56 original assertions with the phase-derived collector deadline.
+Its 181.817-second baseline decodes a median 30 fps without a freeze. The four
+header captures correlate 185086 primary RTP packets: five are absent between
+VM egress and ingress (0.00270145%), with none missing on either container/VM
+boundary. All 37017 observed FEC packets arrive at every point, and all four
+captures have zero kernel drops. Recovery reaches its target after 13.122s and
+sustains it after 26.173s. This does not reproduce or explain the earlier
+persistent TURN losses, and instrumentation makes it a diagnostic rather than
+another release-matrix repetition.
+
+The recurring 12:29:52 UTC event is now accompanied by a measured CPU burst:
+an unrelated application renderer on the host uses 5.457 cores in the one-second
+sample, while total host idle falls from 83.39% to 25.51%. Independent 25ms
+timers report gaps of 67.619ms on macOS and 96.652ms in Linux; the browser timer
+is delayed 160.4ms and playback records a 219ms constrained-phase freeze.
+Wall-clock steps stay below 1ms in that window. Encoder output has a 152.207ms
+maximum gap, within this runner's existing 200ms bound. The complete run passes
+its original gates; no result or threshold from the separate format series is
+reclassified. The next discriminating check is an approved comparison with
+that unrelated application closed. No unrelated application was changed by
+this diagnostic. Captures, clock probes and CPU observation stop cleanly;
+owned containers are removed and socket limits restored to 212992 bytes.
 
 ## Cross-cutting latency and resource criteria
 
