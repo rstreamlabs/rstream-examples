@@ -111,7 +111,7 @@ func TestProducerMetricsRemainMonotonicAfterSessionRetirement(t *testing.T) {
 	if active.EstimatedBitrateBps != 3_000_000 || active.EncoderTargetBitrateBps != 2_500_000 {
 		t.Fatalf("unexpected bitrate metrics: %+v", active)
 	}
-	if active.AcknowledgedPayloadBitrateBps != 2_400_000 || active.DelayRecoveryPayloadBitrateBps != 6_000_000 ||
+	if active.AcknowledgedRTPBitrateBps != 2_400_000 || active.DelayRecoveryRTPBitrateBps != 6_000_000 ||
 		active.DelayRecoverySessions != 1 || active.DelayAdditiveSessions != 0 || active.DelayMultiplicativeSessions != 0 {
 		t.Fatalf("unexpected recovery diagnostics: %+v", active)
 	}
@@ -152,7 +152,7 @@ func TestProducerMetricsRemainMonotonicAfterSessionRetirement(t *testing.T) {
 	if retired.ActiveSessions != 0 {
 		t.Fatalf("active sessions = %d, want 0", retired.ActiveSessions)
 	}
-	if retired.AcknowledgedPayloadBitrateBps != 0 || retired.DelayRecoveryPayloadBitrateBps != 0 ||
+	if retired.AcknowledgedRTPBitrateBps != 0 || retired.DelayRecoveryRTPBitrateBps != 0 ||
 		retired.DelayRecoverySessions != 0 || retired.DelayAdditiveSessions != 0 || retired.DelayMultiplicativeSessions != 0 {
 		t.Fatalf("retired recovery diagnostics remain active: %+v", retired)
 	}

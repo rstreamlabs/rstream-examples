@@ -50,8 +50,8 @@ func TestCollectorExportsStableUnitsAndBoundedDimensions(t *testing.T) {
 		DeliveryDroppedFrames: 2,
 	}}
 	producer := staticProducerProvider{stats: rtc.ProducerStats{
-		AcknowledgedPayloadBitrateBps:              2_400_000,
-		DelayRecoveryPayloadBitrateBps:             6_000_000,
+		AcknowledgedRTPBitrateBps:                  2_400_000,
+		DelayRecoveryRTPBitrateBps:                 6_000_000,
 		DelayRecoverySessions:                      1,
 		ActiveSessions:                             1,
 		TWCCNegotiatedSessions:                     1,
@@ -93,10 +93,10 @@ func TestCollectorExportsStableUnitsAndBoundedDimensions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("gather metrics: %v", err)
 	}
-	if value := metricValue(t, families, namespace+"_twcc_acknowledged_payload_bytes_per_second", nil); value != 300_000 {
+	if value := metricValue(t, families, namespace+"_twcc_acknowledged_rtp_bytes_per_second", nil); value != 300_000 {
 		t.Fatalf("acknowledged payload throughput = %f, want 300000 bytes/s", value)
 	}
-	if value := metricValue(t, families, namespace+"_twcc_delay_recovery_payload_bytes_per_second", nil); value != 750_000 {
+	if value := metricValue(t, families, namespace+"_twcc_delay_recovery_rtp_bytes_per_second", nil); value != 750_000 {
 		t.Fatalf("recovery payload target = %f, want 750000 bytes/s", value)
 	}
 	if value := metricValue(t, families, namespace+"_twcc_delay_increase_mode_sessions", map[string]string{"mode": "recovery"}); value != 1 {

@@ -244,22 +244,23 @@ exact flow being impaired. Transport fallback has its own qualification path;
 the video comparison measures one selected route rather than an opportunistic
 ICE outcome.
 
-FlexFEC is not free capacity. GCC controls the complete paced wire budget, and
-the producer derives the encoder's media share after reserving the configured
-repair ratio. With the reference `1/5` profile, a 1.2 Mbit/s wire budget
-provides 1 Mbit/s to media before RTP, UDP, IP, and occasional RTX overhead. At
-the qualified 4 Mbit/s wire point the theoretical media share is about 3.33
-Mbit/s; the 2 Mbit/s encoder floor leaves measured room for packetization,
-reactive repair, and transient overshoot. Chromium does not acknowledge the
-FlexFEC stream through TWCC, so those packets remain outside GCC's loss and
-received-rate calculations while remaining inside its capacity budget.
+FlexFEC is not free capacity. GCC measures tracked primary/RTX RTP and its
+target feeds the encoder without a second FEC deduction. Chromium does not
+acknowledge FlexFEC through TWCC, so those packets remain outside GCC's loss
+and received-rate calculations. The pacer adds their configured share once.
+With the reference `1/5` profile, a 1 Mbit/s media target produces a modeled
+1.2 Mbit/s protected pacing budget before additional protocol and RTX overhead.
+Repair-induced queueing still affects primary TWCC delay and reduces the target.
+A 4 Mbit/s bottleneck can therefore support less than 3.33 Mbit/s of media;
+the 2 Mbit/s encoder floor leaves room for packetization, reactive repair and
+transient overshoot. Actual convergence must be measured on the selected path.
 
-The sender uses one real-time envelope for media bursts and repair. Its
-sustained target is GCC's complete wire budget; the token bucket permits short
-bursts at 1.5 times that rate without changing the long-term allowance. Every
-recorded sample carries the media target, wire target, and pacing envelope, and
-the qualification fails if their relationship diverges from the configured
-protection ratio.
+The sender uses one real-time envelope for media bursts and repair. The token
+bucket permits short bursts at 1.5 times its protected sustained target without
+changing the long-term allowance. Recorded samples distinguish the media target,
+modeled protected budget and burst envelope. Acknowledged-rate diagnostics count
+tracked RTP headers and payload, excluding untracked FEC and outer transport
+headers; they are not total network-throughput measurements.
 
 Pion's delay and loss estimators remain the primary congestion controller. A
 bounded feedback-loss guard closes one coordination gap between them: two

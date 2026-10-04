@@ -127,7 +127,28 @@ not a promoted policy. All five cases retain identical runtime images, private
 path-scoped observation credentials and complete teardown/resource evidence.
 Temporary host socket settings are restored and owned containers are removed.
 
-Next, diagnose the measured bitrate/format recovery interaction before adopting
+The [acknowledged-rate trials at `468637b`](./distributor/qualification/evidence/468637b/acknowledged-rate.json)
+retain two more failures with the bounded arrival-ordered native rate window.
+The default threshold leaves 360p and records a 194 ms baseline freeze; setting
+only the threshold to zero recovers 6 Mbit/s and reaches 540p, but not the final
+720p format. Runtime/host gates pass; the baseline freeze is not discarded.
+Diagnostics identify a separate unit mismatch in the sample adapter: FlexFEC
+is intentionally untracked, but the native target was divided by its ratio.
+A deterministic primary/FEC writer and TWCC test measures 816 kbit/s of tracked
+RTP (1000 payload bytes + 20 header bytes each 10 ms), excludes untracked FEC,
+and reproduces an 800 kbit/s target incorrectly becoming 666666 bit/s.
+
+The isolated correction keeps GCC and encoder targets in tracked-stream units
+and adds the configured FEC allowance once at the pacer boundary. Rate metrics
+now explicitly identify tracked RTP, including its headers and excluding
+untracked FEC and outer transport headers. The regression, full producer race
+suite, vet and formatting checks pass. The initial full suite also exposed a
+pacer test reading counters before its writer returned; joining the worker fixes
+that test and passes 100 repetitions. Native fork race/lint, distributor race
+and real MediaMTX integration passed before the adapter correction. Its next
+step is unchanged-profile live qualification, not a claim of complete recovery.
+
+Next, qualify the corrected accounting before adopting
 a threshold or controller change. Inspect acknowledged throughput, increase
 mode, receive-time ordering and encoder undershoot; a clean loss signal alone
 does not prove spare capacity. If application limitation is established,

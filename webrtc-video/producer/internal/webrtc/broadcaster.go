@@ -61,8 +61,8 @@ type ICEPathStats struct {
 }
 
 type BandwidthStats struct {
-	AcknowledgedPayloadBitrateBps        int     `json:"acknowledgedPayloadBitrateBps"`
-	DelayRecoveryPayloadBitrateBps       int     `json:"delayRecoveryPayloadBitrateBps"`
+	AcknowledgedRTPBitrateBps            int     `json:"acknowledgedRTPBitrateBps"`
+	DelayRecoveryRTPBitrateBps           int     `json:"delayRecoveryRTPBitrateBps"`
 	DelayIncreaseMode                    string  `json:"delayIncreaseMode"`
 	LossTargetBitrateBps                 int     `json:"lossTargetBitrateBps"`
 	DelayTargetBitrateBps                int     `json:"delayTargetBitrateBps"`
@@ -1071,8 +1071,8 @@ func snapshotBandwidthStats(estimator bandwidthEstimator) *BandwidthStats {
 		return nil
 	}
 	stats := &BandwidthStats{}
-	stats.AcknowledgedPayloadBitrateBps, _ = raw["acknowledgedBitrate"].(int)
-	stats.DelayRecoveryPayloadBitrateBps, _ = raw["delayRecoveryTargetBitrate"].(int)
+	stats.AcknowledgedRTPBitrateBps, _ = raw["acknowledgedBitrate"].(int)
+	stats.DelayRecoveryRTPBitrateBps, _ = raw["delayRecoveryTargetBitrate"].(int)
 	stats.DelayIncreaseMode, _ = raw["delayIncreaseMode"].(string)
 	stats.LossTargetBitrateBps, _ = raw["lossTargetBitrate"].(int)
 	stats.DelayTargetBitrateBps, _ = raw["delayTargetBitrate"].(int)

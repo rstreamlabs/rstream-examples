@@ -88,25 +88,24 @@ func (f *peerConnectionFactory) NewPeerConnection(
 			protection := f.flexFECProtection()
 			minimumMediaBitrateBps := f.cfg.WebRTC.Adaptive.TWCCGCC.MinBitrateKbps * 1000
 			maximumMediaBitrateBps := f.cfg.WebRTC.Adaptive.TWCCGCC.MaxBitrateKbps * 1000
-			initialWireBitrateBps := wireBitrate(initialBitrateBps, protection)
-			minimumWireBitrateBps := wireBitrate(minimumMediaBitrateBps, protection)
-			maximumWireBitrateBps := wireBitrate(maximumMediaBitrateBps, protection)
 			pacer := newMinimumBitratePacerWithProtection(
 				initialBitrateBps,
 				minimumMediaBitrateBps,
 				protection,
 			)
+			// GCC measures primary/RTX RTP; unacknowledged FlexFEC is added only
+			// to the pacer budget. Its queuing still affects primary TWCC delay.
 			options := []gcc.Option{
 				gcc.WithLoggerFactory(newPionLoggerFactory(f.cfg.Logging.Verbose)),
 				gcc.SendSideBWEPacer(pacer),
 			}
-			if initialWireBitrateBps > 0 {
-				options = append(options, gcc.SendSideBWEInitialBitrate(initialWireBitrateBps))
+			if initialBitrateBps > 0 {
+				options = append(options, gcc.SendSideBWEInitialBitrate(initialBitrateBps))
 			}
 			options = append(
 				options,
-				gcc.SendSideBWEMinBitrate(minimumWireBitrateBps),
-				gcc.SendSideBWEMaxBitrate(maximumWireBitrateBps),
+				gcc.SendSideBWEMinBitrate(minimumMediaBitrateBps),
+				gcc.SendSideBWEMaxBitrate(maximumMediaBitrateBps),
 			)
 			estimator, err := gcc.NewSendSideBWE(options...)
 			if err != nil {
@@ -195,7 +194,7 @@ type associatedStreamBandwidthEstimator struct {
 }
 
 func (e *associatedStreamBandwidthEstimator) GetTargetBitrate() int {
-	target := e.effectiveMediaBitrate(mediaBitrate(e.SendSideBWE.GetTargetBitrate(), e.protection))
+	target := e.effectiveMediaBitrate(e.SendSideBWE.GetTargetBitrate())
 	return target
 }
 
@@ -208,9 +207,9 @@ func (e *associatedStreamBandwidthEstimator) OnTargetBitrateChange(callback func
 	})
 }
 
-func (e *associatedStreamBandwidthEstimator) deliverCurrentBitrate(callbackWireBitrate int) {
-	currentRawWireBitrate := e.SendSideBWE.GetTargetBitrate()
-	if callbackWireBitrate != currentRawWireBitrate {
+func (e *associatedStreamBandwidthEstimator) deliverCurrentBitrate(callbackBitrate int) {
+	currentRawBitrate := e.SendSideBWE.GetTargetBitrate()
+	if callbackBitrate != currentRawBitrate {
 		e.staleBitrateCallbacks.Add(1)
 	}
 	e.deliverEffectiveBitrate(e.GetTargetBitrate())
@@ -234,11 +233,13 @@ func (e *associatedStreamBandwidthEstimator) deliverEffectiveBitrate(bitrate int
 
 func (e *associatedStreamBandwidthEstimator) GetStats() map[string]any {
 	stats := e.SendSideBWE.GetStats()
-	rawWireBitrate := e.SendSideBWE.GetTargetBitrate()
-	rawMediaBitrate := mediaBitrate(rawWireBitrate, e.protection)
+	// Wire-named diagnostics are modeled protected pacing budgets, not the
+	// tracked RTP throughput measured by GCC.
+	rawMediaBitrate := e.SendSideBWE.GetTargetBitrate()
+	rawWireBitrate := wireBitrate(rawMediaBitrate, e.protection)
 	effectiveMediaBitrate := e.effectiveMediaBitrate(rawMediaBitrate)
-	convertControllerTargetToMedia(stats, "lossTargetBitrate", "rawWireLossTargetBitrate", e.protection)
-	convertControllerTargetToMedia(stats, "delayTargetBitrate", "rawWireDelayTargetBitrate", e.protection)
+	addControllerWireBudget(stats, "lossTargetBitrate", "rawWireLossTargetBitrate", e.protection)
+	addControllerWireBudget(stats, "delayTargetBitrate", "rawWireDelayTargetBitrate", e.protection)
 	stats["rawWireTargetBitrate"] = rawWireBitrate
 	stats["rawMediaTargetBitrate"] = rawMediaBitrate
 	stats["mediaTargetBitrate"] = effectiveMediaBitrate
@@ -312,27 +313,17 @@ func wireBitrate(mediaBitrateBps int, protection flexFECProtection) int {
 	return int((mediaBitrate*totalPackets + mediaPackets - 1) / mediaPackets)
 }
 
-func mediaBitrate(wireBitrateBps int, protection flexFECProtection) int {
-	if !protection.enabled() || wireBitrateBps <= 0 {
-		return wireBitrateBps
-	}
-	totalPackets := int64(protection.mediaPackets) + int64(protection.repairPackets)
-	mediaPackets := int64(protection.mediaPackets)
-	return int(int64(wireBitrateBps) * mediaPackets / totalPackets)
-}
-
-func convertControllerTargetToMedia(
+func addControllerWireBudget(
 	stats map[string]any,
 	mediaName string,
 	wireName string,
 	protection flexFECProtection,
 ) {
-	wireTarget, ok := stats[mediaName].(int)
+	mediaTarget, ok := stats[mediaName].(int)
 	if !ok {
 		return
 	}
-	stats[wireName] = wireTarget
-	stats[mediaName] = mediaBitrate(wireTarget, protection)
+	stats[wireName] = wireBitrate(mediaTarget, protection)
 }
 
 func (f *peerConnectionFactory) flexFECProtection() flexFECProtection {

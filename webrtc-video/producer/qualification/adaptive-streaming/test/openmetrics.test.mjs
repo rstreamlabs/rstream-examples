@@ -6,8 +6,8 @@ import { parseOpenMetrics, producerSample } from "../lib/openmetrics.mjs";
 test("producer OpenMetrics map bounded transport signals", () => {
   const sample = producerSample(
     parseOpenMetrics(`# HELP ignored help
-rstream_video_producer_twcc_acknowledged_payload_bytes_per_second 300000
-rstream_video_producer_twcc_delay_recovery_payload_bytes_per_second 750000
+rstream_video_producer_twcc_acknowledged_rtp_bytes_per_second 300000
+rstream_video_producer_twcc_delay_recovery_rtp_bytes_per_second 750000
 rstream_video_producer_twcc_delay_increase_mode_sessions{mode="recovery"} 1
 rstream_video_producer_twcc_delay_increase_mode_sessions{mode="additive"} 0
 rstream_video_producer_twcc_delay_increase_mode_sessions{mode="multiplicative"} 0
@@ -60,8 +60,8 @@ rstream_video_producer_malformed_feedback_total{protocol="rtcp"} 3
 rstream_video_producer_twcc_padding_packet_statuses_total 4
 `),
   );
-  assert.equal(sample.acknowledgedPayloadKbps, 2400);
-  assert.equal(sample.delayRecoveryPayloadKbps, 6000);
+  assert.equal(sample.acknowledgedRTPKbps, 2400);
+  assert.equal(sample.delayRecoveryRTPKbps, 6000);
   assert.equal(sample.delayRecoverySessions, 1);
   assert.equal(sample.delayAdditiveSessions, 0);
   assert.equal(sample.delayMultiplicativeSessions, 0);

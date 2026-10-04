@@ -173,19 +173,9 @@ func (p *minimumBitratePacer) recoveryKeyFrameDelay() time.Duration {
 }
 
 func (p *minimumBitratePacer) SetTargetBitrate(bitrate int) {
-	p.targetMu.Lock()
-	defer p.targetMu.Unlock()
-	if p.fixedMediaRate > 0 {
-		p.delegate.SetTargetBitrate(wireBitrate(p.fixedMediaRate, p.protection))
-		return
-	}
-	// GCC estimates the complete paced traffic envelope. Forward that wire
-	// budget unchanged so repair traffic is not counted a second time.
-	minimumWireBitrate := wireBitrate(p.minimumBitrate, p.protection)
-	if bitrate < minimumWireBitrate {
-		bitrate = minimumWireBitrate
-	}
-	p.delegate.SetTargetBitrate(bitrate)
+	// GCC tracks primary/RTX only. The pacer must reserve untracked FlexFEC
+	// exactly once, just as for local encoder targets.
+	p.SetMediaTargetBitrate(bitrate)
 }
 
 func (p *minimumBitratePacer) SetMediaTargetBitrate(bitrate int) {

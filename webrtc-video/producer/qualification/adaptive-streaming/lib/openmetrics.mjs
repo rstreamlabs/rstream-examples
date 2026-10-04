@@ -78,16 +78,12 @@ export function producerSample(samples) {
       "outcome",
       "applied",
     ),
-    acknowledgedPayloadKbps: scale(
-      value(
-        "rstream_video_producer_twcc_acknowledged_payload_bytes_per_second",
-      ),
+    acknowledgedRTPKbps: scale(
+      value("rstream_video_producer_twcc_acknowledged_rtp_bytes_per_second"),
       8 / 1000,
     ),
-    delayRecoveryPayloadKbps: scale(
-      value(
-        "rstream_video_producer_twcc_delay_recovery_payload_bytes_per_second",
-      ),
+    delayRecoveryRTPKbps: scale(
+      value("rstream_video_producer_twcc_delay_recovery_rtp_bytes_per_second"),
       8 / 1000,
     ),
     delayAdditiveSessions: labeled(
