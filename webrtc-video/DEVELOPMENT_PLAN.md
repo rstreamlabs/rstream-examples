@@ -447,6 +447,21 @@ Both delay/jitter/loss trials pass, but a single randomized run does not establi
 an improvement. The experiment remains on its isolated branch; only the narrow
 wakeup correction is retained in the main sample.
 
+The [first full direct/symmetric-TURN pair at `4552d30`](./producer/qualification/adaptive-streaming/evidence/4552d30/direct-relay-regression.json)
+retains two failed overall verdicts. Both use the same 720p30 producer/browser
+images, FlexFEC 5/1 and a zero requested playout-delay hint. This longer profile
+steps down to 4 Mbit/s, then adds 120 ms delay, 30 ms jitter and 2% loss; it is
+not a repeat of the shorter distributor profile. Direct passes delivery and
+controller checks but fails encoder cadence on one 219.774 ms recovery output
+gap, above the unchanged 200 ms bound. Host CPU/sampling checks pass, so its
+cause remains unassigned. TURN is confirmed on both peers and both candidate
+ends, but impaired playback freezes for 9.652 s (29.04%) and fails recovery
+time, sustained recovery and receive-throughput recovery. Its encoder ends at
+3.1 Mbit/s versus the stable 6.8 Mbit/s reference. Neither result is accepted;
+the limits remain unchanged. Socket limits are restored and owned containers
+removed. This pair does not isolate the wakeup change or establish a performance
+regression from it. Further relay/recovery and source-cadence diagnosis remain.
+
 ## Cross-cutting latency and resource criteria
 
 The optional qualification-only pixel timestamp probe is now maintained in
