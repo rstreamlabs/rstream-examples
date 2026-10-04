@@ -8,8 +8,8 @@ operating systems or networks.
 The remaining acceptance work is concentrated on repeated network/latency
 qualification, the automatic-format timing decision, intermittent native
 connectivity and final route/browser regressions. Static Linux packaging and
-its H.264/AV1 source checks passed at `27fa72c`; the final Go 1.27 repeat remains
-pending. The guide build/toolchain/plugin instructions have been verified or
+its H.264/AV1 source checks pass again with Go 1.27 at `90df80f` on ARM64 and
+AMD64 (the latter emulated). The guide build/toolchain/plugin instructions have been verified or
 corrected. [The isolated guides draft PR](https://github.com/rstreamlabs/rstream-nextjs/pull/57)
 passes its complete CI, including search and PostgreSQL checks, with automatic
 deployment disabled for that branch. Bounded shutdown for the
@@ -1508,6 +1508,19 @@ bookworm installs the documented libcamera plugin and loads `libcamerasrc`
 (version 0.0.3); this checks its package/plugin availability, not physical camera
 access. The final guide build contains six collections and 136 documents.
 
+The [Go 1.27 static repeat built at `90df80f`](./producer/qualification/evidence/90df80f/static-linux-go127.json)
+passes `make dist` and all four scratch-runtime cases, including the current
+WHEP cleanup, source key-frame behavior and compatible tunnel-handshake backport.
+Both architectures emit and decode H.264/AV1 at a median 30 fps and 1280x720,
+receiving about 5.00 Mbit/s for H.264 and 5.12 Mbit/s for AV1. The approximately
+21-second observations show no additional packet loss, decoded drops or freeze
+duration. Each session is deleted and each producer exits normally in
+153–177ms after SIGTERM. Browser logs are empty and owned containers removed.
+These are local-media packaging/cadence checks with no tunnel or TURN, no physical
+camera, and AMD64 under emulation; they do not establish hardware CPU or latency
+budgets or external network connectivity. Subsequent platform/documentation
+changes do not change the built producer/shared sources.
+
 ## Final acceptance
 
 - Re-run relevant Go race/lifecycle checks, TypeScript/build checks, PostgreSQL
@@ -1520,7 +1533,7 @@ access. The final guide build contains six collections and 136 documents.
 - Verify all documented commands and default/public versus internal profiles.
   No production deployment or public-demo configuration change is included.
 - Static Linux builds and the test-pattern H.264/AV1 runtime checks are complete
-  at `27fa72c`; camera plugin availability is checked separately, without claiming
+  with Go 1.27 at `90df80f`; camera plugin availability is checked separately, without claiming
   physical camera or native AMD64 performance qualification.
 - Obtain the outstanding quality/format/metrics visual acceptance. Discovery and
   replay presentation are already accepted; OAuth/SSO policy and physical-device
