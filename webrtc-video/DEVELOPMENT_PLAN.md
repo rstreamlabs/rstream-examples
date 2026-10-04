@@ -119,11 +119,48 @@ preceding roughly 11.4 seconds. The complete 18-second observation after each
 stop has no late reactivation or duplicate source. Three additional cycles
 measure 453.1–755.8ms cold, 166.6–386.5ms same-page reopen and 118.9–208.1ms
 warm join. All observations are retained; the earlier faster reopen samples do
-not establish an upper bound. Cycle/cancellation pilots still need integration
-into the portable qualification runner, followed by the complete Next.js path
-and target-network measurements. Page disappearance or a lost response still
+not establish an upper bound. The cycle/cancellation exercise is now integrated
+into the portable qualification runner through
+`RSTREAM_DISTRIBUTOR_STARTUP_CYCLES=true`, sharing its exact viewer bundle,
+isolated runtime, credential scope and cleanup. Its three cold/reopen/join
+rounds and four early-stop observations retain failed cases and enforce a
+four-minute browser deadline. Source activity must remain zero from three
+seconds after confirmed close settles (one-second idle grace plus scheduling
+margin) through the complete 18-second observation. This specifically rejects
+the former delayed activation that an immediate idle sample missed.
+Page disappearance or a lost response still
 requires the server's finite handshake timeout; draining cannot recover an
 unknown URL.
+
+The [portable runner at clean `9dac607`](./distributor/qualification/evidence/9dac607/startup-cycles.json)
+passes all nine activation and four cancellation cases: cold first presentation
+607.4–778.4ms, immediate reopen 115.4–172.5ms and warm join 136.8–189.0ms.
+Warm operations retain exactly one source; cold cases create exactly one new
+source after its predecessor is idle. Early created resources receive confirmed
+DELETE responses in 58–285ms; the last active samples are at about 1.23 seconds
+after close settles, followed by idle samples at 1.33–1.34 seconds and no further
+activity through the 18-second observation. The
+129 collector tests, artifact-redaction test, shell configuration regressions
+and static shell/JavaScript checks pass. Owned containers are removed and Linux
+socket limits restored. The source/distributor image digests match the previous
+qualified media core; this change promotes the measurement workflow without
+changing media defaults. Three samples per activation type are not percentiles.
+
+The [authenticated Next.js startup observations at `056ad6e`](./platform/qualification/evidence/056ad6e/dashboard-startup.json)
+retain two failed qualification attempts. Both first readers delivered the
+first observed callback at `presentedFrames=3`; exact first-picture latency
+remains unqualified. The second probe confirms it was armed with no media
+data, before authorization, so late installation is excluded; the retained
+long tasks do not establish the cause. One warm second-reader observation is
+valid: 1016.8ms from navigation and 703.3ms from authorization request, including
+540.1ms to receive and parse authorization. The three observed authorization
+durations are 348.0–590.5ms. The production Next.js build and all 183 platform
+tests pass; membership is a fixture, while the source tunnel, routes, database,
+MediaMTX and media are real. These are warm membership/inventory caches and an
+already running producer, not OAuth or process boot. Authorization/source
+resolution attribution, exact cold presentation and target-network tests
+remain open. No application caching or media defaults were changed based on
+these small, incomplete timing samples.
 
 - GitHub personal ownership or shared organization ownership, with bounded
   membership verification, explicit configuration and existing-device migration.

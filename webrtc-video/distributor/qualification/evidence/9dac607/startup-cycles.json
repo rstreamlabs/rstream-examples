@@ -1,0 +1,468 @@
+{
+  "schemaVersion": 1,
+  "manifest": {
+    "revision": "9dac6079cc8b95a5fd0e79947f4523f94fe79f37",
+    "workingTreeDirty": false,
+    "mode": "mediamtx",
+    "qualification": "startup-cycles",
+    "idleGraceSeconds": 1,
+    "producerImage": "sha256:b80c0841d31e3321ae60c0925c0416008a850d8c755288aa4f50440b4e5ad5e4",
+    "distributorImage": "sha256:68a7b830f07df9aeb90251bac262ebace14aa0525b6e57dca81755a1f25f058a",
+    "browserImage": "sha256:420533e4c0c5edab3f50fa2f00a4cac0050cd32ede58742d04e8acea0de67609",
+    "producerConfigSHA256": "b72c51f0223b74c0b559650fde7ae52c91916733da3cac7c9ac0fe63e59f2054"
+  },
+  "passed": true,
+  "browserVersion": "154.0.8037.92",
+  "scope": "Portable adaptive MediaMTX startup runner, Docker Linux VM, ready producer HTTP endpoint, three cold/reopen/join cycles and four setup cancellations. Excludes Next.js navigation/authorization, process boot, physical display latency and target hardware/network qualification.",
+  "cases": [
+    {
+      "name": "cold",
+      "round": 1,
+      "before": {
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 0
+      },
+      "startup": {
+        "supported": true,
+        "measurementValid": true,
+        "requestedAtMilliseconds": 109.59999999403954,
+        "firstFrame": {
+          "callbackMilliseconds": 902.5,
+          "expectedDisplayMilliseconds": 888,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1
+        },
+        "requestToCallbackMilliseconds": 792.9000000059605,
+        "requestToExpectedDisplayMilliseconds": 778.4000000059605
+      },
+      "after": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 1
+      }
+    },
+    {
+      "name": "reopen",
+      "round": 1,
+      "before": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 1
+      },
+      "startup": {
+        "supported": true,
+        "measurementValid": true,
+        "requestedAtMilliseconds": 1008.3999999761581,
+        "firstFrame": {
+          "callbackMilliseconds": 1135.8,
+          "expectedDisplayMilliseconds": 1123.8,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1
+        },
+        "requestToCallbackMilliseconds": 127.40000002384181,
+        "requestToExpectedDisplayMilliseconds": 115.40000002384181
+      },
+      "after": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 1
+      }
+    },
+    {
+      "name": "warm-join",
+      "round": 1,
+      "before": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 1
+      },
+      "startup": {
+        "supported": true,
+        "measurementValid": true,
+        "requestedAtMilliseconds": 64.09999999403954,
+        "firstFrame": {
+          "callbackMilliseconds": 241.9,
+          "expectedDisplayMilliseconds": 237.3,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1
+        },
+        "requestToCallbackMilliseconds": 177.80000000596047,
+        "requestToExpectedDisplayMilliseconds": 173.20000000596048
+      },
+      "after": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 1
+      }
+    },
+    {
+      "name": "cold",
+      "round": 2,
+      "before": {
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 1
+      },
+      "startup": {
+        "supported": true,
+        "measurementValid": true,
+        "requestedAtMilliseconds": 61.80000001192093,
+        "firstFrame": {
+          "callbackMilliseconds": 689.7,
+          "expectedDisplayMilliseconds": 675.1,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1
+        },
+        "requestToCallbackMilliseconds": 627.8999999880791,
+        "requestToExpectedDisplayMilliseconds": 613.2999999880791
+      },
+      "after": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 2
+      }
+    },
+    {
+      "name": "reopen",
+      "round": 2,
+      "before": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 2
+      },
+      "startup": {
+        "supported": true,
+        "measurementValid": true,
+        "requestedAtMilliseconds": 803.7000000178814,
+        "firstFrame": {
+          "callbackMilliseconds": 989.7,
+          "expectedDisplayMilliseconds": 976.2,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1
+        },
+        "requestToCallbackMilliseconds": 185.99999998211865,
+        "requestToExpectedDisplayMilliseconds": 172.49999998211865
+      },
+      "after": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 2
+      }
+    },
+    {
+      "name": "warm-join",
+      "round": 2,
+      "before": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 2
+      },
+      "startup": {
+        "supported": true,
+        "measurementValid": true,
+        "requestedAtMilliseconds": 78.90000000596046,
+        "firstFrame": {
+          "callbackMilliseconds": 273.7,
+          "expectedDisplayMilliseconds": 267.9,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1
+        },
+        "requestToCallbackMilliseconds": 194.79999999403952,
+        "requestToExpectedDisplayMilliseconds": 188.9999999940395
+      },
+      "after": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 2
+      }
+    },
+    {
+      "name": "cold",
+      "round": 3,
+      "before": {
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 2
+      },
+      "startup": {
+        "supported": true,
+        "measurementValid": true,
+        "requestedAtMilliseconds": 66.40000000596046,
+        "firstFrame": {
+          "callbackMilliseconds": 677.8,
+          "expectedDisplayMilliseconds": 673.8,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1
+        },
+        "requestToCallbackMilliseconds": 611.3999999940395,
+        "requestToExpectedDisplayMilliseconds": 607.3999999940395
+      },
+      "after": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 3
+      }
+    },
+    {
+      "name": "reopen",
+      "round": 3,
+      "before": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 3
+      },
+      "startup": {
+        "supported": true,
+        "measurementValid": true,
+        "requestedAtMilliseconds": 781.4000000059605,
+        "firstFrame": {
+          "callbackMilliseconds": 961.2,
+          "expectedDisplayMilliseconds": 945.3,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1
+        },
+        "requestToCallbackMilliseconds": 179.79999999403958,
+        "requestToExpectedDisplayMilliseconds": 163.8999999940395
+      },
+      "after": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 3
+      }
+    },
+    {
+      "name": "warm-join",
+      "round": 3,
+      "before": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 3
+      },
+      "startup": {
+        "supported": true,
+        "measurementValid": true,
+        "requestedAtMilliseconds": 62.5,
+        "firstFrame": {
+          "callbackMilliseconds": 207.2,
+          "expectedDisplayMilliseconds": 199.3,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1
+        },
+        "requestToCallbackMilliseconds": 144.7,
+        "requestToExpectedDisplayMilliseconds": 136.8
+      },
+      "after": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 3
+      }
+    }
+  ],
+  "cancellations": [
+    {
+      "waitMilliseconds": 0,
+      "closeResult": {
+        "credentialRefreshFailed": false,
+        "durationMilliseconds": 0,
+        "outcome": "not-established"
+      },
+      "stopToSettledMilliseconds": 3.7159580000006827,
+      "after": {
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 3
+      },
+      "samples": 168,
+      "observationAfterSettledMilliseconds": 17919.162466,
+      "lastActiveAfterSettledMilliseconds": null,
+      "firstIdleAfterFinalActivityMilliseconds": 0.040415999999822816,
+      "allSamplesIdleFrom3000Milliseconds": true,
+      "maximumSourceCount": 0,
+      "maximumActiveSessionCount": 0
+    },
+    {
+      "waitMilliseconds": 25,
+      "closeResult": {
+        "credentialRefreshFailed": false,
+        "durationMilliseconds": 285,
+        "outcome": "deleted",
+        "status": 200
+      },
+      "stopToSettledMilliseconds": 297.3143339999988,
+      "after": {
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 4
+      },
+      "samples": 169,
+      "observationAfterSettledMilliseconds": 17940.831175,
+      "lastActiveAfterSettledMilliseconds": 1236.2604580000007,
+      "firstIdleAfterFinalActivityMilliseconds": 1343.6862090000031,
+      "allSamplesIdleFrom3000Milliseconds": true,
+      "maximumSourceCount": 1,
+      "maximumActiveSessionCount": 1
+    },
+    {
+      "waitMilliseconds": 100,
+      "closeResult": {
+        "credentialRefreshFailed": false,
+        "durationMilliseconds": 230,
+        "outcome": "deleted",
+        "status": 200
+      },
+      "stopToSettledMilliseconds": 238.78750000000582,
+      "after": {
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 5
+      },
+      "samples": 170,
+      "observationAfterSettledMilliseconds": 17909.27205,
+      "lastActiveAfterSettledMilliseconds": 1230.6342930000028,
+      "firstIdleAfterFinalActivityMilliseconds": 1333.640459000002,
+      "allSamplesIdleFrom3000Milliseconds": true,
+      "maximumSourceCount": 1,
+      "maximumActiveSessionCount": 1
+    },
+    {
+      "waitMilliseconds": 250,
+      "closeResult": {
+        "credentialRefreshFailed": false,
+        "durationMilliseconds": 58,
+        "outcome": "deleted",
+        "status": 200
+      },
+      "stopToSettledMilliseconds": 69.9053750000021,
+      "after": {
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 6
+      },
+      "samples": 170,
+      "observationAfterSettledMilliseconds": 17967.904342,
+      "lastActiveAfterSettledMilliseconds": 1227.943376000003,
+      "firstIdleAfterFinalActivityMilliseconds": 1332.6385010000013,
+      "allSamplesIdleFrom3000Milliseconds": true,
+      "maximumSourceCount": 1,
+      "maximumActiveSessionCount": 1
+    }
+  ],
+  "cleanup": {
+    "sourceObservations": [
+      {
+        "milliseconds": 16.764333000000022,
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 0
+      },
+      {
+        "milliseconds": 1280.332042,
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 1
+      },
+      {
+        "milliseconds": 1.980666999999812,
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 1
+      },
+      {
+        "milliseconds": 1264.155084,
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 2
+      },
+      {
+        "milliseconds": 2.539375000000291,
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 2
+      },
+      {
+        "milliseconds": 1267.958250999999,
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 3
+      },
+      {
+        "milliseconds": 2.854833999997936,
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 3
+      },
+      {
+        "milliseconds": 5.249082999995153,
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 4
+      },
+      {
+        "milliseconds": 5.982292000000598,
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 5
+      },
+      {
+        "milliseconds": 2.6976250000006985,
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 6
+      }
+    ],
+    "ownedContainersRemoved": true,
+    "linuxSocketLimitsRestored": {
+      "receive": 212992,
+      "send": 212992
+    }
+  },
+  "limitations": [
+    "Three observations per activation type do not establish percentiles or guarantees.",
+    "Cancellation counters are sampled about every 100ms after the close promise settles; stop-to-settled and close-operation durations are separate fields.",
+    "The qualifier uses one second of idle grace. Production retains five seconds.",
+    "The complete private report preserves every cancellation sample; this summary retains all attempted cases and lifecycle bounds.",
+    "These lifecycle and presentation checks do not replace delivery/cadence, congestion, recording-overhead or CPU qualification."
+  ]
+}

@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 1,
+  "scope": "Authenticated organization/discovered dashboard, production Next.js, real rstream producer tunnel, adaptive MediaMTX 1.21.1 and native headless Chromium on macOS. Membership and inventory caches warm. Producer process ready with low source preset. GitHub membership is a fixture; OAuth and physical capture/display are excluded.",
+  "producerImage": "sha256:b80c0841d31e3321ae60c0925c0416008a850d8c755288aa4f50440b4e5ad5e4",
+  "distributorImage": "sha256:68a7b830f07df9aeb90251bac262ebace14aa0525b6e57dca81755a1f25f058a",
+  "attempts": [
+    {
+      "revision": "7c394f5",
+      "qualificationPassed": false,
+      "failure": {
+        "passed": false,
+        "gates": {
+          "realDiscoveryWithoutEnrollment": true,
+          "sourceControlAndConcurrentSelection": true
+        },
+        "stage": "mediamtx playback from discovered producer",
+        "name": "AssertionError",
+        "commandStatus": null,
+        "message": "First presentation must be measured from navigation and authorization"
+      },
+      "viewers": [
+        {
+          "actor": "alice",
+          "supported": true,
+          "measurementValid": false,
+          "authorization": [
+            {
+              "startedAt": 460.69999998807907,
+              "headersAt": 1050.3999999761581,
+              "status": 200,
+              "bodyReadAt": 1051.199999988079
+            }
+          ],
+          "whep": [
+            {
+              "startedAt": 1154.300000011921,
+              "headersAt": 2605.399999976158,
+              "status": 201
+            }
+          ],
+          "peers": [
+            {
+              "createdAt": 1146.800000011921,
+              "connectedAt": 2618.199999988079
+            }
+          ],
+          "firstFrame": {
+            "callbackMilliseconds": 2749.1,
+            "expectedDisplayMilliseconds": 2745,
+            "width": 1280,
+            "height": 720,
+            "presentedFrames": 3
+          },
+          "navigationToExpectedDisplayMilliseconds": null,
+          "authorizationToExpectedDisplayMilliseconds": null,
+          "authorizationMilliseconds": null
+        }
+      ]
+    },
+    {
+      "revision": "056ad6e",
+      "qualificationPassed": false,
+      "failure": {
+        "passed": false,
+        "gates": {
+          "realDiscoveryWithoutEnrollment": true,
+          "sourceControlAndConcurrentSelection": true
+        },
+        "stage": "mediamtx playback from discovered producer",
+        "name": "AssertionError",
+        "commandStatus": null,
+        "message": "First presentation must be measured from navigation and authorization"
+      },
+      "viewers": [
+        {
+          "actor": "alice",
+          "supported": true,
+          "armedAtMilliseconds": 381,
+          "readyStateAtArm": 0,
+          "longTasks": [
+            {
+              "startedAt": 450.5,
+              "duration": 61
+            },
+            {
+              "startedAt": 867.8000000119209,
+              "duration": 117
+            }
+          ],
+          "measurementValid": false,
+          "authorization": [
+            {
+              "startedAt": 519.9000000357628,
+              "headersAt": 867.1000000238419,
+              "status": 200,
+              "bodyReadAt": 867.9000000357628
+            }
+          ],
+          "whep": [
+            {
+              "startedAt": 992.9000000357628,
+              "headersAt": 2486.7000000476837,
+              "status": 201
+            }
+          ],
+          "peers": [
+            {
+              "createdAt": 977.8000000119209,
+              "connectedAt": 2499
+            }
+          ],
+          "firstFrame": {
+            "callbackMilliseconds": 2623,
+            "observedAtMilliseconds": 2625.2000000476837,
+            "expectedDisplayMilliseconds": 2621.7,
+            "width": 1280,
+            "height": 720,
+            "presentedFrames": 3
+          },
+          "navigationToExpectedDisplayMilliseconds": null,
+          "authorizationToExpectedDisplayMilliseconds": null,
+          "authorizationMilliseconds": null
+        },
+        {
+          "actor": "bob",
+          "supported": true,
+          "armedAtMilliseconds": 195,
+          "readyStateAtArm": 0,
+          "longTasks": [
+            {
+              "startedAt": 247.5,
+              "duration": 59
+            }
+          ],
+          "measurementValid": true,
+          "authorization": [
+            {
+              "startedAt": 313.5,
+              "headersAt": 853,
+              "status": 200,
+              "bodyReadAt": 853.6000000238419
+            }
+          ],
+          "whep": [
+            {
+              "startedAt": 872.3000000119209,
+              "headersAt": 929.3000000119209,
+              "status": 201
+            }
+          ],
+          "peers": [
+            {
+              "createdAt": 860.1999999880791,
+              "connectedAt": 944
+            }
+          ],
+          "firstFrame": {
+            "callbackMilliseconds": 1013.6,
+            "observedAtMilliseconds": 1017.3000000119209,
+            "expectedDisplayMilliseconds": 1016.8,
+            "width": 1280,
+            "height": 720,
+            "presentedFrames": 1
+          },
+          "navigationToExpectedDisplayMilliseconds": 1016.8,
+          "authorizationToExpectedDisplayMilliseconds": 703.3,
+          "authorizationMilliseconds": 540.1000000238419
+        }
+      ]
+    }
+  ],
+  "interpretation": [
+    "Both first-viewer observations missed the first presented frame (presentedFrames=3); they do not establish exact first-picture latency.",
+    "The second attempt proves the callback was armed before any media data (readyState=0). Its retained long tasks do not coincide with frame presentation; the cause remains unassigned.",
+    "The second viewer has valid first-presentation evidence: 1016.8ms from navigation and 703.3ms from authorization request, including 540.1ms authorization.",
+    "Observed authorization response times across the three viewers are 590.5, 348.0 and 540.1ms. These are browser-observed request/body completion durations, not isolated server CPU times.",
+    "The full qualification remains failed; no performance percentiles or guarantee are established."
+  ],
+  "cleanup": {
+    "ownedContainersRemoved": true,
+    "linuxSocketLimitsRestored": {
+      "receive": 212992,
+      "send": 212992
+    }
+  }
+}
