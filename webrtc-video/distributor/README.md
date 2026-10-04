@@ -415,6 +415,23 @@ Use `RSTREAM_DISTRIBUTOR_MODE=direct` for the one-to-one reference. Setting
 `RSTREAM_DISTRIBUTOR_EDGE_AUTH=false` is useful only when isolating local media
 behavior and does not satisfy the release authentication gate.
 
+For a separate activation and cancellation check, use
+`RSTREAM_DISTRIBUTOR_STARTUP_CYCLES=true` with the same command and an empty
+output directory. This adaptive MediaMTX check repeats three source-cold
+activations, three immediate same-page reopens during the one-second
+qualification idle grace, and three additional readers joining the active
+source. Every warm operation must retain the same single upstream and encoder.
+It then cancels setup after 0, 25, 100 and 250ms, confirms WHEP resource cleanup,
+and observes source counters for another 18 seconds. Counters must remain zero
+after the idle grace plus a two-second scheduling margin; an initial zero
+cannot hide delayed activation. `startup-cycles.json` retains every attempted
+case, frame callback and cancellation observation; `startup-manifest.json`
+identifies the source and images. The runner has a four-minute browser deadline.
+This mode does not combine with recording or network/format phases, and does
+not replace their cadence, quality, latency or CPU gates. Timings exclude
+Next.js authorization and device process startup. The production idle grace
+remains five seconds.
+
 Phase changes are published atomically inside the browser container, with
 an acknowledged write before the runner continues. The collector's live control
 file does not depend on host bind-mount rename visibility. Its concurrent-reader

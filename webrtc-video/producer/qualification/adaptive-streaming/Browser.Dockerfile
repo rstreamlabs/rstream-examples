@@ -10,6 +10,7 @@ WORKDIR /qualification
 COPY producer/qualification/adaptive-streaming/package.json producer/qualification/adaptive-streaming/package-lock.json ./
 RUN npm ci --omit=optional
 COPY producer/qualification/adaptive-streaming/collect.mjs ./collect.mjs
+COPY producer/qualification/adaptive-streaming/startup-cycles.mjs ./startup-cycles.mjs
 COPY producer/qualification/adaptive-streaming/viewer.ts ./viewer.ts
 COPY producer/qualification/adaptive-streaming/sample-receiver-udp.mjs ./sample-receiver-udp.mjs
 COPY producer/qualification/adaptive-streaming/sample-host-cpu.sh /usr/local/bin/rstream-sample-host-cpu

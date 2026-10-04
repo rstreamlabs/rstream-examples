@@ -37,6 +37,7 @@ source_queue_packets="${RSTREAM_DISTRIBUTOR_SOURCE_QUEUE_PACKETS:-256}"
 playout_delay_hint_seconds="${RSTREAM_DISTRIBUTOR_PLAYOUT_DELAY_HINT_SECONDS:-0}"
 latency_probe="${RSTREAM_DISTRIBUTOR_LATENCY_PROBE:-false}"
 recording="${RSTREAM_DISTRIBUTOR_RECORDING:-false}"
+startup_cycles="${RSTREAM_DISTRIBUTOR_STARTUP_CYCLES:-false}"
 quality_observer="${RSTREAM_DISTRIBUTOR_QUALITY_OBSERVER:-false}"
 expected_format="${RSTREAM_DISTRIBUTOR_EXPECT_FORMAT:-}"
 producer_config="${RSTREAM_DISTRIBUTOR_PRODUCER_CONFIG:-}"
@@ -54,6 +55,22 @@ if ! select_distribution_mode "${distribution_mode}"; then
   printf 'RSTREAM_DISTRIBUTOR_MODE must be direct, mediamtx, or mediamtx-native\n' >&2
   exit 1
 fi
+case "${startup_cycles}" in
+true)
+  if [[ "${distribution_mode}" != mediamtx || "${recording}" != false || "${latency_probe}" != false || "${quality_observer}" != false || -n "${expected_format}" ]]; then
+    printf 'startup cycles require the adaptive MediaMTX profile without recording, latency or format qualification\n' >&2
+    exit 1
+  fi
+  for value in "${viewer_loss_percent}" "${viewer_capacity_kbps}" "${viewer_delay_milliseconds}" "${viewer_jitter_milliseconds}" "${source_loss_percent}" "${source_capacity_kbps}" "${source_delay_milliseconds}" "${source_jitter_milliseconds}"; do
+    if [[ "${value}" != 0 ]]; then
+      printf 'startup cycles do not combine with network impairment phases\n' >&2
+      exit 1
+    fi
+  done
+  ;;
+false) ;;
+*) printf 'RSTREAM_DISTRIBUTOR_STARTUP_CYCLES must be true or false\n' >&2; exit 1 ;;
+esac
 case "${recording}" in
 true)
   if [[ "${uses_mediamtx}" != true ]]; then
@@ -251,6 +268,9 @@ fi
 collector_maximum_duration_seconds=$((warmup_seconds + duration_seconds + 60))
 if [[ "${viewer_network_enabled}" == true || "${source_network_enabled}" == true ]]; then
   collector_maximum_duration_seconds=$((warmup_seconds + duration_seconds * 2 + recovery_seconds + 60))
+fi
+if [[ "${startup_cycles}" == true ]]; then
+  collector_maximum_duration_seconds=240
 fi
 connect_token_ttl_seconds=$((collector_maximum_duration_seconds + 180))
 if ((connect_token_ttl_seconds < 300)); then
@@ -698,6 +718,46 @@ if [[ "${distribution_mode}" == mediamtx-native ]]; then
     "${distributor_image}" /qualification/native-mediamtx.json >/dev/null
   distributor_started=1
   viewer_endpoint=http://distributor:8889/camera/whep
+fi
+
+if [[ "${startup_cycles}" == true ]]; then
+  docker run --detach \
+    --name "${browser_name}" \
+    --network "${network_name}" \
+    --user "${container_user}" \
+    --read-only \
+    --security-opt no-new-privileges \
+    --tmpfs /tmp:rw,nosuid,size=512m \
+    --shm-size 256m \
+    --env HOME=/tmp \
+    --mount "type=bind,source=${output_directory},target=/artifacts" \
+    --entrypoint node \
+    "${browser_image}" /qualification/startup-cycles.mjs \
+    --whep-endpoint "${viewer_endpoint}" \
+    --producer-metrics-url http://producer:9090/metrics \
+    --output-directory /artifacts >/dev/null
+  browser_started=1
+  deadline=$((SECONDS + collector_maximum_duration_seconds))
+  while [[ "$(docker inspect --format '{{.State.Running}}' "${browser_name}")" == true ]]; do
+    if ((SECONDS >= deadline)); then
+      printf 'startup cycle collector exceeded its deadline\n' >&2
+      exit 1
+    fi
+    sleep 1
+  done
+  browser_status="$(docker wait "${browser_name}")"
+  capture_logs
+  jq -n \
+    --arg revision "${revision}" \
+    --argjson working_tree_dirty "${working_tree_dirty}" \
+    --arg producer_image "$(docker image inspect --format '{{.Id}}' "${producer_image}")" \
+    --arg distributor_image "$(docker image inspect --format '{{.Id}}' "${distributor_image}")" \
+    --arg browser_image "$(docker image inspect --format '{{.Id}}' "${browser_image}")" \
+    --arg producer_config_sha256 "${producer_config_sha256}" \
+    '{revision: $revision, workingTreeDirty: $working_tree_dirty, mode: "mediamtx", qualification: "startup-cycles", idleGraceSeconds: 1, producerImage: $producer_image, distributorImage: $distributor_image, browserImage: $browser_image, producerConfigSHA256: $producer_config_sha256}' \
+    >"${output_directory}/startup-manifest.json"
+  [[ "${browser_status}" == 0 ]] && jq -e '.passed == true' "${output_directory}/startup-cycles.json" >/dev/null
+  exit "$?"
 fi
 
 docker run --detach \

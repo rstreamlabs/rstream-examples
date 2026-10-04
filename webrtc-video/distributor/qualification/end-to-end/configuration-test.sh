@@ -60,4 +60,30 @@ for scenario in invalid direct; do
   fi
 done
 
+for scenario in invalid direct recording network; do
+  mode=mediamtx
+  cycles=true
+  recording=false
+  loss=0
+  expected='startup cycles require the adaptive MediaMTX profile'
+  case "${scenario}" in
+    invalid) cycles=invalid; expected='RSTREAM_DISTRIBUTOR_STARTUP_CYCLES must be true or false' ;;
+    direct) mode=direct ;;
+    recording) recording=true ;;
+    network) loss=1; expected='startup cycles do not combine with network impairment phases' ;;
+  esac
+  if output="$(RSTREAM_CONTEXT=qualification RSTREAM_DISTRIBUTOR_MODE="${mode}" \
+    RSTREAM_DISTRIBUTOR_STARTUP_CYCLES="${cycles}" \
+    RSTREAM_DISTRIBUTOR_RECORDING="${recording}" \
+    RSTREAM_DISTRIBUTOR_SOURCE_LOSS_PERCENT="${loss}" \
+    "${script_directory}/run.sh" "${fixture_directory}/output" 2>&1)"; then
+    printf 'incompatible startup configuration was accepted\n' >&2
+    exit 1
+  fi
+  if [[ "${output}" != *"${expected}"* || -e "${fixture_directory}/output" ]]; then
+    printf 'startup configuration did not fail before creating runtime artifacts\n' >&2
+    exit 1
+  fi
+done
+
 printf 'MediaMTX qualification configuration tests passed\n'

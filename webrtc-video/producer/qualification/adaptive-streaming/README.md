@@ -28,6 +28,12 @@ display scanout. They measure one fresh activation; repeat/cold/warm/churn
 qualification must still distinguish source lifecycle state. No startup-time
 performance threshold is implied by measurement validity.
 
+The distributor runner's `RSTREAM_DISTRIBUTOR_STARTUP_CYCLES=true` mode provides
+that repeated adaptive MediaMTX check using the same viewer/client bundle.
+It measures cold/reopen/join cases and observes setup cancellations through
+the source setup deadline. See the [distribution qualification](../../../distributor/README.md#technical-qualification)
+for its scope and lifecycle gates.
+
 For QUIC signaling, first prepare adequate UDP socket limits on the Linux
 container host (the Linux VM when using Docker Desktop). The
 [distribution prerequisites](../../../distributor/README.md#technical-qualification)
