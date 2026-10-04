@@ -298,6 +298,18 @@ and separate MediaMTX 1.21.1 integration checks pass. The repeated live network
 failures above remain unchanged evidence; integrated network qualification of
 this pin is the next step.
 
+The [four targeted cases at clean revision `f1d38d2`](./distributor/qualification/evidence/f1d38d2/feedback-summary.json)
+use this published pin and identical image digests. Three pass: the 4 Mbit/s
+source and direct paths, and source-to-adapter 60 ms delay / 15 ms jitter /
+1% loss. The direct delay/jitter/loss path fails with 0.483 s of constrained
+freezes and 0.387 s during recovery. All four pass runtime/host integrity and
+recover their 8 Mbit/s target; socket limits are restored and owned containers
+removed. There is one run per case, not a completed repeat qualification.
+The impairment traces also show double-digit reported loss despite about 1%
+qdisc drops; whether temporary missing/overlapping feedback accounts for this
+is under investigation. No acceptance gate is relaxed and no causal improvement
+is inferred from these single random-loss trials.
+
 The discovery configuration review additionally reproduced valid display names
 being rejected or changed when environment expansion encounters YAML quotes or
 backslashes. A literal scalar preserves those names; the real configuration
