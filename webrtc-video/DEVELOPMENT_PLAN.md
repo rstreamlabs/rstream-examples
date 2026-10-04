@@ -57,6 +57,20 @@ run uses adequate UDP socket limits, restores the original values and leaves no
 test containers. This short functional observation does not establish
 capture-to-display latency or impaired-network performance.
 
+The [combined discovery/organization/MediaMTX check at `0b88ec6`](./platform/qualification/evidence/0b88ec6/organization-discovery.json)
+now passes with two separate member sessions, about 29.95 fps per reader at
+720p, two MediaMTX readers and one encoder. The source permits only one viewer,
+so both readers necessarily share the adapter's upstream session. A quality
+change propagates to the other member, a nonmember cannot obtain viewer or
+metrics access, and the remaining reader continues after the first leaves.
+Abrupt closure of the last browser stops the encoder in 35.979 s, including
+disconnection detection and on-demand shutdown. History/rename/offline denial
+and live-only inventory also pass. The direct regression passes on the same
+producer image. Both use a clean checkout and restore socket limits/remove
+owned containers. GitHub membership remains substituted; these short functional
+observations do not qualify actual OAuth/SSO, forced relay or resource/latency
+budgets.
+
 ## In progress: optional source format adaptation
 
 Resolution and frame-rate adaptation is a general-purpose WebRTC technique.
