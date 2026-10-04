@@ -33,10 +33,7 @@
           "bitrateCeilingKbps": 1000,
           "appliedKbps": 1000,
           "receivedKbps": 779.8825910067663,
-          "framesPerSecond": [
-            14.29388221841052,
-            14.29388221841052
-          ],
+          "framesPerSecond": [14.29388221841052, 14.29388221841052],
           "target": {
             "id": "small",
             "width": 640,
@@ -92,10 +89,7 @@
           "bitrateCeilingKbps": 3000,
           "appliedKbps": 3000,
           "receivedKbps": 2896.858246903491,
-          "framesPerSecond": [
-            22.823984526112184,
-            22.823984526112184
-          ],
+          "framesPerSecond": [22.823984526112184, 22.823984526112184],
           "target": {
             "id": "medium",
             "width": 960,
@@ -151,10 +145,7 @@
           "bitrateCeilingKbps": 6000,
           "appliedKbps": 4934,
           "receivedKbps": 5671.526464760075,
-          "framesPerSecond": [
-            28.46079380445305,
-            28.46630518977537
-          ],
+          "framesPerSecond": [28.46079380445305, 28.46630518977537],
           "target": {
             "id": "large",
             "width": 1280,
@@ -210,10 +201,7 @@
           "bitrateCeilingKbps": 1000,
           "appliedKbps": 1000,
           "receivedKbps": 761.9051018699745,
-          "framesPerSecond": [
-            14.184397163120567,
-            14.187116564417177
-          ],
+          "framesPerSecond": [14.184397163120567, 14.187116564417177],
           "target": {
             "id": "small",
             "width": 640,
@@ -269,10 +257,7 @@
           "bitrateCeilingKbps": 6000,
           "appliedKbps": 6000,
           "receivedKbps": 5979.249327068317,
-          "framesPerSecond": [
-            28.482852160434025,
-            28.488372093023255
-          ],
+          "framesPerSecond": [28.482852160434025, 28.488372093023255],
           "target": {
             "id": "large",
             "width": 1280,
@@ -328,10 +313,7 @@
           "bitrateCeilingKbps": 3000,
           "appliedKbps": 3000,
           "receivedKbps": 2908.589358706025,
-          "framesPerSecond": [
-            22.937548188126446,
-            22.941970310391362
-          ],
+          "framesPerSecond": [22.937548188126446, 22.941970310391362],
           "target": {
             "id": "medium",
             "width": 960,
@@ -387,10 +369,7 @@
           "bitrateCeilingKbps": 1000,
           "appliedKbps": 1000,
           "receivedKbps": 742.4307251916432,
-          "framesPerSecond": [
-            14.146434716115465,
-            14.146434716115465
-          ],
+          "framesPerSecond": [14.146434716115465, 14.146434716115465],
           "target": {
             "id": "small",
             "width": 640,
@@ -446,10 +425,7 @@
           "bitrateCeilingKbps": 6000,
           "appliedKbps": 6000,
           "receivedKbps": 5942.522859891034,
-          "framesPerSecond": [
-            28.504944735311227,
-            28.51047323506594
-          ],
+          "framesPerSecond": [28.504944735311227, 28.51047323506594],
           "target": {
             "id": "large",
             "width": 1280,
@@ -505,10 +481,7 @@
           "bitrateCeilingKbps": 6000,
           "appliedKbps": 6000,
           "receivedKbps": 6002.588273064573,
-          "framesPerSecond": [
-            28.471818710052297,
-            28.4773343665246
-          ],
+          "framesPerSecond": [28.471818710052297, 28.4773343665246],
           "target": {
             "id": "large",
             "width": 1280,
@@ -570,9 +543,7 @@
           "bitrateCeilingKbps": 1000,
           "appliedKbps": 1000,
           "receivedKbps": null,
-          "framesPerSecond": [
-            14.2966069386199
-          ],
+          "framesPerSecond": [14.2966069386199],
           "target": {
             "id": "small",
             "width": 640,
@@ -609,9 +580,7 @@
           "bitrateCeilingKbps": 3000,
           "appliedKbps": 3000,
           "receivedKbps": null,
-          "framesPerSecond": [
-            22.75356729656768
-          ],
+          "framesPerSecond": [22.75356729656768],
           "target": {
             "id": "medium",
             "width": 960,
@@ -648,9 +617,7 @@
           "bitrateCeilingKbps": 6000,
           "appliedKbps": 6000,
           "receivedKbps": null,
-          "framesPerSecond": [
-            28.411287205257054
-          ],
+          "framesPerSecond": [28.411287205257054],
           "target": {
             "id": "large",
             "width": 1280,
@@ -687,9 +654,7 @@
           "bitrateCeilingKbps": 1000,
           "appliedKbps": 1000,
           "receivedKbps": null,
-          "framesPerSecond": [
-            14.288435892550963
-          ],
+          "framesPerSecond": [14.288435892550963],
           "target": {
             "id": "small",
             "width": 640,
@@ -726,9 +691,7 @@
           "bitrateCeilingKbps": 6000,
           "appliedKbps": 6000,
           "receivedKbps": null,
-          "framesPerSecond": [
-            28.54923286074966
-          ],
+          "framesPerSecond": [28.54923286074966],
           "target": {
             "id": "large",
             "width": 1280,
@@ -765,9 +728,7 @@
           "bitrateCeilingKbps": 3000,
           "appliedKbps": 3000,
           "receivedKbps": null,
-          "framesPerSecond": [
-            22.911051212938006
-          ],
+          "framesPerSecond": [22.911051212938006],
           "target": {
             "id": "medium",
             "width": 960,
@@ -804,9 +765,7 @@
           "bitrateCeilingKbps": 1000,
           "appliedKbps": 1000,
           "receivedKbps": null,
-          "framesPerSecond": [
-            14.310246136233543
-          ],
+          "framesPerSecond": [14.310246136233543],
           "target": {
             "id": "small",
             "width": 640,
@@ -843,9 +802,7 @@
           "bitrateCeilingKbps": 6000,
           "appliedKbps": 6000,
           "receivedKbps": null,
-          "framesPerSecond": [
-            28.49941837921675
-          ],
+          "framesPerSecond": [28.49941837921675],
           "target": {
             "id": "large",
             "width": 1280,
@@ -882,9 +839,7 @@
           "bitrateCeilingKbps": 6000,
           "appliedKbps": 6000,
           "receivedKbps": null,
-          "framesPerSecond": [
-            28.654404646660215
-          ],
+          "framesPerSecond": [28.654404646660215],
           "target": {
             "id": "large",
             "width": 1280,
