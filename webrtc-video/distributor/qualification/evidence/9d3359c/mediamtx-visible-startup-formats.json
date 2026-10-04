@@ -1314,10 +1314,6 @@
         "networkImpairment": {
           "enabled": true,
           "scope": "producer-to-adapter",
-          "destination": {
-            "ip": "172.19.0.3",
-            "port": null
-          },
           "capacityKbps": 1500,
           "delayMilliseconds": 0,
           "jitterMilliseconds": 0,
@@ -1346,46 +1342,6 @@
             "backlog": 5710,
             "qlen": 5
           },
-          "filters": [
-            {
-              "protocol": "ip",
-              "pref": 1,
-              "kind": "u32",
-              "chain": 0
-            },
-            {
-              "protocol": "ip",
-              "pref": 1,
-              "kind": "u32",
-              "chain": 0,
-              "options": {
-                "fh": "800:",
-                "ht_divisor": 1
-              }
-            },
-            {
-              "protocol": "ip",
-              "pref": 1,
-              "kind": "u32",
-              "chain": 0,
-              "options": {
-                "fh": "800::800",
-                "order": 2048,
-                "key_ht": "800",
-                "bkt": "0",
-                "flowid": "1:3",
-                "not_in_hw": true,
-                "rule_hit": 8835,
-                "success": 8729,
-                "match": {
-                  "value": "ac130003",
-                  "mask": "ffffffff",
-                  "offmask": "",
-                  "off": 16
-                }
-              }
-            }
-          ],
           "twccFeedbackPacketsDelta": 454,
           "adaptiveBitrateUpdatesDelta": 20,
           "pacerSentRetransmissionDelta": 357,
@@ -2718,10 +2674,6 @@
         "networkImpairment": {
           "enabled": true,
           "scope": "producer-to-adapter",
-          "destination": {
-            "ip": "172.19.0.3",
-            "port": null
-          },
           "capacityKbps": 1500,
           "delayMilliseconds": 0,
           "jitterMilliseconds": 0,
@@ -2750,46 +2702,6 @@
             "backlog": 5084,
             "qlen": 4
           },
-          "filters": [
-            {
-              "protocol": "ip",
-              "pref": 1,
-              "kind": "u32",
-              "chain": 0
-            },
-            {
-              "protocol": "ip",
-              "pref": 1,
-              "kind": "u32",
-              "chain": 0,
-              "options": {
-                "fh": "800:",
-                "ht_divisor": 1
-              }
-            },
-            {
-              "protocol": "ip",
-              "pref": 1,
-              "kind": "u32",
-              "chain": 0,
-              "options": {
-                "fh": "800::800",
-                "order": 2048,
-                "key_ht": "800",
-                "bkt": "0",
-                "flowid": "1:3",
-                "not_in_hw": true,
-                "rule_hit": 8807,
-                "success": 8699,
-                "match": {
-                  "value": "ac130003",
-                  "mask": "ffffffff",
-                  "offmask": "",
-                  "off": 16
-                }
-              }
-            }
-          ],
           "twccFeedbackPacketsDelta": 454,
           "adaptiveBitrateUpdatesDelta": 17,
           "pacerSentRetransmissionDelta": 309,
@@ -4259,10 +4171,6 @@
         "networkImpairment": {
           "enabled": true,
           "scope": "producer-to-adapter",
-          "destination": {
-            "ip": "172.19.0.3",
-            "port": null
-          },
           "capacityKbps": 1500,
           "delayMilliseconds": 0,
           "jitterMilliseconds": 0,
@@ -4291,46 +4199,6 @@
             "backlog": 4330,
             "qlen": 4
           },
-          "filters": [
-            {
-              "protocol": "ip",
-              "pref": 1,
-              "kind": "u32",
-              "chain": 0
-            },
-            {
-              "protocol": "ip",
-              "pref": 1,
-              "kind": "u32",
-              "chain": 0,
-              "options": {
-                "fh": "800:",
-                "ht_divisor": 1
-              }
-            },
-            {
-              "protocol": "ip",
-              "pref": 1,
-              "kind": "u32",
-              "chain": 0,
-              "options": {
-                "fh": "800::800",
-                "order": 2048,
-                "key_ht": "800",
-                "bkt": "0",
-                "flowid": "1:3",
-                "not_in_hw": true,
-                "rule_hit": 8634,
-                "success": 8526,
-                "match": {
-                  "value": "ac130003",
-                  "mask": "ffffffff",
-                  "offmask": "",
-                  "off": 16
-                }
-              }
-            }
-          ],
           "twccFeedbackPacketsDelta": 454,
           "adaptiveBitrateUpdatesDelta": 18,
           "pacerSentRetransmissionDelta": 279,

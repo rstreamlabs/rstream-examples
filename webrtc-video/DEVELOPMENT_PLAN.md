@@ -122,7 +122,11 @@ The production HTTPS requirement is unchanged. The renamed `compare-delivery.sh`
 and workflow can repeat three public-default MediaMTX trials on an independent
 Linux runner without credentials, alongside the existing direct crossover.
 This isolates media qualification from the local desktop and external control
-plane; its runtime validation remains pending.
+plane. The local media smoke test at `3aa4015` passes all 23 gates, including
+visible startup and resource teardown; socket limits return to 212992. The
+[independent Linux three-trial series](https://github.com/rstreamlabs/rstream-examples/actions/runs/37231189865)
+is running. This local smoke test has no shaped network phase and does not
+replace that series.
 The current-dependency local forced-TURN trial at `18f6cc1` passes all 56 gates,
 including actual relay candidates at both endpoints, adaptation, recovery and
 session cleanup. It does not remove the separate hosted-runner TCP obstacle.
