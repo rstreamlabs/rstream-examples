@@ -277,10 +277,26 @@ feedback. Fork revision `418b2a2` consumes every received delta while returning
 only known send-history entries, preserves wire sequence advancement and
 rejects missing deltas. Its full Go 1.24.6 race suite and golangci-lint 2.10.1
 checks pass; it is published on the draft review branch but is not yet pinned
-by the sample. The existing
-250-packet history also needs qualification against the number of packets in
-flight under congestion before another integrated network run; do not simply
-substitute an unbounded history or increase media queues.
+separately by the sample.
+
+The history regression then reproduces eviction of 750 out of 1,000 packets
+in a half-second 8 Mbit/s flight. Fork revision `2c11e8a` retains unresolved
+metadata for up to 60 seconds as new packets arrive, with a separate hard cap
+of 32,768 entries, and releases received entries after valid feedback. This
+follows the receipt-retirement and time-window policy in
+[libwebrtc's feedback adapter](https://webrtc.googlesource.com/src/+/main/modules/congestion_controller/rtp/transport_feedback_adapter.cc)
+while additionally bounding the number of entries. No media payload is retained.
+Tests cover delayed and overlapping feedback, late receipt, expiry, the count
+bound, RFC 8888 receipt retirement and malformed feedback without partial
+retirement. The fork's full race/lint checks pass. Three local metadata-path
+benchmarks measure 166–173 ns/packet versus 186–187 ns/packet before this change,
+with unchanged allocations, on Apple M1 Max; these are not complete source
+CPU/memory or media-latency measurements.
+Both producer and distributor now pin the published `2c11e8a` revision,
+including the parser correction. Their checksum, race, GCC, no-embedded-web
+and separate MediaMTX 1.21.1 integration checks pass. The repeated live network
+failures above remain unchanged evidence; integrated network qualification of
+this pin is the next step.
 
 The discovery configuration review additionally reproduced valid display names
 being rejected or changed when environment expansion encounters YAML quotes or
