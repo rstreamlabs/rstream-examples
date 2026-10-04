@@ -66,6 +66,39 @@ test("membership checks use authenticated identity, active membership and bounde
   assert.equal(await verifier.verify("../acme", "7", "token"), null)
 })
 
+test("civil-clock rollback cannot extend the default membership cache lifetime", async (t) => {
+  let wallTime = 1_000_000
+  let elapsedTime = 1_000
+  let calls = 0
+  let state = "active"
+  t.mock.method(Date, "now", () => wallTime)
+  t.mock.method(performance, "now", () => elapsedTime)
+  const verifier = new GitHubMembershipVerifier({
+    fetch: async () => {
+      calls++
+      return Response.json(membership(state))
+    },
+  })
+  assert.ok(await verifier.verify("acme", "7", "token"))
+  elapsedTime += 30_000
+  wallTime += 30_000
+  assert.ok(await verifier.verify("acme", "7", "token"))
+  assert.equal(calls, 1)
+
+  state = "pending"
+  elapsedTime += 30_000
+  // Civil time remains later than cache creation, so checking only that lower
+  // bound does not prevent a rollback from extending the 60-second lifetime.
+  wallTime -= 20_000
+  assert.equal(await verifier.verify("acme", "7", "token"), null)
+  assert.equal(calls, 2)
+
+  state = "active"
+  elapsedTime += 5_000
+  assert.ok(await verifier.verify("acme", "7", "token"))
+  assert.equal(calls, 3)
+})
+
 test("revoked credentials, wrong organization and wrong user never grant access", async () => {
   for (const response of [
     new Response(null, { status: 401 }),

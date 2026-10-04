@@ -22,7 +22,8 @@ type Membership = { organizationId: string } | null
 type Entry = { result: Membership; checkedAt: number; expiresAt: number }
 
 // Bounded process-local cache. Every replica independently enforces the same
-// maximum authorization age. No stale-on-error and no tokens in cache keys/logs.
+// maximum authorization age using elapsed time, independent of civil-clock
+// adjustments. No stale-on-error and no tokens in cache keys/logs.
 export class GitHubMembershipVerifier {
   private readonly cache = new Map<string, Entry>()
   private readonly pending = new Map<string, Promise<Membership>>()
@@ -31,7 +32,7 @@ export class GitHubMembershipVerifier {
 
   constructor(options: { fetch?: typeof fetch; now?: () => number } = {}) {
     this.fetcher = options.fetch ?? fetch
-    this.now = options.now ?? Date.now
+    this.now = options.now ?? (() => performance.now())
   }
 
   async verify(
