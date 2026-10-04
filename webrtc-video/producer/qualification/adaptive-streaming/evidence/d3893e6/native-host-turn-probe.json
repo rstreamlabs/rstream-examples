@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "revision": "1d0ac6e",
+  "scope": "Existing TURN UDP echo probe on the macOS host, without Docker, GStreamer or WebRTC. This uses one allocation and a plain UDP echo peer, so it does not reproduce the video trial topology.",
+  "binarySHA256": "b5c09384aef48c24663b2e0d94213833b4df4ef8e0202a0f38c0b0437eb1f932",
+  "binaryGoVersion": "go1.26.6",
+  "binaryVCSBuildSettings": [],
+  "cases": [
+    {
+      "label": "low",
+      "startedAt": "2026-10-04T09:36:50.296018+00:00",
+      "finishedAt": "2026-10-04T09:37:05.700144+00:00",
+      "offeredMbps": 1,
+      "payloadBytes": 600,
+      "exitCode": 0,
+      "result": {
+        "transport": "udp",
+        "allocation": "udp",
+        "port": 3478,
+        "sent_packets": 2473,
+        "received_packets": 2472,
+        "sent_bytes": 1483800,
+        "received_bytes": 1483200,
+        "duration_ms": 15282,
+        "active_duration_ms": 12001,
+        "offered_mbps": 1,
+        "upstream_mbps": 0.989080547917994,
+        "downstream_mbps": 0.9886805962204939,
+        "delivered_mbps": 0.9886805962204939,
+        "delivery_percent": 99.95956328346138
+      }
+    },
+    {
+      "label": "medium",
+      "startedAt": "2026-10-04T09:37:05.700659+00:00",
+      "finishedAt": "2026-10-04T09:37:20.869398+00:00",
+      "offeredMbps": 4,
+      "payloadBytes": 600,
+      "exitCode": 0,
+      "result": {
+        "transport": "udp",
+        "allocation": "udp",
+        "port": 3478,
+        "sent_packets": 9266,
+        "received_packets": 9266,
+        "sent_bytes": 5559600,
+        "received_bytes": 5559600,
+        "duration_ms": 15132,
+        "active_duration_ms": 12000,
+        "offered_mbps": 4,
+        "upstream_mbps": 3.7061351913902167,
+        "downstream_mbps": 3.7061351913902167,
+        "delivered_mbps": 3.7061351913902167,
+        "delivery_percent": 100
+      }
+    },
+    {
+      "label": "high",
+      "startedAt": "2026-10-04T09:37:20.869890+00:00",
+      "finishedAt": "2026-10-04T09:37:36.033076+00:00",
+      "offeredMbps": 8,
+      "payloadBytes": 1200,
+      "exitCode": 0,
+      "result": {
+        "transport": "udp",
+        "allocation": "udp",
+        "port": 3478,
+        "sent_packets": 9218,
+        "received_packets": 9218,
+        "sent_bytes": 11061600,
+        "received_bytes": 11061600,
+        "duration_ms": 15128,
+        "active_duration_ms": 12001,
+        "offered_mbps": 8,
+        "upstream_mbps": 7.373384444098156,
+        "downstream_mbps": 7.373384444098156,
+        "delivered_mbps": 7.373384444098156,
+        "delivery_percent": 100
+      }
+    }
+  ],
+  "finding": "No sustained loss reproduced in three short native-host UDP echo probes: one missing packet at the low rate and none at medium/high rates. The actual source pacing is about 0.989, 3.706 and 7.373 Mbit/s; requested rates are not substituted for measured throughput.",
+  "limitations": [
+    "One twelve-second active observation per rate; no repeated series or release qualification.",
+    "One TURN allocation and a plain UDP echo peer differ from the two-allocation video path.",
+    "Uniform fixed-size echo traffic does not reproduce the video stream's burst pattern, encryption, repair or mixed packet sizes.",
+    "This short result neither locates nor rules out intermittent loss in Docker, the host network or the managed relay."
+  ],
+  "cleanup": {
+    "boundedCredentialsTTLSeconds": 300,
+    "privateCredentialFilesRemoved": true,
+    "nativeProcessesCompleted": true
+  },
+  "inputs": [
+    {
+      "name": "native-host-probe.json",
+      "sha256": "4dc6aafcb69dce309b2d71b01811d00ef137651b38316d4803b5a42eded723ed"
+    },
+    {
+      "name": "native-probe.py",
+      "sha256": "2c12e83b8c2f46c8ce52d82b4c69f35c6198cbe17368211f64e89f83c3fdf6f9"
+    },
+    {
+      "name": "native-credentials.go",
+      "sha256": "213f9e9b9dfbb5502b8f695e1f2c83b2581ae3d3bc146f4a6b19254618aa9440"
+    }
+  ]
+}

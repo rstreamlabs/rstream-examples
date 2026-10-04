@@ -719,6 +719,14 @@ recovery. This successful diagnostic does not replace the failed release matrix
 or explain the first trial's larger loss. All four captures report zero kernel
 drops; owned containers and temporary socket settings are cleaned up.
 
+Three [short UDP echo probes directly on macOS](./producer/qualification/adaptive-streaming/evidence/d3893e6/native-host-turn-probe.json)
+exclude Docker and the video pipeline. At actual offered rates of 0.989, 3.706
+and 7.373 Mbit/s, they lose one of 2,473 packets, zero of 9,266 and zero of 9,218
+respectively. Each active window is twelve seconds. The existing TURN probe
+uses one allocation and uniformly paced echo traffic, so this does not reproduce
+the two-allocation video's burst pattern or establish a cause for its intermittent
+loss. Its short-lived credentials are removed locally after the processes finish.
+
 ## Cross-cutting latency and resource criteria
 
 The optional qualification-only pixel timestamp probe is now maintained in
