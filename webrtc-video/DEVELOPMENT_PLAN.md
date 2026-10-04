@@ -111,6 +111,28 @@ observer delivery. The qualifier now also arms from the committed DOM immediatel
 before authorization, retaining its strict ordering check. A dedicated regression
 and all 199 unit tests pass; the failed runtime attempt remains retained.
 
+The [visible-startup series at `7e75e65`](./platform/qualification/evidence/7e75e65/visible-startup.json)
+retains that failed attempt and three complete passes: two adaptive MediaMTX
+trials and one direct regression. All seven functional/measurement gates plus
+cleanup pass on clean source. MediaMTX initial navigation to visible image takes
+1.649–1.944s for the first reader and 0.624–0.749s for an additional reader.
+Its six same-page activations after encoder idle take 0.646–1.663s; five are
+0.646–0.832s, while the slowest includes 1.099s authorization. Concurrent
+dependency observations include an 804ms inventory response during that slow
+authorization, without establishing attribution to a single route. Direct
+navigation takes 1.586s and its three same-page activations take 0.578–0.615s.
+
+Graceful WHEP deletion takes 11–44ms through MediaMTX and 306–332ms directly.
+Encoder idle is observed 5.169–6.761s after MediaMTX deletion, including its
+unchanged production five-second idle grace and polling/control latency; direct
+idle observations are 0.370–1.719s. Every viewer remains around 30fps, one encoder
+is shared, and there are no browser page errors. These finite local measurements
+exclude OAuth, physical capture/display and forced TURN. The MediaMTX callback
+uses the local helper's HTTPS tunnel, not the future deployed topology. They
+establish visible-frame and graceful-lifecycle measurement, not a percentile,
+startup SLA or elimination of control-plane outliers. Abrupt-loss measurements
+and prior exact-first-submission failures remain separate and unchanged.
+
 Remove demonstrated serial waits, unnecessary polling and avoidable key-frame
 delays while retaining authentication, bounded cancellation, one shared upstream
 and demand-driven encoder shutdown. Do not keep capture, encoding or media

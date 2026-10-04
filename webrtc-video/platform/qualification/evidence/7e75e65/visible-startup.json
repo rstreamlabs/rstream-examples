@@ -1,0 +1,2574 @@
+{
+  "schemaVersion": 2,
+  "scope": "Authenticated organization/discovered dashboard, production Next.js and real rstream producer tunnel. Adaptive MediaMTX 1.21.1 or direct WebRTC, native headless Chromium on macOS. Producer process already running; initial source low, MediaMTX cycles medium after a shared change. GitHub membership is a fixture; OAuth, physical capture/display and a forced relay path are excluded. MediaMTX resolver callbacks use the local stack temporary HTTPS tunnel; this is not the future deployed topology.",
+  "measurement": "First observed unobstructed video frame callback, after the loading overlay disappears. The later of expected display time and observation after visibility checks is a conservative startup estimate. Exact first submission is reported separately; historical failed trials remain failed.",
+  "lifecycle": "Actual offline device selection unmounts the player and invokes its normal WHEP DELETE. Reactivation selects the live device on the same page after encoder idle. MediaMTX uses its production 5-second runOnDemandCloseAfter. Encoder idle is observed by bounded HTTP polling and includes polling/control latency. Abrupt browser loss is not measured here.",
+  "limitations": [
+    "Small finite sample, not a percentile or startup SLA.",
+    "First activation includes adapter startup; same-page restart still recreates the adapter after idle.",
+    "Source process startup and actual target capture/network/hardware remain separate qualification."
+  ],
+  "attempts": [
+    {
+      "revision": "b29b57d",
+      "note": "initial probe, late mutation delivery invalidates same-page measurement",
+      "qualificationPassed": false,
+      "gates": {
+        "realDiscoveryWithoutEnrollment": true,
+        "sourceControlAndConcurrentSelection": true,
+        "sharedMediaMTXPlaybackAndEncoderLifecycle": true,
+        "historyDoesNotGrantSourceAccess": true,
+        "stableIdentityAndRename": true,
+        "liveOnlyWithoutHistoryWrites": true
+      },
+      "runtime": {
+        "browserVersion": "153.0.8010.12",
+        "playwrightVersion": "1.63.0",
+        "nodeVersion": "v26.7.0",
+        "browserSelection": "bundled",
+        "startupTrace": false
+      },
+      "failure": {
+        "stage": "first presentation measurement",
+        "name": "AssertionError",
+        "message": "Visible presentation must be measured from navigation, authorization and same-page activation"
+      },
+      "playback": {
+        "schemaVersion": 2,
+        "distribution": "mediamtx",
+        "viewers": [
+          {
+            "actor": "alice",
+            "at": 6369.100000023842,
+            "framesDecoded": 130,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.956064438466477
+          },
+          {
+            "actor": "bob",
+            "at": 4133.699999988079,
+            "framesDecoded": 93,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.95008319467554
+          }
+        ],
+        "activeEncoders": 1,
+        "afterSharedQualityChange": [
+          {
+            "actor": "alice",
+            "at": 12534.100000023842,
+            "framesDecoded": 315,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.973024277673684
+          },
+          {
+            "actor": "bob",
+            "at": 10298.199999988079,
+            "framesDecoded": 278,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.97302427826866
+          }
+        ],
+        "firstMemberClosure": {
+          "outcome": "deleted",
+          "status": 200,
+          "durationMilliseconds": 35,
+          "credentialRefreshFailed": false,
+          "distributor": "mediamtx",
+          "observedAt": 12611.399999976158,
+          "selectionToDeletionMilliseconds": 37.69999998807907
+        },
+        "remainingMember": [
+          {
+            "actor": "bob",
+            "at": 14335.699999988079,
+            "framesDecoded": 399,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.98800479819988
+          }
+        ],
+        "mediaMTXReaders": 2,
+        "sourceViewerLimit": 1,
+        "sharedQuality": "medium",
+        "continuesAfterFirstMemberCloses": true,
+        "afterSamePageCycles": [
+          {
+            "actor": "bob",
+            "at": 39334.30000001192,
+            "framesDecoded": 102,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.97002997002997
+          }
+        ],
+        "finalMemberClosure": {
+          "outcome": "deleted",
+          "status": 200,
+          "durationMilliseconds": 16,
+          "credentialRefreshFailed": false,
+          "distributor": "mediamtx",
+          "observedAt": 39378.39999997616,
+          "selectionToDeletionMilliseconds": 17.5
+        },
+        "finalEncoderIdleAfterDeletionMilliseconds": 5703.656209000008,
+        "pageErrors": 0,
+        "startupMeasurementValid": false,
+        "postBrowserCleanupIdleCheckMilliseconds": 777.3627500000002,
+        "startup": [
+          {
+            "actor": "alice",
+            "schemaVersion": 2,
+            "supported": true,
+            "installedAtMilliseconds": 382.5,
+            "activationRequestedAtMilliseconds": null,
+            "armedAtMilliseconds": 388.30000001192093,
+            "readyStateAtArm": 0,
+            "longTasks": [
+              {
+                "startedAt": 448.80000001192093,
+                "duration": 59
+              },
+              {
+                "startedAt": 889.3999999761581,
+                "duration": 107
+              }
+            ],
+            "mediaEvents": [
+              {
+                "kind": "loadeddata",
+                "atMilliseconds": 2103.399999976158,
+                "coveredByStatus": true
+              },
+              {
+                "kind": "playing",
+                "atMilliseconds": 2103.399999976158,
+                "coveredByStatus": true
+              }
+            ],
+            "measurementValid": false,
+            "exactFirstSubmissionMeasured": false,
+            "authorizationResponseMilliseconds": 373.7999999523163,
+            "authorization": [
+              {
+                "startedAt": 515.6000000238419,
+                "headersAt": 889,
+                "status": 200,
+                "bodyReadAt": 889.3999999761581
+              }
+            ],
+            "whep": [
+              {
+                "startedAt": 1006.1999999880791,
+                "headersAt": 1959.3999999761581,
+                "status": 201
+              }
+            ],
+            "peers": [
+              {
+                "createdAt": 987.3000000119209,
+                "connectedAt": 1974.800000011921
+              }
+            ],
+            "firstFrame": {
+              "callbackMilliseconds": 2112.6,
+              "presentationMilliseconds": 2100.8,
+              "expectedDisplayMilliseconds": 2100.8,
+              "receiveMilliseconds": 2080.8,
+              "mediaTimeSeconds": 0.073,
+              "width": 1280,
+              "height": 720,
+              "presentedFrames": 3,
+              "visibility": {
+                "documentVisible": true,
+                "elementVisible": true,
+                "centerInViewport": true,
+                "centerUnobstructed": true,
+                "coveredByStatus": false,
+                "mediaReady": true,
+                "visible": true
+              },
+              "observedAtMilliseconds": 2115.5
+            },
+            "firstVisibleFrame": {
+              "callbackMilliseconds": 2112.6,
+              "presentationMilliseconds": 2100.8,
+              "expectedDisplayMilliseconds": 2100.8,
+              "receiveMilliseconds": 2080.8,
+              "mediaTimeSeconds": 0.073,
+              "width": 1280,
+              "height": 720,
+              "presentedFrames": 3,
+              "visibility": {
+                "documentVisible": true,
+                "elementVisible": true,
+                "centerInViewport": true,
+                "centerUnobstructed": true,
+                "coveredByStatus": false,
+                "mediaReady": true,
+                "visible": true
+              },
+              "observedAtMilliseconds": 2115.5
+            },
+            "visiblePresentationValid": true,
+            "visiblePresentationScope": "First observed unoccluded video frame callback; later of browser expected-display time and observation after visibility checks. Conservative startup estimate, not exact first submission or physical display latency.",
+            "navigationToVisiblePresentationMilliseconds": 2115.5,
+            "authorizationToVisiblePresentationMilliseconds": 1599.8999999761581,
+            "activationToVisiblePresentationMilliseconds": null,
+            "navigationToExpectedDisplayMilliseconds": null,
+            "authorizationToExpectedDisplayMilliseconds": null
+          },
+          {
+            "actor": "bob",
+            "schemaVersion": 2,
+            "supported": true,
+            "installedAtMilliseconds": 238.89999997615814,
+            "activationRequestedAtMilliseconds": null,
+            "armedAtMilliseconds": 240.89999997615814,
+            "readyStateAtArm": 0,
+            "longTasks": [
+              {
+                "startedAt": 290.19999998807907,
+                "duration": 56
+              }
+            ],
+            "mediaEvents": [
+              {
+                "kind": "loadeddata",
+                "atMilliseconds": 1039.300000011921,
+                "coveredByStatus": true
+              },
+              {
+                "kind": "playing",
+                "atMilliseconds": 1039.300000011921,
+                "coveredByStatus": true
+              }
+            ],
+            "measurementValid": true,
+            "exactFirstSubmissionMeasured": true,
+            "authorizationResponseMilliseconds": 600.0999999642372,
+            "authorization": [
+              {
+                "startedAt": 353.60000002384186,
+                "headersAt": 953.3999999761581,
+                "status": 200,
+                "bodyReadAt": 953.6999999880791
+              }
+            ],
+            "whep": [
+              {
+                "startedAt": 963.6000000238419,
+                "headersAt": 974.1000000238419,
+                "status": 201
+              }
+            ],
+            "peers": [
+              {
+                "createdAt": 957.3999999761581,
+                "connectedAt": 979.6999999880791
+              }
+            ],
+            "firstFrame": {
+              "callbackMilliseconds": 1025.8,
+              "presentationMilliseconds": 1038.1,
+              "expectedDisplayMilliseconds": 1038.1,
+              "receiveMilliseconds": 1033.8,
+              "mediaTimeSeconds": 0,
+              "width": 1280,
+              "height": 720,
+              "presentedFrames": 1,
+              "visibility": {
+                "documentVisible": true,
+                "elementVisible": true,
+                "centerInViewport": true,
+                "centerUnobstructed": false,
+                "coveredByStatus": true,
+                "mediaReady": true,
+                "visible": false
+              },
+              "observedAtMilliseconds": 1038.800000011921
+            },
+            "firstVisibleFrame": {
+              "callbackMilliseconds": 1059,
+              "presentationMilliseconds": 1059.3,
+              "expectedDisplayMilliseconds": 1075.7,
+              "receiveMilliseconds": 1052.9,
+              "mediaTimeSeconds": 0.041,
+              "width": 1280,
+              "height": 720,
+              "presentedFrames": 2,
+              "visibility": {
+                "documentVisible": true,
+                "elementVisible": true,
+                "centerInViewport": true,
+                "centerUnobstructed": true,
+                "coveredByStatus": false,
+                "mediaReady": true,
+                "visible": true
+              },
+              "observedAtMilliseconds": 1059.6000000238419
+            },
+            "visiblePresentationValid": true,
+            "visiblePresentationScope": "First observed unoccluded video frame callback; later of browser expected-display time and observation after visibility checks. Conservative startup estimate, not exact first submission or physical display latency.",
+            "navigationToVisiblePresentationMilliseconds": 1075.7,
+            "authorizationToVisiblePresentationMilliseconds": 722.0999999761582,
+            "activationToVisiblePresentationMilliseconds": null,
+            "navigationToExpectedDisplayMilliseconds": 1038.1,
+            "authorizationToExpectedDisplayMilliseconds": 684.499999976158
+          }
+        ],
+        "samePageCycles": [
+          {
+            "cycle": 1,
+            "closed": {
+              "outcome": "deleted",
+              "status": 200,
+              "durationMilliseconds": 42,
+              "credentialRefreshFailed": false,
+              "distributor": "mediamtx",
+              "observedAt": 14740.399999976158,
+              "selectionToDeletionMilliseconds": 43.69999998807907
+            },
+            "encoderIdleAfterDeletionMilliseconds": 6639.3107080000045,
+            "startup": {
+              "schemaVersion": 2,
+              "supported": true,
+              "installedAtMilliseconds": 21393.30000001192,
+              "activationRequestedAtMilliseconds": 21413,
+              "armedAtMilliseconds": 21415.80000001192,
+              "readyStateAtArm": 0,
+              "longTasks": [
+                {
+                  "startedAt": 290.19999998807907,
+                  "duration": 56
+                }
+              ],
+              "mediaEvents": [
+                {
+                  "kind": "loadeddata",
+                  "atMilliseconds": 22256.899999976158,
+                  "coveredByStatus": true
+                },
+                {
+                  "kind": "playing",
+                  "atMilliseconds": 22256.899999976158,
+                  "coveredByStatus": true
+                }
+              ],
+              "measurementValid": false,
+              "exactFirstSubmissionMeasured": false,
+              "authorizationResponseMilliseconds": null,
+              "authorization": [
+                {
+                  "startedAt": 21415.399999976158,
+                  "headersAt": 21631.100000023842,
+                  "status": 200,
+                  "bodyReadAt": 21631.5
+                }
+              ],
+              "whep": [
+                {
+                  "startedAt": 21640.69999998808,
+                  "headersAt": 22230.19999998808,
+                  "status": 201
+                }
+              ],
+              "peers": [
+                {
+                  "createdAt": 21633.600000023842,
+                  "connectedAt": 22238
+                }
+              ],
+              "firstFrame": {
+                "callbackMilliseconds": 22258.2,
+                "presentationMilliseconds": 22256.4,
+                "expectedDisplayMilliseconds": 22256.4,
+                "receiveMilliseconds": 22249.1,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 22259.19999998808
+              },
+              "firstVisibleFrame": {
+                "callbackMilliseconds": 22258.2,
+                "presentationMilliseconds": 22256.4,
+                "expectedDisplayMilliseconds": 22256.4,
+                "receiveMilliseconds": 22249.1,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 22259.19999998808
+              },
+              "visiblePresentationValid": false,
+              "visiblePresentationScope": "First observed unoccluded video frame callback; later of browser expected-display time and observation after visibility checks. Conservative startup estimate, not exact first submission or physical display latency.",
+              "navigationToVisiblePresentationMilliseconds": null,
+              "authorizationToVisiblePresentationMilliseconds": null,
+              "activationToVisiblePresentationMilliseconds": null,
+              "navigationToExpectedDisplayMilliseconds": null,
+              "authorizationToExpectedDisplayMilliseconds": null
+            }
+          },
+          {
+            "cycle": 2,
+            "closed": {
+              "outcome": "deleted",
+              "status": 200,
+              "durationMilliseconds": 16,
+              "credentialRefreshFailed": false,
+              "distributor": "mediamtx",
+              "observedAt": 22678.30000001192,
+              "selectionToDeletionMilliseconds": 18
+            },
+            "encoderIdleAfterDeletionMilliseconds": 5387.414457999999,
+            "startup": {
+              "schemaVersion": 2,
+              "supported": true,
+              "installedAtMilliseconds": 28085.600000023842,
+              "activationRequestedAtMilliseconds": 28112.19999998808,
+              "armedAtMilliseconds": 28113.600000023842,
+              "readyStateAtArm": 0,
+              "longTasks": [
+                {
+                  "startedAt": 290.19999998807907,
+                  "duration": 56
+                }
+              ],
+              "mediaEvents": [
+                {
+                  "kind": "loadeddata",
+                  "atMilliseconds": 28926.19999998808,
+                  "coveredByStatus": true
+                },
+                {
+                  "kind": "playing",
+                  "atMilliseconds": 28926.30000001192,
+                  "coveredByStatus": true
+                }
+              ],
+              "measurementValid": false,
+              "exactFirstSubmissionMeasured": false,
+              "authorizationResponseMilliseconds": null,
+              "authorization": [
+                {
+                  "startedAt": 28113.30000001192,
+                  "headersAt": 28324.899999976158,
+                  "status": 200,
+                  "bodyReadAt": 28325.19999998808
+                }
+              ],
+              "whep": [
+                {
+                  "startedAt": 28332.399999976158,
+                  "headersAt": 28865.19999998808,
+                  "status": 201
+                }
+              ],
+              "peers": [
+                {
+                  "createdAt": 28326.5,
+                  "connectedAt": 28870.399999976158
+                }
+              ],
+              "firstFrame": {
+                "callbackMilliseconds": 28924.6,
+                "presentationMilliseconds": 28925.6,
+                "expectedDisplayMilliseconds": 28925.6,
+                "receiveMilliseconds": 28917,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": false,
+                  "coveredByStatus": true,
+                  "mediaReady": true,
+                  "visible": false
+                },
+                "observedAtMilliseconds": 28926.899999976158
+              },
+              "firstVisibleFrame": {
+                "callbackMilliseconds": 29007.9,
+                "presentationMilliseconds": 28993,
+                "expectedDisplayMilliseconds": 29008,
+                "receiveMilliseconds": 28970.8,
+                "mediaTimeSeconds": 0.076,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 2,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 29008.899999976158
+              },
+              "visiblePresentationValid": false,
+              "visiblePresentationScope": "First observed unoccluded video frame callback; later of browser expected-display time and observation after visibility checks. Conservative startup estimate, not exact first submission or physical display latency.",
+              "navigationToVisiblePresentationMilliseconds": null,
+              "authorizationToVisiblePresentationMilliseconds": null,
+              "activationToVisiblePresentationMilliseconds": null,
+              "navigationToExpectedDisplayMilliseconds": null,
+              "authorizationToExpectedDisplayMilliseconds": null
+            }
+          },
+          {
+            "cycle": 3,
+            "closed": {
+              "outcome": "deleted",
+              "status": 200,
+              "durationMilliseconds": 12,
+              "credentialRefreshFailed": false,
+              "distributor": "mediamtx",
+              "observedAt": 29445.5,
+              "selectionToDeletionMilliseconds": 13.699999988079071
+            },
+            "encoderIdleAfterDeletionMilliseconds": 5617.027834,
+            "startup": {
+              "schemaVersion": 2,
+              "supported": true,
+              "installedAtMilliseconds": 35081.69999998808,
+              "activationRequestedAtMilliseconds": 35113.60000002384,
+              "armedAtMilliseconds": 35117.69999998808,
+              "readyStateAtArm": 0,
+              "longTasks": [
+                {
+                  "startedAt": 290.19999998807907,
+                  "duration": 56
+                }
+              ],
+              "mediaEvents": [
+                {
+                  "kind": "loadeddata",
+                  "atMilliseconds": 35955.30000001192,
+                  "coveredByStatus": true
+                },
+                {
+                  "kind": "playing",
+                  "atMilliseconds": 35955.39999997616,
+                  "coveredByStatus": true
+                }
+              ],
+              "measurementValid": false,
+              "exactFirstSubmissionMeasured": false,
+              "authorizationResponseMilliseconds": null,
+              "authorization": [
+                {
+                  "startedAt": 35117.19999998808,
+                  "headersAt": 35376.69999998808,
+                  "status": 200,
+                  "bodyReadAt": 35377.39999997616
+                }
+              ],
+              "whep": [
+                {
+                  "startedAt": 35387.80000001192,
+                  "headersAt": 35925,
+                  "status": 201
+                }
+              ],
+              "peers": [
+                {
+                  "createdAt": 35379.89999997616,
+                  "connectedAt": 35932.5
+                }
+              ],
+              "firstFrame": {
+                "callbackMilliseconds": 35957.7,
+                "presentationMilliseconds": 35954.9,
+                "expectedDisplayMilliseconds": 35954.9,
+                "receiveMilliseconds": 35946.1,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 35959.19999998808
+              },
+              "firstVisibleFrame": {
+                "callbackMilliseconds": 35957.7,
+                "presentationMilliseconds": 35954.9,
+                "expectedDisplayMilliseconds": 35954.9,
+                "receiveMilliseconds": 35946.1,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 35959.19999998808
+              },
+              "visiblePresentationValid": false,
+              "visiblePresentationScope": "First observed unoccluded video frame callback; later of browser expected-display time and observation after visibility checks. Conservative startup estimate, not exact first submission or physical display latency.",
+              "navigationToVisiblePresentationMilliseconds": null,
+              "authorizationToVisiblePresentationMilliseconds": null,
+              "activationToVisiblePresentationMilliseconds": null,
+              "navigationToExpectedDisplayMilliseconds": null,
+              "authorizationToExpectedDisplayMilliseconds": null
+            }
+          }
+        ]
+      },
+      "dependencyObservations": {
+        "inventory": {
+          "count": 100,
+          "maximumHeadersMilliseconds": 135.73166700000002,
+          "statuses": [200]
+        },
+        "project": {
+          "count": 103,
+          "maximumHeadersMilliseconds": 1014.3424589999995,
+          "statuses": [200]
+        },
+        "turn-key": {
+          "count": 9,
+          "maximumHeadersMilliseconds": 46.47374999999738,
+          "statuses": [200]
+        }
+      },
+      "dependencyScope": "Concurrent dashboard routes and lifecycle checks; these observations cannot be summed or all attributed to viewer authorization."
+    },
+    {
+      "revision": "7e75e65",
+      "note": "synchronous observer arming, trial 1",
+      "qualificationPassed": true,
+      "gates": {
+        "realDiscoveryWithoutEnrollment": true,
+        "sourceControlAndConcurrentSelection": true,
+        "sharedMediaMTXPlaybackAndEncoderLifecycle": true,
+        "historyDoesNotGrantSourceAccess": true,
+        "stableIdentityAndRename": true,
+        "liveOnlyWithoutHistoryWrites": true,
+        "visiblePresentationMeasurement": true,
+        "cleanup": true
+      },
+      "runtime": {
+        "browserVersion": "153.0.8010.12",
+        "playwrightVersion": "1.63.0",
+        "nodeVersion": "v26.7.0",
+        "browserSelection": "bundled",
+        "startupTrace": false
+      },
+      "workingTreeDirty": false,
+      "image": "sha256:b80c0841d31e3321ae60c0925c0416008a850d8c755288aa4f50440b4e5ad5e4",
+      "distributorImage": "sha256:68a7b830f07df9aeb90251bac262ebace14aa0525b6e57dca81755a1f25f058a",
+      "playback": {
+        "schemaVersion": 2,
+        "distribution": "mediamtx",
+        "viewers": [
+          {
+            "actor": "alice",
+            "at": 6238.300000011921,
+            "framesDecoded": 131,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.952076677197464
+          },
+          {
+            "actor": "bob",
+            "at": 4177.300000011921,
+            "framesDecoded": 104,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.604497222382026
+          }
+        ],
+        "activeEncoders": 1,
+        "afterSharedQualityChange": [
+          {
+            "actor": "alice",
+            "at": 12464.5,
+            "framesDecoded": 318,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.978016121629928
+          },
+          {
+            "actor": "bob",
+            "at": 10402,
+            "framesDecoded": 291,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.97701762030091
+          }
+        ],
+        "firstMemberClosure": {
+          "outcome": "deleted",
+          "status": 200,
+          "durationMilliseconds": 34,
+          "credentialRefreshFailed": false,
+          "distributor": "mediamtx",
+          "observedAt": 12539.100000023842,
+          "selectionToDeletionMilliseconds": 37.5
+        },
+        "remainingMember": [
+          {
+            "actor": "bob",
+            "at": 14870.600000023842,
+            "framesDecoded": 425,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.955067398901647
+          }
+        ],
+        "mediaMTXReaders": 2,
+        "sourceViewerLimit": 1,
+        "sharedQuality": "medium",
+        "continuesAfterFirstMemberCloses": true,
+        "afterSamePageCycles": [
+          {
+            "actor": "bob",
+            "at": 40670.80000001192,
+            "framesDecoded": 101,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.62321927862677
+          }
+        ],
+        "finalMemberClosure": {
+          "outcome": "deleted",
+          "status": 200,
+          "durationMilliseconds": 15,
+          "credentialRefreshFailed": false,
+          "distributor": "mediamtx",
+          "observedAt": 40700.200000047684,
+          "selectionToDeletionMilliseconds": 16.400000035762787
+        },
+        "finalEncoderIdleAfterDeletionMilliseconds": 6760.897625000005,
+        "pageErrors": 0,
+        "startupMeasurementValid": true,
+        "postBrowserCleanupIdleCheckMilliseconds": 771.718000000008,
+        "startup": [
+          {
+            "actor": "alice",
+            "schemaVersion": 2,
+            "supported": true,
+            "installedAtMilliseconds": 356.5,
+            "activationRequestedAtMilliseconds": null,
+            "armedAtMilliseconds": 362.2000000476837,
+            "readyStateAtArm": 0,
+            "longTasks": [
+              {
+                "startedAt": 424,
+                "duration": 59
+              },
+              {
+                "startedAt": 755.5,
+                "duration": 108
+              }
+            ],
+            "mediaEvents": [
+              {
+                "kind": "loadeddata",
+                "atMilliseconds": 1930.300000011921,
+                "coveredByStatus": true
+              },
+              {
+                "kind": "playing",
+                "atMilliseconds": 1930.4000000357628,
+                "coveredByStatus": true
+              }
+            ],
+            "measurementValid": false,
+            "exactFirstSubmissionMeasured": false,
+            "authorizationResponseMilliseconds": 265.0999999642372,
+            "authorization": [
+              {
+                "startedAt": 490.4000000357628,
+                "headersAt": 755.3000000119209,
+                "status": 200,
+                "bodyReadAt": 755.5
+              }
+            ],
+            "whep": [
+              {
+                "startedAt": 872.3000000119209,
+                "headersAt": 1823.300000011921,
+                "status": 201
+              }
+            ],
+            "peers": [
+              {
+                "createdAt": 854.6000000238419,
+                "connectedAt": 1842.2000000476837
+              }
+            ],
+            "firstFrame": {
+              "callbackMilliseconds": 1940.7,
+              "presentationMilliseconds": 1929.3,
+              "expectedDisplayMilliseconds": 1929.3,
+              "receiveMilliseconds": 1910.3,
+              "mediaTimeSeconds": 0.068,
+              "width": 1280,
+              "height": 720,
+              "presentedFrames": 3,
+              "visibility": {
+                "documentVisible": true,
+                "elementVisible": true,
+                "centerInViewport": true,
+                "centerUnobstructed": true,
+                "coveredByStatus": false,
+                "mediaReady": true,
+                "visible": true
+              },
+              "observedAtMilliseconds": 1943.800000011921
+            },
+            "firstVisibleFrame": {
+              "callbackMilliseconds": 1940.7,
+              "presentationMilliseconds": 1929.3,
+              "expectedDisplayMilliseconds": 1929.3,
+              "receiveMilliseconds": 1910.3,
+              "mediaTimeSeconds": 0.068,
+              "width": 1280,
+              "height": 720,
+              "presentedFrames": 3,
+              "visibility": {
+                "documentVisible": true,
+                "elementVisible": true,
+                "centerInViewport": true,
+                "centerUnobstructed": true,
+                "coveredByStatus": false,
+                "mediaReady": true,
+                "visible": true
+              },
+              "observedAtMilliseconds": 1943.800000011921
+            },
+            "visiblePresentationValid": true,
+            "visiblePresentationScope": "First observed unoccluded video frame callback; later of browser expected-display time and observation after visibility checks. Conservative startup estimate, not exact first submission or physical display latency.",
+            "navigationToVisiblePresentationMilliseconds": 1943.800000011921,
+            "authorizationToVisiblePresentationMilliseconds": 1453.3999999761581,
+            "activationToVisiblePresentationMilliseconds": null,
+            "navigationToExpectedDisplayMilliseconds": null,
+            "authorizationToExpectedDisplayMilliseconds": null
+          },
+          {
+            "actor": "bob",
+            "schemaVersion": 2,
+            "supported": true,
+            "installedAtMilliseconds": 272.5,
+            "activationRequestedAtMilliseconds": null,
+            "armedAtMilliseconds": 274.9000000357628,
+            "readyStateAtArm": 0,
+            "longTasks": [
+              {
+                "startedAt": 328.10000002384186,
+                "duration": 56
+              }
+            ],
+            "mediaEvents": [
+              {
+                "kind": "loadeddata",
+                "atMilliseconds": 710,
+                "coveredByStatus": true
+              },
+              {
+                "kind": "playing",
+                "atMilliseconds": 710,
+                "coveredByStatus": true
+              }
+            ],
+            "measurementValid": true,
+            "exactFirstSubmissionMeasured": true,
+            "authorizationResponseMilliseconds": 249.29999995231628,
+            "authorization": [
+              {
+                "startedAt": 391.2000000476837,
+                "headersAt": 640.3000000119209,
+                "status": 200,
+                "bodyReadAt": 640.5
+              }
+            ],
+            "whep": [
+              {
+                "startedAt": 651,
+                "headersAt": 659.3000000119209,
+                "status": 201
+              }
+            ],
+            "peers": [
+              {
+                "createdAt": 644.5,
+                "connectedAt": 664.8000000119209
+              }
+            ],
+            "firstFrame": {
+              "callbackMilliseconds": 699.1,
+              "presentationMilliseconds": 708.7,
+              "expectedDisplayMilliseconds": 708.7,
+              "receiveMilliseconds": 704,
+              "mediaTimeSeconds": 0,
+              "width": 1280,
+              "height": 720,
+              "presentedFrames": 1,
+              "visibility": {
+                "documentVisible": true,
+                "elementVisible": true,
+                "centerInViewport": true,
+                "centerUnobstructed": false,
+                "coveredByStatus": true,
+                "mediaReady": true,
+                "visible": false
+              },
+              "observedAtMilliseconds": 709.5
+            },
+            "firstVisibleFrame": {
+              "callbackMilliseconds": 732.4,
+              "presentationMilliseconds": 733.1,
+              "expectedDisplayMilliseconds": 749.2,
+              "receiveMilliseconds": 720.5,
+              "mediaTimeSeconds": 0.037,
+              "width": 1280,
+              "height": 720,
+              "presentedFrames": 2,
+              "visibility": {
+                "documentVisible": true,
+                "elementVisible": true,
+                "centerInViewport": true,
+                "centerUnobstructed": true,
+                "coveredByStatus": false,
+                "mediaReady": true,
+                "visible": true
+              },
+              "observedAtMilliseconds": 733.3000000119209
+            },
+            "visiblePresentationValid": true,
+            "visiblePresentationScope": "First observed unoccluded video frame callback; later of browser expected-display time and observation after visibility checks. Conservative startup estimate, not exact first submission or physical display latency.",
+            "navigationToVisiblePresentationMilliseconds": 749.2,
+            "authorizationToVisiblePresentationMilliseconds": 357.99999995231633,
+            "activationToVisiblePresentationMilliseconds": null,
+            "navigationToExpectedDisplayMilliseconds": 708.7,
+            "authorizationToExpectedDisplayMilliseconds": 317.49999995231633
+          }
+        ],
+        "samePageCycles": [
+          {
+            "cycle": 1,
+            "closed": {
+              "outcome": "deleted",
+              "status": 200,
+              "durationMilliseconds": 44,
+              "credentialRefreshFailed": false,
+              "distributor": "mediamtx",
+              "observedAt": 15299.700000047684,
+              "selectionToDeletionMilliseconds": 46.90000003576279
+            },
+            "encoderIdleAfterDeletionMilliseconds": 5993.418624999998,
+            "startup": {
+              "schemaVersion": 2,
+              "supported": true,
+              "installedAtMilliseconds": 21303.700000047684,
+              "activationRequestedAtMilliseconds": 21318.900000035763,
+              "armedAtMilliseconds": 21320.700000047684,
+              "readyStateAtArm": 0,
+              "longTasks": [
+                {
+                  "startedAt": 328.10000002384186,
+                  "duration": 56
+                }
+              ],
+              "mediaEvents": [
+                {
+                  "kind": "loadeddata",
+                  "atMilliseconds": 22141.30000001192,
+                  "coveredByStatus": true
+                },
+                {
+                  "kind": "playing",
+                  "atMilliseconds": 22141.400000035763,
+                  "coveredByStatus": true
+                }
+              ],
+              "measurementValid": true,
+              "exactFirstSubmissionMeasured": true,
+              "authorizationResponseMilliseconds": 209.19999998807907,
+              "authorization": [
+                {
+                  "startedAt": 21320.700000047684,
+                  "headersAt": 21529.400000035763,
+                  "status": 200,
+                  "bodyReadAt": 21529.900000035763
+                }
+              ],
+              "whep": [
+                {
+                  "startedAt": 21540.200000047684,
+                  "headersAt": 22112.5,
+                  "status": 201
+                }
+              ],
+              "peers": [
+                {
+                  "createdAt": 21532,
+                  "connectedAt": 22120.600000023842
+                }
+              ],
+              "firstFrame": {
+                "callbackMilliseconds": 22148.3,
+                "presentationMilliseconds": 22140.9,
+                "expectedDisplayMilliseconds": 22140.9,
+                "receiveMilliseconds": 22132.7,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 22150.80000001192
+              },
+              "firstVisibleFrame": {
+                "callbackMilliseconds": 22148.3,
+                "presentationMilliseconds": 22140.9,
+                "expectedDisplayMilliseconds": 22140.9,
+                "receiveMilliseconds": 22132.7,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 22150.80000001192
+              },
+              "visiblePresentationValid": true,
+              "visiblePresentationScope": "First observed unoccluded video frame callback; later of browser expected-display time and observation after visibility checks. Conservative startup estimate, not exact first submission or physical display latency.",
+              "navigationToVisiblePresentationMilliseconds": 22150.80000001192,
+              "authorizationToVisiblePresentationMilliseconds": 830.0999999642372,
+              "activationToVisiblePresentationMilliseconds": 831.8999999761581,
+              "navigationToExpectedDisplayMilliseconds": 22140.9,
+              "authorizationToExpectedDisplayMilliseconds": 820.1999999523177
+            }
+          },
+          {
+            "cycle": 2,
+            "closed": {
+              "outcome": "deleted",
+              "status": 200,
+              "durationMilliseconds": 16,
+              "credentialRefreshFailed": false,
+              "distributor": "mediamtx",
+              "observedAt": 22935.700000047684,
+              "selectionToDeletionMilliseconds": 16.900000035762787
+            },
+            "encoderIdleAfterDeletionMilliseconds": 5413.733959000005,
+            "startup": {
+              "schemaVersion": 2,
+              "supported": true,
+              "installedAtMilliseconds": 28368.80000001192,
+              "activationRequestedAtMilliseconds": 28385.600000023842,
+              "armedAtMilliseconds": 28388.80000001192,
+              "readyStateAtArm": 0,
+              "longTasks": [
+                {
+                  "startedAt": 328.10000002384186,
+                  "duration": 56
+                }
+              ],
+              "mediaEvents": [
+                {
+                  "kind": "loadeddata",
+                  "atMilliseconds": 30046.100000023842,
+                  "coveredByStatus": true
+                },
+                {
+                  "kind": "playing",
+                  "atMilliseconds": 30046.100000023842,
+                  "coveredByStatus": true
+                }
+              ],
+              "measurementValid": true,
+              "exactFirstSubmissionMeasured": true,
+              "authorizationResponseMilliseconds": 1098.699999988079,
+              "authorization": [
+                {
+                  "startedAt": 28388.80000001192,
+                  "headersAt": 29487.100000023842,
+                  "status": 200,
+                  "bodyReadAt": 29487.5
+                }
+              ],
+              "whep": [
+                {
+                  "startedAt": 29498.100000023842,
+                  "headersAt": 30030.900000035763,
+                  "status": 201
+                }
+              ],
+              "peers": [
+                {
+                  "createdAt": 29490,
+                  "connectedAt": 30035.900000035763
+                }
+              ],
+              "firstFrame": {
+                "callbackMilliseconds": 30047.9,
+                "presentationMilliseconds": 30045.7,
+                "expectedDisplayMilliseconds": 30045.7,
+                "receiveMilliseconds": 30040,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 30048.600000023842
+              },
+              "firstVisibleFrame": {
+                "callbackMilliseconds": 30047.9,
+                "presentationMilliseconds": 30045.7,
+                "expectedDisplayMilliseconds": 30045.7,
+                "receiveMilliseconds": 30040,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 30048.600000023842
+              },
+              "visiblePresentationValid": true,
+              "visiblePresentationScope": "First observed unoccluded video frame callback; later of browser expected-display time and observation after visibility checks. Conservative startup estimate, not exact first submission or physical display latency.",
+              "navigationToVisiblePresentationMilliseconds": 30048.600000023842,
+              "authorizationToVisiblePresentationMilliseconds": 1659.800000011921,
+              "activationToVisiblePresentationMilliseconds": 1663,
+              "navigationToExpectedDisplayMilliseconds": 30045.7,
+              "authorizationToExpectedDisplayMilliseconds": 1656.8999999880798
+            }
+          },
+          {
+            "cycle": 3,
+            "closed": {
+              "outcome": "deleted",
+              "status": 200,
+              "durationMilliseconds": 11,
+              "credentialRefreshFailed": false,
+              "distributor": "mediamtx",
+              "observedAt": 30850.700000047684,
+              "selectionToDeletionMilliseconds": 13.700000047683716
+            },
+            "encoderIdleAfterDeletionMilliseconds": 5769.576457999996,
+            "startup": {
+              "schemaVersion": 2,
+              "supported": true,
+              "installedAtMilliseconds": 36641.200000047684,
+              "activationRequestedAtMilliseconds": 36669.90000003576,
+              "armedAtMilliseconds": 36671.700000047684,
+              "readyStateAtArm": 0,
+              "longTasks": [
+                {
+                  "startedAt": 328.10000002384186,
+                  "duration": 56
+                }
+              ],
+              "mediaEvents": [
+                {
+                  "kind": "loadeddata",
+                  "atMilliseconds": 37311,
+                  "coveredByStatus": true
+                },
+                {
+                  "kind": "playing",
+                  "atMilliseconds": 37311,
+                  "coveredByStatus": true
+                }
+              ],
+              "measurementValid": true,
+              "exactFirstSubmissionMeasured": true,
+              "authorizationResponseMilliseconds": 230.79999995231628,
+              "authorization": [
+                {
+                  "startedAt": 36671.700000047684,
+                  "headersAt": 36902.10000002384,
+                  "status": 200,
+                  "bodyReadAt": 36902.5
+                }
+              ],
+              "whep": [
+                {
+                  "startedAt": 36911.80000001192,
+                  "headersAt": 37294.90000003576,
+                  "status": 201
+                }
+              ],
+              "peers": [
+                {
+                  "createdAt": 36904.700000047684,
+                  "connectedAt": 37303
+                }
+              ],
+              "firstFrame": {
+                "callbackMilliseconds": 37314.3,
+                "presentationMilliseconds": 37310.5,
+                "expectedDisplayMilliseconds": 37310.5,
+                "receiveMilliseconds": 37304.7,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 37316.200000047684
+              },
+              "firstVisibleFrame": {
+                "callbackMilliseconds": 37314.3,
+                "presentationMilliseconds": 37310.5,
+                "expectedDisplayMilliseconds": 37310.5,
+                "receiveMilliseconds": 37304.7,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 37316.200000047684
+              },
+              "visiblePresentationValid": true,
+              "visiblePresentationScope": "First observed unoccluded video frame callback; later of browser expected-display time and observation after visibility checks. Conservative startup estimate, not exact first submission or physical display latency.",
+              "navigationToVisiblePresentationMilliseconds": 37316.200000047684,
+              "authorizationToVisiblePresentationMilliseconds": 644.5,
+              "activationToVisiblePresentationMilliseconds": 646.3000000119209,
+              "navigationToExpectedDisplayMilliseconds": 37310.5,
+              "authorizationToExpectedDisplayMilliseconds": 638.7999999523163
+            }
+          }
+        ]
+      },
+      "dependencyObservations": {
+        "inventory": {
+          "count": 105,
+          "maximumHeadersMilliseconds": 803.5246660000048,
+          "statuses": [200]
+        },
+        "project": {
+          "count": 111,
+          "maximumHeadersMilliseconds": 1627.4927500000013,
+          "statuses": [200]
+        },
+        "turn-key": {
+          "count": 9,
+          "maximumHeadersMilliseconds": 64.23500000000058,
+          "statuses": [200]
+        }
+      },
+      "dependencyScope": "Concurrent dashboard routes and lifecycle checks; these observations cannot be summed or all attributed to viewer authorization."
+    },
+    {
+      "revision": "7e75e65",
+      "note": "synchronous observer arming, trial 2",
+      "qualificationPassed": true,
+      "gates": {
+        "realDiscoveryWithoutEnrollment": true,
+        "sourceControlAndConcurrentSelection": true,
+        "sharedMediaMTXPlaybackAndEncoderLifecycle": true,
+        "historyDoesNotGrantSourceAccess": true,
+        "stableIdentityAndRename": true,
+        "liveOnlyWithoutHistoryWrites": true,
+        "visiblePresentationMeasurement": true,
+        "cleanup": true
+      },
+      "runtime": {
+        "browserVersion": "153.0.8010.12",
+        "playwrightVersion": "1.63.0",
+        "nodeVersion": "v26.7.0",
+        "browserSelection": "bundled",
+        "startupTrace": false
+      },
+      "workingTreeDirty": false,
+      "image": "sha256:b80c0841d31e3321ae60c0925c0416008a850d8c755288aa4f50440b4e5ad5e4",
+      "distributorImage": "sha256:68a7b830f07df9aeb90251bac262ebace14aa0525b6e57dca81755a1f25f058a",
+      "playback": {
+        "schemaVersion": 2,
+        "distribution": "mediamtx",
+        "viewers": [
+          {
+            "actor": "alice",
+            "at": 5400.100000023842,
+            "framesDecoded": 116,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.927177202022825
+          },
+          {
+            "actor": "bob",
+            "at": 3637.100000023842,
+            "framesDecoded": 91,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.927177202022825
+          }
+        ],
+        "activeEncoders": 1,
+        "afterSharedQualityChange": [
+          {
+            "actor": "alice",
+            "at": 17619.900000035763,
+            "framesDecoded": 482,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.97601918429522
+          },
+          {
+            "actor": "bob",
+            "at": 15856.800000011921,
+            "framesDecoded": 457,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.977017619705773
+          }
+        ],
+        "firstMemberClosure": {
+          "outcome": "deleted",
+          "status": 200,
+          "durationMilliseconds": 37,
+          "credentialRefreshFailed": false,
+          "distributor": "mediamtx",
+          "observedAt": 17697.400000035763,
+          "selectionToDeletionMilliseconds": 40.10000002384186
+        },
+        "remainingMember": [
+          {
+            "actor": "bob",
+            "at": 19181.80000001192,
+            "framesDecoded": 557,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.97302427826866
+          }
+        ],
+        "mediaMTXReaders": 2,
+        "sourceViewerLimit": 1,
+        "sharedQuality": "medium",
+        "continuesAfterFirstMemberCloses": true,
+        "afterSamePageCycles": [
+          {
+            "actor": "bob",
+            "at": 45475.700000047684,
+            "framesDecoded": 135,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 30.291934356139205
+          }
+        ],
+        "finalMemberClosure": {
+          "outcome": "deleted",
+          "status": 200,
+          "durationMilliseconds": 15,
+          "credentialRefreshFailed": false,
+          "distributor": "mediamtx",
+          "observedAt": 45507.700000047684,
+          "selectionToDeletionMilliseconds": 15.800000011920929
+        },
+        "finalEncoderIdleAfterDeletionMilliseconds": 6456.042916999999,
+        "pageErrors": 0,
+        "startupMeasurementValid": true,
+        "postBrowserCleanupIdleCheckMilliseconds": 358.1452500000014,
+        "startup": [
+          {
+            "actor": "alice",
+            "schemaVersion": 2,
+            "supported": true,
+            "installedAtMilliseconds": 336.7000000476837,
+            "activationRequestedAtMilliseconds": null,
+            "armedAtMilliseconds": 342.5,
+            "readyStateAtArm": 0,
+            "longTasks": [
+              {
+                "startedAt": 404.5,
+                "duration": 59
+              },
+              {
+                "startedAt": 745.5,
+                "duration": 106
+              }
+            ],
+            "mediaEvents": [
+              {
+                "kind": "loadeddata",
+                "atMilliseconds": 1633.4000000357628,
+                "coveredByStatus": true
+              },
+              {
+                "kind": "playing",
+                "atMilliseconds": 1633.5,
+                "coveredByStatus": true
+              }
+            ],
+            "measurementValid": false,
+            "exactFirstSubmissionMeasured": false,
+            "authorizationResponseMilliseconds": 274.2999999523163,
+            "authorization": [
+              {
+                "startedAt": 471.2000000476837,
+                "headersAt": 745.1000000238419,
+                "status": 200,
+                "bodyReadAt": 745.5
+              }
+            ],
+            "whep": [
+              {
+                "startedAt": 859.8000000119209,
+                "headersAt": 1532.800000011921,
+                "status": 201
+              }
+            ],
+            "peers": [
+              {
+                "createdAt": 841.6000000238419,
+                "connectedAt": 1546.5
+              }
+            ],
+            "firstFrame": {
+              "callbackMilliseconds": 1630.3,
+              "presentationMilliseconds": 1630.9,
+              "expectedDisplayMilliseconds": 1630.9,
+              "receiveMilliseconds": 1604.4,
+              "mediaTimeSeconds": 0.061,
+              "width": 1280,
+              "height": 720,
+              "presentedFrames": 3,
+              "visibility": {
+                "documentVisible": true,
+                "elementVisible": true,
+                "centerInViewport": true,
+                "centerUnobstructed": false,
+                "coveredByStatus": true,
+                "mediaReady": true,
+                "visible": false
+              },
+              "observedAtMilliseconds": 1632.800000011921
+            },
+            "firstVisibleFrame": {
+              "callbackMilliseconds": 1647,
+              "presentationMilliseconds": 1637.5,
+              "expectedDisplayMilliseconds": 1637.5,
+              "receiveMilliseconds": 1622.3,
+              "mediaTimeSeconds": 0.075,
+              "width": 1280,
+              "height": 720,
+              "presentedFrames": 4,
+              "visibility": {
+                "documentVisible": true,
+                "elementVisible": true,
+                "centerInViewport": true,
+                "centerUnobstructed": true,
+                "coveredByStatus": false,
+                "mediaReady": true,
+                "visible": true
+              },
+              "observedAtMilliseconds": 1648.5
+            },
+            "visiblePresentationValid": true,
+            "visiblePresentationScope": "First observed unoccluded video frame callback; later of browser expected-display time and observation after visibility checks. Conservative startup estimate, not exact first submission or physical display latency.",
+            "navigationToVisiblePresentationMilliseconds": 1648.5,
+            "authorizationToVisiblePresentationMilliseconds": 1177.2999999523163,
+            "activationToVisiblePresentationMilliseconds": null,
+            "navigationToExpectedDisplayMilliseconds": null,
+            "authorizationToExpectedDisplayMilliseconds": null
+          },
+          {
+            "actor": "bob",
+            "schemaVersion": 2,
+            "supported": true,
+            "installedAtMilliseconds": 185.80000001192093,
+            "activationRequestedAtMilliseconds": null,
+            "armedAtMilliseconds": 188.5,
+            "readyStateAtArm": 0,
+            "longTasks": [
+              {
+                "startedAt": 242.70000004768372,
+                "duration": 58
+              }
+            ],
+            "mediaEvents": [
+              {
+                "kind": "loadeddata",
+                "atMilliseconds": 617.1000000238419,
+                "coveredByStatus": true
+              },
+              {
+                "kind": "playing",
+                "atMilliseconds": 617.1000000238419,
+                "coveredByStatus": true
+              }
+            ],
+            "measurementValid": true,
+            "exactFirstSubmissionMeasured": true,
+            "authorizationResponseMilliseconds": 223.19999998807907,
+            "authorization": [
+              {
+                "startedAt": 307.4000000357628,
+                "headersAt": 530.3000000119209,
+                "status": 200,
+                "bodyReadAt": 530.6000000238419
+              }
+            ],
+            "whep": [
+              {
+                "startedAt": 539.4000000357628,
+                "headersAt": 547.5,
+                "status": 201
+              }
+            ],
+            "peers": [
+              {
+                "createdAt": 533.8000000119209,
+                "connectedAt": 552.4000000357628
+              }
+            ],
+            "firstFrame": {
+              "callbackMilliseconds": 623.1,
+              "presentationMilliseconds": 616.6,
+              "expectedDisplayMilliseconds": 616.6,
+              "receiveMilliseconds": 612.4,
+              "mediaTimeSeconds": 0,
+              "width": 1280,
+              "height": 720,
+              "presentedFrames": 1,
+              "visibility": {
+                "documentVisible": true,
+                "elementVisible": true,
+                "centerInViewport": true,
+                "centerUnobstructed": true,
+                "coveredByStatus": false,
+                "mediaReady": true,
+                "visible": true
+              },
+              "observedAtMilliseconds": 624.1000000238419
+            },
+            "firstVisibleFrame": {
+              "callbackMilliseconds": 623.1,
+              "presentationMilliseconds": 616.6,
+              "expectedDisplayMilliseconds": 616.6,
+              "receiveMilliseconds": 612.4,
+              "mediaTimeSeconds": 0,
+              "width": 1280,
+              "height": 720,
+              "presentedFrames": 1,
+              "visibility": {
+                "documentVisible": true,
+                "elementVisible": true,
+                "centerInViewport": true,
+                "centerUnobstructed": true,
+                "coveredByStatus": false,
+                "mediaReady": true,
+                "visible": true
+              },
+              "observedAtMilliseconds": 624.1000000238419
+            },
+            "visiblePresentationValid": true,
+            "visiblePresentationScope": "First observed unoccluded video frame callback; later of browser expected-display time and observation after visibility checks. Conservative startup estimate, not exact first submission or physical display latency.",
+            "navigationToVisiblePresentationMilliseconds": 624.1000000238419,
+            "authorizationToVisiblePresentationMilliseconds": 316.69999998807907,
+            "activationToVisiblePresentationMilliseconds": null,
+            "navigationToExpectedDisplayMilliseconds": 616.6,
+            "authorizationToExpectedDisplayMilliseconds": 309.19999996423724
+          }
+        ],
+        "samePageCycles": [
+          {
+            "cycle": 1,
+            "closed": {
+              "outcome": "deleted",
+              "status": 200,
+              "durationMilliseconds": 40,
+              "credentialRefreshFailed": false,
+              "distributor": "mediamtx",
+              "observedAt": 19619.80000001192,
+              "selectionToDeletionMilliseconds": 41.89999997615814
+            },
+            "encoderIdleAfterDeletionMilliseconds": 5169.322,
+            "startup": {
+              "schemaVersion": 2,
+              "supported": true,
+              "installedAtMilliseconds": 24802.200000047684,
+              "activationRequestedAtMilliseconds": 24827.600000023842,
+              "armedAtMilliseconds": 24830,
+              "readyStateAtArm": 0,
+              "longTasks": [
+                {
+                  "startedAt": 242.70000004768372,
+                  "duration": 58
+                }
+              ],
+              "mediaEvents": [
+                {
+                  "kind": "loadeddata",
+                  "atMilliseconds": 25620.100000023842,
+                  "coveredByStatus": true
+                },
+                {
+                  "kind": "playing",
+                  "atMilliseconds": 25620.100000023842,
+                  "coveredByStatus": true
+                }
+              ],
+              "measurementValid": true,
+              "exactFirstSubmissionMeasured": true,
+              "authorizationResponseMilliseconds": 219.4000000357628,
+              "authorization": [
+                {
+                  "startedAt": 24830,
+                  "headersAt": 25048.900000035763,
+                  "status": 200,
+                  "bodyReadAt": 25049.400000035763
+                }
+              ],
+              "whep": [
+                {
+                  "startedAt": 25059.30000001192,
+                  "headersAt": 25589.80000001192,
+                  "status": 201
+                }
+              ],
+              "peers": [
+                {
+                  "createdAt": 25051.900000035763,
+                  "connectedAt": 25596.700000047684
+                }
+              ],
+              "firstFrame": {
+                "callbackMilliseconds": 25622.2,
+                "presentationMilliseconds": 25619.7,
+                "expectedDisplayMilliseconds": 25619.7,
+                "receiveMilliseconds": 25611.1,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 25623.200000047684
+              },
+              "firstVisibleFrame": {
+                "callbackMilliseconds": 25622.2,
+                "presentationMilliseconds": 25619.7,
+                "expectedDisplayMilliseconds": 25619.7,
+                "receiveMilliseconds": 25611.1,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 25623.200000047684
+              },
+              "visiblePresentationValid": true,
+              "visiblePresentationScope": "First observed unoccluded video frame callback; later of browser expected-display time and observation after visibility checks. Conservative startup estimate, not exact first submission or physical display latency.",
+              "navigationToVisiblePresentationMilliseconds": 25623.200000047684,
+              "authorizationToVisiblePresentationMilliseconds": 793.2000000476837,
+              "activationToVisiblePresentationMilliseconds": 795.6000000238419,
+              "navigationToExpectedDisplayMilliseconds": 25619.7,
+              "authorizationToExpectedDisplayMilliseconds": 789.7000000000007
+            }
+          },
+          {
+            "cycle": 2,
+            "closed": {
+              "outcome": "deleted",
+              "status": 200,
+              "durationMilliseconds": 16,
+              "credentialRefreshFailed": false,
+              "distributor": "mediamtx",
+              "observedAt": 26724.600000023842,
+              "selectionToDeletionMilliseconds": 16.899999976158142
+            },
+            "encoderIdleAfterDeletionMilliseconds": 6143.216833999999,
+            "startup": {
+              "schemaVersion": 2,
+              "supported": true,
+              "installedAtMilliseconds": 32890.10000002384,
+              "activationRequestedAtMilliseconds": 32910,
+              "armedAtMilliseconds": 32913.5,
+              "readyStateAtArm": 0,
+              "longTasks": [
+                {
+                  "startedAt": 242.70000004768372,
+                  "duration": 58
+                }
+              ],
+              "mediaEvents": [
+                {
+                  "kind": "loadeddata",
+                  "atMilliseconds": 33676.90000003576,
+                  "coveredByStatus": true
+                },
+                {
+                  "kind": "playing",
+                  "atMilliseconds": 33676.90000003576,
+                  "coveredByStatus": true
+                }
+              ],
+              "measurementValid": true,
+              "exactFirstSubmissionMeasured": true,
+              "authorizationResponseMilliseconds": 329,
+              "authorization": [
+                {
+                  "startedAt": 32913.5,
+                  "headersAt": 33242.10000002384,
+                  "status": 200,
+                  "bodyReadAt": 33242.5
+                }
+              ],
+              "whep": [
+                {
+                  "startedAt": 33253.60000002384,
+                  "headersAt": 33661,
+                  "status": 201
+                }
+              ],
+              "peers": [
+                {
+                  "createdAt": 33245.200000047684,
+                  "connectedAt": 33667.80000001192
+                }
+              ],
+              "firstFrame": {
+                "callbackMilliseconds": 33688.5,
+                "presentationMilliseconds": 33676.7,
+                "expectedDisplayMilliseconds": 33676.7,
+                "receiveMilliseconds": 33671.2,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 33690.200000047684
+              },
+              "firstVisibleFrame": {
+                "callbackMilliseconds": 33688.5,
+                "presentationMilliseconds": 33676.7,
+                "expectedDisplayMilliseconds": 33676.7,
+                "receiveMilliseconds": 33671.2,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 33690.200000047684
+              },
+              "visiblePresentationValid": true,
+              "visiblePresentationScope": "First observed unoccluded video frame callback; later of browser expected-display time and observation after visibility checks. Conservative startup estimate, not exact first submission or physical display latency.",
+              "navigationToVisiblePresentationMilliseconds": 33690.200000047684,
+              "authorizationToVisiblePresentationMilliseconds": 776.7000000476837,
+              "activationToVisiblePresentationMilliseconds": 780.2000000476837,
+              "navigationToExpectedDisplayMilliseconds": 33676.7,
+              "authorizationToExpectedDisplayMilliseconds": 763.1999999999971
+            }
+          },
+          {
+            "cycle": 3,
+            "closed": {
+              "outcome": "deleted",
+              "status": 200,
+              "durationMilliseconds": 22,
+              "credentialRefreshFailed": false,
+              "distributor": "mediamtx",
+              "observedAt": 34302.10000002384,
+              "selectionToDeletionMilliseconds": 26.399999976158142
+            },
+            "encoderIdleAfterDeletionMilliseconds": 5836.701584000002,
+            "startup": {
+              "schemaVersion": 2,
+              "supported": true,
+              "installedAtMilliseconds": 40151,
+              "activationRequestedAtMilliseconds": 40175.90000003576,
+              "armedAtMilliseconds": 40179,
+              "readyStateAtArm": 0,
+              "longTasks": [
+                {
+                  "startedAt": 242.70000004768372,
+                  "duration": 58
+                }
+              ],
+              "mediaEvents": [
+                {
+                  "kind": "loadeddata",
+                  "atMilliseconds": 41000.40000003576,
+                  "coveredByStatus": true
+                },
+                {
+                  "kind": "playing",
+                  "atMilliseconds": 41000.40000003576,
+                  "coveredByStatus": true
+                }
+              ],
+              "measurementValid": true,
+              "exactFirstSubmissionMeasured": true,
+              "authorizationResponseMilliseconds": 237,
+              "authorization": [
+                {
+                  "startedAt": 40179,
+                  "headersAt": 40415.60000002384,
+                  "status": 200,
+                  "bodyReadAt": 40416
+                }
+              ],
+              "whep": [
+                {
+                  "startedAt": 40426.40000003576,
+                  "headersAt": 40936.200000047684,
+                  "status": 201
+                }
+              ],
+              "peers": [
+                {
+                  "createdAt": 40418.40000003576,
+                  "connectedAt": 40943.30000001192
+                }
+              ],
+              "firstFrame": {
+                "callbackMilliseconds": 41004.9,
+                "presentationMilliseconds": 41000,
+                "expectedDisplayMilliseconds": 41000,
+                "receiveMilliseconds": 40991.4,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 41006
+              },
+              "firstVisibleFrame": {
+                "callbackMilliseconds": 41004.9,
+                "presentationMilliseconds": 41000,
+                "expectedDisplayMilliseconds": 41000,
+                "receiveMilliseconds": 40991.4,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 41006
+              },
+              "visiblePresentationValid": true,
+              "visiblePresentationScope": "First observed unoccluded video frame callback; later of browser expected-display time and observation after visibility checks. Conservative startup estimate, not exact first submission or physical display latency.",
+              "navigationToVisiblePresentationMilliseconds": 41006,
+              "authorizationToVisiblePresentationMilliseconds": 827,
+              "activationToVisiblePresentationMilliseconds": 830.0999999642372,
+              "navigationToExpectedDisplayMilliseconds": 41000,
+              "authorizationToExpectedDisplayMilliseconds": 821
+            }
+          }
+        ]
+      },
+      "dependencyObservations": {
+        "inventory": {
+          "count": 108,
+          "maximumHeadersMilliseconds": 576.6529579999997,
+          "statuses": [200]
+        },
+        "project": {
+          "count": 113,
+          "maximumHeadersMilliseconds": 2268.6663750000007,
+          "statuses": [null, 200]
+        },
+        "turn-key": {
+          "count": 9,
+          "maximumHeadersMilliseconds": 130.07741699999315,
+          "statuses": [200]
+        }
+      },
+      "dependencyScope": "Concurrent dashboard routes and lifecycle checks; these observations cannot be summed or all attributed to viewer authorization."
+    },
+    {
+      "revision": "7e75e65",
+      "note": "direct playback regression",
+      "qualificationPassed": true,
+      "gates": {
+        "realDiscoveryWithoutEnrollment": true,
+        "sourceControlAndConcurrentSelection": true,
+        "directPlaybackAndEncoderLifecycle": true,
+        "historyDoesNotGrantSourceAccess": true,
+        "stableIdentityAndRename": true,
+        "liveOnlyWithoutHistoryWrites": true,
+        "visiblePresentationMeasurement": true,
+        "cleanup": true
+      },
+      "runtime": {
+        "browserVersion": "153.0.8010.12",
+        "playwrightVersion": "1.63.0",
+        "nodeVersion": "v26.7.0",
+        "browserSelection": "bundled",
+        "startupTrace": false
+      },
+      "workingTreeDirty": false,
+      "image": "sha256:b80c0841d31e3321ae60c0925c0416008a850d8c755288aa4f50440b4e5ad5e4",
+      "distributorImage": null,
+      "playback": {
+        "schemaVersion": 2,
+        "distribution": "direct",
+        "viewers": [
+          {
+            "actor": "bob",
+            "at": 4598.5,
+            "framesDecoded": 94,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "relay",
+            "remoteCandidateType": "prflx",
+            "framesPerSecond": 29.931158335471608
+          }
+        ],
+        "activeEncoders": 1,
+        "afterSamePageCycles": [
+          {
+            "actor": "bob",
+            "at": 15478.300000011921,
+            "framesDecoded": 107,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "relay",
+            "remoteCandidateType": "prflx",
+            "framesPerSecond": 29.971028005903676
+          }
+        ],
+        "finalMemberClosure": {
+          "outcome": "deleted",
+          "status": 200,
+          "durationMilliseconds": 320,
+          "credentialRefreshFailed": false,
+          "distributor": "direct",
+          "observedAt": 15830.399999976158,
+          "selectionToDeletionMilliseconds": 324.39999997615814
+        },
+        "finalEncoderIdleAfterDeletionMilliseconds": 370.27245799999946,
+        "pageErrors": 0,
+        "startupMeasurementValid": true,
+        "postBrowserCleanupIdleCheckMilliseconds": 493.78341699999874,
+        "startup": [
+          {
+            "actor": "bob",
+            "schemaVersion": 2,
+            "supported": true,
+            "installedAtMilliseconds": 363.5,
+            "activationRequestedAtMilliseconds": null,
+            "armedAtMilliseconds": 365.5,
+            "readyStateAtArm": 0,
+            "longTasks": [
+              {
+                "startedAt": 414.89999997615814,
+                "duration": 56
+              },
+              {
+                "startedAt": 712.1999999880791,
+                "duration": 82
+              }
+            ],
+            "mediaEvents": [
+              {
+                "kind": "loadeddata",
+                "atMilliseconds": 1583.300000011921,
+                "coveredByStatus": true
+              },
+              {
+                "kind": "playing",
+                "atMilliseconds": 1583.5,
+                "coveredByStatus": true
+              }
+            ],
+            "measurementValid": false,
+            "exactFirstSubmissionMeasured": false,
+            "authorizationResponseMilliseconds": 233.89999997615814,
+            "authorization": [
+              {
+                "startedAt": 478.30000001192093,
+                "headersAt": 711.8999999761581,
+                "status": 200,
+                "bodyReadAt": 712.1999999880791
+              }
+            ],
+            "whep": [
+              {
+                "startedAt": 799.1999999880791,
+                "headersAt": 1275,
+                "status": 201
+              }
+            ],
+            "peers": [
+              {
+                "createdAt": 793.5999999642372,
+                "connectedAt": 1438.5999999642372
+              }
+            ],
+            "firstFrame": {
+              "callbackMilliseconds": 1585.1,
+              "presentationMilliseconds": 1583,
+              "expectedDisplayMilliseconds": 1583,
+              "receiveMilliseconds": 1562.2,
+              "mediaTimeSeconds": 0.077,
+              "width": 1280,
+              "height": 720,
+              "presentedFrames": 4,
+              "visibility": {
+                "documentVisible": true,
+                "elementVisible": true,
+                "centerInViewport": true,
+                "centerUnobstructed": true,
+                "coveredByStatus": false,
+                "mediaReady": true,
+                "visible": true
+              },
+              "observedAtMilliseconds": 1586.3999999761581
+            },
+            "firstVisibleFrame": {
+              "callbackMilliseconds": 1585.1,
+              "presentationMilliseconds": 1583,
+              "expectedDisplayMilliseconds": 1583,
+              "receiveMilliseconds": 1562.2,
+              "mediaTimeSeconds": 0.077,
+              "width": 1280,
+              "height": 720,
+              "presentedFrames": 4,
+              "visibility": {
+                "documentVisible": true,
+                "elementVisible": true,
+                "centerInViewport": true,
+                "centerUnobstructed": true,
+                "coveredByStatus": false,
+                "mediaReady": true,
+                "visible": true
+              },
+              "observedAtMilliseconds": 1586.3999999761581
+            },
+            "visiblePresentationValid": true,
+            "visiblePresentationScope": "First observed unoccluded video frame callback; later of browser expected-display time and observation after visibility checks. Conservative startup estimate, not exact first submission or physical display latency.",
+            "navigationToVisiblePresentationMilliseconds": 1586.3999999761581,
+            "authorizationToVisiblePresentationMilliseconds": 1108.0999999642372,
+            "activationToVisiblePresentationMilliseconds": null,
+            "navigationToExpectedDisplayMilliseconds": null,
+            "authorizationToExpectedDisplayMilliseconds": null
+          }
+        ],
+        "samePageCycles": [
+          {
+            "cycle": 1,
+            "closed": {
+              "outcome": "deleted",
+              "status": 200,
+              "durationMilliseconds": 332,
+              "credentialRefreshFailed": false,
+              "distributor": "direct",
+              "observedAt": 5512.300000011921,
+              "selectionToDeletionMilliseconds": 337.10000002384186
+            },
+            "encoderIdleAfterDeletionMilliseconds": 1719.4771250000013,
+            "startup": {
+              "schemaVersion": 2,
+              "supported": true,
+              "installedAtMilliseconds": 7251.599999964237,
+              "activationRequestedAtMilliseconds": 7274,
+              "armedAtMilliseconds": 7277.300000011921,
+              "readyStateAtArm": 0,
+              "longTasks": [
+                {
+                  "startedAt": 414.89999997615814,
+                  "duration": 56
+                },
+                {
+                  "startedAt": 712.1999999880791,
+                  "duration": 82
+                }
+              ],
+              "mediaEvents": [
+                {
+                  "kind": "loadeddata",
+                  "atMilliseconds": 7843,
+                  "coveredByStatus": true
+                },
+                {
+                  "kind": "playing",
+                  "atMilliseconds": 7843,
+                  "coveredByStatus": true
+                }
+              ],
+              "measurementValid": true,
+              "exactFirstSubmissionMeasured": true,
+              "authorizationResponseMilliseconds": 216.89999997615814,
+              "authorization": [
+                {
+                  "startedAt": 7277.300000011921,
+                  "headersAt": 7493.699999988079,
+                  "status": 200,
+                  "bodyReadAt": 7494.199999988079
+                }
+              ],
+              "whep": [
+                {
+                  "startedAt": 7504.5,
+                  "headersAt": 7632.199999988079,
+                  "status": 201
+                }
+              ],
+              "peers": [
+                {
+                  "createdAt": 7496.699999988079,
+                  "connectedAt": 7774.199999988079
+                }
+              ],
+              "firstFrame": {
+                "callbackMilliseconds": 7851.5,
+                "presentationMilliseconds": 7842.6,
+                "expectedDisplayMilliseconds": 7842.6,
+                "receiveMilliseconds": 7834.4,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 7852.199999988079
+              },
+              "firstVisibleFrame": {
+                "callbackMilliseconds": 7851.5,
+                "presentationMilliseconds": 7842.6,
+                "expectedDisplayMilliseconds": 7842.6,
+                "receiveMilliseconds": 7834.4,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 7852.199999988079
+              },
+              "visiblePresentationValid": true,
+              "visiblePresentationScope": "First observed unoccluded video frame callback; later of browser expected-display time and observation after visibility checks. Conservative startup estimate, not exact first submission or physical display latency.",
+              "navigationToVisiblePresentationMilliseconds": 7852.199999988079,
+              "authorizationToVisiblePresentationMilliseconds": 574.8999999761581,
+              "activationToVisiblePresentationMilliseconds": 578.1999999880791,
+              "navigationToExpectedDisplayMilliseconds": 7842.6,
+              "authorizationToExpectedDisplayMilliseconds": 565.2999999880794
+            }
+          },
+          {
+            "cycle": 2,
+            "closed": {
+              "outcome": "deleted",
+              "status": 200,
+              "durationMilliseconds": 306,
+              "credentialRefreshFailed": false,
+              "distributor": "direct",
+              "observedAt": 8945.300000011921,
+              "selectionToDeletionMilliseconds": 307.10000002384186
+            },
+            "encoderIdleAfterDeletionMilliseconds": 500.9974999999995,
+            "startup": {
+              "schemaVersion": 2,
+              "supported": true,
+              "installedAtMilliseconds": 9459.5,
+              "activationRequestedAtMilliseconds": 9488.800000011921,
+              "armedAtMilliseconds": 9492.099999964237,
+              "readyStateAtArm": 0,
+              "longTasks": [
+                {
+                  "startedAt": 414.89999997615814,
+                  "duration": 56
+                },
+                {
+                  "startedAt": 712.1999999880791,
+                  "duration": 82
+                }
+              ],
+              "mediaEvents": [
+                {
+                  "kind": "loadeddata",
+                  "atMilliseconds": 10091.300000011921,
+                  "coveredByStatus": true
+                },
+                {
+                  "kind": "playing",
+                  "atMilliseconds": 10091.300000011921,
+                  "coveredByStatus": true
+                }
+              ],
+              "measurementValid": true,
+              "exactFirstSubmissionMeasured": true,
+              "authorizationResponseMilliseconds": 233.70000004768372,
+              "authorization": [
+                {
+                  "startedAt": 9492.099999964237,
+                  "headersAt": 9725.399999976158,
+                  "status": 200,
+                  "bodyReadAt": 9725.800000011921
+                }
+              ],
+              "whep": [
+                {
+                  "startedAt": 9732.099999964237,
+                  "headersAt": 9848.800000011921,
+                  "status": 201
+                }
+              ],
+              "peers": [
+                {
+                  "createdAt": 9727.199999988079,
+                  "connectedAt": 9993.5
+                }
+              ],
+              "firstFrame": {
+                "callbackMilliseconds": 10101.4,
+                "presentationMilliseconds": 10091,
+                "expectedDisplayMilliseconds": 10091,
+                "receiveMilliseconds": 10082.4,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 10103.899999976158
+              },
+              "firstVisibleFrame": {
+                "callbackMilliseconds": 10101.4,
+                "presentationMilliseconds": 10091,
+                "expectedDisplayMilliseconds": 10091,
+                "receiveMilliseconds": 10082.4,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 10103.899999976158
+              },
+              "visiblePresentationValid": true,
+              "visiblePresentationScope": "First observed unoccluded video frame callback; later of browser expected-display time and observation after visibility checks. Conservative startup estimate, not exact first submission or physical display latency.",
+              "navigationToVisiblePresentationMilliseconds": 10103.899999976158,
+              "authorizationToVisiblePresentationMilliseconds": 611.8000000119209,
+              "activationToVisiblePresentationMilliseconds": 615.0999999642372,
+              "navigationToExpectedDisplayMilliseconds": 10091,
+              "authorizationToExpectedDisplayMilliseconds": 598.9000000357628
+            }
+          },
+          {
+            "cycle": 3,
+            "closed": {
+              "outcome": "deleted",
+              "status": 200,
+              "durationMilliseconds": 313,
+              "credentialRefreshFailed": false,
+              "distributor": "direct",
+              "observedAt": 10889.5,
+              "selectionToDeletionMilliseconds": 317.69999998807907
+            },
+            "encoderIdleAfterDeletionMilliseconds": 444.7143329999999,
+            "startup": {
+              "schemaVersion": 2,
+              "supported": true,
+              "installedAtMilliseconds": 11342.899999976158,
+              "activationRequestedAtMilliseconds": 11373.699999988079,
+              "armedAtMilliseconds": 11377,
+              "readyStateAtArm": 0,
+              "longTasks": [
+                {
+                  "startedAt": 414.89999997615814,
+                  "duration": 56
+                },
+                {
+                  "startedAt": 712.1999999880791,
+                  "duration": 82
+                }
+              ],
+              "mediaEvents": [
+                {
+                  "kind": "loadeddata",
+                  "atMilliseconds": 11954.300000011921,
+                  "coveredByStatus": true
+                },
+                {
+                  "kind": "playing",
+                  "atMilliseconds": 11954.300000011921,
+                  "coveredByStatus": true
+                }
+              ],
+              "measurementValid": true,
+              "exactFirstSubmissionMeasured": true,
+              "authorizationResponseMilliseconds": 199.39999997615814,
+              "authorization": [
+                {
+                  "startedAt": 11377,
+                  "headersAt": 11576.099999964237,
+                  "status": 200,
+                  "bodyReadAt": 11576.399999976158
+                }
+              ],
+              "whep": [
+                {
+                  "startedAt": 11584.399999976158,
+                  "headersAt": 11709.099999964237,
+                  "status": 201
+                }
+              ],
+              "peers": [
+                {
+                  "createdAt": 11578.399999976158,
+                  "connectedAt": 11850.899999976158
+                }
+              ],
+              "firstFrame": {
+                "callbackMilliseconds": 11968,
+                "presentationMilliseconds": 11954,
+                "expectedDisplayMilliseconds": 11954,
+                "receiveMilliseconds": 11945.3,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 11969.899999976158
+              },
+              "firstVisibleFrame": {
+                "callbackMilliseconds": 11968,
+                "presentationMilliseconds": 11954,
+                "expectedDisplayMilliseconds": 11954,
+                "receiveMilliseconds": 11945.3,
+                "mediaTimeSeconds": 0,
+                "width": 1280,
+                "height": 720,
+                "presentedFrames": 1,
+                "visibility": {
+                  "documentVisible": true,
+                  "elementVisible": true,
+                  "centerInViewport": true,
+                  "centerUnobstructed": true,
+                  "coveredByStatus": false,
+                  "mediaReady": true,
+                  "visible": true
+                },
+                "observedAtMilliseconds": 11969.899999976158
+              },
+              "visiblePresentationValid": true,
+              "visiblePresentationScope": "First observed unoccluded video frame callback; later of browser expected-display time and observation after visibility checks. Conservative startup estimate, not exact first submission or physical display latency.",
+              "navigationToVisiblePresentationMilliseconds": 11969.899999976158,
+              "authorizationToVisiblePresentationMilliseconds": 592.8999999761581,
+              "activationToVisiblePresentationMilliseconds": 596.1999999880791,
+              "navigationToExpectedDisplayMilliseconds": 11954,
+              "authorizationToExpectedDisplayMilliseconds": 577
+            }
+          }
+        ]
+      },
+      "dependencyObservations": {
+        "inventory": {
+          "count": 41,
+          "maximumHeadersMilliseconds": 67.57241699999986,
+          "statuses": [200]
+        },
+        "project": {
+          "count": 47,
+          "maximumHeadersMilliseconds": 1409.1362499999996,
+          "statuses": [200]
+        },
+        "turn-key": {
+          "count": 4,
+          "maximumHeadersMilliseconds": 31.416333000000122,
+          "statuses": [200]
+        }
+      },
+      "dependencyScope": "Concurrent dashboard routes and lifecycle checks; these observations cannot be summed or all attributed to viewer authorization."
+    }
+  ]
+}
