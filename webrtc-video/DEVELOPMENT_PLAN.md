@@ -5,9 +5,11 @@ delivery paths. Deployment is a separate activity. Implementation and synthetic
 qualification do not establish compatibility with untested cameras, encoders,
 operating systems or networks.
 
-The remaining acceptance work is concentrated on repeated network/latency
-qualification, the automatic-format timing decision, intermittent native
-connectivity and outstanding visual approval. The final route/browser regression
+The remaining acceptance work is concentrated on the automatic-format timing
+decision and its repeated delivery qualification, plus outstanding visual
+approval. Current direct, native/adaptive MediaMTX and local forced-relay media
+checks pass in their documented environments; hosted-runner connectivity and
+historical scheduling observations remain explicit boundaries below. The final route/browser regression
 passes at `d8cb5d7` on Chromium 153, WebKit 26.6 and Linux Firefox 155 with the
 current dependencies and session-cleanup code. Static Linux packaging and
 its H.264/AV1 source checks pass again with Go 1.27 at `90df80f` on ARM64 and
@@ -25,9 +27,11 @@ recoveries pass; the complete series remains failed and the public timing is
 unchanged pending attribution. The extended TURN diagnostic at `c585c3c` passes
 all 56 fixed-format gates. Its periodic pause coincides with an unrelated host
 renderer using 5.46 CPU cores; a controlled comparison remains pending.
-The latest fixed-format latency series validates measurement in all four cases
-and passes delivery in three; a 193ms source-capacity recovery freeze remains
-under investigation.
+The earlier fixed-format latency series validates measurement in all four cases
+and passes delivery in three, retaining a 193ms source-capacity recovery freeze.
+The current source-capacity repeat at `50c1262` passes all 22 gates with no
+recovery freeze. A smaller periodic scheduling event is still observed; its
+cause remains unproven and the old failure is not reclassified.
 The independent hosted direct comparison at `18338c8` passes three of three
 one-second down-hold trials and fails three of three three-second trials on
 late sampled freeze counters. All six format ladders recover. The groups use
@@ -1480,6 +1484,26 @@ alignment. Earlier failed measurements remain unchanged. Resources include the
 probe and do not establish its isolated cost; socket limits are restored and
 owned containers removed.
 
+The [current source-capacity repeat at `50c1262`](./distributor/qualification/evidence/50c1262/source-capacity-latency.json)
+passes all 22 unchanged gates with the merged dependencies. The source remains
+720p30 while its upstream is constrained to 4 Mbit/s, then recovers its 8 Mbit/s
+target. Initial capacity disruption totals 1.496s; there are no decoded-frame
+drops, steady constrained-network freezes or recovery freezes. All 596 markers
+are valid, with no rejection/omission and at most 1.341ms clock uncertainty.
+Baseline marker latency is 40.72ms median / 41.56ms p95; the capacity phase is
+72.80ms median / 73.66ms p95, with a 571.38ms transient maximum. Recovery is
+54.74ms median / 72.47ms p95. These measurements exclude physical exposure,
+pre-marker capture/scaling and display scanout.
+
+First presentation is 516.4ms from standalone activation in this one case;
+normal WHEP deletion takes 13ms. The run restores socket ceilings and removes
+owned containers, networks and volumes. Around 18:39:53 UTC, the recovery probe
+still records a 58.6ms JavaScript timer delay and 166.7ms frame-callback gap,
+without a freeze-counter increment. Thus the current case passes, while the
+historical 193ms freeze and periodic scheduling cause remain unresolved rather
+than reclassified. This is a single current-dependency repeat, not a new complete
+four-case matrix or proof of target-hardware performance.
+
 The standalone marker command initially fails on macOS because
 [GLib](https://raw.githubusercontent.com/GNOME/glib/main/glib/gmain.c) uses
 `mach_absolute_time` and current
@@ -1748,7 +1772,7 @@ The sample and guides remain draft PRs, with no deployment in this work.
 | Optional automatic resolution/frame-rate adaptation | [Repeated direct/MediaMTX matrix](./distributor/qualification/evidence/02fdf82/automatic-format-repetitions.json) and [independent direct comparison](./distributor/qualification/evidence/18338c8/hosted-direct-formats.json) recover all format ladders and source targets. | Complete playback matrices retain failures. A same-runner 1s/3s crossover is in progress at `1a3af2f`; public down-hold remains 3s. |
 | Rapid activation, cancellation and demand-driven release | [Portable lifecycle cases](./distributor/qualification/evidence/9dac607/startup-cycles.json) and [visible dashboard activation](./platform/qualification/evidence/7e75e65/visible-startup.json) distinguish cold/reopen/join, canceled setup and actual encoder idle. | Finite local observations, no startup SLA; slow control-plane authorization and native MediaMTX key-frame behavior remain explicit. |
 | Direct, adaptive MediaMTX and native delivery | Real media tests cover direct fallback, adaptive single-upstream sharing and [current native MediaMTX](./distributor/qualification/evidence/82c9c40/native-current.json), whose 22 gates pass. | Native pull is fixed-rate interoperability, not the adaptive platform backend or an optimized startup path. |
-| Congestion, latency and forced relay | [Current local relay](./producer/qualification/adaptive-streaming/evidence/18f6cc1/local-relay.json) and the earlier [extended diagnostic](./producer/qualification/adaptive-streaming/evidence/c585c3c/extended-relay-diagnostic.json) each pass 56 gates. [Four latency trials](./distributor/qualification/evidence/4a0d83a/latency-network.json) have valid measurements but only three delivery passes. | A 193ms recovery freeze remains. [Hosted relay](./producer/qualification/adaptive-streaming/evidence/2a45705/hosted-relay.json) fails basic TCP reachability before media; identical retries are deferred until the external condition changes. |
+| Congestion, latency and forced relay | [Current local relay](./producer/qualification/adaptive-streaming/evidence/18f6cc1/local-relay.json) and the earlier [extended diagnostic](./producer/qualification/adaptive-streaming/evidence/c585c3c/extended-relay-diagnostic.json) each pass 56 gates. [Four latency trials](./distributor/qualification/evidence/4a0d83a/latency-network.json) have valid measurements but only three delivery passes; the [current source-capacity repeat](./distributor/qualification/evidence/50c1262/source-capacity-latency.json) passes all 22 gates. | The historical 193ms recovery freeze remains failed and its scheduling attribution is unproven. [Hosted relay](./producer/qualification/adaptive-streaming/evidence/2a45705/hosted-relay.json) fails basic TCP reachability before media; identical retries are deferred until the external condition changes. |
 | Metrics and bounded recent recording/replay | Current route/browser regression covers authorized metrics, outages, replay gaps/expiry and return to the same live session. [Recording startup regressions](./distributor/qualification/evidence/2b22561/recording-startup.json) pass; [resource comparisons](./distributor/qualification/evidence/5b83934/recording-resources.json) retain all twelve attempts. | Recording remains opt-in. Historical failed resource/delivery trials remain failed; synthetic CPU measurements are not target-device budgets. |
 | Same-page expansion and responsive controls | Current browser regression passes on Chromium, WebKit and Linux Firefox with desktop/mobile/landscape captures, focus/scroll restoration and media continuity. | Inventory and replay visuals are accepted. Explicit quality/format/metrics visual approval is still pending. |
 | Packaging, dependencies, commands and guides | [Go 1.27 static H.264/AV1 runtime checks](./producer/qualification/evidence/90df80f/static-linux-go127.json) pass on ARM64 and emulated AMD64. [Guides PR #57](https://github.com/rstreamlabs/rstream-nextjs/pull/57) passes complete CI at `0ab4f9c`. All three video CI jobs pass at `03731ac`, including the platform build/audit after a formatting-only evidence correction. | No physical-camera or native-AMD64 performance claim. Runtime evidence data are unchanged by that formatting correction; unrelated example CI failures are not video regressions. |
