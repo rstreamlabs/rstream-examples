@@ -1154,7 +1154,16 @@ until the user approves it.
   executable streams actual 720p H.264 and AV1 in a scratch filesystem, releases
   its WHEP session and exits normally on SIGTERM. H.264 reaches 30 fps; AV1 reaches
   only a median 8 fps on this machine, so this is functionality evidence, not AV1
-  performance acceptance. The AMD64 build and final rebuilt viewers remain to
-  qualify. The first ARM64 build started just before its unchanged source bytes
-  were committed; retain that provenance. Guide content builds successfully,
-  and all three documented netem commands pass on an isolated dummy interface.
+  performance acceptance. The [final `make dist` at clean `8d252c3`](./producer/qualification/evidence/8d252c3/static-linux.json)
+  passes for both architectures with the updated viewer. All four scratch-runtime
+  cases (ARM64/AMD64 × H.264/AV1) encode and decode actual video, delete their WHEP
+  resource, then exit normally in 126–155ms after SIGTERM. Their browser logs are
+  empty; no packet loss, decoded drop or freeze is observed. H.264 is 30 fps and
+  AV1 8 fps on both, with AV1 source output also near 8 fps. This localizes the
+  cadence limitation before browser decoding, not to a proven CPU or codec cause.
+  AMD64 runs under architecture emulation. Investigate the AV1 profile cadence
+  separately; these short tests do not establish latency or network robustness.
+  The first ARM64 build started just before its unchanged source bytes were
+  committed; the final builds/checks use a clean revision. Guide content builds
+  successfully, and all three documented netem commands pass on an isolated
+  dummy interface. All owned runtime containers are removed.
