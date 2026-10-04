@@ -699,6 +699,10 @@ a browser compositor estimate, not a physical display measurement.
 The runtime report retains the actual browser, Playwright and Node.js versions,
 including on failed measurements, so results from an older installed browser
 are not mistaken for the currently pinned browser.
+For a focused compositor diagnosis, `RSTREAM_DISCOVERY_STARTUP_TRACE=true`
+additionally saves a Chromium media trace for each initial navigation. These raw
+files can contain private URLs and must remain private. Traced runs are diagnostic
+observations, not baseline performance measurements.
 To exercise discovery with the
 adaptive MediaMTX adapter, also set `RSTREAM_DISCOVERY_DISTRIBUTOR=mediamtx`.
 That variant uses the documented local stack helper (including its production

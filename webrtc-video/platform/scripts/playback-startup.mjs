@@ -34,6 +34,7 @@ export function installPlaybackStartupTiming() {
   const peerListeners = []
   window.__discoveryPeers = []
   const finite = (value) => (Number.isFinite(value) ? value : null)
+  performance.mark?.("rstream-startup-probe-installed")
   const classify = (input, init) => {
     try {
       const url = new URL(
@@ -126,11 +127,15 @@ export function installPlaybackStartupTiming() {
       firstFrame = {
         callbackMilliseconds: finite(now),
         observedAtMilliseconds: performance.now(),
+        presentationMilliseconds: finite(metadata.presentationTime),
         expectedDisplayMilliseconds: finite(metadata.expectedDisplayTime),
+        receiveMilliseconds: finite(metadata.receiveTime),
+        mediaTimeSeconds: finite(metadata.mediaTime),
         width: finite(metadata.width),
         height: finite(metadata.height),
         presentedFrames: finite(metadata.presentedFrames),
       }
+      performance.mark?.("rstream-startup-first-callback")
     })
   }
   const observer = new MutationObserver(observeVideo)

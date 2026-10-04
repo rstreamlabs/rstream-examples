@@ -35,9 +35,16 @@ assert.ok(image, "RSTREAM_DISCOVERY_PRODUCER_IMAGE is required")
 const distribution = process.env.RSTREAM_DISCOVERY_DISTRIBUTOR ?? "direct"
 assert.ok(["direct", "mediamtx"].includes(distribution))
 const distributed = distribution === "mediamtx"
+const startupTrace = process.env.RSTREAM_DISCOVERY_STARTUP_TRACE === "true"
 assert.ok(
-  !distributed || process.env.RSTREAM_DISCOVERY_BROWSER,
-  "MediaMTX qualification requires RSTREAM_DISCOVERY_BROWSER",
+  [undefined, "false", "true"].includes(
+    process.env.RSTREAM_DISCOVERY_STARTUP_TRACE,
+  ),
+  "RSTREAM_DISCOVERY_STARTUP_TRACE must be true or false",
+)
+assert.ok(
+  (!distributed && !startupTrace) || process.env.RSTREAM_DISCOVERY_BROWSER,
+  "MediaMTX qualification and startup tracing require RSTREAM_DISCOVERY_BROWSER",
 )
 const require = createRequire(join(root, "package.json"))
 const {
@@ -337,6 +344,7 @@ async function qualifyPlayback() {
     nodeVersion: process.version,
     browserSelection:
       browserSelection === "bundled" ? "bundled" : "explicit executable",
+    startupTrace,
   })
   const stopOnAbort = () => {
     void browser.close().catch(() => {})
@@ -359,6 +367,12 @@ async function qualifyPlayback() {
       const page = await context.newPage()
       page.on("pageerror", () => pageErrors++)
       let startup = null
+      let startupError = null
+      if (startupTrace)
+        await browser.startTracing(page, {
+          categories: ["media", "blink.user_timing"],
+          screenshots: false,
+        })
       try {
         await page.goto(origin, {
           waitUntil: "domcontentloaded",
@@ -383,6 +397,9 @@ async function qualifyPlayback() {
           undefined,
           { timeout: 45000 },
         )
+      } catch (error) {
+        startupError = error
+        throw error
       } finally {
         // Preserve failed/missing evidence too, without hiding the original failure.
         startup = await page
@@ -392,6 +409,19 @@ async function qualifyPlayback() {
           `playback-startup-${actor}.json`,
           startup ?? { measurementValid: false },
         )
+        if (startupTrace) {
+          try {
+            // Raw browser diagnostics can contain private URLs. Keep them in the
+            // private evidence directory, never console output or public summaries.
+            const trace = await browser.stopTracing()
+            writeFileSync(join(output, `playback-trace-${actor}.json`), trace, {
+              mode: 0o600,
+            })
+          } catch {
+            json(`playback-trace-failure-${actor}.json`, { failed: true })
+            if (!startupError) throw new Error("Startup trace capture failed")
+          }
+        }
       }
       viewers.push({ actor, page, context, startup })
     }
