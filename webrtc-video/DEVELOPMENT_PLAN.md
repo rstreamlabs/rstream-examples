@@ -431,8 +431,19 @@ required. Its scope excludes camera exposure, capture/scaling before the stamp
 and physical display scanout. Production pipelines and buffering are unchanged.
 The 100-test harness suite, artifact sanitization and result/negative-gate tests
 pass; the plugin builds on Linux and macOS and survives actual H.264 encode /
-decode at 500 and 8000 kbit/s. Live direct/MediaMTX validation and instrumented
-versus uninstrumented resource comparison remain required before latency claims.
+decode at 500 and 8000 kbit/s. The first clean-checkout launch rejected an
+untracked profile before starting media; the profile is now explicitly committed.
+The [five pilot runs at `dd2e37c`](./distributor/qualification/evidence/dd2e37c/latency-pilot.json)
+pass: latency-enabled direct, custom-adapter and native MediaMTX, plus direct /
+adapter probe-disabled references. Every instrumented phase satisfies clock,
+marker and sample-count gates. Stable-phase median / p95 are 58.1 / 99.3 ms
+direct, 43.8 / 44.8 ms with the adapter and 40.2 / 41.0 ms natively. These single
+observations do not rank the paths: realized source rates differ (8, 7.586 and
+5 Mbit/s), as do their control policies. Canvas readback materially increases
+browser memory (about 553 MiB peak versus 326 MiB in the direct reference),
+which is retained as measurement overhead. Production readers do not use it.
+Repeated controlled resource comparisons and impaired-network latency remain
+pending; the earlier direct impairment freeze remains an open delivery failure.
 
 - Compare changes against the current path at equal source content and network
   conditions. Measure time to first frame separately from capture-to-display
