@@ -8,8 +8,11 @@ operating systems or networks.
 The remaining acceptance work is concentrated on repeated network/latency
 qualification, the automatic-format timing decision, intermittent native
 connectivity and final route/browser regressions. Static Linux packaging and
-its H.264/AV1 source checks are complete, and the guide build/toolchain/plugin
-instructions have been verified or corrected. Bounded shutdown for the
+its H.264/AV1 source checks passed at `27fa72c`; the final Go 1.27 repeat remains
+pending. The guide build/toolchain/plugin instructions have been verified or
+corrected. [The isolated guides draft PR](https://github.com/rstreamlabs/rstream-nextjs/pull/57)
+passes its complete CI, including search and PostgreSQL checks, with automatic
+deployment disabled for that branch. Bounded shutdown for the
 reproduced blocked native transport write is verified in both samples. Inventory and replay
 presentation are accepted;
 the separate quality/format/metrics visual review remains pending. The current
@@ -51,6 +54,20 @@ cached by this optimization. Unit tests cover cancellation/completion races,
 last-subscriber shutdown, retries and configuration/credential isolation; all
 193 platform unit tests, the production build and full access/database
 integration suite pass. Its effect on actual startup is measured separately.
+
+The [four further dashboard attempts through `4b63d74`](./platform/qualification/evidence/4b63d74/dashboard-startup.json)
+retain the failed cold first-presentation gate and every slow authorization.
+Request-local reuse yields two valid warm-reader measurements of 630–697ms
+from navigation, including about 210–216ms authorization, but two other requests
+take about 3.1–3.2 seconds. Safe dependency timing attributes the instrumented
+outlier to project resolution. Pinned Chromium 153 repeats the missed callback
+seen with the earlier Chromium 143 executable. At `4b63d74`, the first coalesced
+trial records 295/215ms authorization, and its warm reader presents the first
+frame 604ms after navigation (292ms after authorization starts). Concurrent
+project lookups overlapping each authorization decrease from four to seven to
+two. These are overlapping route requests, not spans that can be summed or all
+assigned to the viewer. One trial cannot establish elimination of intermittent
+slow resolution or any percentile. Cold callback attribution remains open.
 
 Remove demonstrated serial waits, unnecessary polling and avoidable key-frame
 delays while retaining authentication, bounded cancellation, one shared upstream
