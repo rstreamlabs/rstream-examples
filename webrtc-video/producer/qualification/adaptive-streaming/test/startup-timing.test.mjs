@@ -105,6 +105,7 @@ test("missing, invalid or pre-request presentation evidence never becomes zero l
     { expectedDisplayTime: 100 },
     { width: 0 },
     { presentedFrames: 0 },
+    { presentedFrames: 2 },
   ]) {
     const f = fixture();
     f.click(200);

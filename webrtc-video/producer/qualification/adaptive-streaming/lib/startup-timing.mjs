@@ -46,7 +46,8 @@ export function installStartupTiming() {
         firstFrame?.expectedDisplayMilliseconds >= requestedAt &&
         firstFrame?.width > 0 &&
         firstFrame?.height > 0 &&
-        firstFrame?.presentedFrames > 0;
+        // A later callback cannot establish when the first frame appeared.
+        firstFrame?.presentedFrames === 1;
       return {
         supported,
         measurementValid: Boolean(valid),

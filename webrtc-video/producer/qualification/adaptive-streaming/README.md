@@ -20,7 +20,8 @@ First-picture timing is recorded separately in `signaling-events.json` under
 `requestVideoFrameCallback` before the player handles that click. The first
 callback preserves both its arrival time and the browser's expected display
 time. Missing or invalid observations remain explicit; later polling completion
-is not substituted for first presentation. MediaMTX end-to-end results include
+is not substituted for first presentation. A callback that has already missed
+the first presented frame is invalid for this measurement. MediaMTX end-to-end results include
 this record under `setup.presentation` and require valid presentation evidence.
 These durations exclude page navigation, device-process startup and physical
 display scanout. They measure one fresh activation; repeat/cold/warm/churn
