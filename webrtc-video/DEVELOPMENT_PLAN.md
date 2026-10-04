@@ -752,9 +752,18 @@ it during impairment, before recovery. The runner now derives its deadline
 from the configured phases plus 180 seconds for setup/orchestration, bounded
 at 720 seconds within the 900-second project-token lifetime. Invalid or longer
 schedules fail before runtime preparation. All 124 collector/harness tests,
-shell syntax and shellcheck pass. A complete extended-duration live check
-remains required. Packet captures and both clock probes are retained; their
-containers are removed and original socket limits restored.
+shell syntax and shellcheck pass. Packet captures and both clock probes are
+retained; their containers are removed and original socket limits restored.
+
+The [extended direct repeat at `8987b4e`](./producer/qualification/adaptive-streaming/evidence/8987b4e/extended-direct.json)
+completes all phases with the computed 551-second safety deadline, including
+recovery after the old 300-second limit. All 57 unchanged gates pass. The
+182-second healthy baseline holds an 8 Mbit/s encoder target with no frozen
+time; impaired playback has 3.689% frozen time, and recovery reaches its target
+in 13.124 seconds with no further freeze. Maximum encoder frame spacing is
+43.545ms across the trial. The published native shutdown revision is in the
+producer image. Owned containers are removed and socket limits restored.
+This single direct result does not resolve the retained TURN/matrix failures.
 
 ## Cross-cutting latency and resource criteria
 
