@@ -6,7 +6,7 @@ qualification do not establish compatibility with untested cameras, encoders,
 operating systems or networks.
 
 The remaining acceptance work is concentrated on repeated network/latency
-qualification, the recording-startup correction, final route/browser regressions
+qualification, bounded native transport shutdown, final route/browser regressions
 and the guide-command audit. Inventory and replay presentation are accepted;
 the separate quality/format/metrics visual review remains pending. The current
 automatic-format series has five complete passes in six trials and retains one
@@ -790,8 +790,13 @@ destination while its transport is still unconnected. Startup now awaits a
 connected peer with a ten-second bound and caller cancellation, closing the
 session on failure. The focused race tests cover successful and terminal state
 changes, timeout, cancellation and exactly-once HTTP cleanup. Full integration
-with MediaMTX 1.21.1 passes under the race detector; a fresh recording startup
-check remains required before closing this defect.
+with MediaMTX 1.21.1 passes under the race detector. The
+[fresh recording checks at `2b22561`](./distributor/qualification/evidence/2b22561/recording-startup.json)
+pass in all three adapter startups and the native MediaMTX smoke test. Each
+creates bounded recording segments with no H.264 error, dropped frame or live
+freeze, then releases its sessions. All owned containers are removed and
+temporary socket limits restored. These short checks close the demonstrated
+startup defect; they do not replace the earlier failed network/latency matrix.
 
 The broader distributor race run exposes a separate intermittent ICE-restart
 failure in `TestRestartRenewsCredentialsAndKeepsOneConnectedPeer`: the peer
@@ -799,7 +804,11 @@ remains connecting, and failed-test cleanup stalls in a UDP IPv6 socket write
 from the ICE task loop, with DTLS closure waiting for that loop. A standalone
 repeat passes, while a bounded full-package repeat reproduces the failure.
 This is not classified as a destination-readiness regression or a passing full
-suite. The preserved stacks require a separate native transport investigation.
+suite. The full-package check passes once with Go 1.26.6, but the subsequent
+complete module run reproduces the same IPv6 write stall, so Go 1.27 alone is
+not its cause. The preserved stacks require a separate native transport
+investigation. Existing ICE pre-stop cancellation is present in the fork;
+DTLS close-notify waits before PeerConnection reaches that ICE shutdown.
 
 The [four initial impaired-network latency trials](./distributor/qualification/evidence/f654989/latency-network.json)
 retain two passes (source delay/jitter/loss and direct capacity), one direct
