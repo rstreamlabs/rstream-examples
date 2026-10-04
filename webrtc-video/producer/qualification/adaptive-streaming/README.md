@@ -358,6 +358,14 @@ RSTREAM_CONTEXT=my-context \
   ./qualification/adaptive-streaming/.artifacts/my-run
 ```
 
+Custom phase durations must total at most 540 seconds, including warmup,
+conditioning, drain and optional mobility. The collector deadline includes
+those phases plus 180 seconds for connection setup and orchestration, with a
+720-second maximum inside the runner's 900-second project-token lifetime.
+The manifest records the applied deadline. Extending a baseline therefore
+leaves time for the later impairment and recovery phases; playback and network
+acceptance thresholds stay unchanged.
+
 The direct reference uses the same media, codec, adaptation, protection, and
 browser image. Only tunnel publication and TURN are disabled. Its Chromium
 viewer runs on the same isolated Docker bridge, which prevents the host route

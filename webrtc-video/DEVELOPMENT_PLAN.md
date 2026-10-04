@@ -730,6 +730,32 @@ uses one allocation and uniformly paced echo traffic, so this does not reproduce
 the two-allocation video's burst pattern or establish a cause for its intermittent
 loss. Its short-lived credentials are removed locally after the processes finish.
 
+The [loaded host/VM observation at `100d2b6`](./producer/qualification/adaptive-streaming/evidence/100d2b6/loaded-relay-observation.json)
+completes a 182-second unshaped TURN baseline with a median 30 fps and no
+reported frozen time. Four captures with zero kernel drops correlate 190,439
+primary packets: none disappear inside either container/VM boundary, and one
+is absent between VM egress and ingress. All 38,088 FEC packets arrive. The one
+RTX packet is excluded from VM correlation because its SSRC was not in the
+initial capture filter; absence from that filter is not classified as loss.
+
+At 10:59:52 UTC, an independent native host probe records 70/66ms consecutive
+scheduling intervals and a separate Linux probe records 121/97ms, against a
+25ms sampling interval. The browser callback gap is 183ms, and primary packet
+gaps reach 146ms at producer/VM egress and 123ms at VM/browser ingress. Civil-
+clock steps stay below 1ms in that window. These simultaneous observations
+support an environment contribution, but do not identify its root cause or
+retroactively turn earlier failures into passes. No sustained TURN loss is
+reproduced in this longer baseline.
+
+The full trial is incomplete: the collector's fixed 300-second deadline stops
+it during impairment, before recovery. The runner now derives its deadline
+from the configured phases plus 180 seconds for setup/orchestration, bounded
+at 720 seconds within the 900-second project-token lifetime. Invalid or longer
+schedules fail before runtime preparation. All 124 collector/harness tests,
+shell syntax and shellcheck pass. A complete extended-duration live check
+remains required. Packet captures and both clock probes are retained; their
+containers are removed and original socket limits restored.
+
 ## Cross-cutting latency and resource criteria
 
 The resource collector now brackets the complete CPU/memory observation with
@@ -1102,3 +1128,9 @@ until the user approves it.
   attempts and remaining hardware/identity-provider qualification boundaries.
 - Verify all documented commands and default/public versus internal profiles.
   No production deployment or public-demo configuration change is included.
+- Complete the documented static Linux distribution builds. The audit finds
+  their GStreamer default still at 1.28.1 and x264 following the moving stable
+  branch. Review reproducible pins and update the stable toolchain; the
+  [current 1.28 release notes](https://gstreamer.freedesktop.org/releases/1.28/)
+  identify 1.28.7 as the latest maintenance release. Development/runtime
+  GStreamer checks do not substitute for these separately packaged builds.
