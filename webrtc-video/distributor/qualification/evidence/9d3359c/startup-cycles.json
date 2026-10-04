@@ -1,0 +1,714 @@
+{
+  "schemaVersion": 1,
+  "manifest": {
+    "revision": "9d3359cd12732ab36dd73a8535f89747264cd0b1",
+    "workingTreeDirty": false,
+    "mode": "mediamtx",
+    "qualification": "startup-cycles",
+    "idleGraceSeconds": 1,
+    "producerImage": "sha256:30b5687656432edeab176c532c30df8818e2d56a02fa07f39509ea6ad0edcaea",
+    "distributorImage": "sha256:68a7b830f07df9aeb90251bac262ebace14aa0525b6e57dca81755a1f25f058a",
+    "browserImage": "sha256:fe4135ab2f1845fe2ee9a1f49ac5fc6a6cc5f78f7f6c6449a31770f030a762b4",
+    "producerConfigSHA256": "b72c51f0223b74c0b559650fde7ae52c91916733da3cac7c9ac0fe63e59f2054"
+  },
+  "passed": true,
+  "browserVersion": "154.0.8037.92",
+  "scope": "Portable adaptive MediaMTX activation on Linux ARM64 Docker with a ready producer HTTP endpoint: three cold/reopen/join cycles and four setup cancellations. Conservative visible presentation, independently retaining exact first-submission diagnostics.",
+  "cases": [
+    {
+      "name": "cold",
+      "round": 1,
+      "before": {
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 0
+      },
+      "startup": {
+        "supported": true,
+        "measurementValid": true,
+        "requestedAtMilliseconds": 94.40000003576279,
+        "firstFrame": {
+          "callbackMilliseconds": 886.5,
+          "expectedDisplayMilliseconds": 880.5,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1,
+          "visibility": {
+            "documentVisible": true,
+            "elementVisible": true,
+            "centerInViewport": true,
+            "centerUnobstructed": true,
+            "mediaReady": true,
+            "visible": true
+          },
+          "observedAtMilliseconds": 888.7000000476837
+        },
+        "firstVisibleFrame": {
+          "callbackMilliseconds": 886.5,
+          "expectedDisplayMilliseconds": 880.5,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1,
+          "visibility": {
+            "documentVisible": true,
+            "elementVisible": true,
+            "centerInViewport": true,
+            "centerUnobstructed": true,
+            "mediaReady": true,
+            "visible": true
+          },
+          "observedAtMilliseconds": 888.7000000476837
+        },
+        "visiblePresentationValid": true,
+        "visiblePresentationScope": "First observed unobstructed browser frame; conservative duration, not exact first submission or physical display timing",
+        "requestToVisiblePresentationMilliseconds": 794.3000000119209,
+        "requestToCallbackMilliseconds": 792.0999999642372,
+        "requestToExpectedDisplayMilliseconds": 786.0999999642372
+      },
+      "after": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 1
+      }
+    },
+    {
+      "name": "reopen",
+      "round": 1,
+      "before": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 1
+      },
+      "startup": {
+        "supported": true,
+        "measurementValid": true,
+        "requestedAtMilliseconds": 991.4000000357628,
+        "firstFrame": {
+          "callbackMilliseconds": 1153.2,
+          "expectedDisplayMilliseconds": 1151.8,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1,
+          "visibility": {
+            "documentVisible": true,
+            "elementVisible": true,
+            "centerInViewport": true,
+            "centerUnobstructed": true,
+            "mediaReady": true,
+            "visible": true
+          },
+          "observedAtMilliseconds": 1154
+        },
+        "firstVisibleFrame": {
+          "callbackMilliseconds": 1153.2,
+          "expectedDisplayMilliseconds": 1151.8,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1,
+          "visibility": {
+            "documentVisible": true,
+            "elementVisible": true,
+            "centerInViewport": true,
+            "centerUnobstructed": true,
+            "mediaReady": true,
+            "visible": true
+          },
+          "observedAtMilliseconds": 1154
+        },
+        "visiblePresentationValid": true,
+        "visiblePresentationScope": "First observed unobstructed browser frame; conservative duration, not exact first submission or physical display timing",
+        "requestToVisiblePresentationMilliseconds": 162.5999999642372,
+        "requestToCallbackMilliseconds": 161.79999996423726,
+        "requestToExpectedDisplayMilliseconds": 160.39999996423717
+      },
+      "after": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 1
+      }
+    },
+    {
+      "name": "warm-join",
+      "round": 1,
+      "before": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 1
+      },
+      "startup": {
+        "supported": true,
+        "measurementValid": true,
+        "requestedAtMilliseconds": 79.80000001192093,
+        "firstFrame": {
+          "callbackMilliseconds": 257.3,
+          "expectedDisplayMilliseconds": 246.9,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1,
+          "visibility": {
+            "documentVisible": true,
+            "elementVisible": true,
+            "centerInViewport": true,
+            "centerUnobstructed": true,
+            "mediaReady": true,
+            "visible": true
+          },
+          "observedAtMilliseconds": 258.9000000357628
+        },
+        "firstVisibleFrame": {
+          "callbackMilliseconds": 257.3,
+          "expectedDisplayMilliseconds": 246.9,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1,
+          "visibility": {
+            "documentVisible": true,
+            "elementVisible": true,
+            "centerInViewport": true,
+            "centerUnobstructed": true,
+            "mediaReady": true,
+            "visible": true
+          },
+          "observedAtMilliseconds": 258.9000000357628
+        },
+        "visiblePresentationValid": true,
+        "visiblePresentationScope": "First observed unobstructed browser frame; conservative duration, not exact first submission or physical display timing",
+        "requestToVisiblePresentationMilliseconds": 179.10000002384186,
+        "requestToCallbackMilliseconds": 177.49999998807908,
+        "requestToExpectedDisplayMilliseconds": 167.09999998807908
+      },
+      "after": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 1
+      }
+    },
+    {
+      "name": "cold",
+      "round": 2,
+      "before": {
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 1
+      },
+      "startup": {
+        "supported": true,
+        "measurementValid": true,
+        "requestedAtMilliseconds": 94.80000001192093,
+        "firstFrame": {
+          "callbackMilliseconds": 704.8,
+          "expectedDisplayMilliseconds": 701.9,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1,
+          "visibility": {
+            "documentVisible": true,
+            "elementVisible": true,
+            "centerInViewport": true,
+            "centerUnobstructed": true,
+            "mediaReady": true,
+            "visible": true
+          },
+          "observedAtMilliseconds": 706
+        },
+        "firstVisibleFrame": {
+          "callbackMilliseconds": 704.8,
+          "expectedDisplayMilliseconds": 701.9,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1,
+          "visibility": {
+            "documentVisible": true,
+            "elementVisible": true,
+            "centerInViewport": true,
+            "centerUnobstructed": true,
+            "mediaReady": true,
+            "visible": true
+          },
+          "observedAtMilliseconds": 706
+        },
+        "visiblePresentationValid": true,
+        "visiblePresentationScope": "First observed unobstructed browser frame; conservative duration, not exact first submission or physical display timing",
+        "requestToVisiblePresentationMilliseconds": 611.1999999880791,
+        "requestToCallbackMilliseconds": 609.999999988079,
+        "requestToExpectedDisplayMilliseconds": 607.099999988079
+      },
+      "after": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 2
+      }
+    },
+    {
+      "name": "reopen",
+      "round": 2,
+      "before": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 2
+      },
+      "startup": {
+        "supported": true,
+        "measurementValid": true,
+        "requestedAtMilliseconds": 808.5999999642372,
+        "firstFrame": {
+          "callbackMilliseconds": 954.7,
+          "expectedDisplayMilliseconds": 939.5,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1,
+          "visibility": {
+            "documentVisible": true,
+            "elementVisible": true,
+            "centerInViewport": true,
+            "centerUnobstructed": true,
+            "mediaReady": true,
+            "visible": true
+          },
+          "observedAtMilliseconds": 956.1999999880791
+        },
+        "firstVisibleFrame": {
+          "callbackMilliseconds": 954.7,
+          "expectedDisplayMilliseconds": 939.5,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1,
+          "visibility": {
+            "documentVisible": true,
+            "elementVisible": true,
+            "centerInViewport": true,
+            "centerUnobstructed": true,
+            "mediaReady": true,
+            "visible": true
+          },
+          "observedAtMilliseconds": 956.1999999880791
+        },
+        "visiblePresentationValid": true,
+        "visiblePresentationScope": "First observed unobstructed browser frame; conservative duration, not exact first submission or physical display timing",
+        "requestToVisiblePresentationMilliseconds": 147.60000002384186,
+        "requestToCallbackMilliseconds": 146.10000003576283,
+        "requestToExpectedDisplayMilliseconds": 130.9000000357628
+      },
+      "after": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 2
+      }
+    },
+    {
+      "name": "warm-join",
+      "round": 2,
+      "before": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 2
+      },
+      "startup": {
+        "supported": true,
+        "measurementValid": true,
+        "requestedAtMilliseconds": 80.90000003576279,
+        "firstFrame": {
+          "callbackMilliseconds": 240.2,
+          "expectedDisplayMilliseconds": 233.3,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1,
+          "visibility": {
+            "documentVisible": true,
+            "elementVisible": true,
+            "centerInViewport": true,
+            "centerUnobstructed": true,
+            "mediaReady": true,
+            "visible": true
+          },
+          "observedAtMilliseconds": 241.9000000357628
+        },
+        "firstVisibleFrame": {
+          "callbackMilliseconds": 240.2,
+          "expectedDisplayMilliseconds": 233.3,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1,
+          "visibility": {
+            "documentVisible": true,
+            "elementVisible": true,
+            "centerInViewport": true,
+            "centerUnobstructed": true,
+            "mediaReady": true,
+            "visible": true
+          },
+          "observedAtMilliseconds": 241.9000000357628
+        },
+        "visiblePresentationValid": true,
+        "visiblePresentationScope": "First observed unobstructed browser frame; conservative duration, not exact first submission or physical display timing",
+        "requestToVisiblePresentationMilliseconds": 161,
+        "requestToCallbackMilliseconds": 159.2999999642372,
+        "requestToExpectedDisplayMilliseconds": 152.39999996423722
+      },
+      "after": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 2
+      }
+    },
+    {
+      "name": "cold",
+      "round": 3,
+      "before": {
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 2
+      },
+      "startup": {
+        "supported": true,
+        "measurementValid": true,
+        "requestedAtMilliseconds": 64.90000003576279,
+        "firstFrame": {
+          "callbackMilliseconds": 443,
+          "expectedDisplayMilliseconds": 428.5,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1,
+          "visibility": {
+            "documentVisible": true,
+            "elementVisible": true,
+            "centerInViewport": true,
+            "centerUnobstructed": true,
+            "mediaReady": true,
+            "visible": true
+          },
+          "observedAtMilliseconds": 444.2000000476837
+        },
+        "firstVisibleFrame": {
+          "callbackMilliseconds": 443,
+          "expectedDisplayMilliseconds": 428.5,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1,
+          "visibility": {
+            "documentVisible": true,
+            "elementVisible": true,
+            "centerInViewport": true,
+            "centerUnobstructed": true,
+            "mediaReady": true,
+            "visible": true
+          },
+          "observedAtMilliseconds": 444.2000000476837
+        },
+        "visiblePresentationValid": true,
+        "visiblePresentationScope": "First observed unobstructed browser frame; conservative duration, not exact first submission or physical display timing",
+        "requestToVisiblePresentationMilliseconds": 379.30000001192093,
+        "requestToCallbackMilliseconds": 378.0999999642372,
+        "requestToExpectedDisplayMilliseconds": 363.5999999642372
+      },
+      "after": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 3
+      }
+    },
+    {
+      "name": "reopen",
+      "round": 3,
+      "before": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 3
+      },
+      "startup": {
+        "supported": true,
+        "measurementValid": true,
+        "requestedAtMilliseconds": 548.1000000238419,
+        "firstFrame": {
+          "callbackMilliseconds": 676.4,
+          "expectedDisplayMilliseconds": 670.2,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1,
+          "visibility": {
+            "documentVisible": true,
+            "elementVisible": true,
+            "centerInViewport": true,
+            "centerUnobstructed": true,
+            "mediaReady": true,
+            "visible": true
+          },
+          "observedAtMilliseconds": 677.6000000238419
+        },
+        "firstVisibleFrame": {
+          "callbackMilliseconds": 676.4,
+          "expectedDisplayMilliseconds": 670.2,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1,
+          "visibility": {
+            "documentVisible": true,
+            "elementVisible": true,
+            "centerInViewport": true,
+            "centerUnobstructed": true,
+            "mediaReady": true,
+            "visible": true
+          },
+          "observedAtMilliseconds": 677.6000000238419
+        },
+        "visiblePresentationValid": true,
+        "visiblePresentationScope": "First observed unobstructed browser frame; conservative duration, not exact first submission or physical display timing",
+        "requestToVisiblePresentationMilliseconds": 129.5,
+        "requestToCallbackMilliseconds": 128.29999997615812,
+        "requestToExpectedDisplayMilliseconds": 122.09999997615819
+      },
+      "after": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 3
+      }
+    },
+    {
+      "name": "warm-join",
+      "round": 3,
+      "before": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 3
+      },
+      "startup": {
+        "supported": true,
+        "measurementValid": true,
+        "requestedAtMilliseconds": 66.10000002384186,
+        "firstFrame": {
+          "callbackMilliseconds": 209.3,
+          "expectedDisplayMilliseconds": 208.3,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1,
+          "visibility": {
+            "documentVisible": true,
+            "elementVisible": true,
+            "centerInViewport": true,
+            "centerUnobstructed": true,
+            "mediaReady": true,
+            "visible": true
+          },
+          "observedAtMilliseconds": 210.4000000357628
+        },
+        "firstVisibleFrame": {
+          "callbackMilliseconds": 209.3,
+          "expectedDisplayMilliseconds": 208.3,
+          "width": 1280,
+          "height": 720,
+          "presentedFrames": 1,
+          "visibility": {
+            "documentVisible": true,
+            "elementVisible": true,
+            "centerInViewport": true,
+            "centerUnobstructed": true,
+            "mediaReady": true,
+            "visible": true
+          },
+          "observedAtMilliseconds": 210.4000000357628
+        },
+        "visiblePresentationValid": true,
+        "visiblePresentationScope": "First observed unobstructed browser frame; conservative duration, not exact first submission or physical display timing",
+        "requestToVisiblePresentationMilliseconds": 144.30000001192093,
+        "requestToCallbackMilliseconds": 143.19999997615815,
+        "requestToExpectedDisplayMilliseconds": 142.19999997615815
+      },
+      "after": {
+        "active": 1,
+        "opening": 0,
+        "sources": 1,
+        "created": 3
+      }
+    }
+  ],
+  "cleanup": [
+    {
+      "milliseconds": 17.345416,
+      "active": 0,
+      "opening": 0,
+      "sources": 0,
+      "created": 0
+    },
+    {
+      "milliseconds": 1275.1903750000001,
+      "active": 0,
+      "opening": 0,
+      "sources": 0,
+      "created": 1
+    },
+    {
+      "milliseconds": 2.3165829999998095,
+      "active": 0,
+      "opening": 0,
+      "sources": 0,
+      "created": 1
+    },
+    {
+      "milliseconds": 1276.8604590000004,
+      "active": 0,
+      "opening": 0,
+      "sources": 0,
+      "created": 2
+    },
+    {
+      "milliseconds": 3.2091669999999795,
+      "active": 0,
+      "opening": 0,
+      "sources": 0,
+      "created": 2
+    },
+    {
+      "milliseconds": 1281.4452920000003,
+      "active": 0,
+      "opening": 0,
+      "sources": 0,
+      "created": 3
+    },
+    {
+      "milliseconds": 2.949124999999185,
+      "active": 0,
+      "opening": 0,
+      "sources": 0,
+      "created": 3
+    },
+    {
+      "milliseconds": 5.212375000002794,
+      "active": 0,
+      "opening": 0,
+      "sources": 0,
+      "created": 4
+    },
+    {
+      "milliseconds": 3.7843750000029104,
+      "active": 0,
+      "opening": 0,
+      "sources": 0,
+      "created": 5
+    },
+    {
+      "milliseconds": 3.006999999997788,
+      "active": 0,
+      "opening": 0,
+      "sources": 0,
+      "created": 6
+    }
+  ],
+  "cancellations": [
+    {
+      "waitMilliseconds": 0,
+      "closeResult": {
+        "credentialRefreshFailed": false,
+        "durationMilliseconds": 0,
+        "outcome": "not-established"
+      },
+      "stopToSettledMilliseconds": 5.493458999999348,
+      "after": {
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 3
+      },
+      "samples": 168,
+      "observationAfterSettledMilliseconds": 17970.264300000003,
+      "maximumActiveSessionCount": 0,
+      "maximumSourceCount": 0,
+      "lastActiveAfterSettledMilliseconds": 0,
+      "firstIdleAfterFinalActivityMilliseconds": 0.013875000000552973,
+      "allSamplesIdleFrom3000Milliseconds": true
+    },
+    {
+      "waitMilliseconds": 25,
+      "closeResult": {
+        "credentialRefreshFailed": false,
+        "durationMilliseconds": 82,
+        "outcome": "deleted",
+        "status": 200
+      },
+      "stopToSettledMilliseconds": 95.33266699999876,
+      "after": {
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 4
+      },
+      "samples": 169,
+      "observationAfterSettledMilliseconds": 17992.942882999996,
+      "maximumActiveSessionCount": 1,
+      "maximumSourceCount": 1,
+      "lastActiveAfterSettledMilliseconds": 1229.5375419999982,
+      "firstIdleAfterFinalActivityMilliseconds": 1337.5982919999988,
+      "allSamplesIdleFrom3000Milliseconds": true
+    },
+    {
+      "waitMilliseconds": 100,
+      "closeResult": {
+        "credentialRefreshFailed": false,
+        "durationMilliseconds": 41,
+        "outcome": "deleted",
+        "status": 200
+      },
+      "stopToSettledMilliseconds": 55.278542000000016,
+      "after": {
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 5
+      },
+      "samples": 169,
+      "observationAfterSettledMilliseconds": 17987.615133,
+      "maximumActiveSessionCount": 1,
+      "maximumSourceCount": 1,
+      "lastActiveAfterSettledMilliseconds": 1225.4049169999998,
+      "firstIdleAfterFinalActivityMilliseconds": 1333.8207919999986,
+      "allSamplesIdleFrom3000Milliseconds": true
+    },
+    {
+      "waitMilliseconds": 250,
+      "closeResult": {
+        "credentialRefreshFailed": false,
+        "durationMilliseconds": 56,
+        "outcome": "deleted",
+        "status": 200
+      },
+      "stopToSettledMilliseconds": 68.16387499999837,
+      "after": {
+        "active": 0,
+        "opening": 0,
+        "sources": 0,
+        "created": 6
+      },
+      "samples": 169,
+      "observationAfterSettledMilliseconds": 17959.014925000003,
+      "maximumActiveSessionCount": 1,
+      "maximumSourceCount": 1,
+      "lastActiveAfterSettledMilliseconds": 1231.2957920000044,
+      "firstIdleAfterFinalActivityMilliseconds": 1334.357376,
+      "allSamplesIdleFrom3000Milliseconds": true
+    }
+  ],
+  "hashes": {
+    "startup-cycles.json": "ad9b71f4e6d0c99368b2101d8c1c19d97bb12e731cee3ee1fd0b51a03c921f8e"
+  },
+  "limitations": [
+    "Activation starts at the Connect click. Durations exclude Next.js navigation/authorization, device-process startup, camera exposure and physical display scanout.",
+    "The qualification uses a one-second idle grace to repeat lifecycle cases; the public MediaMTX configuration retains five seconds. Reopen occurs before idle shutdown; cold means source inactive, not a newly booted device process.",
+    "Finite synthetic-source measurements are not startup SLAs or target hardware/network qualification. Historical failed startup verdicts remain unchanged."
+  ]
+}

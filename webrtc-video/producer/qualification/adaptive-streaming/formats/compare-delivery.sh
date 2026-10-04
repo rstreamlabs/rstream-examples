@@ -6,6 +6,12 @@ video_directory="$(cd "${script_directory}/../../../.." && pwd -P)"
 runner="${RSTREAM_FORMAT_QUALIFICATION_RUNNER:-${video_directory}/distributor/qualification/end-to-end/run.sh}"
 down_hold="${1:-}"
 output_directory="${2:-}"
+delivery_mode="${3:-direct}"
+case "${delivery_mode}" in
+direct) viewer_capacity=1500; source_capacity=0 ;;
+mediamtx) viewer_capacity=0; source_capacity=1500 ;;
+*) printf 'delivery mode must be direct or mediamtx\n' >&2; exit 1 ;;
+esac
 if [[ "${down_hold}" != 1s && "${down_hold}" != 3s && "${down_hold}" != paired ]]; then
   printf 'down-hold comparison accepts only 1s, 3s or paired\n' >&2
   exit 1
@@ -40,17 +46,17 @@ for index in "${!holds[@]}"; do
   RSTREAM_CONTEXT='' \
   RSTREAM_DISTRIBUTOR_CONTROL_PATH=local \
   RSTREAM_DISTRIBUTOR_EDGE_AUTH=false \
-  RSTREAM_DISTRIBUTOR_MODE=direct \
+  RSTREAM_DISTRIBUTOR_MODE="${delivery_mode}" \
   RSTREAM_DISTRIBUTOR_EXPECT_FORMAT=small \
   RSTREAM_DISTRIBUTOR_WARMUP_SECONDS=20 \
   RSTREAM_DISTRIBUTOR_QUALIFICATION_SECONDS=45 \
   RSTREAM_DISTRIBUTOR_RECOVERY_SECONDS=90 \
-  RSTREAM_DISTRIBUTOR_VIEWER_CAPACITY_KBPS=1500 \
+  RSTREAM_DISTRIBUTOR_VIEWER_CAPACITY_KBPS="${viewer_capacity}" \
   RSTREAM_DISTRIBUTOR_VIEWER_LOSS_PERCENT=0 \
   RSTREAM_DISTRIBUTOR_VIEWER_DELAY_MILLISECONDS=0 \
   RSTREAM_DISTRIBUTOR_VIEWER_JITTER_MILLISECONDS=0 \
   RSTREAM_DISTRIBUTOR_VIEWER_QUEUE_PACKETS=256 \
-  RSTREAM_DISTRIBUTOR_SOURCE_CAPACITY_KBPS=0 \
+  RSTREAM_DISTRIBUTOR_SOURCE_CAPACITY_KBPS="${source_capacity}" \
   RSTREAM_DISTRIBUTOR_SOURCE_LOSS_PERCENT=0 \
   RSTREAM_DISTRIBUTOR_SOURCE_DELAY_MILLISECONDS=0 \
   RSTREAM_DISTRIBUTOR_SOURCE_JITTER_MILLISECONDS=0 \
@@ -72,21 +78,25 @@ for index in "${!holds[@]}"; do
     '{run: $run, downHold: $hold, status: $status, result: .}' \
     "${output_directory}/run-${run}/result.json" >>"${output_directory}/records.jsonl"
 done
-jq -s --arg down_hold "${down_hold}" --argjson requested_runs "${#holds[@]}" '
+jq -s --arg down_hold "${down_hold}" --arg mode "${delivery_mode}" --argjson requested_runs "${#holds[@]}" '
   (length == $requested_runs and all(.[]; .result != null) and
     ([.[].result.images.producer] | unique | length == 1) and
     ([.[].result.images.browser] | unique | length == 1) and
     all(.[]; (.result.images.producer | type == "string") and
-      (.result.images.browser | type == "string"))) as $same_images |
+      (.result.images.browser | type == "string")) and
+    ($mode == "direct" or (([.[].result.images.distributor] | unique | length == 1) and
+      all(.[]; (.result.images.distributor | type == "string"))))) as $same_images |
 {
   schemaVersion: 2,
-  scope: "direct WebRTC on an isolated Docker bridge; no tunnel, TURN or edge authentication",
+  deliveryMode: $mode,
+  scope: (if $mode == "direct" then "direct WebRTC on an isolated Docker bridge; no tunnel, TURN or edge authentication"
+    else "adaptive MediaMTX on an isolated Docker bridge with loopback signaling proxies and separate media namespaces; no tunnel, TURN or edge authentication" end),
   downHold: $down_hold,
   requestedRuns: $requested_runs,
   sameImages: $same_images,
   passed: ($same_images and length == $requested_runs and all(.[];
     .status == 0 and .result.passed == true and
-    .result.profile.controlPath == "local" and .result.profile.edgeAuthentication == false)),
+    .result.mode == $mode and .result.profile.controlPath == "local" and .result.profile.edgeAuthentication == false)),
   runs: .
 }' "${output_directory}/records.jsonl" >"${output_directory}/summary.json"
 jq -e '.passed' "${output_directory}/summary.json" >/dev/null

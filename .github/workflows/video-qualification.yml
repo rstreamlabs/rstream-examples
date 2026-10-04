@@ -4,10 +4,18 @@ on:
   workflow_dispatch:
     inputs:
       automatic_format_comparison:
-        description: Compare 1s/3s source-format down-holds on isolated direct WebRTC (no rstream credentials)
+        description: Qualify automatic source formats on an isolated Docker bridge (no rstream credentials)
         required: true
         default: false
         type: boolean
+      automatic_format_delivery:
+        description: Direct compares paired 1s/3s down-holds; MediaMTX repeats the public 3s default
+        required: true
+        default: direct
+        type: choice
+        options:
+          - direct
+          - mediamtx
       path:
         description: WebRTC path under test
         required: true
@@ -282,7 +290,7 @@ jobs:
 
   automatic-formats:
     if: ${{ inputs.automatic_format_comparison }}
-    name: Direct source formats (paired 1s/3s)
+    name: Automatic source formats (${{ inputs.automatic_format_delivery }})
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -313,14 +321,18 @@ jobs:
           sudo sysctl -w \
             "net.core.rmem_max=$((receive_limit > 7500000 ? receive_limit : 7500000))" \
             "net.core.wmem_max=$((send_limit > 7500000 ? send_limit : 7500000))"
-      - name: Compare automatic formats in six interleaved trials
+      - name: Qualify automatic source formats
         id: comparison
         continue-on-error: true
+        env:
+          DELIVERY_MODE: ${{ inputs.automatic_format_delivery }}
         shell: bash
         run: |
           set -euo pipefail
-          webrtc-video/producer/qualification/adaptive-streaming/formats/compare-direct.sh \
-            paired "${RUNNER_TEMP}/video-format-comparison"
+          down_hold=paired
+          if [[ "$DELIVERY_MODE" == mediamtx ]]; then down_hold=3s; fi
+          webrtc-video/producer/qualification/adaptive-streaming/formats/compare-delivery.sh \
+            "$down_hold" "${RUNNER_TEMP}/video-format-comparison" "$DELIVERY_MODE"
       - name: Restore limits and retain runner metadata
         if: always() && steps.sockets.outputs.receive_limit != ''
         env:
@@ -343,7 +355,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: video-direct-formats-paired-${{ github.run_id }}
+          name: video-formats-${{ inputs.automatic_format_delivery }}-${{ github.run_id }}
           path: ${{ runner.temp }}/video-format-comparison
           if-no-files-found: error
           retention-days: 14

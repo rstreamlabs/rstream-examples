@@ -52,8 +52,8 @@ rstream)
   fi
   ;;
 local)
-  if [[ "${distribution_mode}" != direct || "${edge_auth}" != false || -n "${context_name}" ]]; then
-    printf 'local control requires direct mode, EDGE_AUTH=false and no RSTREAM_CONTEXT\n' >&2
+  if [[ ( "${distribution_mode}" != direct && "${distribution_mode}" != mediamtx ) || "${edge_auth}" != false || -n "${context_name}" ]]; then
+    printf 'local control requires direct or adaptive mediamtx mode, EDGE_AUTH=false and no RSTREAM_CONTEXT\n' >&2
     exit 1
   fi
   ;;
@@ -316,6 +316,7 @@ producer_name="rstream-distribution-producer-${suffix}"
 distributor_name="rstream-distribution-mediamtx-${suffix}"
 browser_name="rstream-distribution-browser-${suffix}"
 control_name="rstream-distribution-control-${suffix}"
+adapter_control_name="rstream-distribution-adapter-control-${suffix}"
 runtime_directory="$(mktemp -d "${TMPDIR:-/tmp}/rstream-distribution-qualification.XXXXXX")"
 control_directory="${runtime_directory}/control"
 container_user="$(id -u):$(id -g)"
@@ -323,6 +324,7 @@ producer_started=0
 distributor_started=0
 browser_started=0
 control_started=0
+adapter_control_started=0
 network_created=0
 resource_sampler_pid=0
 
@@ -440,6 +442,9 @@ cleanup() {
   if ((browser_started)); then
     docker rm -f "${browser_name}" >/dev/null 2>&1 || true
   fi
+  if ((adapter_control_started)); then
+    docker rm -f "${adapter_control_name}" >/dev/null 2>&1 || true
+  fi
   if ((distributor_started)); then
     docker rm -f "${distributor_name}" >/dev/null 2>&1 || true
   fi
@@ -467,7 +472,7 @@ write_phase() {
 
 producer_runtime_config=relay-config.yaml
 if [[ "${control_path}" == local ]]; then
-  printf 'Preparing a credential-free direct Docker reference\n'
+  printf 'Preparing a credential-free Docker media reference\n'
   go -C "${producer_directory}" run ./qualification/adaptive-streaming/cmd/prepare-context \
     -local-reference -embedded-viewer=false -flex-fec=true \
     -flex-fec-media-packets "${flexfec_media_packets}" \
@@ -694,6 +699,10 @@ if [[ "${recording}" == true ]]; then
   )
 fi
 if [[ "${uses_adapter}" == true ]]; then
+  adapter_source_endpoint="${source_endpoint}"
+  if [[ "${control_path}" == local ]]; then
+    adapter_source_endpoint=http://127.0.0.1:18080/whep
+  fi
   docker run --detach \
     --name "${distributor_name}" \
     --network "${network_name}" \
@@ -702,12 +711,32 @@ if [[ "${uses_adapter}" == true ]]; then
     --security-opt no-new-privileges \
     --cap-drop ALL \
     --tmpfs /tmp:rw,noexec,nosuid,size=16m \
-    --env "RSTREAM_SOURCE_URL=${source_endpoint}" \
+    --env "RSTREAM_SOURCE_URL=${adapter_source_endpoint}" \
     --env RSTREAM_MEDIAMTX_URL=http://127.0.0.1:8889 \
     ${recording_arguments[@]+"${recording_arguments[@]}"} \
     --mount "type=bind,source=${script_directory}/mediamtx.yml,target=/qualification/mediamtx.yml,readonly" \
     "${distributor_image}" /qualification/mediamtx.yml >/dev/null
   distributor_started=1
+  if [[ "${control_path}" == local ]]; then
+    docker run --detach --name "${adapter_control_name}" --network "container:${distributor_name}" \
+      --user "${container_user}" --read-only --security-opt no-new-privileges --cap-drop ALL \
+      --entrypoint /app/local-control "${producer_image}" -adapter-hop >/dev/null
+    adapter_control_started=1
+    docker run --rm --network "container:${distributor_name}" --user "${container_user}" \
+      --read-only --security-opt no-new-privileges --cap-drop ALL \
+      --entrypoint node "${browser_image}" --input-type=module -e '
+        const deadline = performance.now() + 10000;
+        while (true) {
+          try {
+            const response = await fetch("http://127.0.0.1:18080/healthz", {signal: AbortSignal.timeout(1000)});
+            await response.body?.cancel();
+            if (response.ok) break;
+          } catch {}
+          if (performance.now() >= deadline) throw new Error("local adapter control readiness timed out");
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      '
+  fi
   viewer_endpoint=http://distributor:8889/camera/whep
 fi
 if [[ "${distribution_mode}" == mediamtx-native ]]; then

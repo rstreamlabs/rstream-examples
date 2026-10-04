@@ -8,7 +8,7 @@ test(
   { skip: process.platform === "win32" },
   () => {
     const script = fileURLToPath(
-      new URL("../formats/compare-direct-test.sh", import.meta.url),
+      new URL("../formats/compare-delivery-test.sh", import.meta.url),
     );
     const result = spawnSync("bash", [script], {
       encoding: "utf8",

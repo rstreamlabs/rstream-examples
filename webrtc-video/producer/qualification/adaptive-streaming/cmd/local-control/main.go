@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -42,7 +43,20 @@ func controlHandler(target *url.URL, transport http.RoundTripper) http.Handler {
 }
 
 func main() {
+	adapterHop := flag.Bool("adapter-hop", false, "proxy producer control from the adapter's loopback namespace")
+	flag.Parse()
+	if flag.NArg() != 0 {
+		os.Exit(1)
+	}
 	target, _ := url.Parse("http://127.0.0.1:8080")
+	address := "0.0.0.0:18080"
+	if *adapterHop {
+		// The production adapter still requires HTTPS for remote sources. This
+		// isolated fixture carries signaling through a local HTTP endpoint only;
+		// RTP keeps its separate producer/adapter Docker network namespaces.
+		target, _ = url.Parse("http://producer:18080")
+		address = "127.0.0.1:18080"
+	}
 	transport := &http.Transport{
 		DialContext:     (&net.Dialer{Timeout: time.Second}).DialContext,
 		MaxConnsPerHost: 16, MaxIdleConnsPerHost: 4,
@@ -51,7 +65,7 @@ func main() {
 	}
 	defer transport.CloseIdleConnections()
 	server := &http.Server{
-		Addr: "0.0.0.0:18080", Handler: controlHandler(target, transport),
+		Addr: address, Handler: controlHandler(target, transport),
 		ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 5 * time.Second,
 		WriteTimeout: 10 * time.Second, IdleTimeout: 5 * time.Second, MaxHeaderBytes: 16 * 1024,
 	}

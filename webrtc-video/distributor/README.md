@@ -496,23 +496,34 @@ prefix. Native MediaMTX and downstream-only MediaMTX shaping cannot qualify a
 shared adaptive source. The public provisioning example remains unchanged.
 
 The `Video qualification` workflow also provides
-`automatic_format_comparison=true`: a dedicated direct-only comparison of
-one-second and three-second down-holds, with three full trials each on one hosted
-Linux runner. The order is 1s / 3s / 3s / 1s / 1s / 3s; the report requires the same
-producer and browser image digests in every trial. Other workflow inputs apply to the usual fixed-format qualification and
-are unused in this comparison. This job needs no secrets. It fixes the source
+`automatic_format_comparison=true`. With `automatic_format_delivery=direct`, it
+compares one-second and three-second down-holds in 1s / 3s / 3s / 1s / 1s / 3s
+order on one hosted Linux runner. With `automatic_format_delivery=mediamtx`, it
+repeats the public three-second default three times through the custom adapter.
+The report requires identical producer/browser image digests across trials,
+plus the distributor image for MediaMTX. Other workflow inputs apply to the
+usual fixed-format qualification and are unused here. This job needs no secrets.
+It fixes the source
 ladder, 1.5 Mbit/s capacity, zero injected loss/delay and zero playout-delay hint,
 retains every attempted result and restores the runner's socket limits. No
 production default changes as a side effect. Its local equivalent, after the
 host's socket-limit preparation, is:
 
 ```bash
-../producer/qualification/adaptive-streaming/formats/compare-direct.sh paired /tmp/video-formats-paired
+../producer/qualification/adaptive-streaming/formats/compare-delivery.sh paired /tmp/video-formats-paired
+../producer/qualification/adaptive-streaming/formats/compare-delivery.sh 3s /tmp/video-formats-mediamtx mediamtx
 ```
 
 Use `1s` or `3s` instead of `paired` to run only three trials of one setting.
 Any failed delivery gate fails the aggregate comparison; completed failures are
 retained and the remaining trials still run. An incomplete setup stops the series.
+
+This isolated mode exercises media without the rstream control plane. Its
+qualification-only proxy exposes WHEP and read-only observations on an unpublished
+Docker port. MediaMTX uses a second proxy on its own loopback interface, preserving
+the production adapter's HTTPS requirement for remote sources. Producer and
+adapter retain separate network namespaces, so shaping targets the actual media
+hop. These results do not measure authenticated tunnel or dashboard startup.
 
 The collector reads the existing quality API with a separate, short-lived
 path-scoped credential that stays in a private file outside the evidence.

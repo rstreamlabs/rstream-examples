@@ -39,15 +39,15 @@ fi
 
 fixture_directory="$(mktemp -d "${TMPDIR:-/tmp}/rstream-recording-config.XXXXXX")"
 trap 'rm -rf "${fixture_directory}"' EXIT INT TERM
-for scenario in invalid distributed authenticated context; do
+for scenario in invalid native authenticated context; do
   control=local
   mode=direct
   auth=false
   context=
-  expected='local control requires direct mode, EDGE_AUTH=false and no RSTREAM_CONTEXT'
+  expected='local control requires direct or adaptive mediamtx mode, EDGE_AUTH=false and no RSTREAM_CONTEXT'
   case "${scenario}" in
     invalid) control=invalid; expected='RSTREAM_DISTRIBUTOR_CONTROL_PATH must be rstream or local' ;;
-    distributed) mode=mediamtx ;;
+    native) mode=mediamtx-native ;;
     authenticated) auth=true ;;
     context) context=qualification ;;
   esac
