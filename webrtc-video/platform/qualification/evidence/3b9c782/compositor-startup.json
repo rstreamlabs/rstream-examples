@@ -1,0 +1,270 @@
+{
+  "schemaVersion": 1,
+  "revision": "3b9c782",
+  "scope": "Diagnostic Chromium media trace for one cold dashboard navigation; tracing is enabled and this is not a baseline performance trial. Relative times share the browser monotonic trace clock, with first SetCurrentFrame as zero. Raw traces remain private.",
+  "runtime": {
+    "browserVersion": "153.0.8010.12",
+    "playwrightVersion": "1.63.0",
+    "nodeVersion": "v26.7.0",
+    "browserSelection": "bundled",
+    "startupTrace": true
+  },
+  "qualificationPassed": false,
+  "failure": {
+    "passed": false,
+    "gates": {
+      "realDiscoveryWithoutEnrollment": true,
+      "sourceControlAndConcurrentSelection": true
+    },
+    "stage": "mediamtx playback from discovered producer",
+    "name": "AssertionError",
+    "commandStatus": null,
+    "message": "First presentation must be measured from navigation and authorization"
+  },
+  "firstReader": {
+    "supported": true,
+    "navigationTimeOrigin": 1791129529864.6,
+    "armedAtMilliseconds": 349.19999998807907,
+    "readyStateAtArm": 0,
+    "longTasks": [
+      {
+        "startedAt": 398.5,
+        "duration": 56
+      },
+      {
+        "startedAt": 697.5,
+        "duration": 82
+      }
+    ],
+    "mediaEvents": [
+      {
+        "kind": "loadeddata",
+        "atMilliseconds": 1890.800000011921,
+        "coveredByStatus": true
+      },
+      {
+        "kind": "playing",
+        "atMilliseconds": 1890.8999999761581,
+        "coveredByStatus": true
+      }
+    ],
+    "measurementValid": false,
+    "authorization": [
+      {
+        "startedAt": 460.69999998807907,
+        "headersAt": 697.1999999880791,
+        "status": 200,
+        "bodyReadAt": 697.5
+      }
+    ],
+    "whep": [
+      {
+        "startedAt": 785.3000000119209,
+        "headersAt": 1782.800000011921,
+        "status": 201
+      }
+    ],
+    "peers": [
+      {
+        "createdAt": 778,
+        "connectedAt": 1792.1000000238419
+      }
+    ],
+    "firstFrame": {
+      "callbackMilliseconds": 1902.9,
+      "observedAtMilliseconds": 1904,
+      "presentationMilliseconds": 1890.4,
+      "expectedDisplayMilliseconds": 1890.4,
+      "receiveMilliseconds": 1872.7,
+      "mediaTimeSeconds": 0.073,
+      "width": 1280,
+      "height": 720,
+      "presentedFrames": 3
+    },
+    "navigationToExpectedDisplayMilliseconds": null,
+    "authorizationToExpectedDisplayMilliseconds": null,
+    "authorizationMilliseconds": null
+  },
+  "compositorFrameUpdates": [
+    {
+      "relativeMilliseconds": 0.0,
+      "mediaTimeMicroseconds": 0
+    },
+    {
+      "relativeMilliseconds": 0.011,
+      "mediaTimeMicroseconds": 52000
+    },
+    {
+      "relativeMilliseconds": 0.019,
+      "mediaTimeMicroseconds": 73000
+    }
+  ],
+  "events": [
+    {
+      "relativeMilliseconds": -63.282,
+      "name": "MojoVideoDecoderService::Initialize",
+      "phase": "b"
+    },
+    {
+      "relativeMilliseconds": -63.035,
+      "name": "MojoVideoDecoderService::Initialize",
+      "phase": "e"
+    },
+    {
+      "relativeMilliseconds": -62.872,
+      "name": "MojoVideoDecoder::Decode",
+      "phase": "X",
+      "durationMicroseconds": 108
+    },
+    {
+      "relativeMilliseconds": -62.855,
+      "name": "MojoVideoDecoder::Decode",
+      "phase": "b"
+    },
+    {
+      "relativeMilliseconds": -32.065,
+      "name": "MojoVideoDecoder::Decode",
+      "phase": "X",
+      "durationMicroseconds": 22
+    },
+    {
+      "relativeMilliseconds": -32.058,
+      "name": "MojoVideoDecoder::Decode",
+      "phase": "b"
+    },
+    {
+      "relativeMilliseconds": -16.652,
+      "name": "MojoVideoDecoder::Decode",
+      "phase": "X",
+      "durationMicroseconds": 21
+    },
+    {
+      "relativeMilliseconds": -16.645,
+      "name": "MojoVideoDecoder::Decode",
+      "phase": "b"
+    },
+    {
+      "relativeMilliseconds": -0.349,
+      "name": "MojoVideoDecoderService::OnDecoderOutput",
+      "phase": "X",
+      "durationMicroseconds": 27
+    },
+    {
+      "relativeMilliseconds": -0.281,
+      "name": "MojoVideoDecoder::OnVideoFrameDecoded",
+      "phase": "X",
+      "durationMicroseconds": 67
+    },
+    {
+      "relativeMilliseconds": -0.273,
+      "name": "MojoVideoDecoder::Decode",
+      "phase": "e"
+    },
+    {
+      "relativeMilliseconds": -0.256,
+      "name": "MojoVideoDecoderService::OnDecoderOutput",
+      "phase": "X",
+      "durationMicroseconds": 5
+    },
+    {
+      "relativeMilliseconds": -0.245,
+      "name": "MojoVideoDecoderService::OnDecoderOutput",
+      "phase": "X",
+      "durationMicroseconds": 4
+    },
+    {
+      "relativeMilliseconds": -0.203,
+      "name": "MojoVideoDecoder::OnVideoFrameDecoded",
+      "phase": "X",
+      "durationMicroseconds": 7
+    },
+    {
+      "relativeMilliseconds": -0.201,
+      "name": "MojoVideoDecoder::Decode",
+      "phase": "e"
+    },
+    {
+      "relativeMilliseconds": -0.188,
+      "name": "MojoVideoDecoder::OnVideoFrameDecoded",
+      "phase": "X",
+      "durationMicroseconds": 4
+    },
+    {
+      "relativeMilliseconds": -0.187,
+      "name": "MojoVideoDecoder::Decode",
+      "phase": "e"
+    },
+    {
+      "relativeMilliseconds": -0.184,
+      "name": "Pre-submit buffering",
+      "phase": "b"
+    },
+    {
+      "relativeMilliseconds": -0.051,
+      "name": "WebMediaPlayerMSCompositor::EnqueueFrame",
+      "phase": "I"
+    },
+    {
+      "relativeMilliseconds": -0.031,
+      "name": "WebMediaPlayerMSCompositor::EnqueueFrame",
+      "phase": "I"
+    },
+    {
+      "relativeMilliseconds": -0.015,
+      "name": "WebMediaPlayerMSCompositor::EnqueueFrame",
+      "phase": "I"
+    },
+    {
+      "relativeMilliseconds": 0.0,
+      "name": "WebMediaPlayerMSCompositor::SetCurrentFrame",
+      "phase": "I"
+    },
+    {
+      "relativeMilliseconds": 0.011,
+      "name": "WebMediaPlayerMSCompositor::SetCurrentFrame",
+      "phase": "I"
+    },
+    {
+      "relativeMilliseconds": 0.019,
+      "name": "WebMediaPlayerMSCompositor::SetCurrentFrame",
+      "phase": "I"
+    },
+    {
+      "relativeMilliseconds": 13.613,
+      "name": "VideoFrameSubmitter::SubmitFrame",
+      "phase": "X",
+      "durationMicroseconds": 1
+    },
+    {
+      "relativeMilliseconds": 13.717,
+      "name": "rstream-startup-first-callback",
+      "phase": "I"
+    },
+    {
+      "relativeMilliseconds": 14.551,
+      "name": "VideoFrameSubmitter::SubmitFrame",
+      "phase": "X",
+      "durationMicroseconds": 48
+    },
+    {
+      "relativeMilliseconds": 14.562,
+      "name": "Pre-submit buffering",
+      "phase": "e"
+    }
+  ],
+  "interpretation": [
+    "Three decoded frames are submitted to the media compositor in one burst. The three SetCurrentFrame events span only 0.019ms; their media timestamps are 0, 52000 and 73000 microseconds.",
+    "The first observed video frame callback follows the first SetCurrentFrame by about 13.7ms. The previous counter-at-three result does not by itself establish an extra two frame intervals of UI delay.",
+    "The trace shows the first decoder request about 62.9ms before the burst, with three decoder outputs then released together. This locates a startup batch in this browser media path; it does not prove which decoder policy or source property caused it.",
+    "The strict presentedFrames=1 gate remains failed, and no earlier failed trial is reclassified. Physical first visibility also depends on compositor submission and the loading overlay; this is not a physical display latency measurement.",
+    "Other tabs appear in a browser-wide trace. Only the first, sole-reader trace is analyzed here; raw second-reader trace events must not be attributed without process/player isolation."
+  ],
+  "compositorBurstSpanMilliseconds": 0.019,
+  "cleanup": {
+    "ownedContainersRemoved": true,
+    "linuxSocketLimitsRestored": {
+      "receive": 212992,
+      "send": 212992
+    }
+  }
+}

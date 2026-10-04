@@ -69,6 +69,15 @@ two. These are overlapping route requests, not spans that can be summed or all
 assigned to the viewer. One trial cannot establish elimination of intermittent
 slow resolution or any percentile. Cold callback attribution remains open.
 
+The [private-trace diagnosis at `3b9c782`](./platform/qualification/evidence/3b9c782/compositor-startup.json)
+locates the first three compositor updates in a single 0.019ms burst, after
+three decoder outputs are released together. The first callback runs about
+13.7ms later. Thus the counter at three does not establish a two-frame-interval
+UI delay in this observation. This is a traced diagnostic, not a baseline;
+the exact-first-submission gate remains failed and prior trials stay failed.
+Separating decoder startup batching from visible presentation, including the
+loading overlay, remains necessary before making an end-to-end startup claim.
+
 Remove demonstrated serial waits, unnecessary polling and avoidable key-frame
 delays while retaining authentication, bounded cancellation, one shared upstream
 and demand-driven encoder shutdown. Do not keep capture, encoding or media
