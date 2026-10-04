@@ -460,6 +460,13 @@ transmission. The
 OpenMetrics response emits HELP and TYPE metadata for every family, plus UNIT
 metadata for values expressed in bytes, bytes per second, or seconds.
 
+Recovery diagnostics also expose acknowledged RTP payload throughput, the
+delay controller's retained recovery target, and its selected increase algorithm
+(`additive`, `multiplicative` or `recovery`). The payload rates include repair
+payloads and exclude packet headers; they must not be compared directly with
+the media-only encoder target. Gauges count active sessions and return to zero
+after teardown. These observations add no new media buffering or controller.
+
 ### Tunnel publication and authentication
 
 `tunnel.enabled` decides whether the process publishes the local server through `rstream` or stays local-only.

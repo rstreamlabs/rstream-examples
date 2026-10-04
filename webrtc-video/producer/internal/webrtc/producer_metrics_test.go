@@ -12,6 +12,9 @@ func TestProducerMetricsRemainMonotonicAfterSessionRetirement(t *testing.T) {
 		id: "session",
 		estimator: fakeBandwidthEstimator{stats: map[string]any{
 			"averageLoss":                                     0.025,
+			"acknowledgedBitrate":                             2_400_000,
+			"delayRecoveryTargetBitrate":                      6_000_000,
+			"delayIncreaseMode":                               "recovery",
 			"lossTargetBitrate":                               2_000_000,
 			"delayTargetBitrate":                              3_000_000,
 			"state":                                           "decrease",
@@ -108,6 +111,10 @@ func TestProducerMetricsRemainMonotonicAfterSessionRetirement(t *testing.T) {
 	if active.EstimatedBitrateBps != 3_000_000 || active.EncoderTargetBitrateBps != 2_500_000 {
 		t.Fatalf("unexpected bitrate metrics: %+v", active)
 	}
+	if active.AcknowledgedPayloadBitrateBps != 2_400_000 || active.DelayRecoveryPayloadBitrateBps != 6_000_000 ||
+		active.DelayRecoverySessions != 1 || active.DelayAdditiveSessions != 0 || active.DelayMultiplicativeSessions != 0 {
+		t.Fatalf("unexpected recovery diagnostics: %+v", active)
+	}
 	if active.LossControllerTargetBitrateBps != 2_000_000 ||
 		active.DelayControllerTargetBitrateBps != 3_000_000 ||
 		active.LossGuardTargetBitrateBps != 1_500_000 {
@@ -144,6 +151,10 @@ func TestProducerMetricsRemainMonotonicAfterSessionRetirement(t *testing.T) {
 	retired := broadcaster.MetricsSnapshot()
 	if retired.ActiveSessions != 0 {
 		t.Fatalf("active sessions = %d, want 0", retired.ActiveSessions)
+	}
+	if retired.AcknowledgedPayloadBitrateBps != 0 || retired.DelayRecoveryPayloadBitrateBps != 0 ||
+		retired.DelayRecoverySessions != 0 || retired.DelayAdditiveSessions != 0 || retired.DelayMultiplicativeSessions != 0 {
+		t.Fatalf("retired recovery diagnostics remain active: %+v", retired)
 	}
 	if retired.EstimatedBitrateBps != 0 || retired.LossControllerTargetBitrateBps != 0 ||
 		retired.DelayControllerTargetBitrateBps != 0 || retired.LossGuardTargetBitrateBps != 0 ||

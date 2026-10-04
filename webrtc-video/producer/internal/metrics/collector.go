@@ -42,6 +42,9 @@ type Collector struct {
 	transportNegotiatedSessions   *prometheus.Desc
 	estimatedAvailableBytesSecond *prometheus.Desc
 	controllerTargetBytesSecond   *prometheus.Desc
+	acknowledgedPayloadRate       *prometheus.Desc
+	delayRecoveryPayloadRate      *prometheus.Desc
+	delayIncreaseModeSessions     *prometheus.Desc
 	delayControllerStateSessions  *prometheus.Desc
 	delayControllerUsageSessions  *prometheus.Desc
 	encoderTargetBytesSecond      *prometheus.Desc
@@ -181,6 +184,21 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 			[]string{"controller"},
 			nil,
 			"bytes_per_second",
+		),
+		acknowledgedPayloadRate: newDesc(
+			namespace+"_twcc_acknowledged_payload_bytes_per_second",
+			"Sum of acknowledged RTP payload throughput across active sessions, including repair payloads but excluding packet headers.",
+			nil, nil, "bytes_per_second",
+		),
+		delayRecoveryPayloadRate: newDesc(
+			namespace+"_twcc_delay_recovery_payload_bytes_per_second",
+			"Sum of delay-controller recovery targets across active sessions in RTP payload units, including configured repair overhead.",
+			nil, nil, "bytes_per_second",
+		),
+		delayIncreaseModeSessions: newDesc(
+			namespace+"_twcc_delay_increase_mode_sessions",
+			"Current sessions by the algorithm selected for their next delay-controller increase, including while held.",
+			[]string{"mode"}, nil,
 		),
 		delayControllerStateSessions: newDesc(
 			namespace+"_twcc_delay_controller_state_sessions",
@@ -429,6 +447,9 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 		c.transportNegotiatedSessions,
 		c.estimatedAvailableBytesSecond,
 		c.controllerTargetBytesSecond,
+		c.acknowledgedPayloadRate,
+		c.delayRecoveryPayloadRate,
+		c.delayIncreaseModeSessions,
 		c.delayControllerStateSessions,
 		c.delayControllerUsageSessions,
 		c.encoderTargetBytesSecond,
@@ -527,6 +548,11 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(c.estimatedAvailableBytesSecond, prometheus.GaugeValue, bitsToBytes(producer.EstimatedBitrateBps))
 	ch <- prometheus.MustNewConstMetric(c.controllerTargetBytesSecond, prometheus.GaugeValue, bitsToBytes(producer.LossControllerTargetBitrateBps), "loss")
 	ch <- prometheus.MustNewConstMetric(c.controllerTargetBytesSecond, prometheus.GaugeValue, bitsToBytes(producer.DelayControllerTargetBitrateBps), "delay")
+	ch <- prometheus.MustNewConstMetric(c.acknowledgedPayloadRate, prometheus.GaugeValue, bitsToBytes(producer.AcknowledgedPayloadBitrateBps))
+	ch <- prometheus.MustNewConstMetric(c.delayRecoveryPayloadRate, prometheus.GaugeValue, bitsToBytes(producer.DelayRecoveryPayloadBitrateBps))
+	ch <- prometheus.MustNewConstMetric(c.delayIncreaseModeSessions, prometheus.GaugeValue, float64(producer.DelayAdditiveSessions), "additive")
+	ch <- prometheus.MustNewConstMetric(c.delayIncreaseModeSessions, prometheus.GaugeValue, float64(producer.DelayMultiplicativeSessions), "multiplicative")
+	ch <- prometheus.MustNewConstMetric(c.delayIncreaseModeSessions, prometheus.GaugeValue, float64(producer.DelayRecoverySessions), "recovery")
 	ch <- prometheus.MustNewConstMetric(c.delayControllerStateSessions, prometheus.GaugeValue, float64(producer.DelayControllerIncreaseSessions), "increase")
 	ch <- prometheus.MustNewConstMetric(c.delayControllerStateSessions, prometheus.GaugeValue, float64(producer.DelayControllerDecreaseSessions), "decrease")
 	ch <- prometheus.MustNewConstMetric(c.delayControllerStateSessions, prometheus.GaugeValue, float64(producer.DelayControllerHoldSessions), "hold")
