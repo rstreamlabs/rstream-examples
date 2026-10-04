@@ -1178,6 +1178,18 @@ only fixed outcome categories and elapsed times, closes every socket and never
 publishes an endpoint or raw error. This checks reachability separately from SDK
 proxy/interface/TLS settings; it is not a substitute for those transport probes.
 
+The [TCP-instrumented attempt at `2a45705`](./producer/qualification/adaptive-streaming/evidence/2a45705/hosted-relay.json)
+locates an earlier reachability obstacle on that hosted runner: direct IPv4 TCP
+does not connect within its five-second deadline (observed at 5021ms), while
+IPv6 reports network-unreachable after 2ms. Neither reaches TLS. The SDK TLS and
+QUIC probes still time out, authentication/project checks pass, and cleanup
+restores the socket limits. Forcing IPv4 is not an evidenced remedy. Endpoint,
+routing, firewall and server attribution remain unproven; these host checks do
+not qualify a container or media path. Further identical hosted relay attempts
+are deferred until the selected endpoint/configuration or network reachability
+changes. No live infrastructure change is part of this source-work goal. The
+direct hosted and local extended-TURN successes remain separate evidence.
+
 Review of MediaMTX 1.21.1 confirms the native path's periodic upstream PLI and
 discarded downstream PLI. The current native first-frame delay is consistent
 with that behavior, without proving exact attribution from the existing trace.

@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 1,
+  "workflow": "https://github.com/rstreamlabs/rstream-examples/actions/runs/37221013773",
+  "revision": "2a45705503a352aa46ad7e05a6a57ec698b52660",
+  "qualificationPassed": false,
+  "stage": "producer tunnel publication before browser/media setup",
+  "scope": "Forced TURN qualification attempted on hosted Ubuntu 24.04/x86-64. No media measurements are available.",
+  "runtime": {
+    "dockerVersion": "28.0.4",
+    "operatingSystem": "linux",
+    "kernelRelease": "6.17.0-1022-azure",
+    "architecture": "x86_64",
+    "logicalCPUs": 4,
+    "memoryBytes": 16766414848,
+    "producerLocation": "local-docker-daemon"
+  },
+  "producerImage": "sha256:9912501e67d70ee9f9a7b5b57757c532ee5ad9626dd1eb953985dd832d5ebf1d",
+  "browserImage": "sha256:f0d539583c73a4b4a7e9f0782c3fbdb0f27e9e7df3a3619dcae0c20b7e225026",
+  "setupTimeline": [
+    {
+      "name": "runtime-prepared",
+      "observedAt": "2026-10-04T17:35:00.528Z"
+    },
+    {
+      "name": "producer-build-started",
+      "observedAt": "2026-10-04T17:35:00.574Z"
+    },
+    {
+      "name": "producer-build-completed",
+      "observedAt": "2026-10-04T17:37:16.055Z"
+    },
+    {
+      "name": "browser-build-started",
+      "observedAt": "2026-10-04T17:37:16.160Z"
+    },
+    {
+      "name": "browser-build-completed",
+      "observedAt": "2026-10-04T17:37:43.466Z"
+    },
+    {
+      "name": "connection-started",
+      "observedAt": "2026-10-04T17:37:43.499Z"
+    },
+    {
+      "name": "producer-container-started",
+      "observedAt": "2026-10-04T17:37:43.734Z"
+    }
+  ],
+  "observedConnectionDeadlineErrors": 4,
+  "runnerConnectivity": {
+    "schemaVersion": 2,
+    "cliVersion": "1.32.10",
+    "scope": "runner-host",
+    "exitCode": 1,
+    "reportAvailable": true,
+    "checks": [
+      {
+        "name": "config",
+        "status": "pass"
+      },
+      {
+        "name": "context",
+        "status": "pass"
+      },
+      {
+        "name": "token",
+        "status": "pass"
+      },
+      {
+        "name": "control_plane_auth",
+        "status": "pass"
+      },
+      {
+        "name": "project",
+        "status": "pass"
+      },
+      {
+        "name": "engine_address",
+        "status": "pass"
+      },
+      {
+        "name": "dns",
+        "status": "pass"
+      },
+      {
+        "name": "tls",
+        "status": "fail"
+      },
+      {
+        "name": "quic_transport",
+        "status": "fail"
+      },
+      {
+        "name": "tunnel_transport",
+        "status": "fail"
+      },
+      {
+        "name": "engine",
+        "status": "fail"
+      }
+    ],
+    "tokenExpired": false,
+    "transportDiagnostics": [
+      {
+        "name": "tls",
+        "status": "fail",
+        "errorClass": "timeout"
+      },
+      {
+        "name": "quic_transport",
+        "status": "fail",
+        "errorClass": "timeout"
+      }
+    ],
+    "dnsAddressFamilies": [
+      "ipv4",
+      "ipv6"
+    ],
+    "transportSelection": [
+      {
+        "configured": "auto",
+        "selected": "none"
+      }
+    ]
+  },
+  "socketLimits": {
+    "previous": {
+      "receive": 1048576,
+      "send": 212992
+    },
+    "applied": {
+      "receive": 7500000,
+      "send": 7500000
+    },
+    "restored": true
+  },
+  "sha256": {
+    "manifest.json": "17f29b85a33b4ee3a8adfddb85e4c72eb245a66061b8d2353949def401cb84a0",
+    "producer.log": "c023c63fb1bba0634754530852cb8d203eb415ab8d406ac13c42055678617af8",
+    "setup-timeline.jsonl": "7882d9458146a3291f79c1b7e52e93e0590b97a8e60776d23b4650cf12e04bf0",
+    "runner-connectivity.json": "d1ef9c98d3877b474be96c6146a6587f66aeab4babf055cd8dc433d2ba9ff2ef",
+    "runner-socket-limits.json": "70aabd8f0715fabccf8aac3a0b0cc237d6f8e38c02627d8064da39d7cb507e13",
+    "runner-tcp.json": "d01d98d08c161c9f0419177033b60b7679d3de76a5dede57f2f0ff791cadffd7"
+  },
+  "boundaries": [
+    "The direct runner-host TCP probe reaches its five-second deadline for IPv4; IPv6 reports network-unreachable. Neither connection establishes TCP, before any TLS or application authentication.",
+    "The separate SDK TLS and QUIC probes both report timeouts. Authentication and project resolution succeed and the token is not expired.",
+    "Forcing IPv4 alone is not supported as a remedy: the direct IPv4 probe also fails.",
+    "These probes do not establish whether the selected endpoint, routing, firewall or server causes the failure. They are not producer-container or media-path measurements.",
+    "No network, credentials or live infrastructure settings were changed. Repeating this same setup is deferred until connectivity or configuration changes."
+  ],
+  "runnerTCP": {
+    "schemaVersion": 1,
+    "scope": "runner-host-direct-tcp-without-sdk-transport-settings",
+    "endpointAvailable": true,
+    "timeoutMilliseconds": 5000,
+    "probes": [
+      {
+        "family": "ipv4",
+        "status": "fail",
+        "errorClass": "timeout",
+        "elapsedMilliseconds": 5021
+      },
+      {
+        "family": "ipv6",
+        "status": "fail",
+        "errorClass": "network-unreachable",
+        "elapsedMilliseconds": 2
+      }
+    ]
+  }
+}
