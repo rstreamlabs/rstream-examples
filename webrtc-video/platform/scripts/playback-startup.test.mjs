@@ -123,9 +123,9 @@ function fixture({ supported = true } = {}) {
     clock(at) {
       now = at
     },
-    attach() {
+    attach(notify = true) {
       video = element
-      mutation()
+      if (notify) mutation()
     },
     frame(at, fields = {}) {
       now = at
@@ -278,6 +278,26 @@ test("same-page activation is measured from the click, without accepting late or
       invalid ? null : 225,
     )
   }
+})
+
+test("an effect starting before mutation delivery arms the committed video before authorization", async () => {
+  const f = fixture()
+  f.clock(80)
+  f.window.__playbackStartup.markActivation()
+  f.attach(false)
+  assert.equal(f.snapshot().armedAtMilliseconds, null)
+  await f.request("auth", 100, 140, 150)
+  assert.equal(f.snapshot().armedAtMilliseconds, 100)
+  f.clock(160)
+  f.attach() // The later observer delivery must not rearm or reset the measurement.
+  const peer = new f.window.RTCPeerConnection()
+  await f.request("whep", 180, 220)
+  f.clock(250)
+  peer.connect()
+  f.frame(300)
+  assert.equal(f.snapshot().armedAtMilliseconds, 100)
+  assert.equal(f.snapshot().visiblePresentationValid, true)
+  assert.equal(f.snapshot().activationToVisiblePresentationMilliseconds, 225)
 })
 
 test("visible presentation refuses paused, detached or nonfinite media and a late observer", async () => {

@@ -60,6 +60,9 @@ export function installPlaybackStartupTiming() {
   }
   const observedFetch = async function (input, init) {
     const observations = stopped ? null : classify(input, init)
+    // React can start its effect before MutationObserver delivers the inserted
+    // video. Arm synchronously from that committed DOM before timing the request.
+    if (observations === authorization) observeVideo()
     // Bound telemetry and reject retries as a first-attempt measurement below.
     const event =
       observations && observations.length < 8

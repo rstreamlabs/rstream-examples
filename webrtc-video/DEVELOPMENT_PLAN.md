@@ -104,7 +104,12 @@ diagnostic without reclassifying previous failed trials. All 198 platform unit
 tests pass, including visibility, callback delay, activation ordering and invalid
 sequences. Three real same-page device-selection cycles now measure activation,
 normal player unmount/DELETE and encoder idle separately. Runtime qualification
-of this measurement and lifecycle sequence is pending.
+of this measurement and lifecycle sequence initially fails at `b29b57d`: all six
+functional gates pass and both initial visible measurements are valid, but React
+starts the reactivated player's authorization effect 0.3–0.5ms before mutation
+observer delivery. The qualifier now also arms from the committed DOM immediately
+before authorization, retaining its strict ordering check. A dedicated regression
+and all 199 unit tests pass; the failed runtime attempt remains retained.
 
 Remove demonstrated serial waits, unnecessary polling and avoidable key-frame
 delays while retaining authentication, bounded cancellation, one shared upstream
