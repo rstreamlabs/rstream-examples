@@ -846,6 +846,13 @@ The practical outcome is a standalone executable you can copy to a target machin
 
 That static toolchain is defined in `build-gstreamer-static-linux.sh`. If you change the reference pipelines and introduce new elements or plugins, update that script as well. Otherwise the local development setup may keep working while the static distribution build silently stops matching the pipeline you intend to run.
 
+The packaged sources are GStreamer 1.28.7, libaom 3.15.1 and the immutable x264
+commit recorded in that script. Both release archives are verified with SHA-256
+before compilation. A custom Docker `GST_VERSION` or `AOM_VERSION` build argument
+also requires its corresponding `GST_SHA256` or `AOM_SHA256`; `X264_GIT_REF`
+accepts a full commit hash. These pins identify the media sources, not a claim
+that every external Alpine package or generated binary is bit-for-bit reproducible.
+
 ## Troubleshooting
 
 `make build`, `make build-provisioning`, and `make test` run a preflight check
