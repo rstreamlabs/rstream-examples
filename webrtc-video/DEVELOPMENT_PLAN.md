@@ -160,6 +160,15 @@ incomplete despite final 720p30 observations. Existing runs retain their origina
 results and all acceptance gates remain unchanged. Socket limits are restored and owned containers removed.
 The tracked-stream accounting fix is retained; 1s downHold remains experimental.
 
+The [continuous downshift-evidence trials at `b9b77ad`](./distributor/qualification/evidence/b9b77ad/downshift-evidence.json)
+retain one adaptive MediaMTX pass and one direct failure with the same private
+one-second down-hold profile. Both recover 720p30 and their source-rate target;
+neither drops decoded frames or freezes during recovery. Direct initial
+disruption is 3.065s, above the unchanged 3s bound, and its last freeze is reported
+after the transition grace. The source trial's initial disruption is 1.676s,
+with no steady-state freezes. The source pass is not yet a repeated series;
+public down-hold remains three seconds and qualification remains incomplete.
+
 The [collector-local phase publication check at `f6555f4`](./distributor/qualification/evidence/f6555f4/phase-control.json)
 passes 100 atomic updates with 5,630 concurrent reads while removing the host
 source between updates. The repeated direct trial completes all collection and
