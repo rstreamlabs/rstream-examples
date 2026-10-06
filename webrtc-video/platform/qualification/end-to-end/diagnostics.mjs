@@ -1,4 +1,5 @@
 export function expectedBrowserDiagnostic(diagnostic, signalingResponses = []) {
+  if (stoppedObservationDiagnostic(diagnostic, signalingResponses)) return true
   if (successfulNoContentAbort(diagnostic, signalingResponses)) {
     return true
   }
@@ -29,16 +30,64 @@ export function expectedBrowserDiagnostic(diagnostic, signalingResponses = []) {
   return false
 }
 
+function stoppedObservationDiagnostic(diagnostic, responses) {
+  if (!Number.isFinite(diagnostic.observedAt)) return false
+  const path =
+    "https?:\\/\\/\\S+\\/api\\/devices\\/[^/?\\s]+\\/(metrics|recordings)"
+  const pattern =
+    diagnostic.type === "http-error"
+      ? new RegExp(`^GET (${path}) 503$`)
+      : diagnostic.type === "request-failed"
+        ? new RegExp(`^GET (${path}) net::ERR_ABORTED$`)
+        : diagnostic.type === "console-error"
+          ? new RegExp(
+              `^(${path}):[0-9]+:[0-9]+ Failed to load resource: the server responded with a status of 503 \\(Service Unavailable\\)$`,
+            )
+          : null
+  const match = pattern?.exec(diagnostic.message)
+  if (!match) return false
+  const phases = ["mediamtx-stop-requested", "mediamtx-stopped"]
+  // History polling continues while live viewing falls back to the producer;
+  // MediaMTX remains deliberately stopped throughout these phases too.
+  if (match[2] === "recordings")
+    phases.push(
+      "direct-fallback-playing",
+      "direct-source-formats-passed",
+      // Native MediaMTX rejects an index containing a partial ENOSPC segment.
+      // The recording test independently requires eventual retention recovery
+      // and uninterrupted live frames throughout this bounded fault interval.
+      "recording-storage-full",
+      "recording-storage-recovering",
+    )
+  if (!phases.includes(diagnostic.phase)) return false
+  // The observation client discards the unavailable response body. An aborted
+  // body is expected only after this same GET actually received a 503 during
+  // the deliberately stopped-server phase; arbitrary timeouts still fail.
+  return responses.some(
+    (response) =>
+      response.method === "GET" &&
+      response.url === match[1] &&
+      response.status === 503 &&
+      Number.isFinite(response.observedAt) &&
+      Math.abs(response.observedAt - diagnostic.observedAt) <= 1000,
+  )
+}
+
 function successfulNoContentAbort(diagnostic, signalingResponses) {
   if (
     diagnostic.type !== "request-failed" ||
     !diagnostic.message.endsWith(" net::ERR_ABORTED") ||
-    !isWHEPRequest(diagnostic.message) ||
+    !(
+      isWHEPRequest(diagnostic.message) ||
+      /^GET https?:\/\/\S+\/api\/devices\/[^/?\s]+\/(quality|recordings) net::ERR_ABORTED$/.test(
+        diagnostic.message,
+      )
+    ) ||
     !Number.isFinite(diagnostic.observedAt)
   ) {
     return false
   }
-  const match = /^(POST|PATCH|DELETE) (\S+) net::ERR_ABORTED$/.exec(
+  const match = /^(GET|POST|PATCH|DELETE) (\S+) net::ERR_ABORTED$/.exec(
     diagnostic.message,
   )
   if (!match) {
@@ -104,7 +153,9 @@ function expectedStoppedMediaMTXDiagnostic(diagnostic) {
 }
 
 function isWHEPRequest(message) {
-  return /(?:^|\s)https?:\/\/[^\s]+\/[^\s]*whep(?:[/?]|\s|$)/.test(message)
+  return /(?:^|\s)https?:\/\/[^\s]+\/[^\s]*whep(?:[/?]|\s|$|:\d+:\d+(?:\s|$))/.test(
+    message,
+  )
 }
 
 function isViewerRequest(message) {

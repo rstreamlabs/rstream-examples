@@ -28,6 +28,7 @@ type GStreamerFactory struct {
 	initialBitrateKbps  int
 	logger              *logs.Logger
 	stats               *sourceStats
+	formatConfig        *GStreamerFormatConfig
 }
 
 type GStreamerSource struct {
@@ -35,6 +36,7 @@ type GStreamerSource struct {
 	pipeline      *gst.Pipeline
 	sink          *app.Sink
 	encoder       *gstreamerEncoderController
+	format        *gstreamerFormatController
 	busDone       chan struct{}
 	stopBus       context.CancelFunc
 	failOnce      sync.Once
@@ -64,13 +66,19 @@ func NewGStreamerFactory(
 	sinkName string,
 	initialBitrateKbps int,
 	logger *logs.Logger,
+	formatConfig *GStreamerFormatConfig,
 ) *GStreamerFactory {
+	if formatConfig != nil {
+		copy := *formatConfig
+		formatConfig = &copy
+	}
 	return &GStreamerFactory{
 		pipelineDescription: pipelineDescription,
 		sinkName:            sinkName,
 		initialBitrateKbps:  initialBitrateKbps,
 		logger:              logger,
 		stats:               &sourceStats{},
+		formatConfig:        formatConfig,
 	}
 }
 
@@ -81,6 +89,7 @@ func (f *GStreamerFactory) New() (Source, error) {
 		f.initialBitrateKbps,
 		f.logger,
 		f.stats,
+		f.formatConfig,
 	)
 	if err != nil {
 		f.stats.pipelineCreateErrors.Add(1)
@@ -104,6 +113,7 @@ func NewGStreamerSource(
 		initialBitrateKbps,
 		logger,
 		&sourceStats{},
+		nil,
 	)
 }
 
@@ -113,6 +123,7 @@ func newGStreamerSource(
 	initialBitrateKbps int,
 	logger *logs.Logger,
 	stats *sourceStats,
+	formatConfig *GStreamerFormatConfig,
 ) (*GStreamerSource, error) {
 	gstInitOnce.Do(func() {
 		gst.Init(nil)
@@ -143,6 +154,10 @@ func newGStreamerSource(
 		stats:    stats,
 	}
 	source.startPipeline = source.startPipelineTransition
+	source.format, err = newGStreamerFormatController(source, formatConfig)
+	if err != nil {
+		return nil, err
+	}
 	stats.sources.Add(1)
 	busCtx, cancel := context.WithCancel(context.Background())
 	source.stopBus = cancel
@@ -162,10 +177,14 @@ func newGStreamerSource(
 				stats.sampleExtractionErrors.Add(1)
 				return gst.FlowError
 			}
+			keyFrame := sampleIsKeyFrame(sample)
+			if keyFrame && source.format != nil {
+				source.format.observe(sample)
+			}
 			source.publish(AccessUnit{
 				Data:     data,
 				Duration: duration,
-				KeyFrame: sampleIsKeyFrame(sample),
+				KeyFrame: keyFrame,
 			})
 			return gst.FlowOK
 		},
@@ -206,7 +225,13 @@ func (s *GStreamerSource) Start(ctx context.Context) error {
 	s.mu.Unlock()
 	startCtx, cancel := context.WithTimeout(ctx, pipelineStartTimeout)
 	defer cancel()
+	if s.format != nil {
+		s.format.beginRun()
+	}
 	if err := s.start(startCtx); err != nil {
+		if s.format != nil {
+			s.format.interrupt(err)
+		}
 		if s.pipeline != nil {
 			s.abortStartTransition()
 		}
@@ -224,6 +249,9 @@ func (s *GStreamerSource) Start(ctx context.Context) error {
 	}
 	s.started = true
 	s.mu.Unlock()
+	if s.format != nil {
+		s.format.running()
+	}
 	s.logger.Info("GStreamer pipeline started")
 	return nil
 }
@@ -242,6 +270,9 @@ func (s *GStreamerSource) Stop() error {
 	}
 	s.started = false
 	s.mu.Unlock()
+	if s.format != nil {
+		s.format.interrupt(ErrSourceNotRunning)
+	}
 	if err := s.stopPipeline(); err != nil {
 		return err
 	}
@@ -282,6 +313,9 @@ func (s *GStreamerSource) Close() error {
 	s.closed = true
 	s.started = false
 	s.mu.Unlock()
+	if s.format != nil {
+		s.format.interrupt(ErrSourceClosed)
+	}
 	var closeErr error
 	if wasStarted {
 		closeErr = s.stopPipeline()
@@ -293,6 +327,13 @@ func (s *GStreamerSource) Close() error {
 		stopBus()
 	}
 	<-s.busDone
+	if s.sink != nil {
+		// The native callback registry holds the closures, which retain this
+		// source and its pipeline. Break that cycle explicitly on close; waiting
+		// for the pipeline's Go finalizer would keep the whole source alive.
+		// Replacing callbacks is thread-safe with the supported GStreamer runtime.
+		s.sink.SetCallbacks(&app.SinkCallbacks{})
+	}
 	s.mu.Lock()
 	for ch := range s.subs {
 		close(ch)
@@ -432,6 +473,9 @@ func (s *GStreamerSource) fail(err error) {
 			delete(s.subs, ch)
 		}
 		s.mu.Unlock()
+		if s.format != nil {
+			s.format.interrupt(err)
+		}
 		s.pipeline.CallAsync(func() {
 			_ = s.pipeline.SendEvent(gst.NewEOSEvent())
 			if stopErr := s.pipeline.SetState(gst.StateNull); stopErr != nil {

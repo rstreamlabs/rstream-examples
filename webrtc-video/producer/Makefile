@@ -15,8 +15,7 @@ GST_PKG_CONFIG_PACKAGES := \
 	gstreamer-base-1.0 \
 	gstreamer-app-1.0
 WEB_SOURCES := \
-	../shared/whep-client.ts \
-	./internal/web/embed/app.ts \
+	$(wildcard ../shared/*.ts ./internal/web/embed/*.ts) \
 	./internal/web/embed/index.html \
 	./internal/web/embed/input.css \
 	./package.json \
@@ -111,7 +110,7 @@ test-race: check-build-tools css
 	go test -race ./...
 
 test-gcc-regression: check-go
-	go test -count=1 -race -run '^Test(RateControllerIncreaseDoesNotReduceTarget|RateControllerRecoversMultiplicativelyToPreDecreaseTarget|RateControllerRecoveryStopsAtPreDecreaseTarget|RateControllerTracksAndRecoversADecreasedTarget|RateControllerBoundsRepeatedCongestionResponse|RateControllerRateLimitsSustainedCongestionResponse|RateControllerRespondsToSeparateCongestionEpisodes|RateControllerRecoverySurvivesTransientOveruse|SendSideBWEAppliesConfiguredBoundsToLossController|LossBasedBWEHonorsConfiguredBitrateBounds)$$' github.com/pion/interceptor/pkg/gcc
+	go test -count=1 -race github.com/pion/interceptor/pkg/gcc
 
 test-provisioning: check-build-tools
 	go test -tags noembeddedweb ./...

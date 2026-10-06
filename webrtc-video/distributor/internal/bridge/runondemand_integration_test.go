@@ -31,6 +31,7 @@ import (
 	"github.com/pion/webrtc/v4"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/config"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/media"
+	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/readnotify"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/whipwhep"
 )
 
@@ -53,6 +54,7 @@ type sourceHarness struct {
 	nacks          atomic.Uint32
 	plis           atomic.Uint32
 	twcc           atomic.Uint32
+	timedReports   atomic.Uint32
 	nextSequence   atomic.Uint32
 	warmupWrites   atomic.Uint32
 	warmupDelay    time.Duration
@@ -94,6 +96,34 @@ type counterOfferSource struct {
 	patches atomic.Uint32
 }
 
+// Installed closest to the transport, after the sender's NACK cache has seen
+// the primary packet. This proves real RTX repair, not just advertised SDP.
+type sourcePacketLoss struct {
+	interceptor.NoOp
+	sequence      atomic.Uint32
+	dropped       atomic.Bool
+	retransmitted atomic.Uint32
+}
+
+func (d *sourcePacketLoss) NewInterceptor(string) (interceptor.Interceptor, error) {
+	return d, nil
+}
+
+func (d *sourcePacketLoss) BindLocalStream(info *interceptor.StreamInfo, writer interceptor.RTPWriter) interceptor.RTPWriter {
+	return interceptor.RTPWriterFunc(func(header *rtp.Header, payload []byte, attributes interceptor.Attributes) (int, error) {
+		target := d.sequence.Load()
+		if target != 0 && strings.EqualFold(info.MimeType, webrtc.MimeTypeH264) {
+			if header.SSRC == info.SSRC && uint32(header.SequenceNumber) == target && d.dropped.CompareAndSwap(false, true) {
+				return header.MarshalSize() + len(payload), nil
+			}
+			if header.SSRC == info.SSRCRetransmission && len(payload) >= 2 && uint32(payload[0])<<8|uint32(payload[1]) == target {
+				d.retransmitted.Add(1)
+			}
+		}
+		return writer.Write(header, payload, attributes)
+	})
+}
+
 func TestMediaMTXRunOnDemandUsesOneBridgeAndRepairsFlexFEC(t *testing.T) {
 	mediaMTX := mediaMTXExecutable(t)
 	source := newSourceHarness(t)
@@ -117,6 +147,7 @@ func TestMediaMTXRunOnDemandUsesOneBridgeAndRepairsFlexFEC(t *testing.T) {
 	assertMarkers(t, first.markers, firstSequence, lastSequence)
 	assertMarkers(t, second.markers, firstSequence, lastSequence)
 	waitCounter(t, &source.twcc, "source TWCC feedback")
+	waitCounter(t, &source.timedReports, "source Receiver Report with Sender Report timing")
 	assertMediaMTXPathMetrics(t, 2)
 	if source.posts.Load() != 1 {
 		t.Fatalf("source WHEP POSTs = %d, want 1 for two viewers", source.posts.Load())
@@ -179,7 +210,8 @@ func TestMediaMTXRunOnDemandWaitsForDelayedSourceBeforePublishing(t *testing.T) 
 
 func TestMediaMTXNativeWHEPSourceSharesOneOnDemandSession(t *testing.T) {
 	mediaMTX := mediaMTXExecutable(t)
-	source := newSourceHarness(t)
+	loss := &sourcePacketLoss{}
+	source := newSourceHarnessWithFlexFEC(t, false, loss)
 	server := httptest.NewServer(http.HandlerFunc(source.serveHTTP))
 	defer server.Close()
 	sourceURL := "whep://" + strings.TrimPrefix(server.URL, "http://") + "/whep"
@@ -195,6 +227,7 @@ func TestMediaMTXNativeWHEPSourceSharesOneOnDemandSession(t *testing.T) {
 	second := newViewer(t)
 	defer second.close()
 	waitSignal(t, source.connected, "native WHEP source peer connection")
+	loss.sequence.Store(uint32(stopSourceWarmup(t, source)) + 10)
 	firstSequence, lastSequence := writeSourcePackets(t, source, 99)
 	assertMarkers(t, first.markers, firstSequence, lastSequence)
 	assertMarkers(t, second.markers, firstSequence, lastSequence)
@@ -208,8 +241,11 @@ func TestMediaMTXNativeWHEPSourceSharesOneOnDemandSession(t *testing.T) {
 	if !strings.Contains(offer, "transport-wide-cc-extensions") || !strings.Contains(offer, " transport-cc") {
 		t.Fatalf("native source offer did not negotiate TWCC:\n%s", offer)
 	}
-	if strings.Contains(strings.ToLower(offer), "rtx/90000") || strings.Contains(strings.ToLower(offer), "flexfec-03/90000") {
+	if !strings.Contains(strings.ToLower(offer), "rtx/90000") || strings.Contains(strings.ToLower(offer), "flexfec-03/90000") {
 		t.Fatalf("native source repair capability changed; requalify the profile comparison:\n%s", offer)
+	}
+	if !loss.dropped.Load() || loss.retransmitted.Load() == 0 || source.nacks.Load() == 0 {
+		t.Fatalf("native RTX repair not exercised: dropped=%t retransmitted=%d NACKs=%d", loss.dropped.Load(), loss.retransmitted.Load(), source.nacks.Load())
 	}
 	if strings.Contains(offer, "a=rtcp-mux-only") || strings.Contains(offer, "a=msid:") {
 		t.Fatalf("native WHEP conformance changed; requalify the strict producer profile:\n%s", offer)
@@ -423,9 +459,9 @@ func newSourceHarnessWithDelay(t *testing.T, delay time.Duration) *sourceHarness
 	return harness
 }
 
-func newSourceHarnessWithFlexFEC(t *testing.T, flexFEC bool) *sourceHarness {
+func newSourceHarnessWithFlexFEC(t *testing.T, flexFEC bool, factories ...interceptor.Factory) *sourceHarness {
 	t.Helper()
-	peer, track, sender := newSender(t, flexFEC)
+	peer, track, sender := newSender(t, flexFEC, factories...)
 	harness := &sourceHarness{
 		peer:       peer,
 		track:      track,
@@ -442,7 +478,13 @@ func newSourceHarnessWithFlexFEC(t *testing.T, flexFEC bool) *sourceHarness {
 				return
 			}
 			for _, packet := range packets {
-				switch packet.(type) {
+				switch value := packet.(type) {
+				case *rtcp.ReceiverReport:
+					for _, report := range value.Reports {
+						if report.SSRC == uint32(sender.GetParameters().Encodings[0].SSRC) && report.LastSenderReport != 0 && report.Delay != 0 {
+							harness.timedReports.Add(1)
+						}
+					}
 				case *rtcp.TransportLayerNack:
 					harness.nacks.Add(1)
 				case *rtcp.PictureLossIndication:
@@ -509,11 +551,14 @@ func (s *sourceHarness) stopWarmup() {
 	s.warmupStopOnce.Do(func() { close(s.warmupStop) })
 }
 
-func newSender(t *testing.T, flexFEC bool) (*webrtc.PeerConnection, *webrtc.TrackLocalStaticRTP, *webrtc.RTPSender) {
+func newSender(t *testing.T, flexFEC bool, factories ...interceptor.Factory) (*webrtc.PeerConnection, *webrtc.TrackLocalStaticRTP, *webrtc.RTPSender) {
 	t.Helper()
 	mediaEngine := &webrtc.MediaEngine{}
 	registerSenderCodec(t, mediaEngine)
 	registry := &interceptor.Registry{}
+	for _, factory := range factories {
+		registry.Add(factory)
+	}
 	if flexFEC {
 		requireNoError(t, webrtc.ConfigureFlexFEC03(
 			webrtc.PayloadType(media.FlexFECPayloadType),
@@ -730,9 +775,13 @@ func startMediaMTXWithDistributor(t *testing.T, mediaMTX string, distributor str
 	return startMediaMTXWithRunCommand(t, mediaMTX, fmt.Sprintf("%q", distributor), sourceURL, false)
 }
 
-func startMediaMTXWithRunCommand(t *testing.T, mediaMTX string, runCommand string, sourceURL string, dropFirstFEC bool) (*exec.Cmd, *synchronizedBuffer) {
+func startMediaMTXWithRunCommand(t *testing.T, mediaMTX string, runCommand string, sourceURL string, dropFirstFEC bool, readerCommand ...string) (*exec.Cmd, *synchronizedBuffer) {
 	t.Helper()
 	config := filepath.Join(t.TempDir(), "mediamtx.yml")
+	onRead := ""
+	if len(readerCommand) == 1 {
+		onRead = readerCommand[0]
+	}
 	contents := fmt.Sprintf(`logLevel: debug
 logDestinations: [stdout]
 rtsp: false
@@ -759,9 +808,11 @@ pathDefaults:
   runOnDemandRestart: false
   runOnDemandStartTimeout: 3s
   runOnDemandCloseAfter: 500ms
+  runOnRead: %q
+  runOnReadRestart: false
 paths:
   camera:
-`, mediaMTXMetricsAddress, mediaMTXHTTPAddress, mediaMTXICEAddress, mediaMTXTestReaderLimit, runCommand)
+`, mediaMTXMetricsAddress, mediaMTXHTTPAddress, mediaMTXICEAddress, mediaMTXTestReaderLimit, runCommand, onRead)
 	if err := os.WriteFile(config, []byte(contents), 0o600); err != nil {
 		t.Fatalf("write MediaMTX config: %v", err)
 	}
@@ -774,6 +825,14 @@ paths:
 		"RSTREAM_MEDIAMTX_URL=http://"+mediaMTXHTTPAddress,
 		"RSTREAM_SOURCE_URL="+sourceURL,
 	)
+	if onRead != "" {
+		directory, err := os.MkdirTemp("/tmp", "read-integration-")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.RemoveAll(directory) })
+		command.Env = append(command.Env, readnotify.DirectoryEnvironmentVariable+"="+directory)
+	}
 	if dropFirstFEC {
 		command.Env = append(command.Env, "RSTREAM_BRIDGE_DROP_FIRST_FEC=1")
 	}

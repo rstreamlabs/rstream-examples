@@ -1,3 +1,5 @@
+import { deviceInventoryConfig } from "@/lib/device-inventory"
+import { HTTPError } from "@/lib/error"
 import { DeviceDashboard } from "@/components/device-dashboard"
 import { deviceViews } from "@/lib/devices"
 import { getServerUser } from "@/lib/next-auth"
@@ -11,7 +13,28 @@ const GITHUB_URL =
   "https://github.com/rstreamlabs/rstream-examples/tree/main/webrtc-video/platform"
 
 export default async function Page() {
-  const user = await getServerUser()
+  const inventoryMode = deviceInventoryConfig().mode
+  const description =
+    inventoryMode === "discovered"
+      ? "View live video from your connected devices in one shared workspace."
+      : "Provision devices, issue short-lived viewer access, and stream through rstream tunnels from a Next.js app."
+  let user
+  try {
+    user = await getServerUser()
+  } catch (error) {
+    if (!(error instanceof HTTPError)) throw error
+    return (
+      <main className="mx-auto max-w-2xl space-y-6 px-6 py-16">
+        <h1 className="text-2xl font-semibold">
+          {error.status === 403
+            ? "Organization access required"
+            : "Access verification unavailable"}
+        </h1>
+        <p>{error.message}</p>
+        <SignOutButton />
+      </main>
+    )
+  }
   if (!user?.id) {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-8 sm:px-6 lg:px-10">
@@ -36,8 +59,7 @@ export default async function Page() {
               Next.js WebRTC video platform.
             </h1>
             <p className="max-w-2xl text-base leading-8 text-muted-foreground sm:text-lg">
-              Provision devices, issue short-lived viewer access, and stream
-              through rstream tunnels from a Next.js app.
+              {description}
             </p>
             <SignInButton />
           </div>
@@ -46,7 +68,17 @@ export default async function Page() {
       </main>
     )
   }
-  const devices = await deviceViews(user.id)
+  let devices: Awaited<ReturnType<typeof deviceViews>> = []
+  let inventoryError: string | null = null
+  try {
+    devices = await deviceViews(user.access)
+  } catch (error) {
+    if (inventoryMode !== "discovered") throw error
+    inventoryError =
+      error instanceof HTTPError
+        ? error.message
+        : "Device inventory is unavailable. Retry shortly."
+  }
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-8 sm:px-6 lg:px-10">
       <header className="border-b border-border pb-8">
@@ -69,13 +101,21 @@ export default async function Page() {
             Next.js WebRTC video platform.
           </h1>
           <p className="max-w-3xl text-base leading-8 text-muted-foreground sm:text-lg">
-            Provision devices, issue short-lived viewer access, and stream
-            through rstream tunnels from a Next.js app.
+            {description}
           </p>
         </div>
       </header>
       <section className="flex-1 py-8">
-        <DeviceDashboard initialDevices={devices} />
+        {user.access.kind === "organization" ? (
+          <p className="mb-4 text-sm text-muted-foreground">
+            Shared organization devices. Changes apply to all members.
+          </p>
+        ) : null}
+        <DeviceDashboard
+          initialDevices={devices}
+          inventoryMode={inventoryMode}
+          initialInventoryError={inventoryError}
+        />
       </section>
       <PageFooter account={user.email ?? user.name ?? user.id} />
     </main>
@@ -84,8 +124,8 @@ export default async function Page() {
 
 function PageFooter({ account }: { account?: string }) {
   return (
-    <footer className="flex flex-col gap-3 border-t border-border pt-5 text-sm text-muted-foreground lg:flex-row lg:items-center lg:justify-between">
-      <div className="flex min-w-0 flex-col gap-1 lg:flex-row lg:items-center lg:gap-5">
+    <footer className="flex flex-col gap-4 border-t border-border pt-4 text-sm text-muted-foreground lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:gap-5">
         <p className="lg:whitespace-nowrap">Powered by rstream tunnels.</p>
         {account ? (
           <p className="break-all lg:truncate lg:break-normal">
@@ -93,7 +133,7 @@ function PageFooter({ account }: { account?: string }) {
           </p>
         ) : null}
       </div>
-      <div className="flex flex-col gap-1 lg:flex-row lg:items-center lg:gap-5 lg:whitespace-nowrap">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-5 lg:whitespace-nowrap">
         <a
           href={GITHUB_URL}
           target="_blank"

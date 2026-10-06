@@ -8,6 +8,40 @@ repository_directory="$(git -C "${video_directory}" rev-parse --show-toplevel)"
 producer_directory="${video_directory}/producer"
 output_directory="${1:-}"
 exposure="${2:-public}"
+quality="${RSTREAM_QUALIFICATION_QUALITY:-0}"
+case "${quality}" in
+0) producer_config="config.provisioning.h264.yaml" ;;
+1) producer_config="config.provisioning.quality.h264.yaml" ;;
+*) printf 'RSTREAM_QUALIFICATION_QUALITY must be 0 or 1\n' >&2; exit 1 ;;
+esac
+source_formats="${RSTREAM_QUALIFICATION_SOURCE_FORMATS:-0}"
+case "${source_formats}" in
+0) ;;
+1)
+  if [[ "${quality}" != 1 ]]; then
+    printf 'Source-format qualification requires RSTREAM_QUALIFICATION_QUALITY=1\n' >&2
+    exit 1
+  fi
+  producer_config="config.provisioning.source-formats.h264.yaml"
+  ;;
+*) printf 'RSTREAM_QUALIFICATION_SOURCE_FORMATS must be 0 or 1\n' >&2; exit 1 ;;
+esac
+recording="${RSTREAM_QUALIFICATION_RECORDING:-0}"
+case "${recording}" in
+0) recording_enabled=false ;;
+1)
+  if [[ "${quality}" != 1 ]]; then
+    printf 'Recording qualification requires RSTREAM_QUALIFICATION_QUALITY=1\n' >&2
+    exit 1
+  fi
+  recording_enabled=true
+  if ! command -v ffprobe >/dev/null; then
+    printf 'ffprobe is required for recording recovery qualification\n' >&2
+    exit 1
+  fi
+  ;;
+*) printf 'RSTREAM_QUALIFICATION_RECORDING must be 0 or 1\n' >&2; exit 1 ;;
+esac
 postgres_image="postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193"
 
 if [[ -z "${output_directory}" ]]; then
@@ -38,6 +72,10 @@ if [[ -e "${output_directory}" ]] && [[ -n "$(find "${output_directory}" -mindep
 fi
 mkdir -p "${output_directory}"
 output_directory="$(cd "${output_directory}" && pwd -P)"
+# The local helper's Node env-file resolves against its working directory.
+# Use the same platform/.env.local that was checked above, even when this
+# runner is invoked by absolute path from another directory.
+cd "${platform_directory}"
 
 revision="$(git -C "${repository_directory}" rev-parse HEAD)"
 revision_short="${revision:0:12}"
@@ -55,6 +93,12 @@ stack_pid=""
 mediamtx_container=""
 postgres_started=0
 producer_started=0
+recording_trace="${output_directory}/recording-requests.jsonl"
+stack_node_options="${NODE_OPTIONS:-}"
+if [[ "${recording}" == 1 ]]; then
+  observer_uri="$(node -e 'process.stdout.write(require("node:url").pathToFileURL(process.argv[1]).href)' "${script_directory}/recording-fetch-observer.mjs")"
+  stack_node_options="${stack_node_options} --import=${observer_uri}"
+fi
 
 cleanup() {
   local status=$?
@@ -133,12 +177,13 @@ docker run --detach \
   "${postgres_image}" >/dev/null
 postgres_started=1
 for _ in $(seq 1 60); do
-  if docker exec "${postgres_name}" pg_isready -U qualification -d webrtc_video_platform >/dev/null 2>&1; then
+  # The image's temporary initialization server accepts Unix sockets only.
+  if docker exec "${postgres_name}" pg_isready -h 127.0.0.1 -U qualification -d webrtc_video_platform >/dev/null 2>&1; then
     break
   fi
   sleep 0.5
 done
-if ! docker exec "${postgres_name}" pg_isready -U qualification -d webrtc_video_platform >/dev/null 2>&1; then
+if ! docker exec "${postgres_name}" pg_isready -h 127.0.0.1 -U qualification -d webrtc_video_platform >/dev/null 2>&1; then
   printf 'PostgreSQL did not become ready\n' >&2
   docker inspect --format 'state={{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}} oom={{.State.OOMKilled}}' \
     "${postgres_name}" >&2 || true
@@ -174,9 +219,12 @@ SQL
 printf 'Starting Next.js and the MediaMTX adapter stack\n'
 POSTGRES_PRISMA_DIRECT_URL="${database_url}" \
   POSTGRES_PRISMA_POOL_URL="${database_url}" \
+  NODE_OPTIONS="${stack_node_options}" \
+  RSTREAM_QUALIFICATION_RECORDING_TRACE="${recording_trace}" \
   "${platform_directory}/scripts/run-local-mediamtx.mjs" \
     --exposure "${exposure}" \
     --next-mode production \
+    --recording "${recording_enabled}" \
     --state-file "${state_file}" >"${stack_log}" 2>&1 &
 stack_pid=$!
 for _ in $(seq 1 240); do
@@ -211,12 +259,13 @@ docker run --detach \
   --tmpfs /tmp:rw,noexec,nosuid,size=64m \
   --env "API_URL=${platform_callback}" \
   --env "DEVICE_SECRET=${device_secret}" \
-  --mount "type=bind,source=${producer_directory}/config.provisioning.h264.yaml,target=/qualification/config.yaml,readonly" \
+  --mount "type=bind,source=${producer_directory}/${producer_config},target=/qualification/config.yaml,readonly" \
   "${producer_image}" -config /qualification/config.yaml >/dev/null
 producer_started=1
 
 printf 'Running browser playback, fallback, and recovery gates\n'
 RSTREAM_QUALIFICATION_SESSION_TOKEN="${session_token}" \
+  RSTREAM_QUALIFICATION_RECORDING_TRACE="${recording_trace}" \
   node "${script_directory}/browser.mjs" \
   --platform "${platform}" \
   --container "${mediamtx_container}" \

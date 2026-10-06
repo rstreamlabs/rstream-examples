@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/adaptation"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/config"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/logs"
 	rtc "github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/webrtc"
@@ -40,17 +41,21 @@ type Session interface {
 }
 
 type Server struct {
-	logger      *logs.Logger
-	createTURN  func(context.Context) (*rstream.TURNCredentials, error)
-	openSession func(context.Context) (Session, error)
-	whep        *whepServer
-	viewer      bool
-	mu          sync.RWMutex
-	info        Info
+	qualityState  func() (adaptation.QualityState, error)
+	selectQuality func(context.Context, string, string) (adaptation.QualityState, error)
+	logger        *logs.Logger
+	createTURN    func(context.Context) (*rstream.TURNCredentials, error)
+	openSession   func(context.Context) (Session, error)
+	whep          *whepServer
+	viewer        bool
+	mu            sync.RWMutex
+	info          Info
 }
 
 type ServerOptions struct {
-	Viewer bool
+	QualityState  func() (adaptation.QualityState, error)
+	SelectQuality func(context.Context, string, string) (adaptation.QualityState, error)
+	Viewer        bool
 }
 
 type turnCredentialsResponse struct {
@@ -77,6 +82,10 @@ func NewServer(
 		createTURN:  createTURN,
 		openSession: openSession,
 		viewer:      viewer,
+	}
+	if len(options) > 0 {
+		server.qualityState = options[0].QualityState
+		server.selectQuality = options[0].SelectQuality
 	}
 	server.whep = newWHEPServer(logger, openSession, checkOrigin)
 	return server
@@ -111,6 +120,8 @@ func (s *Server) mountViewerRoutes(mux *http.ServeMux) {
 }
 
 func (s *Server) mountAPIRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/quality", s.handleQuality)
+	mux.HandleFunc("PUT /api/quality", s.handleQuality)
 	mux.HandleFunc("GET /api/status", s.handleAPIStatus)
 	mux.HandleFunc("GET /api/turn", s.handleAPITURN)
 	mux.HandleFunc("GET /api/diagnostics/sessions/{session}", s.handleAPISessionDiagnostics)

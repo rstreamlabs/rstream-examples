@@ -9,27 +9,38 @@ process. Later viewers share that publisher; the final viewer leaving stops it.
 
 Direct WebRTC remains the default for one-to-one delivery. Distribution is a
 backend selected by the platform, not a fork of the capture or player code.
-This component is the reference implementation for the third guide in the
-producer and Next.js video series; that guide remains unpublished until its
-complete qualification record is ready.
+This component is the reference implementation for the
+[MediaMTX guide](https://rstream.io/guides/distribute-webrtc-video-with-mediamtx-and-rstream) in the producer and Next.js video series.
+
+For shared organization deployments, configure the platform with
+`DEVICE_ACCESS_MODE=organization`, `GITHUB_ORGANIZATION`, and
+`MEDIAMTX_ALLOW_DIRECT_FALLBACK=false`. This prevents a distributor outage from
+opening separate direct device sessions. Optional source presets are configured
+on the producer and apply to the single upstream, hence to all MediaMTX readers.
+They do not create separate renditions or downstream adaptation. Organizations
+may also select `DEVICE_INVENTORY_MODE=discovered` and publish labeled sources
+with `config.discovery.h264.yaml`; the adapter resolves their current project
+tunnel without a provisioning secret. The platform README covers stable device
+IDs, display names and optional offline inventory history.
 
 ## Delivery profiles
 
-| Profile               | Device uplinks | Producer leg                                      | Viewer leg                     | Use it when                                                         |
-| --------------------- | -------------: | ------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------- |
-| Direct                | one per viewer | TWCC, NACK/RTX, FlexFEC, bounded pacer            | same end-to-end session        | one viewer needs the shortest path and end-to-end adaptation        |
-| MediaMTX native pull  |     one shared | NACK and negotiated TWCC with fixed source pacing | MediaMTX NACK and TWCC         | a static source accepts the reduced MediaMTX 1.20 offer             |
-| MediaMTX with adapter |     one shared | TWCC, NACK/RTX, FlexFEC, bounded pacer            | independent MediaMTX NACK/TWCC | a product needs dynamic sources, complete source repair and fan-out |
+| Profile               | Device uplinks | Producer leg                               | Viewer leg                     | Use it when                                                         |
+| --------------------- | -------------: | ------------------------------------------ | ------------------------------ | ------------------------------------------------------------------- |
+| Direct                | one per viewer | TWCC, NACK/RTX, FlexFEC, bounded pacer     | same end-to-end session        | one viewer needs the shortest path and end-to-end adaptation        |
+| MediaMTX native pull  |     one shared | NACK/RTX and TWCC with fixed source pacing | MediaMTX NACK and TWCC         | a static source accepts the reduced MediaMTX 1.21.1 offer           |
+| MediaMTX with adapter |     one shared | TWCC, NACK/RTX, FlexFEC, bounded pacer     | independent MediaMTX NACK/TWCC | a product needs dynamic sources, complete source repair and fan-out |
 
 The native profile is intentionally retained as an interoperability option. It
 removes the adapter when its smaller feature set and static source contract are
 enough. The producer must opt into the bounded MediaMTX-native offer profile;
 strict profiles do not relax their WHEP validation. Draft 04 requires
 `rtcp-mux-only` and one common `msid` on the active media sections; MediaMTX
-1.20 emits neither in its source offer and its player does not complete a `406`
+1.21.1 emits neither in its source offer and its player does not complete a `406`
 counter-offer exchange. The opt-in accepts only those two known differences,
-continues to require BUNDLE and RTCP multiplexing, and disables RTX, FlexFEC,
-and adaptive source encoding for that session. The adapter profile keeps the
+continues to require BUNDLE and RTCP multiplexing, and keeps fixed source
+encoding/pacing for that session. RTX is negotiated when offered (including
+MediaMTX 1.21.1); FlexFEC is absent. The adapter profile keeps the
 strict producer contract and is the reference product path.
 
 MediaMTX exposure is independent of these profiles. A public deployment gives
@@ -63,9 +74,9 @@ paths:
 This profile is deliberately static: MediaMTX receives one source URL in its
 configuration and pulls it on first demand. It is useful for a small fixed
 deployment, but it does not provide the platform's per-device resolver or
-automatic direct fallback. The producer fixes pacing for this native source
-session because MediaMTX 1.20 does not negotiate the RTX/FlexFEC profile used
-by the adaptive adapter leg.
+automatic direct fallback. The sample retains fixed encoding and pacing for
+this native source session. Adaptive encoding, optional source presets and
+FlexFEC use the adapter profile; RTX alone does not enable these features.
 
 The adapter terminates source repair before publishing a fresh downstream RTP
 flow. Source transport-wide sequence numbers never cross into the MediaMTX
@@ -96,11 +107,49 @@ local resource invariants stop the process immediately so a broken deployment
 cannot hammer the control plane. `SIGINT`/`SIGTERM` interrupts both forwarding
 and backoff immediately.
 
+After WHIP signaling, the adapter waits up to ten seconds for the destination
+media transport to connect before forwarding RTP or requesting the initial
+source key frame. This preserves the initial H.264 parameter sets that a
+not-yet-connected sender can otherwise discard. Cancellation or connection
+failure closes the newly created session; no extra live buffering is added.
+
 The forwarding pipeline has bounded packet, repair, and worker queues. It
 reorders media for at most 300 ms, retries NACK feedback at a bounded cadence,
 expires missing packets after one second, and stops instead of accumulating an
-unbounded live-stream backlog. PLI and FIR requests cross back to the source;
-viewer NACK and TWCC remain local to the MediaMTX hop.
+unbounded live-stream backlog. PLI and FIR received from MediaMTX cross back to
+the source; viewer NACK and TWCC remain local to the MediaMTX hop. This is not
+end-to-end forwarding of every viewer's key-frame request: MediaMTX 1.21.1
+[consumes reader RTCP without forwarding PLI upstream](https://github.com/bluenviron/mediamtx/blob/v1.21.1/internal/protocols/webrtc/outbound_track.go)
+and [generates its own periodic source PLI every two seconds](https://github.com/bluenviron/mediamtx/blob/v1.21.1/internal/protocols/webrtc/inbound_track.go).
+The combined image therefore uses MediaMTX's standard `runOnRead` hook to
+request a source key frame when a reader's media transport connects. A short
+local command sends a fixed notification to that path's adapter through a
+private Unix socket. Concurrent arrivals retain at most one pending request
+per 250ms; the producer also preserves one deferred request inside its own
+rate limit. Neither source bitrate nor GOP interval changes. Existing readers
+continue on the same live upstream, and the last reader still releases it after
+`runOnDemandCloseAfter` (five seconds in the reference configuration). That idle
+grace trades briefly continued encoding against avoiding source recreation on
+rapid reopen; reduce it when immediate resource release matters more.
+
+Stopping the shared browser client during its initial WHEP POST retains that
+request only within its existing close budget, so a returned session URL can
+be deleted promptly. Aborting the POST before its response would lose the only
+resource identifier and leave MediaMTX's unfinished peer waiting for its
+handshake timeout. An unreachable response or disappearing page can still
+require that server timeout; the client reports unconfirmed cleanup explicitly.
+
+The `host` command creates and removes the private notification directory and
+passes it to MediaMTX and its hooks. Path locks reject a duplicate live adapter
+and allow a replacement to recover a socket left by a crashed process. Custom
+MediaMTX configurations must retain both `runOnDemand` and `runOnRead` from the
+bundled configuration to get this behavior. No public control endpoint or
+permanent encoding session is added. Native MediaMTX pull does not use this
+adapter hook and retains MediaMTX's periodic key-frame behavior.
+
+First-picture timing is measured separately from steady-state latency;
+reducing the source GOP interval also changes encoding cost and compression
+efficiency, so it requires a measured tradeoff.
 
 The reference configuration admits at most eight readers on one device path.
 That boundary is deliberate: the fan-out qualification drives a decoder-valid
@@ -114,7 +163,7 @@ still needs a measured aggregate admission boundary.
 ## Build the combined image
 
 The official MediaMTX image is distroless and cannot execute `runOnDemand`
-commands. The supplied image copies the pinned MediaMTX 1.20 binary and the Go
+commands. The supplied image copies the pinned MediaMTX 1.21.1 binary and the Go
 adapter into an unprivileged Alpine runtime with a shell and CA roots. Both
 processes still run in one container.
 
@@ -223,7 +272,7 @@ path, or other query parameters. Static deployments use the same contract:
 place the rstream token in `RSTREAM_SOURCE_URL` and use
 `RSTREAM_SOURCE_AUTHORIZATION` only when the producer itself requires a bearer.
 
-MediaMTX 1.20 validates the JWT when it creates a WHEP or WHIP session. In this
+MediaMTX 1.21.1 validates the JWT when it creates a WHEP or WHIP session. In this
 implementation, the returned resource URL then acts as an opaque capability:
 PATCH and DELETE are bound to its random session identifier and do not
 revalidate a later JWT.
@@ -249,6 +298,12 @@ readiness, reader count, and inbound/outbound bytes:
 GET http://127.0.0.1:9998/metrics?type=paths&path=devices/<device-id>
 ```
 
+To show a scoped summary in the Next.js player, configure its server-side
+`MEDIAMTX_METRICS_URL` with this private `/metrics` endpoint. Next.js authorizes
+the device before reading readiness, reader count and byte counters. It derives
+rates from consecutive observations and does not expose this listener or the
+administrative API to the browser. Scraping never starts an on-demand source.
+
 Keep device identity in scrape-target labels rather than adding session or
 viewer identifiers in application metrics. The adapter's structured shutdown
 log distinguishes received recovery packets, repairs delivered before the
@@ -256,7 +311,63 @@ reorder window closes, and RTX/FlexFEC packets that arrived too late. The
 current on-demand process deliberately does not open a second metrics listener
 per device.
 
+## Optional recent recordings
+
+The bundled configuration leaves `record` and `playback` disabled. To enable a
+short history, explicitly set `MTX_PATHDEFAULTS_RECORD=true` and
+`MTX_PLAYBACK=true`, then supply a writable `/recordings` mount owned by UID/GID 10001. Keep playback port 9996 on loopback or a private network accessible to
+Next.js. Playback uses the existing JWT issuer/JWKS and a separate, path-scoped
+`playback` permission; live `read` and `publish` tokens cannot read recordings.
+The administrative API remains disabled.
+
+The configuration uses fMP4, one-second parts, an 8 MiB maximum part size,
+five-second minimum segments and five-minute retention. Recording only follows
+an already transmitting path. It does not create a permanent reader or change
+the on-demand source lifecycle. Codec changes and interruptions can split the
+available time spans.
+
+**Retention is not a byte quota.** MediaMTX cleans periodically (half the
+configured retention interval in version 1.21.1), and segments can exceed their
+minimum duration while waiting for a key frame. Use a dedicated filesystem with
+an enforced quota or a size-limited temporary volume. Size it for the aggregate
+bitrate of simultaneously active devices, cleanup delay and key-frame overhead.
+The local helper's 512 MiB tmpfs is bounded, consumes server memory, and is
+discarded with the container; it does not guarantee five minutes at every
+bitrate/device count. For sustained server use, prefer an appropriately sized
+quota-limited disk volume and monitor recording errors/free space. Keep media
+storage separate from logs and the system filesystem.
+
+**Full storage temporarily disables history.** MediaMTX 1.21.1 can leave incomplete
+fMP4 segments after `ENOSPC`; its playback index rejects the whole requested
+interval if any segment cannot be parsed. Freeing space lets recording resume,
+but history can remain unavailable until those files leave the requested window
+or retention removes them. With the bundled
+five-minute retention, allow up to another cleaner interval (2.5 minutes).
+Next.js reports this as unavailable, keeps live viewing independent and retries
+the index. It does not delete segments or claim a complete history during the
+fault. Prevent saturation with sufficient capacity and monitoring; this optional
+history is not an archival recording service.
+
+Next.js exposes only the configured recent window and proxies bounded MP4
+clips; see the [platform API and local setup](../platform/README.md#optional-recent-recordings).
+Live video continues to use WebRTC. Qualify disk activity, full-volume behavior
+and simultaneous replay against your live latency/resource budget before
+enabling this optional feature in a deployment.
+
 ## Technical qualification
+
+Prepare the Linux host's UDP socket limits before live QUIC qualification:
+
+```bash
+sudo sysctl -w net.core.rmem_max=7500000 net.core.wmem_max=7500000
+```
+
+These are host settings, not producer configuration. With Docker Desktop, the
+relevant host is its Linux VM. Record existing values and restore them after a
+temporary experiment; the command does not persist across reboot. See the
+[quic-go buffer guidance](https://github.com/quic-go/quic-go/wiki/UDP-Buffer-Sizes).
+A socket-buffer warning fails the performance-environment gate even if video
+plays correctly. Do not suppress the warning to qualify an undersized host.
 
 ```bash
 go test ./...
@@ -266,7 +377,7 @@ go test -race -tags=integration ./internal/bridge
 make qualify-fanout OUT=/tmp/rstream-video-distributor
 ```
 
-The integration suite starts the real MediaMTX 1.20 binary. It proves that two
+The integration suite starts the real MediaMTX 1.21.1 binary. It proves that two
 viewers create one source WHEP session, injects and repairs a missing H.264 RTP
 packet with FlexFEC, then repeats with the first FEC packet suppressed and
 requires RTX recovery. Every viewer must receive the complete ordered range.
@@ -274,8 +385,9 @@ The source offer and both viewer sessions must also negotiate transport-wide
 congestion control, and the source harness must receive TWCC feedback.
 The suite also reads the live MediaMTX path metrics, closes the source after the
 last viewer, restarts without stale state, and recovers after a rejected source
-negotiation. A separate native-pull test locks the capability difference that
-makes the two profiles explicit.
+negotiation. A separate native-pull test drops a primary packet, requires an
+actual RTX retransmission and delivery to both readers, and locks the remaining
+capability differences that make the two profiles explicit.
 
 The fan-out qualification runs three independent passes with a real
 constrained-baseline H.264 GOP at approximately 8 Mbit/s. It requires constant
@@ -303,6 +415,42 @@ Use `RSTREAM_DISTRIBUTOR_MODE=direct` for the one-to-one reference. Setting
 `RSTREAM_DISTRIBUTOR_EDGE_AUTH=false` is useful only when isolating local media
 behavior and does not satisfy the release authentication gate.
 
+For a direct media diagnostic without an external control-plane dependency,
+unset `RSTREAM_CONTEXT` and set `RSTREAM_DISTRIBUTOR_CONTROL_PATH=local`,
+`RSTREAM_DISTRIBUTOR_MODE=direct` and `RSTREAM_DISTRIBUTOR_EDGE_AUTH=false`.
+No rstream CLI configuration or credentials are read. The producer stays on an
+isolated Docker bridge with no published host ports; a qualification-only
+proxy preserves the local quality API's loopback restriction and exposes only
+WHEP and read-only observations. Results explicitly record `controlPath: local`.
+This diagnoses direct media independently; it does not qualify tunnels, TURN,
+edge authentication or MediaMTX. Other modes reject this option.
+
+For a separate activation and cancellation check, use
+`RSTREAM_DISTRIBUTOR_STARTUP_CYCLES=true` with the same command and an empty
+output directory. This adaptive MediaMTX check repeats three source-cold
+activations, three immediate same-page reopens during the one-second
+qualification idle grace, and three additional readers joining the active
+source. Every warm operation must retain the same single upstream and encoder.
+It then cancels setup after 0, 25, 100 and 250ms, confirms WHEP resource cleanup,
+and observes source counters for another 18 seconds. Counters must remain zero
+after the idle grace plus a two-second scheduling margin; an initial zero
+cannot hide delayed activation. `startup-cycles.json` retains every attempted
+case, frame callback and cancellation observation; `startup-manifest.json`
+identifies the source and images. The runner has a four-minute browser deadline.
+This mode does not combine with recording or network/format phases, and does
+not replace their cadence, quality, latency or CPU gates. Timings exclude
+Next.js authorization and device process startup. The production idle grace
+remains five seconds.
+
+Phase changes are published atomically inside the browser container, with
+an acknowledged write before the runner continues. The collector's live control
+file does not depend on host bind-mount rename visibility. Its concurrent-reader
+check requires only a Node container (or an existing qualification browser image):
+
+```bash
+qualification/end-to-end/phase-container-test.sh node:24-bookworm
+```
+
 The browser runner can apply capacity, delay, jitter, loss, and an explicit
 playout target to the viewer leg. It correlates first-frame timing, decoded
 frame rate, freezes, source OpenMetrics, packet repair, traffic-control
@@ -329,3 +477,89 @@ impairment cannot be enabled in one run because that would make the observed
 reaction causally ambiguous. The result records the selected network
 namespace, destination, traffic-control counters, TWCC response, encoder
 target, RTX/FlexFEC repair, decoded frame rate, freezes, and recovery.
+
+To qualify automatic source resolution and frame-rate changes, use the optional
+format profile and name the expected format during the constrained phase:
+
+```bash
+RSTREAM_CONTEXT="<staging-context>" \
+RSTREAM_DISTRIBUTOR_MODE="mediamtx" \
+RSTREAM_DISTRIBUTOR_SOURCE_CAPACITY_KBPS="1500" \
+RSTREAM_DISTRIBUTOR_EXPECT_FORMAT="small" \
+qualification/end-to-end/run.sh /tmp/rstream-video-automatic-format
+```
+
+This selects a qualification-only 720p30 / 540p24 / 360p15 ladder, measures
+45-second baseline and capacity phases, then allows 90 seconds for recovery.
+For direct delivery, use `MODE=direct` and `VIEWER_CAPACITY_KBPS` with the same
+prefix. Native MediaMTX and downstream-only MediaMTX shaping cannot qualify a
+shared adaptive source. The public provisioning example remains unchanged.
+
+The `Video qualification` workflow also provides
+`automatic_format_comparison=true`. With `automatic_format_delivery=direct`, it
+compares one-second and three-second down-holds in 1s / 3s / 3s / 1s / 1s / 3s
+order on one hosted Linux runner. With `automatic_format_delivery=mediamtx`, it
+repeats the public three-second default three times through the custom adapter.
+The report requires identical producer/browser image digests across trials,
+plus the distributor image for MediaMTX. Other workflow inputs apply to the
+usual fixed-format qualification and are unused here. This job needs no secrets.
+It fixes the source
+ladder, 1.5 Mbit/s capacity, zero injected loss/delay and zero playout-delay hint,
+retains every attempted result and restores the runner's socket limits. No
+production default changes as a side effect. Its local equivalent, after the
+host's socket-limit preparation, is:
+
+```bash
+../producer/qualification/adaptive-streaming/formats/compare-delivery.sh paired /tmp/video-formats-paired
+../producer/qualification/adaptive-streaming/formats/compare-delivery.sh 3s /tmp/video-formats-mediamtx mediamtx
+```
+
+Use `1s` or `3s` instead of `paired` to run only three trials of one setting.
+Any failed delivery gate fails the aggregate comparison; completed failures are
+retained and the remaining trials still run. An incomplete setup stops the series.
+
+This isolated mode exercises media without the rstream control plane. Its
+qualification-only proxy exposes WHEP and read-only observations on an unpublished
+Docker port. MediaMTX uses a second proxy on its own loopback interface, preserving
+the production adapter's HTTPS requirement for remote sources. Producer and
+adapter retain separate network namespaces, so shaping targets the actual media
+hop. These results do not measure authenticated tunnel or dashboard startup.
+
+The collector reads the existing quality API with a separate, short-lived
+path-scoped credential that stays in a private file outside the evidence.
+`source-formats.json` compares confirmed encoder caps with actual decoded
+dimensions, measures cadence against the observed format, checks dwell time
+within the reported sampling uncertainty, and requires return to the initial
+format without another peer connection or WHEP session. Requested caps alone
+cannot pass. Existing freeze, dropped-frame, bitrate, recovery and resource
+checks remain active. Media-time continuity is sampled; this observation does
+not establish every-frame timestamp continuity or physical capture latency.
+`RSTREAM_DISTRIBUTOR_QUALITY_OBSERVER=true` enables just the API observations
+for other profiles that expose quality modes. Combined format/latency runs
+require an explicit profile with the pixel marker after format selection.
+
+For pixel-based latency measurement on a shared Linux host, add
+`RSTREAM_DISTRIBUTOR_LATENCY_PROBE=true`. The optional
+`RSTREAM_DISTRIBUTOR_PRODUCER_CONFIG` selects a custom qualification profile;
+its digest is retained in the report. See the
+[measurement scope and clock/marker gates](../producer/qualification/adaptive-streaming/README.md#optional-pixel-based-latency-measurement)
+before interpreting these results. The probe is disabled by default and does
+not change production pipelines or the live player's buffering policy.
+
+For a bounded recording-cost comparison, add
+`RSTREAM_DISTRIBUTOR_RECORDING=true` in either MediaMTX mode. The qualification
+records fMP4 with one-second parts, five-second segments and five-minute retention
+in a disposable 512 MiB tmpfs. `recording.json` reports the resulting segment
+count and bytes; an enabled run with no recorded data fails. This measures
+recording during live viewing; playback and storage-fault behavior have separate
+platform integration checks. Direct delivery rejects this option.
+
+`resources.json` retains whole-run totals and also groups CPU, memory and task
+counts by phase. A sample spanning a phase change stays in whole-run totals but
+is excluded from phase comparisons, including when the change happens during
+the process-memory fallback read. Compare matching `phases.baseline` windows,
+source profiles and images when measuring probe or recording overhead. UTC
+sample times provide context; they are not used to calculate CPU utilization.
+Memory is labeled by measurement source: process PSS/RSS excludes the recording
+tmpfs, whose stored bytes are reported separately. These are host-specific
+measurements, not hardware-independent resource guarantees.

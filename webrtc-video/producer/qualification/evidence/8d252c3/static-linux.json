@@ -1,0 +1,184 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "8d252c3289884b50403999b38da42cd63f9e738b",
+  "sourceCleanAtFinalBuild": true,
+  "commands": [
+    "make dist-linux-arm64",
+    "make dist-linux-amd64",
+    "make dist"
+  ],
+  "finalBuild": "make dist at 8d252c3; both architectures completed",
+  "mediaSources": {
+    "gstreamer": {
+      "version": "1.28.7",
+      "sha256": "58dd845a6473355edd71f67227219ec04e039cee5c000265d3fbbd2e7920a3a8"
+    },
+    "libaom": {
+      "version": "3.15.1",
+      "sha256": "8ca0c52746174603500f0adb6f2a215d69c9ca2aab2acb3caa06fb791d8d01bf"
+    },
+    "x264": {
+      "commit": "b35605ace3ddf7c1a5d67a2eb553f034aef41d55"
+    }
+  },
+  "runtimeChecks": [
+    {
+      "architecture": "arm64",
+      "binarySHA256": "97f973bcdf3feb529375ace8d6fe1de718b964c98f53e02235bf791d356c9bf5",
+      "sourceRevision": "8d252c3289884b50403999b38da42cd63f9e738b",
+      "runtimeImage": "sha256:6549870d2a8b18d8bbae79b3390dc1e800521d5f02cd391469d1d2a5da61daaf",
+      "cases": [
+        {
+          "codec": "h264",
+          "configurationSHA256": "73f6e473da4c625a1d58a506c83b6efe992ed5b0ab73adc205de68a0bb631d90",
+          "passed": true,
+          "encodedFrames": 605.0,
+          "medianDecodedFramesPerSecond": 30.0,
+          "samples": 22,
+          "decodedFrames": 634,
+          "width": 1280,
+          "height": 720,
+          "shutdownSeconds": 0.13996112497989088,
+          "producerExitCode": 0,
+          "browser": "154.0.8037.92",
+          "whepSessionCreates": 1,
+          "whepSessionDeletes": 1,
+          "packetLossIncrease": 0,
+          "decodedDropIncrease": 0,
+          "freezeSecondsIncrease": 0,
+          "browserDiagnosticsBytes": 0
+        },
+        {
+          "codec": "av1",
+          "configurationSHA256": "d9413189afe1c057632e10292f59583ac0bff95f18c13b5ad4888dffb6f5e5e4",
+          "passed": true,
+          "encodedFrames": 158.0,
+          "medianDecodedFramesPerSecond": 8.0,
+          "samples": 22,
+          "decodedFrames": 166,
+          "width": 1280,
+          "height": 720,
+          "shutdownSeconds": 0.12575870798900723,
+          "producerExitCode": 0,
+          "browser": "154.0.8037.92",
+          "whepSessionCreates": 1,
+          "whepSessionDeletes": 1,
+          "packetLossIncrease": 0,
+          "decodedDropIncrease": 0,
+          "freezeSecondsIncrease": 0.0,
+          "browserDiagnosticsBytes": 0
+        }
+      ],
+      "scope": "functional real-media/static-link check; no latency or CPU performance claim"
+    },
+    {
+      "architecture": "amd64",
+      "binarySHA256": "d0d5fdffa28bfd36926befda493395a05649e7f5e643966840241bf49d7d4a65",
+      "sourceRevision": "8d252c3289884b50403999b38da42cd63f9e738b",
+      "runtimeImage": "sha256:09d3a24287dd4b81016c25c63deebd9edc9c8426941dc5b9a67a272ef00eb4da",
+      "cases": [
+        {
+          "codec": "h264",
+          "configurationSHA256": "73f6e473da4c625a1d58a506c83b6efe992ed5b0ab73adc205de68a0bb631d90",
+          "passed": true,
+          "encodedFrames": 604.0,
+          "medianDecodedFramesPerSecond": 30.0,
+          "samples": 22,
+          "decodedFrames": 635,
+          "width": 1280,
+          "height": 720,
+          "shutdownSeconds": 0.14403016702271998,
+          "producerExitCode": 0,
+          "browser": "154.0.8037.92",
+          "whepSessionCreates": 1,
+          "whepSessionDeletes": 1,
+          "packetLossIncrease": 0,
+          "decodedDropIncrease": 0,
+          "freezeSecondsIncrease": 0,
+          "browserDiagnosticsBytes": 0
+        },
+        {
+          "codec": "av1",
+          "configurationSHA256": "d9413189afe1c057632e10292f59583ac0bff95f18c13b5ad4888dffb6f5e5e4",
+          "passed": true,
+          "encodedFrames": 157.0,
+          "medianDecodedFramesPerSecond": 8.0,
+          "samples": 22,
+          "decodedFrames": 166,
+          "width": 1280,
+          "height": 720,
+          "shutdownSeconds": 0.15505329199368134,
+          "producerExitCode": 0,
+          "browser": "154.0.8037.92",
+          "whepSessionCreates": 1,
+          "whepSessionDeletes": 1,
+          "packetLossIncrease": 0,
+          "decodedDropIncrease": 0,
+          "freezeSecondsIncrease": 0,
+          "browserDiagnosticsBytes": 0
+        }
+      ],
+      "scope": "functional real-media/static-link check; no latency or CPU performance claim"
+    }
+  ],
+  "limitations": [
+    "Both are standalone static ELF files run in a scratch filesystem without shared GStreamer or codec libraries.",
+    "Runtime configuration uses the shipped codec pipeline at 1280x720/30; tunnel and TURN disabled, loopback HTTP and local metrics enabled.",
+    "ARM64 executes in the ARM64 Docker VM; AMD64 executes through Docker Desktop architecture emulation. These are not native AMD64 performance measurements.",
+    "Each codec has about 20 seconds of steady media observation, at least 15 samples and 150 newly decoded frames; this checks real encoding/decoding and shutdown, not network impairment or capture-to-display latency.",
+    "H.264 sustains 30 fps; AV1 sustains only 8 fps. The AV1 profile has not met its configured 30 fps and requires a separate encoder/profile investigation before making a real-time performance claim.",
+    "Source and browser snapshots have different collection boundaries; their absolute frame deltas must not be subtracted as a packet/frame loss count.",
+    "The first ARM64 build began with the unchanged 605a55f bytes just before commit. Final make dist and all four final runtime cases use clean 8d252c3."
+  ],
+  "sourceValidation": [
+    "shell syntax and shellcheck pass",
+    "invalid source versions, missing custom checksums, malformed digests and a moving x264 ref are rejected",
+    "an intentionally incorrect libaom SHA256 rejects the actual downloaded archive before compilation"
+  ],
+  "inputSHA256": {
+    "runtime-arm64-8d252c3/h264/config.yaml": "73f6e473da4c625a1d58a506c83b6efe992ed5b0ab73adc205de68a0bb631d90",
+    "runtime-arm64-8d252c3/h264/samples.jsonl": "625b2cd4f604d88bc21b4644b946bf051f13e864a65b278099b1c2c125bf691b",
+    "runtime-arm64-8d252c3/h264/producer.log": "3da7bc386b2b9127e97e3133e24a62602107ed54e3e5c29dbaa33efa1032acb1",
+    "runtime-arm64-8d252c3/h264/browser.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runtime-arm64-8d252c3/h264/browser.json": "dcd7d14f17499a6f0dcee3dc98d996899524c7f8f5981a6a5dd810e3dfb121eb",
+    "runtime-arm64-8d252c3/h264/signaling-events.json": "45ca3baca05e4e36bdad5d7cb8a270b3860094be2c47911ca7e96d95f2178145",
+    "runtime-arm64-8d252c3/h264/metrics-start.txt": "f39fed9a51fa46d526b3504e72ddabc99db715bdc529cb0deecfaa63dc0cad0f",
+    "runtime-arm64-8d252c3/h264/metrics-end.txt": "83e511acb2ba13c7c57ab0e62af11b852971915bc4089712259f33c8303430d0",
+    "runtime-arm64-8d252c3/av1/config.yaml": "d9413189afe1c057632e10292f59583ac0bff95f18c13b5ad4888dffb6f5e5e4",
+    "runtime-arm64-8d252c3/av1/samples.jsonl": "de211194f98f46ce1fe4594e8c93f3110d8dc6010f1b4cc0e6bbe13781e0f011",
+    "runtime-arm64-8d252c3/av1/producer.log": "fdff3e9abacd1790552d555c38fe4777388b8234ff07ee13708054fda474e6ae",
+    "runtime-arm64-8d252c3/av1/browser.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runtime-arm64-8d252c3/av1/browser.json": "1bb0d8afc2a0f7b02484774ded5da72f232dec3e55cc25897d742c6c293f9b0a",
+    "runtime-arm64-8d252c3/av1/signaling-events.json": "0cfae2bb3926c6a63d3a51dcba0e0928ed2ba50cc7ccbbd4c64b888cfd524f2e",
+    "runtime-arm64-8d252c3/av1/metrics-start.txt": "c443be7855bec0e9f6ead7ac24b79d0c263d86312da15eca4cd7a63b56111eb8",
+    "runtime-arm64-8d252c3/av1/metrics-end.txt": "53ca938b506bf728c652b2a380b54cdc8894c44def289bcb5a4425cc7d7ae1ba",
+    "runtime-arm64-8d252c3/result.json": "4df46d17b34704dd4f5c1a444fd106346ae3ad7e288a8c48e481a91400ecb2b6",
+    "runtime-amd64-8d252c3/h264/config.yaml": "73f6e473da4c625a1d58a506c83b6efe992ed5b0ab73adc205de68a0bb631d90",
+    "runtime-amd64-8d252c3/h264/samples.jsonl": "77073d43de0101fd0016cc7363a66bbe1ff83e863ad7c473e458a1f9e9e6b5ca",
+    "runtime-amd64-8d252c3/h264/producer.log": "ae34ffc736b8fc785201242e7032ea45f63dba14971e19ae9c30616ce4fa6ce3",
+    "runtime-amd64-8d252c3/h264/browser.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runtime-amd64-8d252c3/h264/browser.json": "dcd7d14f17499a6f0dcee3dc98d996899524c7f8f5981a6a5dd810e3dfb121eb",
+    "runtime-amd64-8d252c3/h264/signaling-events.json": "a4fbef71013bcad26af7a762e2f96b35f73b33dc4f0456d3422d7b381e8762e1",
+    "runtime-amd64-8d252c3/h264/metrics-start.txt": "2ddea18b5510cf0c61bd6499576dfdaaf0e4540c505624fcd05c055c565ba646",
+    "runtime-amd64-8d252c3/h264/metrics-end.txt": "e2a02d69316f85df009f26a5621fa0d0eec82078381a381365ca52bae2e8328d",
+    "runtime-amd64-8d252c3/av1/config.yaml": "d9413189afe1c057632e10292f59583ac0bff95f18c13b5ad4888dffb6f5e5e4",
+    "runtime-amd64-8d252c3/av1/samples.jsonl": "c37250dfb008424dd6ffdb91702ea71f0ead3a5178ba044c2d8a38450f3d7126",
+    "runtime-amd64-8d252c3/av1/producer.log": "0c3d8b5213355cb21e8f1b514f3b3a6ce3dadc741c80fb6e0db9bf9ecbf99895",
+    "runtime-amd64-8d252c3/av1/browser.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runtime-amd64-8d252c3/av1/browser.json": "1bb0d8afc2a0f7b02484774ded5da72f232dec3e55cc25897d742c6c293f9b0a",
+    "runtime-amd64-8d252c3/av1/signaling-events.json": "933309f80f09d7fe44c001ae6083d390757267422006df8059303f43618c0725",
+    "runtime-amd64-8d252c3/av1/metrics-start.txt": "9aef345b9a8cf50b4fd3ac386a702405cbb68bd2846e79cbcd1965085f56726e",
+    "runtime-amd64-8d252c3/av1/metrics-end.txt": "31431f3578d5b5d6f1a86f9f13ea79842c2d6a9f47101bf6066f8c8c567d1568",
+    "runtime-amd64-8d252c3/result.json": "645fad127cdd14e6ca657944cdf41d2f593be49b91d7225452461ba1e1a707f9",
+    "rstream-static-linux-arm64.log": "0de148e4f467f08f8e69451836c101adc1e87e39cf521b2db0f84509a1a3affe",
+    "rstream-static-linux-amd64.log": "a0d4374eefa80a17fbc372ce97818632ed25df16867183ec459209d7d63524a1",
+    "rstream-static-linux-final-8d252c3.log": "7cc3265215bd23ae90fbca5684c0b9733e2bb9e50878fa47254191c8ddf86750",
+    "rstream-video-guide-tc-check-final.log": "c7177698cfec5286ed88e897147baad43a5a73ce0f26c533de425f4f160d1200"
+  },
+  "runtimeHarnessSHA256": "9d1b3d390666b52671d63c28e6b65fa7f11c5c712f17a657b5439d5c3b04e914",
+  "cleanup": {
+    "ownedRuntimeContainersRemaining": 0,
+    "hostPortPublication": false,
+    "hostNetworkChanges": false
+  }
+}

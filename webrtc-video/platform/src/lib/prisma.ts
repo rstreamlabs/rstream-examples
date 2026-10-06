@@ -30,7 +30,15 @@ function normalizeDatabaseUrl(value: string): string {
 
 function createPrismaClient(): PrismaClient {
   return new PrismaClient({
-    adapter: new PrismaPg({ connectionString: databaseUrl() }),
+    adapter: new PrismaPg({
+      connectionString: databaseUrl(),
+      // Bound connection/pool acquisition and statements independently. Let
+      // PostgreSQL cancel work before the client-side transport deadline.
+      connectionTimeoutMillis: 5000,
+      statement_timeout: 5000,
+      query_timeout: 6000,
+      idle_in_transaction_session_timeout: 10000,
+    }),
   })
 }
 

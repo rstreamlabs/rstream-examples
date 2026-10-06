@@ -56,7 +56,9 @@ jobs:
             webrtc-video/distributor/qualification/end-to-end/mode-test.sh
             webrtc-video/distributor/qualification/end-to-end/phase.sh
             webrtc-video/distributor/qualification/end-to-end/phase-test.sh
+            webrtc-video/distributor/qualification/end-to-end/phase-container-test.sh
             webrtc-video/distributor/qualification/end-to-end/resource-report-test.sh
+            webrtc-video/distributor/qualification/end-to-end/resource-sampler-test.sh
             webrtc-video/distributor/qualification/end-to-end/result-test.sh
             webrtc-video/distributor/qualification/comparison/report-test.sh
             webrtc-video/distributor/qualification/comparison/run.sh
@@ -84,10 +86,12 @@ jobs:
           .github/scripts/npm-audit_test.sh
           webrtc-video/distributor/qualification/fanout/report-test.sh
           webrtc-video/distributor/qualification/end-to-end/resource-report-test.sh
+          webrtc-video/distributor/qualification/end-to-end/resource-sampler-test.sh
           webrtc-video/distributor/qualification/end-to-end/result-test.sh
           webrtc-video/distributor/qualification/end-to-end/configuration-test.sh
           webrtc-video/distributor/qualification/end-to-end/mode-test.sh
           webrtc-video/distributor/qualification/end-to-end/phase-test.sh
+          webrtc-video/distributor/qualification/end-to-end/phase-container-test.sh node:24-bookworm
           webrtc-video/distributor/qualification/comparison/report-test.sh
           webrtc-video/distributor/qualification/matrix/report-test.sh
           webrtc-video/distributor/qualification/matrix/run-test.sh
@@ -339,7 +343,7 @@ jobs:
           container="rstream-mediamtx-platform-${GITHUB_RUN_ID}"
           trap 'docker rm --force "$container" >/dev/null 2>&1 || true' EXIT
           docker create --name "$container" \
-            bluenviron/mediamtx:1.20.0@sha256:86e63af28616d5e5a18540d7b031b6510bd4cbf1a3c7d224f9e2976f02aefbfb
+            bluenviron/mediamtx:1.21.1@sha256:5ce2a948eb68df06ce2e13870db8df8e30d516ac4dc40e04bfe8aee3bdf7be40
           docker cp "$container:/mediamtx" "${RUNNER_TEMP}/mediamtx"
           chmod 0555 "${RUNNER_TEMP}/mediamtx"
           printf '%s\n' "$RUNNER_TEMP" >>"$GITHUB_PATH"
@@ -388,7 +392,7 @@ jobs:
           container="rstream-mediamtx-distributor-${GITHUB_RUN_ID}"
           trap 'docker rm --force "$container" >/dev/null 2>&1 || true' EXIT
           docker create --name "$container" \
-            bluenviron/mediamtx:1.20.0@sha256:86e63af28616d5e5a18540d7b031b6510bd4cbf1a3c7d224f9e2976f02aefbfb
+            bluenviron/mediamtx:1.21.1@sha256:5ce2a948eb68df06ce2e13870db8df8e30d516ac4dc40e04bfe8aee3bdf7be40
           docker cp "$container:/mediamtx" "${RUNNER_TEMP}/mediamtx"
           chmod 0555 "${RUNNER_TEMP}/mediamtx"
           printf '%s\n' "$RUNNER_TEMP" >>"$GITHUB_PATH"
@@ -430,6 +434,7 @@ jobs:
           set -euo pipefail
           sudo apt update
           sudo apt-get install -y \
+            gstreamer1.0-libav \
             gstreamer1.0-plugins-bad \
             gstreamer1.0-plugins-base \
             gstreamer1.0-plugins-good \
@@ -438,7 +443,9 @@ jobs:
             libgstreamer-plugins-base1.0-dev \
             libgstreamer1.0-dev \
             pkg-config
-          gst-inspect-1.0 appsink h264parse videotestsrc x264enc >/dev/null
+          for element in appsink avdec_h264 h264parse videotestsrc x264enc; do
+            gst-inspect-1.0 "$element" >/dev/null
+          done
       - name: Test
         working-directory: webrtc-video/producer
         shell: bash

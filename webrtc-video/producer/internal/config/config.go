@@ -8,9 +8,12 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	goyaml "gopkg.in/yaml.v3"
 )
@@ -55,10 +58,12 @@ const (
 	DefaultTunnelName            = "webrtc-video-producer"
 	DefaultTURNTTL               = "10m"
 	DefaultProvisioningTimeout   = "10s"
+	DefaultTunnelConnectTimeout  = "15s"
 	DefaultReconnect             = "5s"
 	DefaultBitrateKbps           = 5000
 	MinBitrateKbps               = 500
-	MaxBitrateKbps               = 8000
+	MaxBitrateKbps               = 50000
+	DefaultMaxBitrateKbps        = 8000
 	RealTimePacingFactor         = 1.5
 	DefaultFlexFECMediaPackets   = 5
 	DefaultFlexFECRepairPackets  = 1
@@ -69,6 +74,7 @@ const (
 )
 
 type Config struct {
+	Quality QualityConfig `yaml:"quality"`
 	Server  ServerConfig  `yaml:"server"`
 	Metrics MetricsConfig `yaml:"metrics"`
 	Web     WebConfig     `yaml:"web"`
@@ -103,12 +109,14 @@ type WebWHEPConfig struct {
 }
 
 type TunnelConfig struct {
-	Enabled      bool                     `yaml:"enabled"`
-	Name         string                   `yaml:"name"`
-	Auth         TunnelAuthConfig         `yaml:"auth"`
-	Transport    TunnelTransportConfig    `yaml:"transport"`
-	Provisioning TunnelProvisioningConfig `yaml:"provisioning"`
-	Reconnect    TunnelReconnectConfig    `yaml:"reconnect"`
+	ConnectTimeout string                   `yaml:"connectTimeout"`
+	Labels         map[string]string        `yaml:"labels"`
+	Enabled        bool                     `yaml:"enabled"`
+	Name           string                   `yaml:"name"`
+	Auth           TunnelAuthConfig         `yaml:"auth"`
+	Transport      TunnelTransportConfig    `yaml:"transport"`
+	Provisioning   TunnelProvisioningConfig `yaml:"provisioning"`
+	Reconnect      TunnelReconnectConfig    `yaml:"reconnect"`
 }
 
 type TunnelAuthConfig struct {
@@ -185,9 +193,10 @@ type WebRTCTWCCGCCBackendConfig struct {
 }
 
 type MediaConfig struct {
-	Pipeline string    `yaml:"pipeline"`
-	SinkName string    `yaml:"sinkName"`
-	Mode     MediaMode `yaml:"mode"`
+	Pipeline string              `yaml:"pipeline"`
+	SinkName string              `yaml:"sinkName"`
+	Mode     MediaMode           `yaml:"mode"`
+	Format   *SourceFormatConfig `yaml:"format"`
 }
 
 type LoggingConfig struct {
@@ -211,9 +220,10 @@ func Default() Config {
 			},
 		},
 		Tunnel: TunnelConfig{
-			Enabled:   true,
-			Name:      DefaultTunnelName,
-			Transport: TunnelTransportConfig{},
+			ConnectTimeout: DefaultTunnelConnectTimeout,
+			Enabled:        true,
+			Name:           DefaultTunnelName,
+			Transport:      TunnelTransportConfig{},
 			Reconnect: TunnelReconnectConfig{
 				Enabled:  true,
 				Interval: DefaultReconnect,
@@ -254,7 +264,7 @@ func Default() Config {
 				Backend: AdaptiveBackendTWCCGCC,
 				TWCCGCC: WebRTCTWCCGCCBackendConfig{
 					MinBitrateKbps:        2000,
-					MaxBitrateKbps:        MaxBitrateKbps,
+					MaxBitrateKbps:        DefaultMaxBitrateKbps,
 					UpdateInterval:        "1s",
 					ChangeThresholdPct:    10,
 					DecreaseThresholdPct:  5,
@@ -269,10 +279,10 @@ func Default() Config {
 			Pipeline: strings.Join([]string{
 				"videotestsrc is-live=true pattern=smpte",
 				"videoconvert",
-				"video/x-raw,width=1920,height=1080,framerate=30/1",
+				"video/x-raw,width=1280,height=720,framerate=30/1",
 				"x264enc name=encoder tune=zerolatency speed-preset=veryfast bitrate=5000 key-int-max=60 bframes=0 byte-stream=true aud=true",
 				"h264parse config-interval=-1",
-				"video/x-h264,stream-format=byte-stream,alignment=au,profile=constrained-baseline",
+				"video/x-h264,stream-format=byte-stream,alignment=au,profile=constrained-baseline,level=(string)3.1",
 				"appsink name=video emit-signals=true sync=false max-buffers=4 drop=true",
 			}, " ! "),
 		},
@@ -331,6 +341,9 @@ func (c Config) Validate() error {
 	if _, err := c.TunnelProvisioningTimeout(); err != nil {
 		return err
 	}
+	if err := c.validateTunnelLabels(); err != nil {
+		return err
+	}
 	provisioningMode := c.TunnelProvisioningMode()
 	switch provisioningMode {
 	case TunnelProvisioningModeLocal:
@@ -345,6 +358,9 @@ func (c Config) Validate() error {
 		return fmt.Errorf("invalid tunnel provisioning mode %q", c.Tunnel.Provisioning.Mode)
 	}
 	if _, err := c.TunnelReconnectInterval(); err != nil {
+		return err
+	}
+	if _, err := c.TunnelConnectTimeout(); err != nil {
 		return err
 	}
 	switch c.TunnelTransportMode() {
@@ -481,7 +497,13 @@ func (c Config) Validate() error {
 			return errors.New("media pipeline must include av1parse when webrtc video mimeType is video/AV1")
 		}
 	}
-	return nil
+	if err := c.validateQuality(); err != nil {
+		return err
+	}
+	if err := c.validateH264Envelope(); err != nil {
+		return err
+	}
+	return c.validateSourceFormat()
 }
 
 func (c Config) HasLocalTunnelAuthPolicy() bool {
@@ -720,6 +742,18 @@ func isLoopbackHost(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+func (c Config) TunnelConnectTimeout() (time.Duration, error) {
+	value := strings.TrimSpace(c.Tunnel.ConnectTimeout)
+	if value == "" {
+		value = DefaultTunnelConnectTimeout
+	}
+	duration, err := time.ParseDuration(value)
+	if err != nil || duration <= 0 || duration > 5*time.Minute {
+		return 0, errors.New("tunnel connectTimeout must be a positive duration no greater than 5m")
+	}
+	return duration, nil
+}
+
 func (c Config) TunnelReconnectInterval() (time.Duration, error) {
 	value := strings.TrimSpace(c.Tunnel.Reconnect.Interval)
 	if value == "" {
@@ -737,4 +771,41 @@ func (c Config) TunnelReconnectInterval() (time.Duration, error) {
 
 func stringPtr(value string) *string {
 	return &value
+}
+
+var (
+	tunnelLabelKey     = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$`)
+	discoveredDeviceID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+)
+
+func (c Config) validateTunnelLabels() error {
+	labels := c.Tunnel.Labels
+	if len(labels) > 16 {
+		return errors.New("tunnel.labels supports at most 16 labels")
+	}
+	if len(labels) > 0 && c.TunnelProvisioningMode() != TunnelProvisioningModeLocal {
+		return errors.New("tunnel.labels is only configurable in local provisioning mode")
+	}
+	for key, value := range labels {
+		if !tunnelLabelKey.MatchString(key) || value == "" || strings.TrimSpace(value) != value || len(value) > 256 || !utf8.ValidString(value) {
+			return errors.New("tunnel.labels requires valid keys and nonempty UTF-8 values of at most 256 bytes without surrounding whitespace")
+		}
+		for _, r := range value {
+			if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+				return errors.New("tunnel.labels values must not contain control or format characters")
+			}
+		}
+	}
+	if labels["inventory"] == "discovered" {
+		if !c.Tunnel.Enabled || !c.Tunnel.Auth.Token || c.Tunnel.Auth.Rstream {
+			return errors.New("discovered inventory requires an enabled tunnel with token authentication only")
+		}
+		if labels["app"] != "webrtc-video-platform" || !discoveredDeviceID.MatchString(labels["device"]) {
+			return errors.New("discovered inventory requires app=webrtc-video-platform and a stable lowercase device UUID")
+		}
+		if len(labels["device-name"]) > 80 {
+			return errors.New("device-name must be at most 80 UTF-8 bytes")
+		}
+	}
+	return nil
 }

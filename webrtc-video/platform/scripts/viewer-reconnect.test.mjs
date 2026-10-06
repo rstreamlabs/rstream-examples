@@ -705,3 +705,37 @@ async function eventually(predicate, timeoutMs = 1000) {
     await new Promise((resolve) => setTimeout(resolve, 5))
   }
 }
+
+test("a required MediaMTX deployment recovers without selecting direct", async () => {
+  const resolutions = [],
+    clients = []
+  const controller = new ViewerSessionController({
+    backend: (resolution) => resolution.backend,
+    createClient: (_resolution, callbacks) => {
+      const client = fakeClient(callbacks)
+      clients.push(client)
+      return client
+    },
+    delayForAttempt: () => 0,
+    excludeBackendAfterFailure: () => false,
+    onFailure: assert.fail,
+    onPhase: () => {},
+    onTrack: () => {},
+    resolve: async (_signal, excluded) => {
+      resolutions.push(excluded)
+      return { backend: "mediamtx" }
+    },
+    stableSessionMs: 60000,
+  })
+  await controller.start()
+  try {
+    assert.equal(
+      controller.recoverCurrentBackend(new Error("playback stalled")),
+      true,
+    )
+    await eventually(() => clients.length === 2)
+    assert.deepEqual(resolutions, [null, null])
+  } finally {
+    await controller.stop()
+  }
+})

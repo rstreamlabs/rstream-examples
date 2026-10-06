@@ -16,6 +16,7 @@ producer_directory="${video_directory}/producer"
 qualification_directory="${producer_directory}/qualification/adaptive-streaming"
 repository_directory="$(git -C "${video_directory}" rev-parse --show-toplevel)"
 context_name="${RSTREAM_CONTEXT:-}"
+control_path="${RSTREAM_DISTRIBUTOR_CONTROL_PATH:-rstream}"
 rstream_cli="${RSTREAM_CLI:-rstream}"
 distribution_mode="${RSTREAM_DISTRIBUTOR_MODE:-mediamtx}"
 warmup_seconds="${RSTREAM_DISTRIBUTOR_WARMUP_SECONDS:-20}"
@@ -35,12 +36,29 @@ source_delay_milliseconds="${RSTREAM_DISTRIBUTOR_SOURCE_DELAY_MILLISECONDS:-0}"
 source_jitter_milliseconds="${RSTREAM_DISTRIBUTOR_SOURCE_JITTER_MILLISECONDS:-0}"
 source_queue_packets="${RSTREAM_DISTRIBUTOR_SOURCE_QUEUE_PACKETS:-256}"
 playout_delay_hint_seconds="${RSTREAM_DISTRIBUTOR_PLAYOUT_DELAY_HINT_SECONDS:-0}"
+latency_probe="${RSTREAM_DISTRIBUTOR_LATENCY_PROBE:-false}"
+recording="${RSTREAM_DISTRIBUTOR_RECORDING:-false}"
+startup_cycles="${RSTREAM_DISTRIBUTOR_STARTUP_CYCLES:-false}"
+quality_observer="${RSTREAM_DISTRIBUTOR_QUALITY_OBSERVER:-false}"
+expected_format="${RSTREAM_DISTRIBUTOR_EXPECT_FORMAT:-}"
+producer_config="${RSTREAM_DISTRIBUTOR_PRODUCER_CONFIG:-}"
 output_directory="${1:-}"
 
-if [[ -z "${context_name}" ]]; then
-  printf 'RSTREAM_CONTEXT must name an explicit qualification context\n' >&2
-  exit 1
-fi
+case "${control_path}" in
+rstream)
+  if [[ -z "${context_name}" ]]; then
+    printf 'RSTREAM_CONTEXT must name an explicit qualification context\n' >&2
+    exit 1
+  fi
+  ;;
+local)
+  if [[ ( "${distribution_mode}" != direct && "${distribution_mode}" != mediamtx ) || "${edge_auth}" != false || -n "${context_name}" ]]; then
+    printf 'local control requires direct or adaptive mediamtx mode, EDGE_AUTH=false and no RSTREAM_CONTEXT\n' >&2
+    exit 1
+  fi
+  ;;
+*) printf 'RSTREAM_DISTRIBUTOR_CONTROL_PATH must be rstream or local\n' >&2; exit 1 ;;
+esac
 if [[ -z "${output_directory}" ]]; then
   printf 'usage: RSTREAM_CONTEXT=<context> %s OUTPUT_DIRECTORY\n' "$0" >&2
   exit 1
@@ -49,6 +67,32 @@ if ! select_distribution_mode "${distribution_mode}"; then
   printf 'RSTREAM_DISTRIBUTOR_MODE must be direct, mediamtx, or mediamtx-native\n' >&2
   exit 1
 fi
+case "${startup_cycles}" in
+true)
+  if [[ "${distribution_mode}" != mediamtx || "${recording}" != false || "${latency_probe}" != false || "${quality_observer}" != false || -n "${expected_format}" ]]; then
+    printf 'startup cycles require the adaptive MediaMTX profile without recording, latency or format qualification\n' >&2
+    exit 1
+  fi
+  for value in "${viewer_loss_percent}" "${viewer_capacity_kbps}" "${viewer_delay_milliseconds}" "${viewer_jitter_milliseconds}" "${source_loss_percent}" "${source_capacity_kbps}" "${source_delay_milliseconds}" "${source_jitter_milliseconds}"; do
+    if [[ "${value}" != 0 ]]; then
+      printf 'startup cycles do not combine with network impairment phases\n' >&2
+      exit 1
+    fi
+  done
+  ;;
+false) ;;
+*) printf 'RSTREAM_DISTRIBUTOR_STARTUP_CYCLES must be true or false\n' >&2; exit 1 ;;
+esac
+case "${recording}" in
+true)
+  if [[ "${uses_mediamtx}" != true ]]; then
+    printf 'recording qualification requires MediaMTX\n' >&2
+    exit 1
+  fi
+  ;;
+false) ;;
+*) printf 'RSTREAM_DISTRIBUTOR_RECORDING must be true or false\n' >&2; exit 1 ;;
+esac
 case "${edge_auth}" in
 true | false)
   ;;
@@ -57,6 +101,45 @@ true | false)
   exit 1
   ;;
 esac
+if [[ -n "${expected_format}" ]]; then
+  if ! [[ "${expected_format}" =~ ^[a-z][a-z0-9-]{0,31}$ ]] || [[ "${distribution_mode}" == mediamtx-native ]]; then
+    printf 'automatic-format qualification needs a profile ID and direct or adaptive MediaMTX delivery\n' >&2
+    exit 1
+  fi
+  if [[ "${latency_probe}" == true && -z "${producer_config}" ]]; then
+    printf 'combined format/latency qualification requires an explicit pipeline with a timestamp marker\n' >&2
+    exit 1
+  fi
+  quality_observer=true
+  duration_seconds="${RSTREAM_DISTRIBUTOR_QUALIFICATION_SECONDS:-45}"
+  recovery_seconds="${RSTREAM_DISTRIBUTOR_RECOVERY_SECONDS:-90}"
+fi
+case "${latency_probe}" in
+true | false) ;;
+*)
+  printf 'RSTREAM_DISTRIBUTOR_LATENCY_PROBE must be true or false\n' >&2
+  exit 1
+  ;;
+esac
+case "${quality_observer}" in
+true | false) ;;
+*)
+  printf 'RSTREAM_DISTRIBUTOR_QUALITY_OBSERVER must be true or false\n' >&2
+  exit 1
+  ;;
+esac
+if [[ -z "${producer_config}" ]]; then
+  producer_config="${producer_directory}/config.test-pattern.h264.twcc-gcc-flexfec.yaml"
+  if [[ "${latency_probe}" == true ]]; then
+    producer_config="${qualification_directory}/latency/config.latency.yaml"
+  elif [[ -n "${expected_format}" ]]; then
+    producer_config="${qualification_directory}/formats/config.automatic.yaml"
+  fi
+fi
+if [[ ! -f "${producer_config}" ]]; then
+  printf 'qualification producer configuration does not exist\n' >&2
+  exit 1
+fi
 if ! [[ "${duration_seconds}" =~ ^[0-9]+$ ]] || ((duration_seconds < 10 || duration_seconds > 300)); then
   printf 'RSTREAM_DISTRIBUTOR_QUALIFICATION_SECONDS must be from 10 through 300\n' >&2
   exit 1
@@ -67,6 +150,10 @@ if ! [[ "${warmup_seconds}" =~ ^[0-9]+$ ]] || ((warmup_seconds < 10 || warmup_se
 fi
 if ! [[ "${recovery_seconds}" =~ ^[0-9]+$ ]] || ((recovery_seconds < 15 || recovery_seconds > 300)); then
   printf 'RSTREAM_DISTRIBUTOR_RECOVERY_SECONDS must be from 15 through 300\n' >&2
+  exit 1
+fi
+if [[ "${latency_probe}" == true ]] && ((duration_seconds < 15 || warmup_seconds < 15)); then
+  printf 'latency qualification requires warmup and measurement phases of at least 15 seconds\n' >&2
   exit 1
 fi
 if ! [[ "${flexfec_media_packets}" =~ ^[0-9]+$ ]] ||
@@ -90,13 +177,16 @@ for command in docker git go jq node; do
     exit 1
   fi
 done
-if ! command -v "${rstream_cli}" >/dev/null; then
-  printf 'required command not found: %s\n' "${rstream_cli}" >&2
-  exit 1
-fi
-if ! "${rstream_cli}" token create --help 2>&1 | grep -q -- '--expires-in'; then
-  printf 'the selected rstream CLI cannot create bounded-lifetime tokens; install version 1.29.0 or newer, or set RSTREAM_CLI to a compatible binary\n' >&2
-  exit 1
+producer_config_sha256="$(node -e 'process.stdout.write(require("node:crypto").createHash("sha256").update(require("node:fs").readFileSync(process.argv[1])).digest("hex"))' "${producer_config}")"
+if [[ "${control_path}" == rstream ]]; then
+  if ! command -v "${rstream_cli}" >/dev/null; then
+    printf 'required command not found: %s\n' "${rstream_cli}" >&2
+    exit 1
+  fi
+  if ! "${rstream_cli}" token create --help 2>&1 | grep -q -- '--expires-in'; then
+    printf 'the selected rstream CLI cannot create bounded-lifetime tokens; install version 1.29.0 or newer, or set RSTREAM_CLI to a compatible binary\n' >&2
+    exit 1
+  fi
 fi
 if ! jq -en --arg value "${viewer_loss_percent}" '
   ($value | tonumber) as $loss | $loss >= 0 and $loss <= 20
@@ -183,9 +273,18 @@ if [[ "${source_network_enabled}" == true && "${uses_adapter}" != true ]]; then
   printf 'source network impairment requires RSTREAM_DISTRIBUTOR_MODE=mediamtx\n' >&2
   exit 1
 fi
+if [[ -n "${expected_format}" ]] &&
+  ! { { [[ "${distribution_mode}" == direct ]] && ((viewer_capacity_kbps > 0)); } ||
+    { [[ "${uses_adapter}" == true ]] && ((source_capacity_kbps > 0)); }; }; then
+  printf 'automatic-format qualification requires a capacity limit on the direct viewer or adaptive shared source\n' >&2
+  exit 1
+fi
 collector_maximum_duration_seconds=$((warmup_seconds + duration_seconds + 60))
 if [[ "${viewer_network_enabled}" == true || "${source_network_enabled}" == true ]]; then
   collector_maximum_duration_seconds=$((warmup_seconds + duration_seconds * 2 + recovery_seconds + 60))
+fi
+if [[ "${startup_cycles}" == true ]]; then
+  collector_maximum_duration_seconds=240
 fi
 connect_token_ttl_seconds=$((collector_maximum_duration_seconds + 180))
 if ((connect_token_ttl_seconds < 300)); then
@@ -216,12 +315,16 @@ network_name="rstream-distribution-qualification-${suffix}"
 producer_name="rstream-distribution-producer-${suffix}"
 distributor_name="rstream-distribution-mediamtx-${suffix}"
 browser_name="rstream-distribution-browser-${suffix}"
+control_name="rstream-distribution-control-${suffix}"
+adapter_control_name="rstream-distribution-adapter-control-${suffix}"
 runtime_directory="$(mktemp -d "${TMPDIR:-/tmp}/rstream-distribution-qualification.XXXXXX")"
 control_directory="${runtime_directory}/control"
 container_user="$(id -u):$(id -g)"
 producer_started=0
 distributor_started=0
 browser_started=0
+control_started=0
+adapter_control_started=0
 network_created=0
 resource_sampler_pid=0
 
@@ -300,6 +403,13 @@ sample_container_resources() {
   local resident_bytes_source
   local sample
   local samples
+  local phase_before
+  local phase_after
+  local started_at
+  local finished_at
+  local measured_samples=""
+  phase_before="$(cat "${control_directory}/phase.json")" || return 1
+  started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   if ! samples="$(docker stats --no-stream --format '{{json .}}' "${resource_container_names[@]}")"; then
     return 1
   fi
@@ -310,12 +420,19 @@ sample_container_resources() {
     if [[ "$(jq -r '(.MemUsage | split(" / ")[1]) == "0B"' <<<"${sample}")" == true ]]; then
       container_name="$(jq -er '.Name' <<<"${sample}")"
       read -r resident_bytes resident_bytes_source < <(process_resident_sample "${container_name}")
-      jq -c --argjson resident_bytes "${resident_bytes}" --arg resident_bytes_source "${resident_bytes_source}" \
-        '. + {ResidentBytes: $resident_bytes, ResidentBytesSource: $resident_bytes_source}' <<<"${sample}"
+      sample="$(jq -c --argjson resident_bytes "${resident_bytes}" --arg resident_bytes_source "${resident_bytes_source}" \
+        '. + {ResidentBytes: $resident_bytes, ResidentBytesSource: $resident_bytes_source}' <<<"${sample}")" || return 1
     else
-      jq -c '. + {ResidentBytesSource: "container-cgroup"}' <<<"${sample}"
+      sample="$(jq -c '. + {ResidentBytesSource: "container-cgroup"}' <<<"${sample}")" || return 1
     fi
+    measured_samples+="${sample}"$'\n'
   done <<<"${samples}"
+  finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  phase_after="$(cat "${control_directory}/phase.json")" || return 1
+  jq -c --argjson before "${phase_before}" --argjson after "${phase_after}" \
+    --arg started "${started_at}" --arg finished "${finished_at}" \
+    '. + {sampleStartedAt: $started, sampleFinishedAt: $finished,
+      samplePhase: (if $before == $after then $before else null end)}' <<<"${measured_samples}"
 }
 
 cleanup() {
@@ -325,8 +442,14 @@ cleanup() {
   if ((browser_started)); then
     docker rm -f "${browser_name}" >/dev/null 2>&1 || true
   fi
+  if ((adapter_control_started)); then
+    docker rm -f "${adapter_control_name}" >/dev/null 2>&1 || true
+  fi
   if ((distributor_started)); then
     docker rm -f "${distributor_name}" >/dev/null 2>&1 || true
+  fi
+  if ((control_started)); then
+    docker rm -f "${control_name}" >/dev/null 2>&1 || true
   fi
   if ((producer_started)); then
     docker rm -f "${producer_name}" >/dev/null 2>&1 || true
@@ -342,52 +465,66 @@ trap cleanup EXIT INT TERM
 
 write_phase() {
   write_phase_file "${control_directory}/phase.json" "$1"
+  if ((browser_started)); then
+    copy_phase_to_container "${browser_name}" "${control_directory}/phase.json" /tmp/phase.json
+  fi
 }
 
-printf 'Preparing an isolated rstream runtime\n'
-project_endpoint="$(
-  "${rstream_cli}" context list --output json |
-    jq -er --arg context "${context_name}" '
-      [.[] | select(.Name == $context)] |
-      if length == 1 then .[0].ProjectEndpoint else error("qualification context is not unique") end
-    '
-)"
-project_id="$(
-  "${rstream_cli}" --context "${context_name}" project list --output json |
-    jq -er --arg endpoint "${project_endpoint}" '
-      [.projects[] | select(.endpoint == $endpoint)] |
-      if length == 1 then .[0].id else error("qualification project is not unique") end
-    '
-)"
-qualification_resources="$(
-  jq -cn --arg project "${project_id}" --argjson token_auth "${edge_auth}" '{
-    tunnels: {projects: [$project], scopes: {tunnels: {create: {filters: {
-      name: {exact: "webrtc-video-producer-adaptive"},
-      protocol: "http",
-      publish: true,
-      token_auth: $token_auth
-    }}}}}
-  }'
-)"
-qualification_token="$(
-  "${rstream_cli}" --context "${context_name}" token create \
-    --expires-in "${qualification_token_ttl_seconds}" \
-    --resources-json "${qualification_resources}" \
-    --output json |
-    jq -er '.token | select(type == "string" and length > 0)'
-)"
-RSTREAM_AUTHENTICATION_TOKEN="${qualification_token}" go -C "${producer_directory}" run ./qualification/adaptive-streaming/cmd/prepare-context \
-  -context "${context_name}" \
-  -allow-mediamtx-native-offer="$([[ "${distribution_mode}" == mediamtx-native ]] && printf true || printf false)" \
-  -embedded-viewer=false \
-  -flex-fec=true \
-  -flex-fec-media-packets "${flexfec_media_packets}" \
-  -flex-fec-repair-packets "${flexfec_repair_packets}" \
-  -producer-config "${producer_directory}/config.test-pattern.h264.twcc-gcc-flexfec.yaml" \
-  -producer-turn-policy disabled \
-  -tunnel-token-auth="${edge_auth}" \
-  -output-directory "${runtime_directory}"
-unset qualification_token
+producer_runtime_config=relay-config.yaml
+if [[ "${control_path}" == local ]]; then
+  printf 'Preparing a credential-free Docker media reference\n'
+  go -C "${producer_directory}" run ./qualification/adaptive-streaming/cmd/prepare-context \
+    -local-reference -embedded-viewer=false -flex-fec=true \
+    -flex-fec-media-packets "${flexfec_media_packets}" \
+    -flex-fec-repair-packets "${flexfec_repair_packets}" \
+    -producer-config "${producer_config}" -output-directory "${runtime_directory}"
+  producer_runtime_config=direct-config.yaml
+else
+  printf 'Preparing an isolated rstream runtime\n'
+  project_endpoint="$(
+    "${rstream_cli}" context list --output json |
+      jq -er --arg context "${context_name}" '
+        [.[] | select(.Name == $context)] |
+        if length == 1 then .[0].ProjectEndpoint else error("qualification context is not unique") end
+      '
+  )"
+  project_id="$(
+    "${rstream_cli}" --context "${context_name}" project list --output json |
+      jq -er --arg endpoint "${project_endpoint}" '
+        [.projects[] | select(.endpoint == $endpoint)] |
+        if length == 1 then .[0].id else error("qualification project is not unique") end
+      '
+  )"
+  qualification_resources="$(
+    jq -cn --arg project "${project_id}" --argjson token_auth "${edge_auth}" '{
+      tunnels: {projects: [$project], scopes: {tunnels: {create: {filters: {
+        name: {exact: "webrtc-video-producer-adaptive"},
+        protocol: "http",
+        publish: true,
+        token_auth: $token_auth
+      }}}}}
+    }'
+  )"
+  qualification_token="$(
+    "${rstream_cli}" --context "${context_name}" token create \
+      --expires-in "${qualification_token_ttl_seconds}" \
+      --resources-json "${qualification_resources}" \
+      --output json |
+      jq -er '.token | select(type == "string" and length > 0)'
+  )"
+  RSTREAM_AUTHENTICATION_TOKEN="${qualification_token}" go -C "${producer_directory}" run ./qualification/adaptive-streaming/cmd/prepare-context \
+    -context "${context_name}" \
+    -allow-mediamtx-native-offer="$([[ "${distribution_mode}" == mediamtx-native ]] && printf true || printf false)" \
+    -embedded-viewer=false \
+    -flex-fec=true \
+    -flex-fec-media-packets "${flexfec_media_packets}" \
+    -flex-fec-repair-packets "${flexfec_repair_packets}" \
+    -producer-config "${producer_config}" \
+    -producer-turn-policy disabled \
+    -tunnel-token-auth="${edge_auth}" \
+    -output-directory "${runtime_directory}"
+  unset qualification_token
+fi
 mkdir -m 0700 "${control_directory}"
 write_phase warmup
 jq -n '{enabled: false, capacityKbps: 0, delayMilliseconds: 0, jitterMilliseconds: 0, lossPercent: 0, queuePackets: 0, qdisc: null, filters: []}' \
@@ -398,6 +535,8 @@ jq -n '{}' >"${output_directory}/adapter-result.json"
 jq -n '{fatalErrors: 0, h264PacketizationErrors: 0, packetLossWarnings: 0, transportBufferWarnings: 0}' \
   >"${output_directory}/runtime-health.json"
 jq -n '{required: false}' >"${output_directory}/native-source-profile.json"
+jq -n '{enabled: false}' >"${output_directory}/latency.json"
+jq -n '{enabled: false}' >"${output_directory}/source-formats.json"
 
 printf 'Building producer and browser images\n'
 docker build --provenance=false --file "${qualification_directory}/Dockerfile" --tag "${producer_image}" "${video_directory}"
@@ -422,25 +561,62 @@ docker run --detach \
   --env RSTREAM_CONFIG=/runtime/config.yaml \
   --env RSTREAM_CONTEXT=qualification \
   --mount "type=bind,source=${runtime_directory}/config.yaml,target=/runtime/config.yaml,readonly" \
-  --mount "type=bind,source=${runtime_directory}/relay-config.yaml,target=/runtime/producer.yaml,readonly" \
+  --mount "type=bind,source=${runtime_directory}/${producer_runtime_config},target=/runtime/producer.yaml,readonly" \
   "${producer_image}" -config /runtime/producer.yaml >/dev/null
 producer_started=1
-
-source_base=""
-for _ in $(seq 1 90); do
-  if [[ "$(docker inspect --format '{{.State.Running}}' "${producer_name}")" != true ]]; then
-    printf 'producer exited before publishing its tunnel\n' >&2
+latency_arguments=()
+if [[ "${latency_probe}" == true ]]; then
+  producer_boot_digest="$(docker exec "${producer_name}" sha256sum /proc/sys/kernel/random/boot_id)"
+  producer_boot_hash="${producer_boot_digest%% *}"
+  producer_monotonic_digest="$(docker exec "${producer_name}" sha256sum /proc/self/timens_offsets)"
+  producer_monotonic_hash="${producer_monotonic_digest%% *}"
+  if ! [[ "${producer_boot_hash}" =~ ^[a-f0-9]{64}$ && "${producer_monotonic_hash}" =~ ^[a-f0-9]{64}$ ]]; then
+    printf 'producer shared-clock identity is unavailable\n' >&2
     exit 1
   fi
-  source_base="$(docker logs "${producer_name}" 2>&1 | sed -nE 's/.*Public URL: (https:\/\/[^[:space:]]+).*/\1/p' | tail -1)"
-  if [[ -n "${source_base}" ]]; then
-    break
+  latency_arguments=(--latency-probe enabled --producer-boot-hash "${producer_boot_hash}" --producer-monotonic-offset-hash "${producer_monotonic_hash}")
+fi
+
+if [[ "${control_path}" == local ]]; then
+  # Keep the source quality listener on loopback. Only this isolated test
+  # network can reach WHEP and read-only observations through the helper.
+  docker run --detach --name "${control_name}" --network "container:${producer_name}" \
+    --user "${container_user}" --read-only --security-opt no-new-privileges --cap-drop ALL \
+    --entrypoint /app/local-control "${producer_image}" >/dev/null
+  control_started=1
+  source_base=http://producer:18080
+  docker run --rm --network "${network_name}" --user "${container_user}" \
+    --read-only --security-opt no-new-privileges --cap-drop ALL \
+    --entrypoint node "${browser_image}" --input-type=module -e '
+      const deadline = performance.now() + 10000;
+      while (true) {
+        try {
+          const response = await fetch("http://producer:18080/healthz", {signal: AbortSignal.timeout(1000)});
+          await response.body?.cancel();
+          if (response.ok) break;
+        } catch {}
+        if (performance.now() >= deadline) throw new Error("local producer readiness timed out");
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    '
+else
+  source_base=""
+  for _ in $(seq 1 90); do
+    if [[ "$(docker inspect --format '{{.State.Running}}' "${producer_name}")" != true ]]; then
+      printf 'producer exited before publishing its tunnel\n' >&2
+      exit 1
+    fi
+    source_base="$(docker logs "${producer_name}" 2>&1 | sed -nE 's/.*Public URL: (https:\/\/[^[:space:]]+).*/\1/p' | tail -1)"
+    if [[ -n "${source_base}" ]]; then
+      break
+    fi
+    sleep 1
+  done
+  if [[ -z "${source_base}" ]]; then
+    printf 'producer did not publish its tunnel within 90 seconds\n' >&2
+    exit 1
   fi
-  sleep 1
-done
-if [[ -z "${source_base}" ]]; then
-  printf 'producer did not publish its tunnel within 90 seconds\n' >&2
-  exit 1
+
 fi
 
 source_endpoint="${source_base%/}/whep"
@@ -481,7 +657,52 @@ if [[ "${edge_auth}" == true ]]; then
   source_endpoint="${source_endpoint}?rstream.token=${encoded_connect_token}"
 fi
 viewer_endpoint="${source_endpoint}"
+quality_arguments=()
+if [[ "${quality_observer}" == true ]]; then
+  quality_authorization=""
+  if [[ "${edge_auth}" == true ]]; then
+    # Preserve the media credential's WHEP-only scope. The observer owns a
+    # separate control credential, never passed to the browser or adapter.
+    quality_resources="$(jq -c '.tunnels.scopes.tunnels.connect.params.path.regex = "^/api/quality$"' <<<"${connect_resources}")"
+    quality_token="$(
+      "${rstream_cli}" --context "${context_name}" token create \
+        --expires-in "${connect_token_ttl_seconds}" \
+        --resources-json "${quality_resources}" \
+        --output json |
+        jq -er '.token | select(type == "string" and length > 0)'
+    )"
+    quality_authorization="Bearer ${quality_token}"
+  fi
+  jq -n --arg endpoint "${source_base%/}/api/quality" --arg authorization "${quality_authorization}" \
+    --arg control_path "${control_path}" \
+    '{endpoint: $endpoint, authorization: $authorization, localReference: ($control_path == "local")}' >"${control_directory}/source-quality.json"
+  chmod 0600 "${control_directory}/source-quality.json"
+  unset quality_token quality_authorization
+  quality_arguments=(--source-quality-file /runtime/source-quality.json)
+fi
+recording_arguments=()
+if [[ "${recording}" == true ]]; then
+  recording_uid=10001
+  recording_gid=10001
+  if [[ "${distribution_mode}" == mediamtx-native ]]; then
+    recording_uid="$(id -u)"
+    recording_gid="$(id -g)"
+  fi
+  recording_arguments+=(
+    --env MTX_PATHDEFAULTS_RECORD=true
+    --env 'MTX_PATHDEFAULTS_RECORDPATH=/recordings/%path/%Y-%m-%d_%H-%M-%S-%f'
+    --env MTX_PATHDEFAULTS_RECORDFORMAT=fmp4
+    --env MTX_PATHDEFAULTS_RECORDPARTDURATION=1s
+    --env MTX_PATHDEFAULTS_RECORDSEGMENTDURATION=5s
+    --env MTX_PATHDEFAULTS_RECORDDELETEAFTER=5m
+    --tmpfs "/recordings:rw,nosuid,nodev,noexec,size=512m,uid=${recording_uid},gid=${recording_gid},mode=0700"
+  )
+fi
 if [[ "${uses_adapter}" == true ]]; then
+  adapter_source_endpoint="${source_endpoint}"
+  if [[ "${control_path}" == local ]]; then
+    adapter_source_endpoint=http://127.0.0.1:18080/whep
+  fi
   docker run --detach \
     --name "${distributor_name}" \
     --network "${network_name}" \
@@ -490,11 +711,32 @@ if [[ "${uses_adapter}" == true ]]; then
     --security-opt no-new-privileges \
     --cap-drop ALL \
     --tmpfs /tmp:rw,noexec,nosuid,size=16m \
-    --env "RSTREAM_SOURCE_URL=${source_endpoint}" \
+    --env "RSTREAM_SOURCE_URL=${adapter_source_endpoint}" \
     --env RSTREAM_MEDIAMTX_URL=http://127.0.0.1:8889 \
+    ${recording_arguments[@]+"${recording_arguments[@]}"} \
     --mount "type=bind,source=${script_directory}/mediamtx.yml,target=/qualification/mediamtx.yml,readonly" \
     "${distributor_image}" /qualification/mediamtx.yml >/dev/null
   distributor_started=1
+  if [[ "${control_path}" == local ]]; then
+    docker run --detach --name "${adapter_control_name}" --network "container:${distributor_name}" \
+      --user "${container_user}" --read-only --security-opt no-new-privileges --cap-drop ALL \
+      --entrypoint /app/local-control "${producer_image}" -adapter-hop >/dev/null
+    adapter_control_started=1
+    docker run --rm --network "container:${distributor_name}" --user "${container_user}" \
+      --read-only --security-opt no-new-privileges --cap-drop ALL \
+      --entrypoint node "${browser_image}" --input-type=module -e '
+        const deadline = performance.now() + 10000;
+        while (true) {
+          try {
+            const response = await fetch("http://127.0.0.1:18080/healthz", {signal: AbortSignal.timeout(1000)});
+            await response.body?.cancel();
+            if (response.ok) break;
+          } catch {}
+          if (performance.now() >= deadline) throw new Error("local adapter control readiness timed out");
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      '
+  fi
   viewer_endpoint=http://distributor:8889/camera/whep
 fi
 if [[ "${distribution_mode}" == mediamtx-native ]]; then
@@ -556,10 +798,51 @@ if [[ "${distribution_mode}" == mediamtx-native ]]; then
     --cap-drop ALL \
     --tmpfs /tmp:rw,noexec,nosuid,size=16m \
     --entrypoint /usr/local/bin/mediamtx \
+    ${recording_arguments[@]+"${recording_arguments[@]}"} \
     --mount "type=bind,source=${native_config},target=/qualification/native-mediamtx.json,readonly" \
     "${distributor_image}" /qualification/native-mediamtx.json >/dev/null
   distributor_started=1
   viewer_endpoint=http://distributor:8889/camera/whep
+fi
+
+if [[ "${startup_cycles}" == true ]]; then
+  docker run --detach \
+    --name "${browser_name}" \
+    --network "${network_name}" \
+    --user "${container_user}" \
+    --read-only \
+    --security-opt no-new-privileges \
+    --tmpfs /tmp:rw,nosuid,size=512m \
+    --shm-size 256m \
+    --env HOME=/tmp \
+    --mount "type=bind,source=${output_directory},target=/artifacts" \
+    --entrypoint node \
+    "${browser_image}" /qualification/startup-cycles.mjs \
+    --whep-endpoint "${viewer_endpoint}" \
+    --producer-metrics-url http://producer:9090/metrics \
+    --output-directory /artifacts >/dev/null
+  browser_started=1
+  deadline=$((SECONDS + collector_maximum_duration_seconds))
+  while [[ "$(docker inspect --format '{{.State.Running}}' "${browser_name}")" == true ]]; do
+    if ((SECONDS >= deadline)); then
+      printf 'startup cycle collector exceeded its deadline\n' >&2
+      exit 1
+    fi
+    sleep 1
+  done
+  browser_status="$(docker wait "${browser_name}")"
+  capture_logs
+  jq -n \
+    --arg revision "${revision}" \
+    --argjson working_tree_dirty "${working_tree_dirty}" \
+    --arg producer_image "$(docker image inspect --format '{{.Id}}' "${producer_image}")" \
+    --arg distributor_image "$(docker image inspect --format '{{.Id}}' "${distributor_image}")" \
+    --arg browser_image "$(docker image inspect --format '{{.Id}}' "${browser_image}")" \
+    --arg producer_config_sha256 "${producer_config_sha256}" \
+    '{revision: $revision, workingTreeDirty: $working_tree_dirty, mode: "mediamtx", qualification: "startup-cycles", idleGraceSeconds: 1, producerImage: $producer_image, distributorImage: $distributor_image, browserImage: $browser_image, producerConfigSHA256: $producer_config_sha256}' \
+    >"${output_directory}/startup-manifest.json"
+  [[ "${browser_status}" == 0 ]] && jq -e '.passed == true' "${output_directory}/startup-cycles.json" >/dev/null
+  exit "$?"
 fi
 
 docker run --detach \
@@ -573,15 +856,18 @@ docker run --detach \
   --env HOME=/tmp \
   --mount "type=bind,source=${output_directory},target=/artifacts" \
   --mount "type=bind,source=${control_directory},target=/runtime,readonly" \
-  "${browser_image}" \
+  --entrypoint /bin/sh \
+  "${browser_image}" -ceu 'cp /runtime/phase.json /tmp/phase.json; exec node /qualification/collect.mjs "$@"' collector \
   --whep-endpoint "${viewer_endpoint}" \
   --producer-metrics-url http://producer:9090/metrics \
   --output-directory /artifacts \
-  --phase-file /runtime/phase.json \
+  --phase-file /tmp/phase.json \
   --ice-policy direct \
   --browser-executable /usr/bin/chromium \
   --browser-sandbox disabled \
   --playout-delay-hint-seconds "${playout_delay_hint_seconds}" \
+  ${latency_arguments[@]+"${latency_arguments[@]}"} \
+  ${quality_arguments[@]+"${quality_arguments[@]}"} \
   --maximum-duration-seconds "${collector_maximum_duration_seconds}" >/dev/null
 browser_started=1
 
@@ -628,7 +914,7 @@ if [[ "${distribution_mode}" == mediamtx-native ]]; then
     || ! grep -Eq '^rstream_video_producer_whep_initial_requests_total\{outcome="created"\} 1$' "${output_directory}/producer-metrics-native-active.prom" \
     || ! grep -Eq '^rstream_video_producer_transport_negotiated_sessions\{feature="twcc"\} 1$' "${output_directory}/producer-metrics-native-active.prom" \
     || ! grep -Eq '^rstream_video_producer_transport_negotiated_sessions\{feature="nack"\} 1$' "${output_directory}/producer-metrics-native-active.prom" \
-    || ! grep -Eq '^rstream_video_producer_transport_negotiated_sessions\{feature="rtx"\} 0$' "${output_directory}/producer-metrics-native-active.prom" \
+    || ! grep -Eq '^rstream_video_producer_transport_negotiated_sessions\{feature="rtx"\} 1$' "${output_directory}/producer-metrics-native-active.prom" \
     || ! grep -Eq '^rstream_video_producer_transport_negotiated_sessions\{feature="flexfec"\} 0$' "${output_directory}/producer-metrics-native-active.prom" \
     || ! grep -Eq '^rstream_video_producer_adaptive_bitrate_updates_total\{outcome="applied"\} 0$' "${output_directory}/producer-metrics-native-active.prom" \
     || ! grep -Eq '^rstream_video_producer_adaptive_bitrate_updates_total\{outcome="failed"\} 0$' "${output_directory}/producer-metrics-native-active.prom" \
@@ -642,7 +928,7 @@ if [[ "${distribution_mode}" == mediamtx-native ]]; then
     required: true,
     activeSessions: 1,
     createdSessions: 1,
-    negotiated: {twcc: 1, nack: 1, rtx: 0, flexfec: 0},
+    negotiated: {twcc: 1, nack: 1, rtx: 1, flexfec: 0},
     fixedSourcePacing: {adaptiveUpdates: 0, adaptiveFailures: 0, queueDrops: 0, mediaFrameDrops: 0},
     activeAfterTeardown: null
   }' >"${output_directory}/native-source-profile.json"
@@ -764,6 +1050,16 @@ if [[ "${browser_status}" != 0 ]]; then
 fi
 sleep 3
 capture_logs
+if [[ "${recording}" == true ]]; then
+  # Source teardown closes the current segment. Keep recorded bytes bounded and
+  # private; qualify real MP4 decoding separately in the playback integration.
+  docker exec "${distributor_name}" sh -ceu '
+    find /recordings -type f -name "*.mp4" -exec stat -c "%s" {} \; |
+      awk '\''{files++; bytes += $1} END {printf "{\"enabled\":true,\"segmentFiles\":%d,\"bytes\":%.0f,\"storageLimitBytes\":536870912}\n", files, bytes}'\''
+  ' >"${output_directory}/recording.json"
+else
+  printf '{"enabled":false}\n' >"${output_directory}/recording.json"
+fi
 if [[ "${uses_adapter}" == true ]]; then
   docker exec "${distributor_name}" wget -q -T 2 -O - http://127.0.0.1:9999/metrics \
     >"${output_directory}/adapter-metrics-final.prom"
@@ -855,12 +1151,18 @@ if ! jq -e --argjson required "${required_resource_components}" '
   exit 1
 fi
 
+if [[ -n "${expected_format}" ]]; then
+  node "${qualification_directory}/formats/report.mjs" "${output_directory}" "${expected_format}"
+fi
+
 jq -s \
   --arg revision "${revision}" \
   --arg mode "${distribution_mode}" \
+  --arg control_path "${control_path}" \
   --argjson edge_auth "${edge_auth}" \
   --argjson connect_token_ttl_seconds "${connect_token_ttl_seconds}" \
   --argjson working_tree_dirty "${working_tree_dirty}" \
+  --argjson native_boundary_required true \
   --arg producer_image "$(docker image inspect --format '{{.Id}}' "${producer_image}")" \
   --arg distributor_image "$(if [[ "${uses_mediamtx}" == true ]]; then docker image inspect --format '{{.Id}}' "${distributor_image}"; fi)" \
   --arg browser_image "$(docker image inspect --format '{{.Id}}' "${browser_image}")" \
@@ -869,12 +1171,19 @@ jq -s \
   --slurpfile browser "${output_directory}/browser.json" \
   --slurpfile signaling "${output_directory}/signaling-events.json" \
   --slurpfile resources "${output_directory}/resources.json" \
+  --argjson recording "$(cat "${output_directory}/recording.json")" \
   --argjson warmup_seconds "${warmup_seconds}" \
   --argjson phase_seconds "${duration_seconds}" \
   --argjson recovery_seconds "${recovery_seconds}" \
   --argjson flexfec_media_packets "${flexfec_media_packets}" \
   --argjson flexfec_repair_packets "${flexfec_repair_packets}" \
   --argjson playout_delay_hint_seconds "${playout_delay_hint_seconds}" \
+  --arg producer_config_sha256 "${producer_config_sha256}" \
+  --argjson latency_probe "${latency_probe}" \
+  --argjson quality_observer "${quality_observer}" \
+  --arg expected_format "${expected_format}" \
+  --slurpfile source_formats "${output_directory}/source-formats.json" \
+  --slurpfile latency "${output_directory}/latency.json" \
   --slurpfile viewer_network "${output_directory}/viewer-network.json" \
   --slurpfile source_network "${output_directory}/source-network.json" \
   --slurpfile native_source_profile "${output_directory}/native-source-profile.json" \

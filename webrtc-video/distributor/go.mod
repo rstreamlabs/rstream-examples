@@ -9,6 +9,7 @@ require (
 	github.com/pion/rtp v1.10.5
 	github.com/pion/sdp/v3 v3.0.19
 	github.com/pion/webrtc/v4 v4.2.18
+	golang.org/x/sys v0.48.0
 )
 
 require (
@@ -24,14 +25,13 @@ require (
 	github.com/pion/transport/v4 v4.1.0 // indirect
 	github.com/pion/turn/v5 v5.0.13 // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
-	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 )
 
-replace github.com/pion/interceptor => github.com/rstreamlabs/pion-interceptor v0.1.48-0.20260817140720-195b94231732
+replace github.com/pion/interceptor => github.com/rstreamlabs/pion-interceptor v0.1.48-0.20261004062019-94d47092806b
 
-replace github.com/pion/webrtc/v4 => github.com/rstreamlabs/pion-webrtc/v4 v4.2.19-0.20260817140720-926abfa31a52
+replace github.com/pion/webrtc/v4 => github.com/rstreamlabs/pion-webrtc/v4 v4.2.19-0.20261004104852-5924f8e74b64
 
 replace github.com/pion/ice/v4 => github.com/rstreamlabs/ice/v4 v4.4.2-0.20260822124615-7bd2416006e3

@@ -1,0 +1,618 @@
+{
+  "purpose": "Two additional repetitions of repair-feedback qualification, retaining every pass and failure",
+  "implementationRevision": "96b5feb9772e4dbe7899b55b0bfb16448d423342",
+  "sourceRevision": "f762165bb65c2f0eba235253d28ff8ced2720bba",
+  "sourceDifference": "Only DEVELOPMENT_PLAN.md and the initial feedback-summary.json changed; all three runtime image digests match the first series exactly.",
+  "initialSeries": "feedback-summary.json",
+  "repetitions": 3,
+  "totalRuns": 12,
+  "passedRuns": 11,
+  "failedRuns": 1,
+  "stabilized": false,
+  "gatesChanged": false,
+  "udpSocketLimitsRestored": true,
+  "ownedContainersRemoved": true,
+  "interpretation": "Capacity and MediaMTX source impairment pass all three repetitions. Direct impairment passes two of three. The failing direct run has two transition freezes totalling 0.741 s (4.94% of the 15 s phase, above the unchanged 2% gate); no steady or recovery freeze and no dropped decoded frame. Browser frame callbacks confirm 550 ms and 200 ms gaps while timer scheduling stays below 4 ms around the event. This is a retained delivery failure, not dismissed as host interference. Latency and the repair/pacer transition require investigation before stabilization.",
+  "cases": [
+    {
+      "repetition": 2,
+      "case": "direct-capacity",
+      "resultSHA256": "7fb9b9b5f02710af53bf20e08e47f89650ab0a529b4e0972991f1af081d77508",
+      "revision": "f762165bb65c2f0eba235253d28ff8ced2720bba",
+      "workingTreeDirty": false,
+      "images": {
+        "producer": "sha256:16e6ffef2d491f3ca1f31d0cb29488a189ae66f1c2b8b32f9f9c0519df3b7403",
+        "distributor": null,
+        "browser": "sha256:40395c7e39614612e5b321fc1a0739d0678a23a7885c098b0485af394610b41b"
+      },
+      "passed": true,
+      "gates": {
+        "media": true,
+        "playback": true,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": true,
+        "sourceTargetRecovery": true
+      },
+      "framesPerSecond": 25.28328611898017,
+      "baselineFramesPerSecond": 29.961750956226094,
+      "network": {
+        "capacityKbps": 4000,
+        "delayMilliseconds": 0,
+        "jitterMilliseconds": 0,
+        "lossPercent": 0,
+        "freezeDurationDeltaSeconds": 2.851,
+        "steadyStateFreezeDurationDeltaSeconds": 0,
+        "steadyStateFrameDropRatio": 0,
+        "capacityTransitionDisruptionSeconds": 2.851,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "scope": "producer-to-browser"
+      },
+      "qdiscPackets": 9187,
+      "qdiscDrops": 1126,
+      "constrainedMedianLossEstimate": 6.7713789711452955e-12,
+      "recoveryTargetKbps": 8000,
+      "recoveryEncoderKbps": 8000,
+      "producerResources": {
+        "samples": 32,
+        "cpuCoreRatio": {
+          "average": 0.3619093749999999,
+          "p95": 0.37329999999999997,
+          "maximum": 0.377
+        },
+        "residentBytes": {
+          "average": 59248476.160000004,
+          "p95": 62505615.36,
+          "maximum": 62599987.2,
+          "sources": [
+            "container-cgroup"
+          ]
+        },
+        "tasks": {
+          "maximum": 37
+        },
+        "network": {
+          "receivedBytes": 409000,
+          "transmittedBytes": 98700000
+        }
+      }
+    },
+    {
+      "repetition": 2,
+      "case": "source-capacity",
+      "resultSHA256": "da1595c5dc256671e17eb28eaf77cdf38ae74c600ec3a547e8ceab98742b7a7f",
+      "revision": "f762165bb65c2f0eba235253d28ff8ced2720bba",
+      "workingTreeDirty": false,
+      "images": {
+        "producer": "sha256:16e6ffef2d491f3ca1f31d0cb29488a189ae66f1c2b8b32f9f9c0519df3b7403",
+        "distributor": "sha256:e111a71c8fe758595044088198d95a29b0348e4fa91284cfc55764f91bfcff42",
+        "browser": "sha256:40395c7e39614612e5b321fc1a0739d0678a23a7885c098b0485af394610b41b"
+      },
+      "passed": true,
+      "gates": {
+        "media": true,
+        "playback": true,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": true,
+        "sourceTargetRecovery": true
+      },
+      "framesPerSecond": 26.418301579431972,
+      "baselineFramesPerSecond": 29.949022939677146,
+      "network": {
+        "capacityKbps": 4000,
+        "delayMilliseconds": 0,
+        "jitterMilliseconds": 0,
+        "lossPercent": 0,
+        "freezeDurationDeltaSeconds": 2.094,
+        "steadyStateFreezeDurationDeltaSeconds": 0,
+        "steadyStateFrameDropRatio": 0,
+        "capacityTransitionDisruptionSeconds": 2.094,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "scope": "producer-to-adapter"
+      },
+      "qdiscPackets": 8565,
+      "qdiscDrops": 935,
+      "constrainedMedianLossEstimate": 2.0403074545709257e-13,
+      "recoveryTargetKbps": 8000,
+      "recoveryEncoderKbps": 7517,
+      "producerResources": {
+        "samples": 31,
+        "cpuCoreRatio": {
+          "average": 0.34841935483870967,
+          "p95": 0.3632,
+          "maximum": 0.3642
+        },
+        "residentBytes": {
+          "average": 57601323.93290324,
+          "p95": 59223572.48,
+          "maximum": 59800289.28,
+          "sources": [
+            "container-cgroup"
+          ]
+        },
+        "tasks": {
+          "maximum": 37
+        },
+        "network": {
+          "receivedBytes": 383000,
+          "transmittedBytes": 100000000
+        }
+      }
+    },
+    {
+      "repetition": 2,
+      "case": "direct-impairment",
+      "resultSHA256": "bc9e0c960ecb7b2bea3300e5f8ba1016455a35c3b04263fcb11c5ad87e9f54d6",
+      "revision": "f762165bb65c2f0eba235253d28ff8ced2720bba",
+      "workingTreeDirty": false,
+      "images": {
+        "producer": "sha256:16e6ffef2d491f3ca1f31d0cb29488a189ae66f1c2b8b32f9f9c0519df3b7403",
+        "distributor": null,
+        "browser": "sha256:40395c7e39614612e5b321fc1a0739d0678a23a7885c098b0485af394610b41b"
+      },
+      "passed": true,
+      "gates": {
+        "media": true,
+        "playback": true,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": true,
+        "sourceTargetRecovery": true
+      },
+      "framesPerSecond": 29.976613989086527,
+      "baselineFramesPerSecond": 30.021950010620973,
+      "network": {
+        "capacityKbps": 0,
+        "delayMilliseconds": 60,
+        "jitterMilliseconds": 15,
+        "lossPercent": 1,
+        "freezeDurationDeltaSeconds": 0,
+        "steadyStateFreezeDurationDeltaSeconds": 0,
+        "steadyStateFrameDropRatio": 0,
+        "capacityTransitionDisruptionSeconds": 0,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "scope": "producer-to-browser"
+      },
+      "qdiscPackets": 28103,
+      "qdiscDrops": 271,
+      "constrainedMedianLossEstimate": 0.009239356613712542,
+      "recoveryTargetKbps": 8000,
+      "recoveryEncoderKbps": 8000,
+      "producerResources": {
+        "samples": 33,
+        "cpuCoreRatio": {
+          "average": 0.3647030303030303,
+          "p95": 0.37979999999999997,
+          "maximum": 0.3812
+        },
+        "residentBytes": {
+          "average": 68237830.82666667,
+          "p95": 77101793.28,
+          "maximum": 77112279.04,
+          "sources": [
+            "container-cgroup"
+          ]
+        },
+        "tasks": {
+          "maximum": 38
+        },
+        "network": {
+          "receivedBytes": 644000,
+          "transmittedBytes": 130000000
+        }
+      }
+    },
+    {
+      "repetition": 2,
+      "case": "source-impairment",
+      "resultSHA256": "5166abcc411555adb9eea030d6367647def914c70a05187b852648363dfba852",
+      "revision": "f762165bb65c2f0eba235253d28ff8ced2720bba",
+      "workingTreeDirty": false,
+      "images": {
+        "producer": "sha256:16e6ffef2d491f3ca1f31d0cb29488a189ae66f1c2b8b32f9f9c0519df3b7403",
+        "distributor": "sha256:e111a71c8fe758595044088198d95a29b0348e4fa91284cfc55764f91bfcff42",
+        "browser": "sha256:40395c7e39614612e5b321fc1a0739d0678a23a7885c098b0485af394610b41b"
+      },
+      "passed": true,
+      "gates": {
+        "media": true,
+        "playback": true,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": true,
+        "sourceTargetRecovery": true
+      },
+      "framesPerSecond": 30.038965639390717,
+      "baselineFramesPerSecond": 30.02620211033213,
+      "network": {
+        "capacityKbps": 0,
+        "delayMilliseconds": 60,
+        "jitterMilliseconds": 15,
+        "lossPercent": 1,
+        "freezeDurationDeltaSeconds": 0,
+        "steadyStateFreezeDurationDeltaSeconds": 0,
+        "steadyStateFrameDropRatio": 0.003003003003003003,
+        "capacityTransitionDisruptionSeconds": 0,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "scope": "producer-to-adapter"
+      },
+      "qdiscPackets": 15558,
+      "qdiscDrops": 143,
+      "constrainedMedianLossEstimate": 0.012002876485357894,
+      "recoveryTargetKbps": 8000,
+      "recoveryEncoderKbps": 7905,
+      "producerResources": {
+        "samples": 32,
+        "cpuCoreRatio": {
+          "average": 0.34921874999999997,
+          "p95": 0.36369999999999997,
+          "maximum": 0.3711
+        },
+        "residentBytes": {
+          "average": 57116917.75999999,
+          "p95": 68922900.48,
+          "maximum": 69289902.08,
+          "sources": [
+            "container-cgroup"
+          ]
+        },
+        "tasks": {
+          "maximum": 38
+        },
+        "network": {
+          "receivedBytes": 315000,
+          "transmittedBytes": 120000000
+        }
+      }
+    },
+    {
+      "repetition": 3,
+      "case": "direct-capacity",
+      "resultSHA256": "9d9e896dcf14afc2e0a6b1d10d1dd1573ce1e1793040d503c7158ceb2b62f08c",
+      "revision": "f762165bb65c2f0eba235253d28ff8ced2720bba",
+      "workingTreeDirty": false,
+      "images": {
+        "producer": "sha256:16e6ffef2d491f3ca1f31d0cb29488a189ae66f1c2b8b32f9f9c0519df3b7403",
+        "distributor": null,
+        "browser": "sha256:40395c7e39614612e5b321fc1a0739d0678a23a7885c098b0485af394610b41b"
+      },
+      "passed": true,
+      "gates": {
+        "media": true,
+        "playback": true,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": true,
+        "sourceTargetRecovery": true
+      },
+      "framesPerSecond": 27.697102783877593,
+      "baselineFramesPerSecond": 30.007077140835104,
+      "network": {
+        "capacityKbps": 4000,
+        "delayMilliseconds": 0,
+        "jitterMilliseconds": 0,
+        "lossPercent": 0,
+        "freezeDurationDeltaSeconds": 2.627,
+        "steadyStateFreezeDurationDeltaSeconds": 0,
+        "steadyStateFrameDropRatio": 0,
+        "capacityTransitionDisruptionSeconds": 2.627,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "scope": "producer-to-browser"
+      },
+      "qdiscPackets": 8601,
+      "qdiscDrops": 1093,
+      "constrainedMedianLossEstimate": 6.35125671488681e-13,
+      "recoveryTargetKbps": 8000,
+      "recoveryEncoderKbps": 7309,
+      "producerResources": {
+        "samples": 32,
+        "cpuCoreRatio": {
+          "average": 0.3551781249999999,
+          "p95": 0.36719999999999997,
+          "maximum": 0.4047
+        },
+        "residentBytes": {
+          "average": 57646448.64,
+          "p95": 60324577.28,
+          "maximum": 60744007.68,
+          "sources": [
+            "container-cgroup"
+          ]
+        },
+        "tasks": {
+          "maximum": 37
+        },
+        "network": {
+          "receivedBytes": 399000,
+          "transmittedBytes": 97400000
+        }
+      }
+    },
+    {
+      "repetition": 3,
+      "case": "source-capacity",
+      "resultSHA256": "d65166f74dfc2d592efd8134bca445da879137e41fd4490d0b7987a0db8152ac",
+      "revision": "f762165bb65c2f0eba235253d28ff8ced2720bba",
+      "workingTreeDirty": false,
+      "images": {
+        "producer": "sha256:16e6ffef2d491f3ca1f31d0cb29488a189ae66f1c2b8b32f9f9c0519df3b7403",
+        "distributor": "sha256:e111a71c8fe758595044088198d95a29b0348e4fa91284cfc55764f91bfcff42",
+        "browser": "sha256:40395c7e39614612e5b321fc1a0739d0678a23a7885c098b0485af394610b41b"
+      },
+      "passed": true,
+      "gates": {
+        "media": true,
+        "playback": true,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": true,
+        "sourceTargetRecovery": true
+      },
+      "framesPerSecond": 26.134995396274523,
+      "baselineFramesPerSecond": 30.01132502831257,
+      "network": {
+        "capacityKbps": 4000,
+        "delayMilliseconds": 0,
+        "jitterMilliseconds": 0,
+        "lossPercent": 0,
+        "freezeDurationDeltaSeconds": 2.415,
+        "steadyStateFreezeDurationDeltaSeconds": 0,
+        "steadyStateFrameDropRatio": 0,
+        "capacityTransitionDisruptionSeconds": 2.415,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "scope": "producer-to-adapter"
+      },
+      "qdiscPackets": 8891,
+      "qdiscDrops": 1055,
+      "constrainedMedianLossEstimate": 4.858748571762373e-13,
+      "recoveryTargetKbps": 8000,
+      "recoveryEncoderKbps": 8000,
+      "producerResources": {
+        "samples": 32,
+        "cpuCoreRatio": {
+          "average": 0.34982187500000006,
+          "p95": 0.36579999999999996,
+          "maximum": 0.4036
+        },
+        "residentBytes": {
+          "average": 56029347.84,
+          "p95": 57682165.76,
+          "maximum": 58395197.44,
+          "sources": [
+            "container-cgroup"
+          ]
+        },
+        "tasks": {
+          "maximum": 37
+        },
+        "network": {
+          "receivedBytes": 402000,
+          "transmittedBytes": 102000000
+        }
+      }
+    },
+    {
+      "repetition": 3,
+      "case": "direct-impairment",
+      "resultSHA256": "103d61fb25c4b49e0db388375bb0c2ef9080292289a0f0dd725228b5a6c4d549",
+      "revision": "f762165bb65c2f0eba235253d28ff8ced2720bba",
+      "workingTreeDirty": false,
+      "images": {
+        "producer": "sha256:16e6ffef2d491f3ca1f31d0cb29488a189ae66f1c2b8b32f9f9c0519df3b7403",
+        "distributor": null,
+        "browser": "sha256:40395c7e39614612e5b321fc1a0739d0678a23a7885c098b0485af394610b41b"
+      },
+      "passed": false,
+      "gates": {
+        "media": true,
+        "playback": false,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": false,
+        "sourceTargetRecovery": true
+      },
+      "framesPerSecond": 30.043222560759585,
+      "baselineFramesPerSecond": 30.01769911504425,
+      "network": {
+        "capacityKbps": 0,
+        "delayMilliseconds": 60,
+        "jitterMilliseconds": 15,
+        "lossPercent": 1,
+        "freezeDurationDeltaSeconds": 0.741,
+        "steadyStateFreezeDurationDeltaSeconds": 0,
+        "steadyStateFrameDropRatio": 0,
+        "capacityTransitionDisruptionSeconds": 0.741,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "scope": "producer-to-browser"
+      },
+      "qdiscPackets": 27893,
+      "qdiscDrops": 286,
+      "constrainedMedianLossEstimate": 0.012081496899540464,
+      "recoveryTargetKbps": 8000,
+      "recoveryEncoderKbps": 8000,
+      "producerResources": {
+        "samples": 32,
+        "cpuCoreRatio": {
+          "average": 0.36221562499999993,
+          "p95": 0.3724,
+          "maximum": 0.37450000000000006
+        },
+        "residentBytes": {
+          "average": 59386101.75999999,
+          "p95": 62631444.48,
+          "maximum": 62767759.36,
+          "sources": [
+            "container-cgroup"
+          ]
+        },
+        "tasks": {
+          "maximum": 37
+        },
+        "network": {
+          "receivedBytes": 651000,
+          "transmittedBytes": 129000000
+        }
+      }
+    },
+    {
+      "repetition": 3,
+      "case": "source-impairment",
+      "resultSHA256": "27c7f6772fa4167bb96e0f397603c3e27f60f2eab19555d7c1a5f9512c17872b",
+      "revision": "f762165bb65c2f0eba235253d28ff8ced2720bba",
+      "workingTreeDirty": false,
+      "images": {
+        "producer": "sha256:16e6ffef2d491f3ca1f31d0cb29488a189ae66f1c2b8b32f9f9c0519df3b7403",
+        "distributor": "sha256:e111a71c8fe758595044088198d95a29b0348e4fa91284cfc55764f91bfcff42",
+        "browser": "sha256:40395c7e39614612e5b321fc1a0739d0678a23a7885c098b0485af394610b41b"
+      },
+      "passed": true,
+      "gates": {
+        "media": true,
+        "playback": true,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": true,
+        "sourceTargetRecovery": true
+      },
+      "framesPerSecond": 30.051740024098095,
+      "baselineFramesPerSecond": 29.97024231259742,
+      "network": {
+        "capacityKbps": 0,
+        "delayMilliseconds": 60,
+        "jitterMilliseconds": 15,
+        "lossPercent": 1,
+        "freezeDurationDeltaSeconds": 0.233,
+        "steadyStateFreezeDurationDeltaSeconds": 0,
+        "steadyStateFrameDropRatio": 0,
+        "capacityTransitionDisruptionSeconds": 0.233,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "scope": "producer-to-adapter"
+      },
+      "qdiscPackets": 12346,
+      "qdiscDrops": 123,
+      "constrainedMedianLossEstimate": 0.012893370894965842,
+      "recoveryTargetKbps": 8000,
+      "recoveryEncoderKbps": 7458,
+      "producerResources": {
+        "samples": 31,
+        "cpuCoreRatio": {
+          "average": 0.3490354838709678,
+          "p95": 0.36,
+          "maximum": 0.361
+        },
+        "residentBytes": {
+          "average": 50172670.34838709,
+          "p95": 51925483.52,
+          "maximum": 52701429.76,
+          "sources": [
+            "container-cgroup"
+          ]
+        },
+        "tasks": {
+          "maximum": 38
+        },
+        "network": {
+          "receivedBytes": 295000,
+          "transmittedBytes": 108000000
+        }
+      }
+    }
+  ]
+}

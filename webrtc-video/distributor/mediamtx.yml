@@ -14,6 +14,8 @@ metrics: true
 metricsAddress: :9998
 pprof: false
 playback: false
+playbackAddress: :9996
+playbackAllowOrigins: []
 
 rtsp: false
 rtmp: false
@@ -39,6 +41,15 @@ webrtcHandshakeTimeout: 10s
 webrtcTrackGatherTimeout: 250ms
 
 pathDefaults:
+  # Optional recent history. Supply a bounded writable /recordings volume and
+  # explicitly enable record + playback; recording never starts this source.
+  record: false
+  recordPath: /recordings/%path/%Y-%m-%d_%H-%M-%S-%f
+  recordFormat: fmp4
+  recordPartDuration: 1s
+  recordMaxPartSize: 8M
+  recordSegmentDuration: 5s
+  recordDeleteAfter: 5m
   source: publisher
   overridePublisher: false
   maxReaders: 8
@@ -46,6 +57,9 @@ pathDefaults:
   runOnDemandRestart: false
   runOnDemandStartTimeout: 15s
   runOnDemandCloseAfter: 5s
+  # Request a fresh source key frame after each reader's transport connects.
+  runOnRead: /usr/local/bin/rstream-video-distributor reader-started
+  runOnReadRestart: false
 
 paths:
   all_others:

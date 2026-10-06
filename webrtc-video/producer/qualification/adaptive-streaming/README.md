@@ -5,7 +5,48 @@ bandwidth, latency, and packet loss. It compares a managed rstream TURN path
 with an isolated direct reference, then moves the active producer between two
 interfaces to qualify Trickle ICE and ICE restart on the recovered session.
 
+The current bundled H.264 source is 1280×720 at 30 fps, explicitly bounded to
+level 3.1 in both the encoder and SDP. The manifest expects that resolution;
+stale prepared 1080p runtimes are rejected. Historical evidence at `ca8a308`
+used 1920×1080 and remains unchanged. It is a transport/playback record for
+that revision, not proof of the current profile or H.264 level conformance.
+Compare revisions at identical source settings. Frame-rate, freeze, QP,
+queue, recovery and network-loss gates are unchanged.
+
 ## What the harness measures
+
+First-picture timing is recorded separately in `signaling-events.json` under
+`startup`. A capture listener timestamps the actual Connect click and arms
+`requestVideoFrameCallback` before the player handles that click. Its first
+callback preserves arrival and expected display times. The exact first-submission
+diagnostic remains invalid when that callback has already missed a submitted
+frame: the [browser callback is best effort](https://wicg.github.io/video-rvfc/).
+
+The collector separately observes the first callback with ready, playing video
+in a visible document, a visible element and an unobstructed center inside the
+viewport. `requestToVisiblePresentationMilliseconds` uses the later of the
+observation and expected display times. This conservative observation does not
+backdate missed callbacks or assert physical display timing. Hidden or invalid
+frames keep the observer armed until a valid frame or teardown; missing evidence
+remains invalid. Distributor results include both measurements under
+`setup.presentation` and require the visible observation, with its raw timestamp
+and visibility evidence. Historical results are unchanged.
+
+These durations exclude page navigation, device-process startup and physical
+display scanout. They measure one fresh activation; repeat/cold/warm/churn
+qualification distinguishes source lifecycle state. No startup-time performance
+threshold is implied by measurement validity.
+
+The distributor runner's `RSTREAM_DISTRIBUTOR_STARTUP_CYCLES=true` mode provides
+that repeated adaptive MediaMTX check using the same viewer/client bundle.
+It measures cold/reopen/join cases and observes setup cancellations through
+the source setup deadline. See the [distribution qualification](../../../distributor/README.md#technical-qualification)
+for its scope and lifecycle gates.
+
+For QUIC signaling, first prepare adequate UDP socket limits on the Linux
+container host (the Linux VM when using Docker Desktop). The
+[distribution prerequisites](../../../distributor/README.md#technical-qualification)
+give the commands and explain how to preserve and restore temporary settings.
 
 Each run starts the exact producer source in an ephemeral Linux container and
 connects the same pinned headless Chromium image in its own container. Direct
@@ -20,6 +61,144 @@ and close to the identical direct reference. Chromium separately proves the
 decoded resolution, frame rate, freeze time, and decode cost. These signals are
 complementary: QP measures compression pressure, while receiver statistics
 measure transport and playback continuity.
+
+Each sample also includes bounded `framePresentation` diagnostics from
+`requestVideoFrameCallback`: callback gaps, available receive/decode/presentation
+timestamps, and a 100ms JavaScript timer's scheduling delay. Gaps above 100ms and
+timer delays above 50ms retain their surrounding timestamps, with at most 128
+events between samples and an explicit omitted-event count. These observations
+help distinguish receiver scheduling from media-delivery pauses; they do not
+change continuity gates or independently establish the cause of a freeze.
+Missing browser metadata remains `null`. Media time and receiver timestamps do
+not establish source capture-to-display latency. The probe runs only in the
+qualification browser and is stopped before session teardown.
+
+Frozen-time accounting retains the counter increase reported at the first
+snapshot of each phase, using the preceding snapshot as its baseline. The
+sampling interval is assigned to its ending snapshot's phase and included in
+the ratio's observation duration. JSON reports expose
+`phaseEntryFreezeDurationSeconds` and `freezeMeasurementDurationSeconds` so this
+boundary remains visible. Native freeze counters are reported when playback
+resumes; this attribution does not prove when the freeze began or what caused it.
+The first sample of the entire collection has no preceding interval to measure.
+
+The distributor additionally records `transitionBoundaryDiagnostics`. The
+qualification browser takes two native-statistics snapshots around four seconds
+after its first observation of each network/recovery phase. It requires the
+statistics' own collection timestamps to bracket that boundary within 250ms,
+one unchanged decoded stream, and identical freeze/drop counters on both sides.
+The phase observation precedes the regular sample and producer HTTP requests;
+it does not claim to timestamp the actual network-shaping command. The host's
+whole-second phase marker is not used as a precise browser clock.
+
+Missing counters, cached or late timestamps, a changed stream, unfinished calls
+and counter increments across the bracket remain invalid observations. There
+are at most two extra calls per phase; timers and pending results are invalidated
+on phase changes or teardown. A freeze still in progress at the boundary remains
+a later native-counter increment when rendering resumes. Fresh distributor runs
+require validated `transitionBoundaryEvidence` for steady capacity measurements
+and recovery. Validation checks native stream identity, clock/counter continuity,
+agreement with regular samples, and at least two samples after the bracket.
+Steady freeze/drop deltas use that boundary; the decoded-frame denominator starts
+at the later snapshot, conservatively omitting the bracket's decoded frames.
+An invalid required measurement fails the run without falling back to coarse
+polling. Continuous delay/loss still uses its whole-phase impairment budget.
+
+The four-second transition window, three-second disruption limit and subsequent
+zero-freeze requirement are unchanged. Reports retain `legacySampledDeltas` to
+show the earlier interval attribution, and `profile.steadyCounterMethod` names
+the method used. Historical results and verdicts remain unchanged, including
+the initial diagnostic-only probe trials. This follows the W3C definitions of
+[statistics timestamps](https://www.w3.org/TR/webrtc-stats/#basic-concepts) and
+[native freeze duration](https://www.w3.org/TR/webrtc-stats/#dom-rtcinboundrtpstreamstats-totalfreezesduration).
+
+### Optional pixel-based latency measurement
+
+The distributor's end-to-end runner supports `RSTREAM_DISTRIBUTOR_LATENCY_PROBE=true`
+for direct, custom-adapter and native MediaMTX paths. It selects the matching
+720p30 qualification profile in `latency/config.latency.yaml`, which stamps a Linux monotonic timestamp
+into a small patch of I420 pixels immediately before the encoder. The browser
+decodes that patch at most five times per second. This works across MediaMTX RTP
+timestamp rewriting and does not add a queue or change the public source profiles.
+The plugin and browser probe are built only into qualification images.
+
+Run from `webrtc-video/distributor`, after the normal socket-limit prerequisites:
+
+```bash
+RSTREAM_CONTEXT="<staging-context>" \
+RSTREAM_DISTRIBUTOR_MODE=mediamtx \
+RSTREAM_DISTRIBUTOR_LATENCY_PROBE=true \
+qualification/end-to-end/run.sh /tmp/rstream-video-latency
+```
+
+The producer, collector and browser must share one Linux monotonic clock. The
+runner compares hashes of their boot identity and `/proc/self/timens_offsets`
+(which must be readable); different time-namespace offsets are rejected. Before
+and after collection, seven bounded browser requests align `performance.now()`
+with the collector's `process.hrtime()`. Each request brackets the browser read
+between two host readings. The intersection of those intervals includes a 1ms
+browser timer-precision allowance and does not assume symmetric request delays.
+Initial and final intervals must overlap, and the reported worst-case alignment
+error must be at most 5ms. Each calibration has a two-second total deadline.
+
+The marker uses GLib's monotonic clock, as do libuv and Chromium on Linux.
+Adjustments to UTC therefore do not alter measured durations. The observed
+wall/performance-clock offset remains diagnostic data; it is not subtracted
+from samples. Different hosts/clock offsets, failed or inconsistent calibration,
+negative or inconsistent latency, unreadable markers, missing observations and
+incomplete runs fail measurement validity.
+Each measured phase requires at least 50 samples and 95% readable markers.
+Warmup and measurement phases must last at least 15 seconds. The report keeps
+invalid measurements and never substitutes zero for absent data.
+
+`latency.json` contains median, p95, p99 and maximum latency, raw calibration
+observations and their error bound, clock and marker gates, sampling overhead,
+and separate phase summaries. The first and last
+collector snapshot of each phase are excluded from its steady summary because
+they can span a boundary; they remain in the overall distribution. Raw marker
+observations remain in `samples.jsonl`. These are measurements from the raw-frame
+stamp to the browser's **expected composition time**, excluding physical camera
+exposure, capture/scaling before the stamp and display scanout. They are not a
+glass-to-glass measurement or proof of latency on a different host/device.
+The distribution samples newly presented frames. It must be read alongside
+frame gaps and freeze durations: an image that remains frozen grows older
+without generating another frame callback. A reported maximum is therefore
+not a bound on the age of the displayed image during a freeze. An invalid
+latency report still allows collection and teardown to finish, then fails the
+runner's final `latencyMeasurement` gate with the other evidence preserved.
+Version-2 markers carry monotonic time. The decoder rejects version-1 UTC
+markers instead of silently mixing clock domains. Historical results retain
+their original revision, measurement method and verdict; they are not corrected
+retroactively using the new calibration.
+
+`RSTREAM_DISTRIBUTOR_PRODUCER_CONFIG` can select another producer profile. Its
+SHA-256 is recorded in the result. With latency enabled, a custom pipeline must
+place `rstreamlatencystamp` after its final scaling stage, immediately before
+the encoder, on I420 frames at least 288×64 pixels. A missing or subsequently
+scaled marker fails qualification. Compare probe-disabled and probe-enabled
+runs at otherwise identical settings before attributing CPU or latency changes
+to the media implementation. A valid measurement does not itself impose a
+latency target; the measured distribution must still be assessed for the use case.
+
+To verify the stamp survives H.264 encoding independently of WebRTC, compile
+`latency/gstlatencystamp.c` with the local GStreamer development package into an
+external artifact directory. For example, on Linux, from this directory:
+
+```bash
+latency_artifacts="$(mktemp -d)"
+cc -shared -fPIC -O2 -Wall -Wextra -Werror \
+  -o "${latency_artifacts}/libgstlatencystamp.so" latency/gstlatencystamp.c \
+  $(pkg-config --cflags --libs gstreamer-video-1.0)
+GST_PLUGIN_PATH="${latency_artifacts}" node latency/verify-marker.mjs
+```
+
+Compilation can also be checked on macOS with the `.dylib` extension, but
+`verify-marker.mjs` requires Linux: Node/libuv and GLib do not share the same
+monotonic clock on macOS. This restriction applies only to latency qualification,
+not to the producer or viewers. The Linux check requires `gst-launch-1.0`, x264,
+the H.264 parser and the libav decoder. It verifies timestamp/CRC
+integrity at 500 and 8000 kbit/s, corruption rejection, and removes its temporary
+decoded frames. Do not put compiled plugin binaries in the repository.
 
 The harness also samples UDP counters once per second inside both isolated
 Linux network namespaces: the producer container and the receiver browser. A
@@ -38,7 +217,13 @@ every phase. A run whose p95 steal time exceeds 5% on either side fails: an
 encoder or browser that was not scheduled predictably cannot qualify the media
 pipeline or transport, regardless of its average frame rate. A 250 ms heartbeat
 also records shorter runtime pauses that aggregate CPU counters cannot expose,
-including pauses of a local container VM.
+including pauses of a local container VM. Heartbeat intervals use Linux boot
+time from `/proc/uptime` (10 ms resolution), independently of civil-clock
+adjustments. Each sample records `gapClock`, `bootMilliseconds`, and the measured
+`gapMilliseconds`; UTC `capturedAt` is retained for phase correlation only.
+Earlier artifacts without `gapClock` used realtime intervals and can therefore
+report a false scheduling failure when the host adjusts its clock. Their raw
+results remain unchanged; they do not establish monotonic scheduling evidence.
 
 The impairment schedule runs as one process inside the producer network
 namespace. It first holds a 32 Mbit/s profile with no added delay, jitter, or
@@ -74,9 +259,9 @@ budget. New access units that exceed the 225 ms admission envelope are dropped
 whole before packetization. Recovery resumes on a key frame once the queue can
 contain its most recently observed size plus 25% headroom.
 The report separately exposes encoder requests, complete frame drops, the
-key-frame reserve, actual packet residence time, and prospective sustained-rate
-backlog. These signals make the latency bound, sequence continuity, and egress
-rate directly verifiable.
+key-frame reserve, actual packet residence time, and projected service backlog.
+The admission estimate is not measured packet residence or end-to-end latency;
+retain those separate observations when checking sequence continuity and egress.
 
 The link moves through six measured phases:
 
@@ -151,39 +336,39 @@ exact flow being impaired. Transport fallback has its own qualification path;
 the video comparison measures one selected route rather than an opportunistic
 ICE outcome.
 
-FlexFEC is not free capacity. GCC controls the complete paced wire budget, and
-the producer derives the encoder's media share after reserving the configured
-repair ratio. With the reference `1/5` profile, a 1.2 Mbit/s wire budget
-provides 1 Mbit/s to media before RTP, UDP, IP, and occasional RTX overhead. At
-the qualified 4 Mbit/s wire point the theoretical media share is about 3.33
-Mbit/s; the 2 Mbit/s encoder floor leaves measured room for packetization,
-reactive repair, and transient overshoot. Chromium does not acknowledge the
-FlexFEC stream through TWCC, so those packets remain outside GCC's loss and
-received-rate calculations while remaining inside its capacity budget.
+FlexFEC is not free capacity. GCC measures tracked primary/RTX RTP and its
+target feeds the encoder without a second FEC deduction. Chromium does not
+acknowledge FlexFEC through TWCC, so those packets remain outside GCC's loss
+and received-rate calculations. The pacer adds their configured share once.
+With the reference `1/5` profile, a 1 Mbit/s media target produces a modeled
+1.2 Mbit/s protected pacing budget before additional protocol and RTX overhead.
+Repair-induced queueing still affects primary TWCC delay and reduces the target.
+A 4 Mbit/s bottleneck can therefore support less than 3.33 Mbit/s of media;
+the 2 Mbit/s encoder floor leaves room for packetization, reactive repair and
+transient overshoot. Actual convergence must be measured on the selected path.
 
-The sender uses one real-time envelope for media bursts and repair. Its
-sustained target is GCC's complete wire budget; the token bucket permits short
-bursts at 1.5 times that rate without changing the long-term allowance. Every
-recorded sample carries the media target, wire target, and pacing envelope, and
-the qualification fails if their relationship diverges from the configured
-protection ratio.
+The sender shares one scheduler between media and repair. Its token-bucket
+refill rate is 1.5 times the modeled protected target; there is no separate
+long-term limiter at the lower unmultiplied target. Recorded samples distinguish
+the media target, modeled protected budget and scheduling ceiling. Actual traffic
+depends on encoded output and repair demand. Acknowledged-rate diagnostics count
+tracked RTP headers and payload, excluding untracked FEC and outer transport
+headers; they are not total network-throughput measurements.
 
-Pion's delay and loss estimators remain the primary congestion controller. A
-bounded feedback-loss guard closes one coordination gap between them: two
-consecutive valid TWCC reports above 10% loss reduce the current media target
-immediately, even if the delay estimator has not emitted a new callback. The
-guard ignores reports with fewer than 20 statuses and isolated spikes. After a
-second of reports below 2% loss, its cap rises in 5% steps every 200 ms until
-Pion's target takes over again. This prevents a transient queue from becoming a
-loss/RTX/FlexFEC amplification loop without replacing GCC's normal bandwidth
-estimate. The phase report exposes the guard target, peak reported loss, and
-every reduction and recovery.
+The pinned Pion fork's delay and loss estimators control congestion. Its loss
+controller reconciles overlapping missing reports and late receipts over bounded
+250 ms send-time observations; this does not buffer media. A completed observation
+can update the target even without a new delay-estimator callback. The historical
+`lossGuard*` fields now alias that reconciled loss controller's state, target,
+latest observed loss, reductions and recoveries. They do not represent another
+controller acting on raw TWCC symbols. Both delay and combined-target recovery
+remain bounded by acknowledged throughput.
 
 Encoder hysteresis cannot spend the same headroom twice. Startup validation
-therefore derives the largest safe decrease threshold from the selected repair
-ratio and the shared pacing envelope. The qualified profiles use immediate
-decreases; the `2/4` stress ratio consumes the complete 1.5× allowance, while
-the default `1/5` ratio retains margin for packetization and reactive repair.
+limits the decrease threshold to 33% under the shared 1.5× scheduling factor.
+FlexFEC is already included in the protected target, so its ratio does not
+reduce that allowance a second time. The reference profiles use immediate
+decreases; stronger repair ratios still consume additional link capacity.
 
 Pion distributes protected media packets across independent XOR groups when a
 profile uses several repair packets. In the `2/4` stress profile, each repair
@@ -216,6 +401,25 @@ runner needs neither Go nor the rstream CLI. It validates the prepared input,
 copies it into its own private runtime, and removes that copy on exit. The
 caller remains responsible for removing the source directory after the run.
 
+The repository's manually dispatched `Video qualification` GitHub Actions
+workflow runs the same scenario on Ubuntu 24.04 with Node.js 24. Its two existing
+repository secrets, `RSTREAM_QUALIFICATION_CONFIG_B64` and
+`RSTREAM_QUALIFICATION_TOKEN`, must identify an isolated qualification project.
+The workflow temporarily raises the runner's UDP socket receive/send limits to
+at least 7,500,000 bytes, records the previous and applied limits, and restores
+them after success or failure. It also removes the prepared authentication
+files. The evidence upload excludes those private runtime directories.
+After a failed relay run, a read-only `rstream doctor` check runs with a
+45-second limit. `runner-connectivity.json` retains only known check names,
+statuses and an expired-token classification; raw diagnostic text, addresses
+and project metadata are discarded. This check observes the runner host, not
+the producer container, and cannot turn a failed media qualification into a
+pass. A missing or timed-out report remains explicit.
+Choose the path, repair profile and receiver hint explicitly; set
+`playout_delay_hint_seconds` to `0` to qualify the low-latency viewer without an
+additional requested buffering floor. The workflow's historical default is
+`0.2`, so results from those two settings must remain distinguishable.
+
 ```bash
 RSTREAM_CONTEXT=your-context \
   ./qualification/adaptive-streaming/run.sh
@@ -230,6 +434,14 @@ RSTREAM_CONTEXT=my-context \
   ./qualification/adaptive-streaming/run.sh \
   ./qualification/adaptive-streaming/.artifacts/my-run
 ```
+
+Custom phase durations must total at most 540 seconds, including warmup,
+conditioning, drain and optional mobility. The collector deadline includes
+those phases plus 180 seconds for connection setup and orchestration, with a
+720-second maximum inside the runner's 900-second project-token lifetime.
+The manifest records the applied deadline. Extending a baseline therefore
+leaves time for the later impairment and recovery phases; playback and network
+acceptance thresholds stay unchanged.
 
 The direct reference uses the same media, codec, adaptation, protection, and
 browser image. Only tunnel publication and TURN are disabled. Its Chromium

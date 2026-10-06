@@ -1,0 +1,135 @@
+{
+  "purpose": "Qualify discovered organization inventory with real source controls and direct/adaptive MediaMTX playback",
+  "passed": true,
+  "githubMembership": "fixture; actual organization OAuth and SSO are not qualified",
+  "forcedRelay": false,
+  "latencyOrResourceQualification": false,
+  "udpSocketLimitsRestored": true,
+  "ownedContainersRemoved": true,
+  "cases": [
+    {
+      "case": "mediamtx",
+      "resultSHA256": "fb885718fa8d8f5d576ec4a9ccd15454c22372e3091ac34d0416e10ffd5764fe",
+      "passed": true,
+      "gates": {
+        "realDiscoveryWithoutEnrollment": true,
+        "sourceControlAndConcurrentSelection": true,
+        "sharedMediaMTXPlaybackAndEncoderLifecycle": true,
+        "historyDoesNotGrantSourceAccess": true,
+        "stableIdentityAndRename": true,
+        "liveOnlyWithoutHistoryWrites": true,
+        "cleanup": true
+      },
+      "revision": "0b88ec6814210d5285432a9e6f2e6234fe947226",
+      "workingTreeDirty": false,
+      "image": "sha256:ece5a1f2a282f9bc5ccec46541b004954aa6353b84e975bc3f6dab8f5ec6ba7f",
+      "distribution": "mediamtx",
+      "distributorImage": "sha256:e111a71c8fe758595044088198d95a29b0348e4fa91284cfc55764f91bfcff42",
+      "githubMembership": "fixture",
+      "mediaPlayback": {
+        "distribution": "mediamtx",
+        "viewers": [
+          {
+            "actor": "alice",
+            "at": 12998.300000011921,
+            "framesDecoded": 158,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.951079902468923
+          },
+          {
+            "actor": "bob",
+            "at": 5060.800000011921,
+            "framesDecoded": 91,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.945100648810513
+          }
+        ],
+        "activeEncoders": 1,
+        "afterSharedQualityChange": [
+          {
+            "actor": "alice",
+            "at": 20085.69999998808,
+            "framesDecoded": 370,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.968034097082196
+          },
+          {
+            "actor": "bob",
+            "at": 12148.100000023842,
+            "framesDecoded": 303,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.96603848935484
+          }
+        ],
+        "remainingMember": [
+          {
+            "actor": "bob",
+            "at": 18106.19999998808,
+            "framesDecoded": 482,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.95207667779161
+          }
+        ],
+        "mediaMTXReaders": 2,
+        "sourceViewerLimit": 1,
+        "sharedQuality": "medium",
+        "continuesAfterFirstMemberCloses": true,
+        "encoderStoppedAfterBrowserClosureMilliseconds": 35979.203791
+      },
+      "nextBuild": "vJSjbcsBBeqSdT3HSdnoA"
+    },
+    {
+      "case": "direct",
+      "resultSHA256": "fdf86d0b743af0745b328feb99d26d1cfe6a458699622b8eec9887209cf87ff9",
+      "passed": true,
+      "gates": {
+        "realDiscoveryWithoutEnrollment": true,
+        "sourceControlAndConcurrentSelection": true,
+        "directPlaybackAndEncoderLifecycle": true,
+        "historyDoesNotGrantSourceAccess": true,
+        "stableIdentityAndRename": true,
+        "liveOnlyWithoutHistoryWrites": true,
+        "cleanup": true
+      },
+      "revision": "0b88ec6814210d5285432a9e6f2e6234fe947226",
+      "workingTreeDirty": false,
+      "image": "sha256:ece5a1f2a282f9bc5ccec46541b004954aa6353b84e975bc3f6dab8f5ec6ba7f",
+      "distribution": "direct",
+      "distributorImage": null,
+      "githubMembership": "fixture",
+      "mediaPlayback": {
+        "distribution": "direct",
+        "viewers": [
+          {
+            "actor": "bob",
+            "at": 5592.699999988079,
+            "framesDecoded": 89,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "relay",
+            "remoteCandidateType": "prflx",
+            "framesPerSecond": 27.958062905641537
+          }
+        ],
+        "activeEncoders": 1,
+        "encoderStoppedAfterBrowserClosureMilliseconds": 36705.758625
+      },
+      "nextBuild": "vJSjbcsBBeqSdT3HSdnoA"
+    }
+  ]
+}

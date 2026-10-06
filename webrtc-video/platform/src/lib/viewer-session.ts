@@ -7,7 +7,7 @@ export type ViewerPeer = {
 }
 
 export type ViewerSessionClient = {
-  close: () => Promise<unknown>
+  close: (options?: { pageHide?: boolean }) => Promise<unknown>
   peer: ViewerPeer
   restart: () => Promise<void>
   start: () => Promise<void>
@@ -171,7 +171,7 @@ export class ViewerSessionController<Resolution, Track = unknown> {
     await this.connect()
   }
 
-  async stop() {
+  async stop(options?: { pageHide?: boolean }) {
     if (this.stopped) {
       return
     }
@@ -181,8 +181,13 @@ export class ViewerSessionController<Resolution, Track = unknown> {
     this.clearReconnectTimer()
     const client = this.detachClient()
     if (client) {
-      await client.close().catch(() => {})
+      await client.close(options).catch(() => {})
     }
+  }
+
+  recoverCurrentBackend(cause: unknown) {
+    if (this.stopped || this.reconnecting || !this.currentBackend) return false
+    return this.scheduleRecovery(cause)
   }
 
   excludeCurrentBackend(cause: unknown) {

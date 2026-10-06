@@ -3,6 +3,7 @@ package webrtc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -715,6 +716,14 @@ func TestRefreshWHEPICEFetchesCredentialsBeforeSerializingPeerMutation(t *testin
 }
 
 func TestWHEPOfferAllowsOnlyTheBoundedMediaMTXTransportDowngrade(t *testing.T) {
+	for _, rtx := range []bool{false, true} {
+		t.Run(fmt.Sprintf("rtx=%t", rtx), func(t *testing.T) {
+			testMediaMTXTransportDowngrade(t, rtx)
+		})
+	}
+}
+
+func testMediaMTXTransportDowngrade(t *testing.T, rtx bool) {
 	cfg := config.Default()
 	cfg.WebRTC.UseTURN = false
 	cfg.WebRTC.Adaptive.Enabled = false
@@ -743,6 +752,16 @@ func TestWHEPOfferAllowsOnlyTheBoundedMediaMTXTransportDowngrade(t *testing.T) {
 		PayloadType: 106,
 	}, webrtc.RTPCodecTypeVideo); err != nil {
 		t.Fatalf("register MediaMTX H264 codec: %v", err)
+	}
+	if rtx {
+		if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType: webrtc.MimeTypeRTX, ClockRate: 90000, SDPFmtpLine: "apt=106",
+			},
+			PayloadType: 107,
+		}, webrtc.RTPCodecTypeVideo); err != nil {
+			t.Fatalf("register MediaMTX RTX codec: %v", err)
+		}
 	}
 	interceptors := &interceptor.Registry{}
 	if err := webrtc.ConfigureNack(mediaEngine, interceptors); err != nil {
@@ -786,8 +805,12 @@ func TestWHEPOfferAllowsOnlyTheBoundedMediaMTXTransportDowngrade(t *testing.T) {
 		t.Fatal("strict WHEP offer activated the MediaMTX native source policy")
 	}
 	strictSession.Close("strict downgrade test complete")
-	if strictErr == nil || !strings.Contains(strictErr.Error(), "rtx, flexfec") {
-		t.Fatalf("strict WHEP downgrade error = %v, want missing RTX and FlexFEC", strictErr)
+	missing := "rtx, flexfec"
+	if rtx {
+		missing = "flexfec"
+	}
+	if strictErr == nil || strictErr.Error() != "required WHEP transport features were not negotiated: "+missing {
+		t.Fatalf("strict WHEP downgrade error = %v, want missing %s", strictErr, missing)
 	}
 	if strictAnswer != "" {
 		t.Fatalf("rejected strict WHEP answer = %q, want empty", strictAnswer)
@@ -800,8 +823,8 @@ func TestWHEPOfferAllowsOnlyTheBoundedMediaMTXTransportDowngrade(t *testing.T) {
 	if !stats.TWCCNegotiated || !stats.NACKNegotiated {
 		t.Fatalf("MediaMTX session did not negotiate TWCC and NACK: %+v", stats)
 	}
-	if stats.RTXNegotiated || stats.FlexFECNegotiated {
-		t.Fatalf("MediaMTX session unexpectedly negotiated RTX or FlexFEC: %+v", stats)
+	if stats.RTXNegotiated != rtx || stats.FlexFECNegotiated {
+		t.Fatalf("MediaMTX session repair negotiation = %+v, want RTX=%t and no FlexFEC", stats, rtx)
 	}
 	if !session.mediaMTXNative.Load() {
 		t.Fatal("MediaMTX offer did not activate the native source policy")
@@ -1071,6 +1094,7 @@ func TestSessionCoalescesConcurrentRecoveryKeyFrameRequests(t *testing.T) {
 		encoder: encoder,
 		logger:  logs.NewLogger(logs.NewHub(8), false),
 	}
+	defer session.cancelScheduledKeyFrameRequest()
 	var wait sync.WaitGroup
 	wait.Add(callers)
 	for range callers {

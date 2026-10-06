@@ -4,7 +4,7 @@ import process from "node:process";
 import { renderFrameRateSVG, renderPacketRepairSVG } from "./media-charts.mjs";
 
 const maximumQualificationSampleGapMilliseconds = 2500;
-const minimumTWCCLossGuardStatuses = 20;
+const minimumTWCCLossObservationStatuses = 20;
 const minimumSustainedRecoveryMilliseconds = 10_000;
 const minimumSustainedRecoveryTargetRatio = 0.8;
 const networkTransitionGuardMilliseconds = 2000;
@@ -51,14 +51,21 @@ export function analyze(
     (name) => name !== "warmup",
   );
   const summaries = Object.fromEntries(
-    manifest.phases.map((phase) => [
-      phase.name,
-      summarizePhase(
-        enriched.filter((sample) => sample.phase === phase.name),
-        phase,
-        encoderQuality?.[phase.name] || null,
-      ),
-    ]),
+    manifest.phases.map((phase) => {
+      const phaseSamples = enriched.filter(
+        (sample) => sample.phase === phase.name,
+      );
+      const firstIndex = enriched.indexOf(phaseSamples[0]);
+      return [
+        phase.name,
+        summarizePhase(
+          phaseSamples,
+          phase,
+          encoderQuality?.[phase.name] || null,
+          firstIndex > 0 ? enriched[firstIndex - 1] : null,
+        ),
+      ];
+    }),
   );
   const baseline = summaries.baseline;
   const conditioning = summaries.conditioning;
@@ -681,7 +688,7 @@ export function analyze(
   const lossGuardTelemetryPresent = enriched.some((sample) =>
     Object.hasOwn(sample, "lossGuardReductions"),
   );
-  const sustainedHighLoss = hasPersistentTWCCLoss(
+  const sustainedHighLoss = hasPersistentControllerLoss(
     enriched,
     0.1,
     manifest.video?.adaptive?.minimumBitrateKbps,
@@ -692,7 +699,7 @@ export function analyze(
       !sustainedHighLoss ||
       counterIncrease(enriched, "lossGuardReductions", phaseOrder) > 0,
     "loss-guard-response",
-    "two consecutive TWCC sampling intervals above 10% loss reduce an encoder target that remains above its configured floor without waiting for a delay-estimator callback",
+    "two consecutive sampling intervals above 10% reconciled GCC loss reduce an encoder target that remains above its configured floor without waiting for a delay-estimator callback",
   );
   if (manifest.networkImpairment) {
     assert(
@@ -743,12 +750,12 @@ export function analyze(
     assert(
       assertions,
       !twccTelemetryPresent ||
-        (constrained.twccReportedLossRatio <=
+        (constrained.medianAverageLoss <=
           trafficControlSummary.constrainedDropRatio + 0.08 &&
-          impaired.twccReportedLossRatio <=
+          impaired.medianAverageLoss <=
             trafficControlSummary.impairedDropRatio + 0.08),
       "twcc-loss-fidelity",
-      "browser TWCC loss stays within eight percentage points of shaped-link drops, detecting transport-sequence accounting regressions",
+      "reconciled GCC loss stays within eight percentage points of shaped-link drops; raw TWCC missing symbols may repeat during reordering",
     );
   }
   if (receiverUDP.available) {
@@ -1293,8 +1300,8 @@ export function renderMarkdown(analysis, manifest) {
     ],
     [
       "Loss fidelity",
-      `qdisc ${formatNumber(analysis.trafficControl?.impairedDropRatio * 100, 2)}%; TWCC ${formatNumber(impaired.twccReportedLossRatio * 100, 2)}%`,
-      "2% injected; TWCC within 8 percentage points",
+      `qdisc ${formatNumber(analysis.trafficControl?.impairedDropRatio * 100, 2)}%; GCC ${formatNumber(impaired.medianAverageLoss * 100, 2)}%`,
+      "2% injected; reconciled GCC loss within 8 percentage points",
     ],
     ["Packet repair", repairObserved, repairRequired],
     [
@@ -1518,6 +1525,12 @@ ${setupSection}${mobilitySection}${signalingSection}## Phase summary
 | Phase | Samples | Connected | Received kbps (median) | Link use | TWCC kbps (median) | Encoder kbps (median) | Decoded fps | Avg QP | Decode ms/frame | Frozen | NACK | Receiver retransmissions | FEC packets | Max RTT ms |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 ${phaseRows}
+
+Frozen-time ratios include the sampling interval ending at the first snapshot of
+each phase, so transitions do not lose cumulative-counter increments. The JSON
+retains that entry increment and the full observation duration separately.
+Native counters are reported when playback resumes; phase attribution identifies
+the reporting interval, not the exact start or cause of a freeze.
 
 Congestion response: ${analysis.congestionResponseRequired ? formatDuration(analysis.responseDelayMilliseconds) : "not required (stable pre-transition target fits the constrained media budget)"}. Recovery response: ${analysis.congestionResponseRequired ? formatDuration(analysis.recoveryDelayMilliseconds) : "not required"}.
 
@@ -2109,7 +2122,7 @@ export function summarizeHostCPU(samples, phaseTimeline, phaseOrder) {
   };
 }
 
-function summarizePhase(samples, phase, encoderQuality) {
+function summarizePhase(samples, phase, encoderQuality, previousSample) {
   if (samples.length === 0) {
     return null;
   }
@@ -2147,10 +2160,25 @@ function summarizePhase(samples, phase, encoderQuality) {
     .filter(
       (sample, index) => sample.framesDecoded > samples[index].framesDecoded,
     ).length;
+  // Native freeze counters are cumulative and reported after presentation
+  // resumes. Attribute each sampling interval to its ending snapshot's phase,
+  // including the interval crossing phase entry; otherwise that increment is
+  // omitted from both adjacent summaries. This is reporting time, not proof of
+  // when a freeze began. Keep this interval's duration in the ratio denominator.
+  const freezeBaseline = previousSample || first;
+  const freezeMeasurementDurationSeconds = Math.max(
+    0,
+    (last.elapsedMilliseconds - freezeBaseline.elapsedMilliseconds) / 1000,
+  );
+  const phaseEntryFreezeDurationSeconds = Math.max(
+    0,
+    (first.totalFreezesDurationSeconds || 0) -
+      (freezeBaseline.totalFreezesDurationSeconds || 0),
+  );
   const freezeDurationSeconds = Math.max(
     0,
     (last.totalFreezesDurationSeconds || 0) -
-      (first.totalFreezesDurationSeconds || 0),
+      (freezeBaseline.totalFreezesDurationSeconds || 0),
   );
   const nackIncrease = counterIncrease(samples, "nackCount", [phase.name]);
   const packetsReceivedIncrease = counterIncrease(samples, "packetsReceived", [
@@ -2206,8 +2234,12 @@ function summarizePhase(samples, phase, encoderQuality) {
     decoderActiveRatio:
       samples.length > 1 ? decodedIntervals / (samples.length - 1) : 0,
     freezeDurationSeconds,
+    phaseEntryFreezeDurationSeconds,
+    freezeMeasurementDurationSeconds,
     freezeRatio:
-      durationSeconds > 0 ? freezeDurationSeconds / durationSeconds : 0,
+      freezeMeasurementDurationSeconds > 0
+        ? freezeDurationSeconds / freezeMeasurementDurationSeconds
+        : 0,
     fecPacketsIncrease: counterIncrease(samples, "fecPacketsReceived", [
       phase.name,
     ]),
@@ -2861,7 +2893,7 @@ function counterIncrease(samples, field, phases) {
   return Math.max(0, last - first);
 }
 
-function hasPersistentTWCCLoss(samples, threshold, minimumTargetKbps) {
+function hasPersistentControllerLoss(samples, threshold, minimumTargetKbps) {
   if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
     return false;
   }
@@ -2886,18 +2918,18 @@ function hasPersistentTWCCLoss(samples, threshold, minimumTargetKbps) {
       [previous, sample],
       "twccReportedStatuses",
     );
-    const lost = nullableCounterIncrease(
-      [previous, sample],
-      "twccReportedLost",
-    );
+    // Raw not-received symbols can be repeated by overlapping feedback and
+    // corrected by late receipts. Only the reconciled controller observation
+    // may authorize a loss response; raw counters remain diagnostic evidence.
+    const loss = sample.lossAverage;
     const canReduce =
       Number.isFinite(previous.encoderTargetKbps) &&
       previous.encoderTargetKbps > Math.max(1, targetFloorKbps * 1.01);
     if (
       reported !== null &&
-      reported >= minimumTWCCLossGuardStatuses &&
-      lost !== null &&
-      lost / reported > threshold &&
+      reported >= minimumTWCCLossObservationStatuses &&
+      Number.isFinite(loss) &&
+      loss > threshold &&
       canReduce
     ) {
       consecutive += 1;

@@ -274,6 +274,61 @@ test("WHEP sends a separate completion fragment when gathering finishes after ca
   await client.close()
 })
 
+test("WHEP treats an empty ICE candidate as end of gathering, including the later null event", async () => {
+  const requests = [],
+    errors = []
+  const peer = new ManualCompletionPeer()
+  const client = new WHEPClient({
+    authorization: "Bearer viewer-token",
+    endpoint: "https://edge.example/whep",
+    fetch: async (_input, init) => {
+      requests.push({ body: String(init.body ?? ""), method: init.method })
+      if (init.method === "POST")
+        return response(initialAnswer, 201, {
+          "Content-Type": "application/sdp",
+          ETag: '"generation-1"',
+          Location: "/whep/empty-completion",
+        })
+      return response(null, init.method === "PATCH" ? 204 : 200)
+    },
+    iceServers: [],
+    onError: (error) => errors.push(error.message),
+    onTrack: () => {},
+    peerFactory: () => peer,
+  })
+  try {
+    await client.start()
+    peer.onicecandidate({
+      candidate: {
+        toJSON: () => ({
+          candidate: "",
+          sdpMid: "0",
+          usernameFragment: "client-1",
+        }),
+      },
+    })
+    await eventually(
+      () =>
+        errors.length ||
+        requests.some((request) => /a=end-of-candidates/.test(request.body)),
+    )
+    assert.deepEqual(errors, [])
+    peer.completeGathering()
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    assert.equal(
+      requests.filter(
+        (request) =>
+          request.method === "PATCH" &&
+          /a=end-of-candidates/.test(request.body),
+      ).length,
+      1,
+    )
+    assert.equal(peer.closed, false)
+  } finally {
+    await client.close()
+  }
+})
+
 test("WHEP does not patch a candidate already embedded in its initial offer", async () => {
   const requests = []
   const client = new WHEPClient({
@@ -984,6 +1039,145 @@ test("WHEP close waits for concurrent resource creation and deletes it exactly o
   assert.equal(closeResults[0].outcome, "deleted")
 })
 
+test("WHEP stop drains an abort-aware initial POST so its server resource can be deleted", async () => {
+  const requests = []
+  const peer = new FakePeer()
+  let releasePOST
+  let postSignal
+  let bodyCanceled = false
+  const client = new WHEPClient({
+    endpoint: "https://edge.example/whep",
+    iceServers: [],
+    authorization: "",
+    onError: assert.fail,
+    onTrack: assert.fail,
+    peerFactory: () => peer,
+    fetch: async (input, init) => {
+      requests.push({ input: String(input), method: init.method })
+      if (init.method === "POST") {
+        postSignal = init.signal
+        return new Promise((resolve, reject) => {
+          init.signal.addEventListener(
+            "abort",
+            () => reject(init.signal.reason),
+            { once: true },
+          )
+          releasePOST = () =>
+            resolve(
+              response(
+                new ReadableStream({
+                  cancel() {
+                    bodyCanceled = true
+                  },
+                }),
+                201,
+                {
+                  "Content-Type": "application/sdp",
+                  ETag: '"generation-1"',
+                  Location: "/whep/stop-during-create",
+                },
+              ),
+            )
+        })
+      }
+      return response(null, 204)
+    },
+  })
+  const starting = client.start()
+  const rejectedStart = assert.rejects(starting)
+  await eventually(() => postSignal)
+  const closing = client.close()
+  const abortedBeforeResponse = postSignal.aborted
+  releasePOST()
+  const result = await closing
+  await rejectedStart
+  assert.equal(
+    abortedBeforeResponse,
+    false,
+    "stop discarded the only way to identify the new server resource",
+  )
+  assert.equal(result.outcome, "deleted")
+  assert.deepEqual(
+    requests.map((request) => request.method),
+    ["POST", "DELETE"],
+  )
+  assert.equal(bodyCanceled, true)
+  assert.equal(peer.remoteDescription, null)
+  assert.equal(peer.closed, true)
+})
+
+test("WHEP stop bounds an uninterruptible POST and cleans up a later Location", async () => {
+  const methods = []
+  const peer = new FakePeer()
+  let releasePOST
+  let postSignal
+  const client = new WHEPClient({
+    endpoint: "https://edge.example/whep",
+    iceServers: [],
+    authorization: "",
+    onError: assert.fail,
+    onTrack: assert.fail,
+    peerFactory: () => peer,
+    requestTimeoutMs: 30,
+    fetch: async (_input, init) => {
+      methods.push(init.method)
+      if (init.method === "POST") {
+        postSignal = init.signal
+        return new Promise((resolve) => {
+          releasePOST = () =>
+            resolve(
+              response(initialAnswer, 201, {
+                "Content-Type": "application/sdp",
+                ETag: '"generation-1"',
+                Location: "/whep/late-after-stop",
+              }),
+            )
+        })
+      }
+      return response(null, 204)
+    },
+  })
+  const starting = client.start()
+  const rejectedStart = assert.rejects(starting)
+  await eventually(() => postSignal)
+  const started = performance.now()
+  const closed = await client.close()
+  assert.equal(closed.outcome, "timed-out")
+  assert.ok(performance.now() - started < 500, "close exceeded its deadline")
+  assert.equal(peer.closed, true)
+  assert.equal(postSignal.aborted, true)
+  releasePOST()
+  await rejectedStart
+  assert.deepEqual(methods, ["POST", "DELETE"])
+})
+
+test("WHEP stop never follows a late initial redirect", async () => {
+  const methods = []
+  let releasePOST
+  const client = new WHEPClient({
+    endpoint: "https://edge.example/whep",
+    iceServers: [],
+    authorization: "",
+    onError: assert.fail,
+    onTrack: assert.fail,
+    peerFactory: () => new FakePeer(),
+    fetch: async (_input, init) => {
+      methods.push(init.method)
+      return new Promise((resolve) => {
+        releasePOST = () =>
+          resolve(response(null, 307, { Location: "/new-whep" }))
+      })
+    },
+  })
+  const starting = client.start()
+  const rejectedStart = assert.rejects(starting, /closed/)
+  await eventually(() => releasePOST)
+  const closing = client.close()
+  releasePOST()
+  await Promise.all([rejectedStart, closing])
+  assert.deepEqual(methods, ["POST"])
+})
+
 test("WHEP client exposes bounded server retry guidance after saturation", async () => {
   const requests = []
   const closeResults = []
@@ -1583,6 +1777,50 @@ test("WHEP terminal signaling remains contained when its observer throws", async
   assert.equal(observations, 1)
   await assert.rejects(() => client.restart(), /session has failed/)
   await client.close()
+})
+
+test("page navigation starts one keepalive DELETE synchronously despite an in-flight PATCH", async () => {
+  const peer = new FakePeer()
+  let patchStarted = false,
+    deletions = 0
+  const client = new WHEPClient({
+    endpoint: "https://edge.example/whep?rstream.token=edge-token",
+    iceServers: [],
+    authorization: "",
+    onError: assert.fail,
+    onTrack: () => {},
+    peerFactory: () => peer,
+    fetch: async (_url, init) => {
+      if (init.method === "POST")
+        return response(initialAnswer, 201, {
+          "Content-Type": "application/sdp",
+          ETag: '"generation-1"',
+          Location: "/whep/navigation",
+        })
+      if (init.method === "PATCH") {
+        patchStarted = true
+        return new Promise((_resolve, reject) =>
+          init.signal.addEventListener(
+            "abort",
+            () => reject(init.signal.reason),
+            { once: true },
+          ),
+        )
+      }
+      assert.equal(init.method, "DELETE")
+      assert.equal(init.keepalive, true)
+      deletions++
+      return response(null, 200)
+    },
+  })
+  await client.start()
+  await eventually(() => patchStarted)
+  const closed = client.close({ pageHide: true })
+  assert.equal(deletions, 1)
+  assert.equal(peer.closed, true)
+  await closed
+  await client.close({ pageHide: true })
+  assert.equal(deletions, 1)
 })
 
 class FakePeer {

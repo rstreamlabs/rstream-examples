@@ -20,33 +20,35 @@ import (
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/logs"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/media"
 	turnprovider "github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/turn"
+	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/videoformat"
 	"github.com/rstreamlabs/rstream-go"
 )
 
 type SessionStats struct {
-	Codec                     string                 `json:"codec"`
-	TWCCEnabled               bool                   `json:"twccEnabled"`
-	TWCCNegotiated            bool                   `json:"twccNegotiated"`
-	NACKEnabled               bool                   `json:"nackEnabled"`
-	NACKNegotiated            bool                   `json:"nackNegotiated"`
-	RTXEnabled                bool                   `json:"rtxEnabled"`
-	RTXNegotiated             bool                   `json:"rtxNegotiated"`
-	FlexFECEnabled            bool                   `json:"flexFECEnabled"`
-	FlexFECNegotiated         bool                   `json:"flexFECNegotiated"`
-	AdaptiveBackend           config.AdaptiveBackend `json:"adaptiveBackend"`
-	AdaptiveActive            bool                   `json:"adaptiveActive"`
-	EstimatedBitrateBps       int                    `json:"estimatedBitrateBps"`
-	EncoderTargetBitrateKbps  int                    `json:"encoderTargetBitrateKbps"`
-	LastAppliedBitrateKbps    int                    `json:"lastAppliedBitrateKbps"`
-	AdaptiveBitrateUpdates    uint64                 `json:"adaptiveBitrateUpdates"`
-	AdaptiveBitrateFailures   uint64                 `json:"adaptiveBitrateFailures"`
-	RecoveryKeyFrameRequests  uint64                 `json:"recoveryKeyFrameRequests"`
-	RecoveryKeyFrameCoalesced uint64                 `json:"recoveryKeyFrameCoalesced"`
-	RecoveryKeyFrameFailures  uint64                 `json:"recoveryKeyFrameFailures"`
-	RTCPKeyFrameRequests      uint64                 `json:"rtcpKeyFrameRequests"`
-	RTCPMalformedFeedback     uint64                 `json:"rtcpMalformedFeedback"`
-	Bandwidth                 *BandwidthStats        `json:"bandwidth,omitempty"`
-	ICEPath                   *ICEPathStats          `json:"icePath,omitempty"`
+	Codec                     string                   `json:"codec"`
+	TWCCEnabled               bool                     `json:"twccEnabled"`
+	TWCCNegotiated            bool                     `json:"twccNegotiated"`
+	NACKEnabled               bool                     `json:"nackEnabled"`
+	NACKNegotiated            bool                     `json:"nackNegotiated"`
+	RTXEnabled                bool                     `json:"rtxEnabled"`
+	RTXNegotiated             bool                     `json:"rtxNegotiated"`
+	FlexFECEnabled            bool                     `json:"flexFECEnabled"`
+	FlexFECNegotiated         bool                     `json:"flexFECNegotiated"`
+	AdaptiveBackend           config.AdaptiveBackend   `json:"adaptiveBackend"`
+	AdaptiveActive            bool                     `json:"adaptiveActive"`
+	EstimatedBitrateBps       int                      `json:"estimatedBitrateBps"`
+	EncoderTargetBitrateKbps  int                      `json:"encoderTargetBitrateKbps"`
+	LastAppliedBitrateKbps    int                      `json:"lastAppliedBitrateKbps"`
+	AdaptiveBitrateUpdates    uint64                   `json:"adaptiveBitrateUpdates"`
+	AdaptiveBitrateFailures   uint64                   `json:"adaptiveBitrateFailures"`
+	RecoveryKeyFrameRequests  uint64                   `json:"recoveryKeyFrameRequests"`
+	RecoveryKeyFrameCoalesced uint64                   `json:"recoveryKeyFrameCoalesced"`
+	RecoveryKeyFrameFailures  uint64                   `json:"recoveryKeyFrameFailures"`
+	RTCPKeyFrameRequests      uint64                   `json:"rtcpKeyFrameRequests"`
+	RTCPMalformedFeedback     uint64                   `json:"rtcpMalformedFeedback"`
+	Bandwidth                 *BandwidthStats          `json:"bandwidth,omitempty"`
+	ICEPath                   *ICEPathStats            `json:"icePath,omitempty"`
+	SourceFormat              *media.SourceFormatState `json:"sourceFormat,omitempty"`
 }
 
 type ICEPathStats struct {
@@ -59,6 +61,9 @@ type ICEPathStats struct {
 }
 
 type BandwidthStats struct {
+	AcknowledgedRTPBitrateBps            int     `json:"acknowledgedRTPBitrateBps"`
+	DelayRecoveryRTPBitrateBps           int     `json:"delayRecoveryRTPBitrateBps"`
+	DelayIncreaseMode                    string  `json:"delayIncreaseMode"`
 	LossTargetBitrateBps                 int     `json:"lossTargetBitrateBps"`
 	DelayTargetBitrateBps                int     `json:"delayTargetBitrateBps"`
 	AverageLoss                          float64 `json:"averageLoss"`
@@ -121,6 +126,7 @@ type BandwidthStats struct {
 }
 
 type Broadcaster struct {
+	quality        *adaptation.QualityPolicy
 	cfg            config.Config
 	logger         *logs.Logger
 	sourceFactory  media.Factory
@@ -153,6 +159,10 @@ type Session struct {
 	estimator                 bandwidthEstimator
 	encoder                   media.EncoderController
 	adaptive                  *adaptation.Controller
+	formatWorker              *adaptation.FormatWorker
+	formatConfig              *config.SourceFormatConfig
+	formatBitrateLimit        int
+	videoBitrateLimit         int
 	close                     sync.Once
 	closed                    chan struct{}
 	lifecycleMu               sync.Mutex
@@ -216,11 +226,16 @@ const (
 var ErrSessionCapacity = errors.New("viewer session capacity exhausted")
 
 func NewBroadcaster(cfg config.Config, sourceFactory media.Factory, turn *turnprovider.Provider, logger *logs.Logger) (*Broadcaster, error) {
+	quality, err := adaptation.NewQualityPolicy(cfg)
+	if err != nil {
+		return nil, err
+	}
 	peerFactory, codec, err := newPeerConnectionFactory(cfg)
 	if err != nil {
 		return nil, err
 	}
 	return &Broadcaster{
+		quality:        quality,
 		cfg:            cfg,
 		logger:         logger,
 		sourceFactory:  sourceFactory,
@@ -308,18 +323,19 @@ func (b *Broadcaster) OpenSession(ctx context.Context) (*Session, error) {
 	}
 	samples, unsubscribe := source.Subscribe()
 	session := &Session{
-		id:            sessionID,
-		logger:        b.logger,
-		pc:            peerConnection,
-		track:         track,
-		sender:        sender,
-		unsubscribe:   unsubscribe,
-		release:       release,
-		estimator:     estimator,
-		encoder:       encoderController,
-		closed:        make(chan struct{}),
-		mediaReady:    make(chan struct{}),
-		receiverReady: make(chan struct{}),
+		id:                sessionID,
+		logger:            b.logger,
+		pc:                peerConnection,
+		track:             track,
+		sender:            sender,
+		unsubscribe:       unsubscribe,
+		release:           release,
+		estimator:         estimator,
+		encoder:           encoderController,
+		closed:            make(chan struct{}),
+		mediaReady:        make(chan struct{}),
+		receiverReady:     make(chan struct{}),
+		videoBitrateLimit: b.cfg.MaximumVideoBitrateKbps(),
 		writeNativeTrackProbe: func() error {
 			return track.WriteSample(rtcmedia.Sample{
 				Data:     []byte(nativeMediaMTXTrackProbe),
@@ -426,6 +442,27 @@ func (b *Broadcaster) OpenSession(ctx context.Context) (*Session, error) {
 			}
 		})
 	}
+	if b.cfg.Media.Format != nil {
+		controllable := source.(media.FormatControllableSource) // Checked by newSource.
+		formatController, _ := controllable.FormatController()
+		worker, err := adaptation.NewFormatWorker(*b.cfg.Media.Format, formatController, b.quality, func() int {
+			if session.adaptive == nil {
+				return 0
+			}
+			snapshot := session.adaptive.Snapshot()
+			// The estimate can exceed the encoder target while an increase is
+			// held after loss. Do not raise source cost ahead of that recovery.
+			return min(snapshot.EstimatedBitrateBps, snapshot.EncoderTargetBitrateKbps*1000)
+		}, b.logger)
+		if err != nil {
+			releaseSource = false
+			session.Close("source format initialization failed")
+			return nil, err
+		}
+		session.formatWorker = worker
+		session.formatConfig = b.cfg.Media.Format
+		session.formatBitrateLimit = b.cfg.WebRTC.Adaptive.TWCCGCC.MaxBitrateKbps
+	}
 	b.mu.Lock()
 	if b.closed {
 		b.mu.Unlock()
@@ -518,6 +555,9 @@ func (s *Session) EncoderInfo() (media.EncoderInfo, bool) {
 func (s *Session) SetEncoderTargetBitrateKbps(value int) error {
 	if s.encoder == nil {
 		return errors.New("dynamic encoder control is unavailable")
+	}
+	if value > s.videoBitrateLimit {
+		return errors.New("encoder target exceeds the configured session bitrate limit")
 	}
 	return s.encoder.SetTargetBitrateKbps(value)
 }
@@ -663,6 +703,31 @@ func (s *Session) createAnswer(ctx context.Context, offer string, gatherComplete
 	}); err != nil {
 		return "", fmt.Errorf("failed to apply the remote offer: %w", err)
 	}
+	if strings.EqualFold(s.track.Codec().MimeType, webrtc.MimeTypeH264) {
+		matched := false
+		for _, codec := range s.sender.GetParameters().Codecs {
+			if strings.EqualFold(codec.MimeType, webrtc.MimeTypeH264) {
+				if s.formatConfig != nil {
+					if err := config.ValidateSourceFormatBounds(*s.formatConfig, s.formatBitrateLimit, codec.SDPFmtpLine, true); err != nil {
+						return "", fmt.Errorf("receiver cannot accept configured source profiles: %w", err)
+					}
+				}
+				sender, err := videoformat.H264Bounds(s.track.Codec().SDPFmtpLine, false)
+				if err != nil {
+					return "", fmt.Errorf("invalid configured H264 sender: %w", err)
+				}
+				receiver, err := videoformat.H264Bounds(codec.SDPFmtpLine, true)
+				if err != nil || !receiver.AcceptsEnvelope(sender, s.videoBitrateLimit) {
+					return "", errors.New("receiver cannot accept the configured H264 level and maximum bitrate")
+				}
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return "", errors.New("receiver did not negotiate H264 support")
+		}
+	}
 	answer, err := s.pc.CreateAnswer(nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create the answer: %w", err)
@@ -697,6 +762,9 @@ func (s *Session) recordTransportNegotiation() {
 	adaptive := negotiation.twcc && s.adaptive != nil && !s.mediaMTXNative.Load()
 	if adaptive {
 		s.adaptive.Start()
+		if s.formatWorker != nil {
+			s.formatWorker.Start()
+		}
 	}
 	s.updateStats(func(stats *SessionStats) {
 		stats.TWCCNegotiated = negotiation.twcc
@@ -756,6 +824,9 @@ func (s *Session) Close(reason string) {
 		}
 		if s.adaptive != nil {
 			s.adaptive.Close()
+		}
+		if s.formatWorker != nil {
+			s.formatWorker.Close()
 		}
 		if s.pc != nil {
 			_ = s.pc.Close()
@@ -877,6 +948,10 @@ func (s *Session) StatsSnapshot() SessionStats {
 	stats.RTCPKeyFrameRequests = s.rtcpKeyFrameRequests.Load()
 	stats.RTCPMalformedFeedback = s.rtcpMalformedFeedback.Load()
 	stats.Bandwidth = snapshotBandwidthStats(s.estimator)
+	if s.formatWorker != nil {
+		format := s.formatWorker.Snapshot()
+		stats.SourceFormat = &format
+	}
 	if s.adaptive == nil {
 		return stats
 	}
@@ -996,6 +1071,9 @@ func snapshotBandwidthStats(estimator bandwidthEstimator) *BandwidthStats {
 		return nil
 	}
 	stats := &BandwidthStats{}
+	stats.AcknowledgedRTPBitrateBps, _ = raw["acknowledgedBitrate"].(int)
+	stats.DelayRecoveryRTPBitrateBps, _ = raw["delayRecoveryTargetBitrate"].(int)
+	stats.DelayIncreaseMode, _ = raw["delayIncreaseMode"].(string)
 	stats.LossTargetBitrateBps, _ = raw["lossTargetBitrate"].(int)
 	stats.DelayTargetBitrateBps, _ = raw["delayTargetBitrate"].(int)
 	stats.AverageLoss, _ = raw["averageLoss"].(float64)
@@ -1252,11 +1330,13 @@ func (s *Session) writeSamples(samples <-chan media.AccessUnit) {
 }
 
 func (s *Session) requestKeyFrame() {
-	s.scheduleKeyFrameRequest(0, false, false)
+	// A reader can arrive just after the preceding key frame. Retain one
+	// trailing request when rate limited so it need not wait for the next GOP.
+	s.scheduleKeyFrameRequest(0, false)
 }
 
 func (s *Session) requestRecoveryKeyFrame(delay time.Duration) {
-	s.scheduleKeyFrameRequest(delay, true, true)
+	s.scheduleKeyFrameRequest(delay, true)
 }
 
 func (s *Session) requestCongestionRecoveryKeyFrame() {
@@ -1276,21 +1356,22 @@ func (s *Session) recoveryKeyFrameDelay() time.Duration {
 	return max(delay, spacingDelay, 0)
 }
 
-func (s *Session) scheduleKeyFrameRequest(delay time.Duration, deferIfLimited, waitForAdmission bool) {
+func (s *Session) scheduleKeyFrameRequest(delay time.Duration, waitForAdmission bool) {
 	if s.isClosed() {
 		return
 	}
 	now := time.Now()
 	due := now.Add(max(delay, 0))
 	s.keyFrameMu.Lock()
-	earliest := s.lastKeyFrameRequest.Add(keyFrameRequestInterval)
-	if earliest.After(due) {
-		due = earliest
-	}
-	if !deferIfLimited && delay <= 0 && due.After(now) {
+	// Close may have won while this caller was waiting for the mutex.
+	if s.isClosed() {
 		s.keyFrameMu.Unlock()
-		s.recoveryKeyFrameCoalesced.Add(1)
 		return
+	}
+	earliest := s.lastKeyFrameRequest.Add(keyFrameRequestInterval)
+	rateLimited := earliest.After(due)
+	if rateLimited {
+		due = earliest
 	}
 	if due.After(now) {
 		if s.keyFrameRequestTimer != nil && !due.Before(s.keyFrameRequestDue) {
@@ -1310,6 +1391,9 @@ func (s *Session) scheduleKeyFrameRequest(delay time.Duration, deferIfLimited, w
 			s.fireScheduledKeyFrameRequest(generation)
 		})
 		s.keyFrameMu.Unlock()
+		if rateLimited {
+			s.recoveryKeyFrameCoalesced.Add(1)
+		}
 		return
 	}
 	s.cancelScheduledKeyFrameRequestLocked()
@@ -1421,13 +1505,14 @@ func (b *Broadcaster) newAdaptiveController(
 			return adaptation.LossState{Average: loss, GuardActive: guardActive}
 		},
 		requestRecoveryKeyFrame,
+		b.quality,
 	), true
 }
 
 func (b *Broadcaster) acquireSource(ctx context.Context) (media.Source, func(), error) {
 	switch b.mediaMode {
 	case config.MediaModePerViewer:
-		source, err := b.sourceFactory.New()
+		source, err := b.newSource()
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1467,7 +1552,7 @@ func (b *Broadcaster) acquireSharedSource(ctx context.Context) (media.Source, fu
 	}
 	b.mu.Unlock()
 	var err error
-	source, err = b.sourceFactory.New()
+	source, err = b.newSource()
 	if err != nil {
 		return nil, nil, err
 	}

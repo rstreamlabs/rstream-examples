@@ -26,7 +26,7 @@ export function devicePresenceUpdateFromWebhookEvent(
     return null
   }
   const labels = eventLabels(event)
-  if (labels?.app !== APP_LABEL) {
+  if (labels?.app !== APP_LABEL || labels?.inventory === "discovered") {
     return null
   }
   const deviceId = labels[DEVICE_LABEL]

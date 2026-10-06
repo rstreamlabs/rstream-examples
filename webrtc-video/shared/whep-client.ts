@@ -120,6 +120,7 @@ export class WHEPClient {
   private readonly allowLegacyWildcardETag: boolean;
   private readonly allowInsecureHTTP: boolean;
   private abort = new AbortController();
+  private initialAbort = new AbortController();
   private closed = false;
   private closePromise: Promise<WHEPCloseResult> | null = null;
   private credentialExpiresAt: number | null;
@@ -131,6 +132,7 @@ export class WHEPClient {
   private iceCredentialExpiresAt: number | null;
   private iceRestartTimer: ReturnType<typeof setTimeout> | null = null;
   private initialRequest: Promise<void> | null = null;
+  private initialRequestFailed = false;
   private patchTimer: ReturnType<typeof setTimeout> | null = null;
   private patchQueue: Promise<void> = Promise.resolve();
   private remoteDeletePromise: Promise<RemoteDeleteResult> | null = null;
@@ -197,6 +199,7 @@ export class WHEPClient {
           this.captureSessionURL(result);
         }
       } catch (error) {
+        this.initialRequestFailed = result === null;
         if (result) {
           await discardResponse(result.response);
         }
@@ -205,6 +208,7 @@ export class WHEPClient {
         settleInitialRequest();
       }
       if (this.closed) {
+        await discardResponse(result.response);
         await Promise.resolve();
         await this.cleanupLateSession();
         throw new Error("WHEP client is closed");
@@ -257,7 +261,18 @@ export class WHEPClient {
     return this.sessionHeaders.get(name);
   }
 
-  close() {
+  close(options: { pageHide?: boolean } = {}) {
+    if (options.pageHide && !this.closed) {
+      // Navigation may discard pending promise continuations. Start the bounded
+      // keepalive DELETE synchronously, using the last valid session credential.
+      if (this.sessionURL) {
+        void this.deleteRemoteSession(
+          this.sessionURL,
+          AbortSignal.timeout(this.closeTimeoutMs),
+        );
+      }
+      this.peer.close();
+    }
     if (!this.closePromise) {
       this.closePromise = this.performClose();
     }
@@ -284,12 +299,20 @@ export class WHEPClient {
       await waitForAbortable(this.patchQueue, signal);
     } catch {
       signalingSettled = false;
+    } finally {
+      // An in-flight POST must first yield its Location so it can be deleted.
+      // Abort it only after it settles or exhausts the bounded close budget.
+      this.initialAbort.abort();
     }
     const session = this.sessionURL;
     if (!signalingSettled) {
       result = closeResult("timed-out", startedAt, false);
     } else if (!session) {
-      result = closeResult("not-established", startedAt, false);
+      result = closeResult(
+        this.initialRequestFailed ? "request-error" : "not-established",
+        startedAt,
+        false,
+      );
     } else {
       if (this.refreshCredentials) {
         try {
@@ -409,7 +432,7 @@ export class WHEPClient {
         "Content-Type": "application/sdp",
       },
       method: "POST",
-      signal: this.abort.signal,
+      signal: this.initialAbort.signal,
     });
   }
 
@@ -541,7 +564,12 @@ export class WHEPClient {
       return;
     }
     const generation = this.generation;
-    if (!event.candidate) {
+    const candidate = event.candidate?.toJSON();
+    // Firefox emits an RTCIceCandidate with an empty candidate string at the
+    // end of a generation, followed by the aggregate null event. Both finish
+    // gathering for this client's single bundled video transport; neither is
+    // a candidate attribute to serialize into SDP (WebRTC 1.0).
+    if (!candidate || candidate.candidate === "") {
       generation.complete = true;
       for (const resolve of generation.waiters.splice(0)) {
         resolve();
@@ -549,7 +577,6 @@ export class WHEPClient {
       this.scheduleCandidatePatch(0);
       return;
     }
-    const candidate = event.candidate.toJSON();
     if (generation.embedded.has(candidateKey(candidate))) {
       return;
     }
@@ -832,6 +859,9 @@ export class WHEPClient {
       }
       const location = response.headers.get("location");
       await discardResponse(response);
+      // Closing may drain an already issued POST, but must never follow a
+      // redirect and create a new resource after the user has stopped.
+      this.requireOpen();
       if (!location) {
         throw new Error("WHEP redirect omitted Location");
       }

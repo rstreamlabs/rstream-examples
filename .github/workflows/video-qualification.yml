@@ -3,6 +3,19 @@ name: Video qualification
 on:
   workflow_dispatch:
     inputs:
+      automatic_format_comparison:
+        description: Qualify automatic source formats on an isolated Docker bridge (no rstream credentials)
+        required: true
+        default: false
+        type: boolean
+      automatic_format_delivery:
+        description: Direct compares paired 1s/3s down-holds; MediaMTX repeats the public 3s default
+        required: true
+        default: direct
+        type: choice
+        options:
+          - direct
+          - mediamtx
       path:
         description: WebRTC path under test
         required: true
@@ -49,12 +62,20 @@ concurrency:
 
 jobs:
   qualify:
+    if: ${{ !inputs.automatic_format_comparison }}
     name: ${{ inputs.path }} ${{ inputs.protection }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Check out the tested revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -79,6 +100,30 @@ jobs:
           done
           docker info >/dev/null
 
+      - name: Prepare runner UDP socket limits
+        id: sockets
+        shell: bash
+        run: |
+          set -euo pipefail
+          receive_limit="$(sysctl -n net.core.rmem_max)"
+          send_limit="$(sysctl -n net.core.wmem_max)"
+          {
+            printf 'receive_limit=%s\n' "$receive_limit"
+            printf 'send_limit=%s\n' "$send_limit"
+          } >>"$GITHUB_OUTPUT"
+          # Match the qualified local environment without lowering a larger limit.
+          sudo sysctl -w \
+            "net.core.rmem_max=$((receive_limit > 7500000 ? receive_limit : 7500000))" \
+            "net.core.wmem_max=$((send_limit > 7500000 ? send_limit : 7500000))"
+          jq -n \
+            --argjson previous_receive "$receive_limit" \
+            --argjson previous_send "$send_limit" \
+            --argjson applied_receive "$(sysctl -n net.core.rmem_max)" \
+            --argjson applied_send "$(sysctl -n net.core.wmem_max)" \
+            '{previous: {receive: $previous_receive, send: $previous_send},
+              applied: {receive: $applied_receive, send: $applied_send}}' \
+            >"${RUNNER_TEMP}/video-qualification-socket-limits.json"
+
       - name: Prepare the credential-isolated runtime
         id: runtime
         working-directory: webrtc-video/producer/qualification/adaptive-streaming
@@ -94,7 +139,10 @@ jobs:
         run: |
           set -euo pipefail
           config_directory="$(mktemp -d)"
+          trap 'rm -rf -- "$config_directory"' EXIT
           runtime_directory="$(mktemp -d)"
+          # Publish the owned path before preparation so failed setup is cleaned too.
+          printf 'runtime_directory=%s\n' "$runtime_directory" >>"$GITHUB_OUTPUT"
           output_directory="${RUNNER_TEMP}/video-qualification"
           mkdir -p "$output_directory"
           chmod 700 "$config_directory" "$runtime_directory" "$output_directory"
@@ -134,7 +182,6 @@ jobs:
           RSTREAM_CONFIG="${config_directory}/config.yaml" \
             go run ./cmd/prepare-context "${prepare_arguments[@]}"
           {
-            printf 'runtime_directory=%s\n' "$runtime_directory"
             printf 'output_directory=%s\n' "$output_directory"
             printf 'mobility=%s\n' "$mobility"
           } >>"$GITHUB_OUTPUT"
@@ -154,6 +201,75 @@ jobs:
           RSTREAM_QUALIFICATION_PREPARED_RUNTIME_DIRECTORY: ${{ steps.runtime.outputs.runtime_directory }}
         run: ./run.sh "${{ steps.runtime.outputs.output_directory }}"
 
+      - name: Diagnose failed relay setup
+        if: inputs.path == 'relay' && steps.runtime.outcome == 'success' && steps.qualification.outcome == 'failure'
+        continue-on-error: true
+        timeout-minutes: 5
+        working-directory: webrtc-video/producer/qualification/adaptive-streaming
+        shell: bash
+        env:
+          RSTREAM_AUTHENTICATION_TOKEN: ${{ secrets.RSTREAM_QUALIFICATION_TOKEN }}
+          RSTREAM_CONFIG: ${{ steps.runtime.outputs.runtime_directory }}/config.yaml
+          OUTPUT_DIRECTORY: ${{ steps.runtime.outputs.output_directory }}
+        run: |
+          set -euo pipefail
+          diagnostic_directory="$(mktemp -d)"
+          trap 'rm -rf -- "$diagnostic_directory"' EXIT
+          chmod 700 "$diagnostic_directory"
+          GOBIN="$diagnostic_directory" \
+            go install github.com/rstreamlabs/rstream-go/cmd/rstream@v1.32.10
+          status=0
+          timeout --kill-after=5s 45s \
+            "${diagnostic_directory}/rstream" --context qualification doctor --output json \
+            >"${diagnostic_directory}/report.json" \
+            2>"${diagnostic_directory}/stderr.log" || status=$?
+          # Only fixed check names, statuses and classifications leave this
+          # private directory. Raw URLs, project data and errors are discarded.
+          if ! jq -e 'type == "object" and (.checks | type == "array")' \
+            "${diagnostic_directory}/report.json" >/dev/null 2>&1; then
+            printf '{}\n' >"${diagnostic_directory}/report.json"
+          fi
+          jq --argjson exit_code "$status" -f doctor-report.jq \
+            "${diagnostic_directory}/report.json" \
+            >"${OUTPUT_DIRECTORY}/runner-connectivity.json"
+          # Distinguish basic TCP reachability from the SDK TLS/QUIC probes.
+          # The helper opens at most two bounded sockets and emits no endpoint.
+          timeout --kill-after=2s 12s \
+            node ./probe-runner-tcp.mjs "${diagnostic_directory}/report.json" \
+            >"${OUTPUT_DIRECTORY}/runner-tcp.json"
+
+      - name: Remove prepared credentials
+        if: always()
+        shell: bash
+        env:
+          RUNTIME_DIRECTORY: ${{ steps.runtime.outputs.runtime_directory }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$RUNTIME_DIRECTORY" ]]; then
+            rm -rf -- "$RUNTIME_DIRECTORY"
+          fi
+
+      - name: Restore runner UDP socket limits
+        if: always() && steps.sockets.outputs.receive_limit != ''
+        shell: bash
+        env:
+          ORIGINAL_RECEIVE_LIMIT: ${{ steps.sockets.outputs.receive_limit }}
+          ORIGINAL_SEND_LIMIT: ${{ steps.sockets.outputs.send_limit }}
+          OUTPUT_DIRECTORY: ${{ steps.runtime.outputs.output_directory }}
+        run: |
+          set -euo pipefail
+          sudo sysctl -w \
+            "net.core.rmem_max=$ORIGINAL_RECEIVE_LIMIT" \
+            "net.core.wmem_max=$ORIGINAL_SEND_LIMIT"
+          test "$(sysctl -n net.core.rmem_max)" = "$ORIGINAL_RECEIVE_LIMIT"
+          test "$(sysctl -n net.core.wmem_max)" = "$ORIGINAL_SEND_LIMIT"
+          if [[ -n "$OUTPUT_DIRECTORY" && -d "$OUTPUT_DIRECTORY" && \
+            -f "${RUNNER_TEMP}/video-qualification-socket-limits.json" ]]; then
+            jq '. + {restored: true}' \
+              "${RUNNER_TEMP}/video-qualification-socket-limits.json" \
+              >"${OUTPUT_DIRECTORY}/runner-socket-limits.json"
+          fi
+
       - name: Upload the complete evidence bundle
         if: always() && steps.runtime.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -171,3 +287,81 @@ jobs:
             printf 'Video qualification failed; inspect the uploaded evidence bundle.\n' >&2
             exit 1
           fi
+
+  automatic-formats:
+    if: ${{ inputs.automatic_format_comparison }}
+    name: Automatic source formats (${{ inputs.automatic_format_delivery }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out the tested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: webrtc-video/producer/go.mod
+          cache-dependency-path: webrtc-video/producer/go.sum
+      - name: Prepare runner socket limits
+        id: sockets
+        shell: bash
+        run: |
+          set -euo pipefail
+          receive_limit="$(sysctl -n net.core.rmem_max)"
+          send_limit="$(sysctl -n net.core.wmem_max)"
+          {
+            printf 'receive_limit=%s\n' "$receive_limit"
+            printf 'send_limit=%s\n' "$send_limit"
+          } >>"$GITHUB_OUTPUT"
+          sudo sysctl -w \
+            "net.core.rmem_max=$((receive_limit > 7500000 ? receive_limit : 7500000))" \
+            "net.core.wmem_max=$((send_limit > 7500000 ? send_limit : 7500000))"
+      - name: Qualify automatic source formats
+        id: comparison
+        continue-on-error: true
+        env:
+          DELIVERY_MODE: ${{ inputs.automatic_format_delivery }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          down_hold=paired
+          if [[ "$DELIVERY_MODE" == mediamtx ]]; then down_hold=3s; fi
+          webrtc-video/producer/qualification/adaptive-streaming/formats/compare-delivery.sh \
+            "$down_hold" "${RUNNER_TEMP}/video-format-comparison" "$DELIVERY_MODE"
+      - name: Restore limits and retain runner metadata
+        if: always() && steps.sockets.outputs.receive_limit != ''
+        env:
+          ORIGINAL_RECEIVE: ${{ steps.sockets.outputs.receive_limit }}
+          ORIGINAL_SEND: ${{ steps.sockets.outputs.send_limit }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo sysctl -w "net.core.rmem_max=$ORIGINAL_RECEIVE" "net.core.wmem_max=$ORIGINAL_SEND"
+          if [[ -d "${RUNNER_TEMP}/video-format-comparison" ]]; then
+            node --input-type=module -e '
+              import os from "node:os";
+              console.log(JSON.stringify({platform: os.platform(), architecture: os.arch(),
+                kernel: os.release(), logicalCPUs: os.cpus().length, memoryBytes: os.totalmem(),
+                socketLimitsRestored: true,
+                originalSocketLimits: {receive: Number(process.env.ORIGINAL_RECEIVE), send: Number(process.env.ORIGINAL_SEND)}}));
+            ' >"${RUNNER_TEMP}/video-format-comparison/runner.json"
+          fi
+      - name: Upload every attempted trial
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: video-formats-${{ inputs.automatic_format_delivery }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/video-format-comparison
+          if-no-files-found: error
+          retention-days: 14
+      - name: Enforce the unchanged delivery and format gates
+        if: always()
+        env:
+          OUTCOME: ${{ steps.comparison.outcome }}
+        shell: bash
+        run: test "$OUTCOME" = success

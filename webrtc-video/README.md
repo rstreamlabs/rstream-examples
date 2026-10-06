@@ -19,8 +19,8 @@ it.
 - The [Next.js guide](https://rstream.io/guides/integrate-webrtc-video-streaming-into-a-nextjs-platform-with-rstream)
   runs the same producer in provisioning mode and adds product identity,
   authorization, and fleet state around that session.
-- The third guide, currently in preparation, adds an on-demand MediaMTX
-  backend. One adaptive upstream feeds multi-viewer fan-out while direct
+- The [MediaMTX guide](https://rstream.io/guides/distribute-webrtc-video-with-mediamtx-and-rstream)
+  adds an on-demand distribution backend. One adaptive upstream feeds multi-viewer fan-out while direct
   WebRTC remains available for one-to-one delivery and transport diagnosis.
 
 In fan-out mode, the producer controls and measures the device-to-MediaMTX
@@ -35,12 +35,23 @@ The implementation is split by responsibility:
   the adaptive media loop and producer-side OpenMetrics exporter.
 - [`platform/`](./platform/) is the Next.js product layer. It provisions
   devices, issues scoped producer and viewer access, and exposes live tunnel
-  state without proxying the media session.
+  state without proxying the live media session. It supports personal or shared
+  organization access and, for organizations, automatic discovery of labeled
+  project tunnels with optional inventory history.
 - [`distributor/`](./distributor/) is the optional MediaMTX backend. It opens
   one strict producer WHEP session on first demand and republishes a repaired
-  H.264 stream for any number of viewers.
+  H.264 stream within the configured viewer limit. An optional
+  [recent-recording mode](./platform/README.md#optional-recent-recordings)
+  provides authorized, bounded MP4 replay and timeline controls in the platform;
+  recording remains off by default.
 
 ## Qualified reference path
+
+The following results belong to the historical `ca8a308` 1080p30 revision.
+Current H.264 browser examples use 720p30 with matching level 3.1 encoder/SDP
+limits; the earlier examples produced level 4 while advertising 3.1. The
+historical matrix remains useful as a transport record, but does not establish
+codec conformance or qualify the revised source profile.
 
 ![Adaptive 1080p30 response under controlled congestion](./producer/qualification/evidence/ca8a308/direct-reference/adaptive-bitrate.svg)
 
@@ -60,16 +71,21 @@ contains the selected matrix, synchronized network, sender, playback, and
 transport time series, mobility evidence, every automated gate, and the
 rejected-run register.
 
-The root Makefile targets the device role, so `make build`, `make run`,
-`make test`, `make verify`, and `make clean` delegate to `producer/`. The
+The root `make build`, `make test`, `make verify`, and `make clean` targets cover
+both Go roles. `make run` starts the producer. The
 [producer README](./producer/README.md) starts with the standalone path and
 continues through the congestion, repair, mobility, and qualification model.
 
-Run the platform directly with npm:
+Use Node.js 24 to run the platform directly with npm:
 
 ```bash
 cd platform
-npm install
-npm run prisma:migrate
+npm ci
+cp .env.example .env.local
+# Fill PostgreSQL, GitHub OAuth, NextAuth, and rstream settings in .env.local.
+npm run prisma:deploy
 npm run dev
 ```
+
+`prisma:deploy` applies the committed migrations. Use `prisma:migrate` when
+intentionally developing a schema change.

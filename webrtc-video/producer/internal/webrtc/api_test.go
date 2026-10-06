@@ -74,8 +74,8 @@ func TestAssociatedEstimatorEnforcesConfiguredMediaFloorAcrossLossController(t *
 	estimator, err := gcc.NewSendSideBWE(
 		gcc.SendSideBWEPacer(pacer),
 		gcc.SendSideBWEInitialBitrate(50_000),
-		gcc.SendSideBWEMinBitrate(2_400_000),
-		gcc.SendSideBWEMaxBitrate(9_600_000),
+		gcc.SendSideBWEMinBitrate(2_000_000),
+		gcc.SendSideBWEMaxBitrate(8_000_000),
 	)
 	if err != nil {
 		t.Fatalf("create estimator: %v", err)
@@ -99,14 +99,14 @@ func TestAssociatedEstimatorEnforcesConfiguredMediaFloorAcrossLossController(t *
 		t.Fatalf("effective media target = %d, want 2000000", effective)
 	}
 	stats := wrapped.GetStats()
-	if raw, ok := stats["rawWireTargetBitrate"].(int); !ok || raw != 50_000 {
-		t.Fatalf("raw wire target = %v, want 50000", stats["rawWireTargetBitrate"])
+	if raw, ok := stats["rawWireTargetBitrate"].(int); !ok || raw != 60_000 {
+		t.Fatalf("raw protected target = %v, want 60000", stats["rawWireTargetBitrate"])
 	}
-	if raw, ok := stats["rawMediaTargetBitrate"].(int); !ok || raw != 41_666 {
-		t.Fatalf("raw media target = %v, want 41666", stats["rawMediaTargetBitrate"])
+	if raw, ok := stats["rawMediaTargetBitrate"].(int); !ok || raw != 50_000 {
+		t.Fatalf("raw media target = %v, want 50000", stats["rawMediaTargetBitrate"])
 	}
-	if raw, ok := stats["wireTargetBitrate"].(int); !ok || raw != 50_000 {
-		t.Fatalf("wire target = %v, want 50000", stats["wireTargetBitrate"])
+	if raw, ok := stats["wireTargetBitrate"].(int); !ok || raw != 60_000 {
+		t.Fatalf("protected pacing target = %v, want 60000", stats["wireTargetBitrate"])
 	}
 	if effective, ok := stats["effectiveWireTargetBitrate"].(int); !ok || effective != 2_400_000 {
 		t.Fatalf("effective wire target = %v, want 2400000", stats["effectiveWireTargetBitrate"])
@@ -167,7 +167,7 @@ func TestPeerConnectionFactoryKeepsTWCCProtocolWithoutEstimatorWhenAdaptiveIsOff
 	}
 }
 
-func TestFlexFECRepairPacketsTraverseTWCCAndGCC(t *testing.T) {
+func TestFlexFECRepairPacketsArePacedOutsideTWCCAccounting(t *testing.T) {
 	cfg := config.Default()
 	cfg.WebRTC.UseTURN = false
 	cfg.WebRTC.Adaptive.Enabled = true
@@ -189,8 +189,8 @@ func TestFlexFECRepairPacketsTraverseTWCCAndGCC(t *testing.T) {
 	if !ok {
 		t.Fatalf("estimator type = %T, want *associatedStreamBandwidthEstimator", estimator)
 	}
-	if raw := associated.SendSideBWE.GetTargetBitrate(); raw != 7_000_000 {
-		t.Fatalf("raw GCC wire target = %d, want 7000000", raw)
+	if raw := associated.SendSideBWE.GetTargetBitrate(); raw != 5_000_000 {
+		t.Fatalf("raw GCC tracked-RTP target = %d, want 5000000", raw)
 	}
 	pacer, ok := associated.pacer.delegate.(*tokenBucketPacer)
 	if !ok {
@@ -347,50 +347,27 @@ func TestFlexFECWireBudgetRoundsWithoutUnderProvisioning(t *testing.T) {
 	}
 }
 
-func TestFlexFECWireAndMediaBudgetsPreserveTheirEnvelope(t *testing.T) {
-	protections := []flexFECProtection{
-		{},
-		{mediaPackets: 5, repairPackets: 1},
-		{mediaPackets: 5, repairPackets: 2},
-		{mediaPackets: 110, repairPackets: 110},
-	}
-	for _, protection := range protections {
-		for _, mediaTarget := range []int{1, 49_999, 1_500_000, 5_000_001, 8_000_000} {
-			wireTarget := wireBitrate(mediaTarget, protection)
-			if got := mediaBitrate(wireTarget, protection); got != mediaTarget {
-				t.Fatalf("media round trip for %d with %+v = %d", mediaTarget, protection, got)
-			}
-		}
-		for _, wireTarget := range []int{1, 50_000, 1_800_001, 7_000_002, 16_000_001} {
-			mediaTarget := mediaBitrate(wireTarget, protection)
-			if got := wireBitrate(mediaTarget, protection); got > wireTarget {
-				t.Fatalf("wire round trip for %d with %+v overspent by %d", wireTarget, protection, got-wireTarget)
-			}
-		}
-	}
-}
-
-func TestControllerTargetsExposeMediaAndWireUnits(t *testing.T) {
+func TestControllerTargetsExposeModeledProtectionWithoutDeductingFEC(t *testing.T) {
 	stats := map[string]any{
 		"lossTargetBitrate":  7_000_000,
 		"delayTargetBitrate": 3_500_001,
 		"unrelated":          42,
 	}
 	protection := flexFECProtection{mediaPackets: 5, repairPackets: 2}
-	convertControllerTargetToMedia(stats, "lossTargetBitrate", "rawWireLossTargetBitrate", protection)
-	convertControllerTargetToMedia(stats, "delayTargetBitrate", "rawWireDelayTargetBitrate", protection)
-	convertControllerTargetToMedia(stats, "unavailable", "rawWireUnavailable", protection)
-	if got := stats["lossTargetBitrate"]; got != 5_000_000 {
-		t.Fatalf("loss media target = %v, want 5000000", got)
+	addControllerWireBudget(stats, "lossTargetBitrate", "rawWireLossTargetBitrate", protection)
+	addControllerWireBudget(stats, "delayTargetBitrate", "rawWireDelayTargetBitrate", protection)
+	addControllerWireBudget(stats, "unavailable", "rawWireUnavailable", protection)
+	if got := stats["lossTargetBitrate"]; got != 7_000_000 {
+		t.Fatalf("tracked loss target = %v, want 7000000", got)
 	}
-	if got := stats["rawWireLossTargetBitrate"]; got != 7_000_000 {
-		t.Fatalf("loss wire target = %v, want 7000000", got)
+	if got := stats["rawWireLossTargetBitrate"]; got != 9_800_000 {
+		t.Fatalf("modeled loss wire target = %v, want 9800000", got)
 	}
-	if got := stats["delayTargetBitrate"]; got != 2_500_000 {
-		t.Fatalf("delay media target = %v, want 2500000", got)
+	if got := stats["delayTargetBitrate"]; got != 3_500_001 {
+		t.Fatalf("tracked delay target = %v, want 3500001", got)
 	}
-	if got := stats["rawWireDelayTargetBitrate"]; got != 3_500_001 {
-		t.Fatalf("delay wire target = %v, want 3500001", got)
+	if got := stats["rawWireDelayTargetBitrate"]; got != 4_900_002 {
+		t.Fatalf("modeled delay wire target = %v, want 4900002", got)
 	}
 	if _, ok := stats["rawWireUnavailable"]; ok {
 		t.Fatal("missing controller target produced a wire diagnostic")
@@ -451,8 +428,8 @@ func TestAssociatedEstimatorSupersedesOutOfOrderBitrateCallback(t *testing.T) {
 	}
 	estimator.callbackMu.Unlock()
 	estimator.deliverCurrentBitrate(1_800_000)
-	if delivered != 5_000_000 {
-		t.Fatalf("delivered stale bitrate %d, want current bitrate 5000000", delivered)
+	if delivered != 6_000_000 {
+		t.Fatalf("delivered stale bitrate %d, want current bitrate 6000000", delivered)
 	}
 	if stale := estimator.staleBitrateCallbacks.Load(); stale != 1 {
 		t.Fatalf("stale callback count = %d, want 1", stale)

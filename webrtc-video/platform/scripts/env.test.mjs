@@ -15,7 +15,13 @@ const mediaMTXEnvironment = {
   VIDEO_DISTRIBUTOR: "mediamtx",
 }
 const managedNames = [
+  "RSTREAM_PROJECT_ID",
+  "RSTREAM_PROJECT_ENDPOINT",
+  "RSTREAM_ENGINE",
   "MEDIAMTX_EXPOSURE",
+  "MEDIAMTX_METRICS_URL",
+  "MEDIAMTX_PLAYBACK_URL",
+  "MEDIAMTX_RECORDING_WINDOW_SECONDS",
   "MEDIAMTX_JWT_PRIVATE_KEY_BASE64",
   "MEDIAMTX_PUBLIC_URL",
   "MEDIAMTX_SOURCE_RESOLVER_JWKS",
@@ -23,6 +29,33 @@ const managedNames = [
   "TURN_CREDENTIAL_TTL_SECONDS",
   "VIDEO_DISTRIBUTOR",
 ]
+
+test("project ID and engine overrides cannot replace the endpoint required by TURN", () => {
+  for (const endpoint of ["", "   "]) {
+    withEnvironment(
+      {
+        ...baseEnvironment,
+        RSTREAM_PROJECT_ENDPOINT: endpoint,
+        RSTREAM_PROJECT_ID: "project-id",
+        RSTREAM_ENGINE: "engine.test:443",
+      },
+      () => {
+        const result = rstreamEnvResult()
+        assert.equal(result.success, false)
+        assert.deepEqual(
+          result.error.issues.map((issue) => issue.path),
+          [["RSTREAM_PROJECT_ENDPOINT"]],
+        )
+      },
+    )
+  }
+  withEnvironment(
+    { ...baseEnvironment, RSTREAM_PROJECT_ID: "project-id" },
+    () => {
+      assert.equal(rstreamEnvResult().success, true)
+    },
+  )
+})
 
 test("TURN credential TTL defaults to ten minutes", () => {
   withEnvironment(baseEnvironment, () => {
@@ -130,6 +163,39 @@ test("public MediaMTX endpoints require protected transport", () => {
   )
 })
 
+test("MediaMTX metrics are optional, server-only and reject ambiguous configuration", () => {
+  const base = {
+    ...mediaMTXEnvironment,
+    MEDIAMTX_EXPOSURE: "public",
+    MEDIAMTX_PUBLIC_URL: "https://media.example",
+  }
+  for (const value of [
+    "",
+    "http://127.0.0.1:9998/metrics",
+    "http://mediamtx.internal:9998/metrics",
+    "https://private.example/prefix/metrics",
+  ]) {
+    withEnvironment({ ...base, MEDIAMTX_METRICS_URL: value }, () =>
+      assert.equal(rstreamEnvResult().success, true),
+    )
+  }
+  for (const value of [
+    "ftp://private/metrics",
+    "https://user:secret@private/metrics",
+    "http://private/metrics?path=other",
+    "http://private/metrics#fragment",
+    "http://private/whep",
+  ]) {
+    withEnvironment({ ...base, MEDIAMTX_METRICS_URL: value }, () =>
+      assert.equal(rstreamEnvResult().success, false),
+    )
+  }
+  withEnvironment(
+    { ...baseEnvironment, MEDIAMTX_METRICS_URL: "http://private/metrics" },
+    () => assert.equal(rstreamEnvResult().success, false),
+  )
+})
+
 function withEnvironment(environment, operation) {
   const previous = new Map()
   const names = new Set([...managedNames, ...Object.keys(environment)])
@@ -156,3 +222,30 @@ function withEnvironment(environment, operation) {
     }
   }
 }
+
+test("recording service is opt-in and rejects incompatible modes, URLs and windows", () => {
+  withEnvironment(baseEnvironment, () =>
+    assert.equal(rstreamEnvResult().data.MEDIAMTX_PLAYBACK_URL, undefined),
+  )
+  const recording = {
+    ...mediaMTXEnvironment,
+    MEDIAMTX_EXPOSURE: "public",
+    MEDIAMTX_PUBLIC_URL: "https://media.example",
+    MEDIAMTX_PLAYBACK_URL: "http://127.0.0.1:9996",
+  }
+  withEnvironment(recording, () => {
+    assert.equal(rstreamEnvResult().success, true)
+    assert.equal(rstreamEnvResult().data.MEDIAMTX_RECORDING_WINDOW_SECONDS, 300)
+  })
+  for (const settings of [
+    { VIDEO_DISTRIBUTOR: "direct" },
+    { MEDIAMTX_PLAYBACK_URL: "file:///tmp" },
+    { MEDIAMTX_PLAYBACK_URL: "http://u:p@host" },
+    { MEDIAMTX_PLAYBACK_URL: "http://host/?path=x" },
+    { MEDIAMTX_RECORDING_WINDOW_SECONDS: "29" },
+    { MEDIAMTX_RECORDING_WINDOW_SECONDS: "601" },
+  ])
+    withEnvironment({ ...recording, ...settings }, () =>
+      assert.equal(rstreamEnvResult().success, false),
+    )
+})

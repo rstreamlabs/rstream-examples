@@ -20,15 +20,22 @@ function validationMessage(err: ZodError): string {
 }
 
 function errorResponse(err: HTTPError): Response {
-  return Response.json(err.toJSON(), { status: err.status })
+  return Response.json(err.toJSON(), {
+    status: err.status,
+    headers: { "Cache-Control": "no-store" },
+  })
 }
 
 export async function readJSON(
-  request: Request,
+  request: Pick<Request, "body" | "headers"> & { signal?: AbortSignal },
   maximumBytes = defaultMaximumJSONBytes,
+  timeoutMs = 5000,
 ): Promise<unknown> {
   if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1) {
     throw new Error("JSON body limit must be a positive safe integer.")
+  }
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60_000) {
+    throw new Error("JSON body deadline must be from 1 through 60000 ms.")
   }
   const encoding = request.headers.get("content-encoding")?.trim().toLowerCase()
   if (encoding && encoding !== "identity") {
@@ -47,11 +54,24 @@ export async function readJSON(
     throw new HTTPError(400, "Invalid JSON body.")
   }
   const reader = request.body.getReader()
+  let interrupted: HTTPError | undefined
+  const interrupt = (status: number, message: string) => {
+    interrupted ??= new HTTPError(status, message)
+    void reader.cancel().catch(() => undefined)
+  }
+  const onAbort = () => interrupt(499, "Request cancelled.")
+  request.signal?.addEventListener("abort", onAbort, { once: true })
+  if (request.signal?.aborted) onAbort()
+  const timer = setTimeout(
+    () => interrupt(408, "JSON body deadline exceeded."),
+    timeoutMs,
+  )
   const chunks: Uint8Array[] = []
   let size = 0
   try {
     while (true) {
       const { done, value } = await reader.read()
+      if (interrupted) throw interrupted
       if (done) {
         break
       }
@@ -71,11 +91,13 @@ export async function readJSON(
     const text = new TextDecoder("utf-8", { fatal: true }).decode(body)
     return JSON.parse(text)
   } catch (error) {
-    if (error instanceof HTTPError || request.signal.aborted) {
+    if (error instanceof HTTPError || request.signal?.aborted) {
       throw error
     }
     throw new HTTPError(400, "Invalid JSON body.")
   } finally {
+    clearTimeout(timer)
+    request.signal?.removeEventListener("abort", onAbort)
     reader.releaseLock()
   }
 }

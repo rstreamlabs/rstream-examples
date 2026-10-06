@@ -20,8 +20,15 @@ COPY producer/go.mod producer/go.sum ./
 RUN go mod download
 COPY producer/cmd ./cmd
 COPY producer/internal ./internal
+COPY producer/qualification/adaptive-streaming/cmd/local-control ./qualification/adaptive-streaming/cmd/local-control
 COPY --from=web /src/internal/web/generated ./internal/web/generated
+COPY producer/qualification/adaptive-streaming/latency/gstlatencystamp.c ./latency/
+RUN mkdir -p /out \
+    && cc -shared -fPIC -O2 -Wall -Wextra -Werror \
+        -o /out/libgstlatencystamp.so latency/gstlatencystamp.c \
+        $(pkg-config --cflags --libs gstreamer-video-1.0)
 RUN CGO_ENABLED=1 go build -trimpath -o /out/webrtc-video-producer ./cmd/webrtc-video-producer
+RUN CGO_ENABLED=0 go build -trimpath -o /out/local-control ./qualification/adaptive-streaming/cmd/local-control
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
@@ -36,6 +43,9 @@ RUN apt-get update \
 RUN useradd --create-home --uid 10001 rstream
 WORKDIR /app
 COPY --from=build /out/webrtc-video-producer ./webrtc-video-producer
+COPY --from=build /out/local-control ./local-control
+COPY --from=build /out/libgstlatencystamp.so ./gstreamer-plugins/
+ENV GST_PLUGIN_PATH=/app/gstreamer-plugins
 COPY producer/config.test-pattern.h264.twcc-gcc.yaml ./config.yaml
 COPY producer/qualification/adaptive-streaming/sample-host-cpu.sh /usr/local/bin/rstream-sample-host-cpu
 USER rstream

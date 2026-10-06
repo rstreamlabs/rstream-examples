@@ -47,7 +47,7 @@ media:
     avfvideosrc device-index=0 !
     videoconvert !
     video/x-raw,format=I420,width=1280,height=720,framerate=30/1 !
-    av1enc name=encoder usage-profile=realtime end-usage=cbr cpu-used=10 lag-in-frames=0 threads=8 row-mt=true tile-columns=2 target-bitrate=5000 keyframe-max-dist=60 qos=true drop-frame=25 !
+    av1enc name=encoder usage-profile=realtime end-usage=cbr cpu-used=10 lag-in-frames=0 threads=8 row-mt=true tile-columns=2 target-bitrate=5000 min-quantizer=0 max-quantizer=63 keyframe-max-dist=60 qos=true drop-frame=25 !
     av1parse !
     video/x-av1,stream-format=obu-stream,alignment=tu !
     appsink name=video emit-signals=true sync=false max-buffers=4 drop=true

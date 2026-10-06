@@ -26,7 +26,7 @@ for run in 1 2 3; do
       required: true,
       activeSessions: 1,
       createdSessions: 1,
-      negotiated: {twcc: 1, nack: 1, rtx: 0, flexfec: 0},
+      negotiated: {twcc: 1, nack: 1, rtx: 1, flexfec: 0},
       fixedSourcePacing: {adaptiveUpdates: 0, adaptiveFailures: 0, queueDrops: 0, mediaFrameDrops: 0},
       activeAfterTeardown: 0
     },
@@ -67,3 +67,14 @@ jq \
   "${temporary_directory}/failed-records.json" >"${temporary_directory}/failed-summary.json"
 jq -e '.passed == false and .gates.mediaDeliveredWithoutLoss == false and .gates.allResultsPassed == false' \
   "${temporary_directory}/failed-summary.json" >/dev/null
+
+# Missing upstream RTX must fail even when the downstream and playback passed.
+jq -s '.[1].result.nativeSourceProfile.negotiated.rtx = 0' \
+  "${temporary_directory}/records.jsonl" >"${temporary_directory}/no-rtx-records.json"
+jq \
+  --arg revision test-revision \
+  --argjson working_tree_dirty false \
+  --argjson requested_runs 3 \
+  -f "${script_directory}/report.jq" \
+  "${temporary_directory}/no-rtx-records.json" | \
+  jq -e '.passed == false and .gates.exactSourceLifecycle == false' >/dev/null

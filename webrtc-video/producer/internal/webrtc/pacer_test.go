@@ -408,7 +408,7 @@ func TestTokenBucketPacerReportsOneAtomicPacingEnvelope(t *testing.T) {
 	}
 }
 
-func TestMinimumBitratePacerAcceptsGCCWireBudgetWithoutDoubleCounting(t *testing.T) {
+func TestMinimumBitratePacerReservesUntrackedFECForGCCTarget(t *testing.T) {
 	delegate := &recordingPacer{}
 	pacer := wrapMinimumBitratePacerWithProtection(
 		delegate,
@@ -422,8 +422,8 @@ func TestMinimumBitratePacerAcceptsGCCWireBudgetWithoutDoubleCounting(t *testing
 	if len(delegate.bitrates) != 2 {
 		t.Fatalf("delegated bitrate updates = %d, want 2", len(delegate.bitrates))
 	}
-	if delegate.bitrates[0] != 5_000_000 {
-		t.Fatalf("GCC wire target = %d, want 5000000", delegate.bitrates[0])
+	if delegate.bitrates[0] != 7_000_000 {
+		t.Fatalf("protected GCC target = %d, want 7000000", delegate.bitrates[0])
 	}
 	if delegate.bitrates[1] != 2_800_000 {
 		t.Fatalf("GCC wire floor = %d, want 2800000", delegate.bitrates[1])

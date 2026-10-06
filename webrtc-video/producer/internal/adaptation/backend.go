@@ -49,6 +49,8 @@ type recoveryKeyFrameBackend interface {
 const guardedRecoveryKeyFrameQuietPeriod = 250 * time.Millisecond
 
 type Controller struct {
+	quality                 *QualityPolicy
+	qualityUpdates          chan struct{}
 	logger                  *logs.Logger
 	encoder                 media.EncoderController
 	backend                 Backend
@@ -79,9 +81,16 @@ func NewController(
 	estimateSource func() int,
 	lossSource func() LossState,
 	requestRecoveryKeyFrame func(),
+	quality ...*QualityPolicy,
 ) *Controller {
 	info := encoder.Info()
+	var policy *QualityPolicy
+	if len(quality) > 0 {
+		policy = quality[0]
+	}
 	return &Controller{
+		quality:                 policy,
+		qualityUpdates:          make(chan struct{}, 1),
 		logger:                  logger,
 		encoder:                 encoder,
 		backend:                 backend,
@@ -124,6 +133,14 @@ func (c *Controller) UpdateEstimatedBitrate(bps int) {
 	}
 }
 
+// QualityChanged coalesces notifications without blocking the HTTP control path.
+func (c *Controller) QualityChanged() {
+	select {
+	case c.qualityUpdates <- struct{}{}:
+	default:
+	}
+}
+
 func (c *Controller) Snapshot() Snapshot {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -153,6 +170,12 @@ func (c *Controller) run() {
 	var lastUpdateAttempt time.Time
 	for {
 		select {
+		case <-c.qualityUpdates:
+			estimate := c.currentEstimate()
+			c.recordEstimate(estimate)
+			if c.applyEstimate(estimate, true) {
+				lastUpdateAttempt = time.Now()
+			}
 		case <-c.updates:
 			estimate := c.currentEstimate()
 			c.recordEstimate(estimate)
@@ -197,6 +220,15 @@ func (c *Controller) recordEstimate(estimate int) {
 }
 
 func (c *Controller) applyEstimate(estimate int, allowIncrease bool) bool {
+	limit := 0
+	if c.quality != nil {
+		c.quality.mu.RLock()
+		defer c.quality.mu.RUnlock()
+		limit = c.quality.limitLocked()
+		if estimate > limit*1000 {
+			estimate = limit * 1000
+		}
+	}
 	encoderInfo := c.encoder.Info()
 	observation := Observation{
 		EstimatedBitrateBps:      estimate,
@@ -210,6 +242,10 @@ func (c *Controller) applyEstimate(estimate int, allowIncrease bool) bool {
 	lossGuardStarted := observation.LossGuardActive && !c.lossGuardActive
 	c.lossGuardActive = observation.LossGuardActive
 	decision, ok := c.backend.Decide(observation)
+	if limit > 0 && encoderInfo.TargetBitrateKbps > limit && (!ok || decision.TargetBitrateKbps > limit) {
+		decision = Decision{TargetBitrateKbps: limit}
+		ok = true
+	}
 	c.updateSnapshot(func(snapshot *Snapshot) {
 		snapshot.EncoderTargetBitrateKbps = encoderInfo.TargetBitrateKbps
 	})

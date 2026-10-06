@@ -1816,6 +1816,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
       ...sample,
       twccFeedbackPackets: index + 1,
       twccMalformedFeedback: index === samples.length - 1 ? 1 : 0,
+      lossAverage: 0.5,
       twccReportedLost: index * 50,
       twccReportedStatuses: index * 100,
     })),
@@ -1842,6 +1843,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     samples.map((sample, index) => ({
       ...sample,
       lossGuardReductions: 0,
+      lossAverage: 0.2,
       twccReportedLost: index * 20,
       twccReportedStatuses: index * 100,
     })),
@@ -1857,6 +1859,7 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
     samples.map((sample, index) => ({
       ...sample,
       lossGuardReductions: index === 0 ? 0 : 1,
+      lossAverage: 0.2,
       twccReportedLost: index * 20,
       twccReportedStatuses: index * 100,
     })),
@@ -1864,6 +1867,22 @@ test("accepts a continuous relay stream that reacts and recovers", () => {
   );
   assert.equal(
     highLossWithGuardResponse.assertions.find(
+      (assertion) => assertion.name === "loss-guard-response",
+    ).passed,
+    true,
+  );
+  const reorderedFeedback = analyze(
+    samples.map((sample, index) => ({
+      ...sample,
+      lossGuardReductions: 0,
+      lossAverage: 0.01,
+      twccReportedLost: index * 20,
+      twccReportedStatuses: index * 100,
+    })),
+    manifest,
+  );
+  assert.equal(
+    reorderedFeedback.assertions.find(
       (assertion) => assertion.name === "loss-guard-response",
     ).passed,
     true,
@@ -2287,6 +2306,66 @@ test("rejects negotiated RTX when loss produces no repair packets", () => {
     false,
   );
 });
+
+for (const [affectedPhase, freezeSeconds, assertionName] of [
+  ["impaired", 2.5, "impaired-link-freezes"],
+  ["recovery", 0.5, "healthy-link-freezes"],
+]) {
+  test(`counts a freeze reported at entry to ${affectedPhase}`, () => {
+    const names = ["warmup", "baseline", "constrained", "impaired", "recovery"];
+    const samples = [];
+    let elapsedMilliseconds = 0;
+    let totalFreezesDurationSeconds = 0;
+    for (const phase of names) {
+      for (let index = 0; index < 20; index++) {
+        elapsedMilliseconds += 1000;
+        if (phase === affectedPhase && index === 0)
+          totalFreezesDurationSeconds += freezeSeconds;
+        samples.push({
+          phase,
+          elapsedMilliseconds,
+          totalFreezesDurationSeconds,
+          bytesReceived: elapsedMilliseconds * 250,
+          framesDecoded: elapsedMilliseconds * 0.03,
+          encoderTargetKbps: 2000,
+          twccTargetKbps: 2000,
+          peerConnectionState: "connected",
+          playback: "Playing",
+        });
+      }
+    }
+    const result = analyze(samples, {
+      phases: names.map((name) => ({ name })),
+    });
+    assert.equal(
+      result.assertions.find((assertion) => assertion.name === assertionName)
+        .passed,
+      false,
+      "A phase-entry freeze must not disappear between per-phase counter baselines",
+    );
+    assert.equal(
+      result.phases[affectedPhase].freezeDurationSeconds,
+      freezeSeconds,
+    );
+    assert.equal(
+      result.phases[affectedPhase].phaseEntryFreezeDurationSeconds,
+      freezeSeconds,
+    );
+    assert.equal(
+      result.phases[affectedPhase].freezeMeasurementDurationSeconds,
+      20,
+    );
+    assert.equal(result.phases[affectedPhase].freezeRatio, freezeSeconds / 20);
+    assert.equal(
+      Object.values(result.phases).reduce(
+        (sum, phase) => sum + phase.freezeDurationSeconds,
+        0,
+      ),
+      freezeSeconds,
+      "Every observed increment is retained exactly once",
+    );
+  });
+}
 
 test("rejects a connected stream that freezes under impairment", () => {
   const phases = [

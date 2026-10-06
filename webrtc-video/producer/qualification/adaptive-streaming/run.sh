@@ -775,8 +775,18 @@ constrained_seconds=$((10#${constrained_seconds}))
 impaired_seconds=$((10#${impaired_seconds}))
 recovery_seconds=$((10#${recovery_seconds}))
 recovery_drain_seconds=$((10#${recovery_drain_seconds}))
+mobility_seconds=$((10#${mobility_seconds}))
 transition_step_seconds=$((10#${transition_step_seconds}))
 conditioning_seconds=$((10#${conditioning_seconds}))
+collector_phase_durations=(
+  "${warmup_seconds}" "${baseline_seconds}" "${conditioning_seconds}"
+  "${constrained_seconds}" "${impaired_seconds}" "${recovery_seconds}"
+  "${recovery_drain_seconds}"
+)
+if [[ "${mobility_mode}" == "producer" ]]; then
+  collector_phase_durations+=("${mobility_seconds}")
+fi
+collector_maximum_duration_seconds="$(node "${script_directory}/lib/scenario-deadline.mjs" "${collector_phase_durations[@]}")"
 if ! positive_integer "${capacity_kbps}"; then
   printf 'RSTREAM_QUALIFICATION_CAPACITY_KBPS must be an integer of at least 600, got %s\n' \
     "${capacity_kbps}" >&2
@@ -853,6 +863,13 @@ fi
 record_setup_milestone runtime-prepared
 
 effective_config_path="${runtime_directory}/${path_kind}-config.yaml"
+# This matrix qualifies the current bundled browser profile. Reject an old
+# prepared 1080p runtime rather than attributing its results to the 720p source.
+if ! grep -Fq 'width=1280,height=720,framerate=30/1' "${effective_config_path}" ||
+   ! grep -Fq 'level=(string)3.1' "${effective_config_path}"; then
+  printf 'qualification requires the current 720p30 H264 level 3.1 reference pipeline\n' >&2
+  exit 1
+fi
 initial_bitrate_kbps="$(sed -nE 's/^[[:space:]]*initialBitrateKbps:[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' "${effective_config_path}")"
 minimum_bitrate_kbps="$(sed -nE 's/^[[:space:]]*minBitrateKbps:[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' "${effective_config_path}")"
 maximum_bitrate_kbps="$(sed -nE 's/^[[:space:]]*maxBitrateKbps:[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' "${effective_config_path}")"
@@ -955,6 +972,7 @@ jq -n \
   --argjson memory_bytes "$(jq -r '.MemTotal' <<<"${producer_docker_info}")" \
   --arg producer_location "${producer_location}" \
   --argjson warmup "${warmup_seconds}" \
+  --argjson collector_deadline "${collector_maximum_duration_seconds}" \
   --argjson baseline "${baseline_seconds}" \
   --argjson constrained "${constrained_seconds}" \
   --argjson impaired "${impaired_seconds}" \
@@ -978,6 +996,7 @@ jq -n \
   '{
     generatedAt: $generated_at,
     git: {revision: $revision, producerTree: $producer_tree, dirty: $dirty},
+    collector: {maximumDurationSeconds: $collector_deadline},
     producerImage: $image,
     protection: {
       profile: $protection_profile,
@@ -1011,8 +1030,8 @@ jq -n \
     },
     video: {
       codec: "H264",
-      width: 1920,
-      height: 1080,
+      width: 1280,
+      height: 720,
       framesPerSecond: 30,
       playoutDelayHintSeconds: $playout_delay_hint,
       adaptive: {
@@ -1216,7 +1235,7 @@ docker run \
   --browser-executable /usr/bin/chromium \
   --browser-sandbox disabled \
   --playout-delay-hint-seconds "${playout_delay_hint_seconds}" \
-  --maximum-duration-seconds 300 \
+  --maximum-duration-seconds "${collector_maximum_duration_seconds}" \
   >"${output_directory}/browser.log" 2>&1 &
 browser_container_started=1
 collector_pid=$!

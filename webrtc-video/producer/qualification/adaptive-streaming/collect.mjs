@@ -6,14 +6,27 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { createServer } from "node:http";
+import {
+  startQualificationViewer,
+  closeServer,
+} from "./lib/qualification-viewer.mjs";
 import process from "node:process";
+import { createHash } from "node:crypto";
 import { chromium } from "playwright-core";
 import { collectProducerOpenMetrics } from "./lib/openmetrics.mjs";
+import {
+  collectSourceQuality,
+  readSourceQualityCredential,
+} from "./lib/quality-sample.mjs";
 import { readPhase } from "./lib/phase.mjs";
 import { PathStability, pathMatchesPolicy } from "./lib/path.mjs";
 import { redactError, redactSensitiveText } from "./lib/redaction.mjs";
 import { negotiatedVideoCodecs } from "./lib/sdp-codecs.mjs";
+import { installFrameDiagnostics } from "./lib/frame-diagnostics.mjs";
+import { installTransitionBoundary } from "./lib/transition-boundary.mjs";
+import { installStartupTiming } from "./lib/startup-timing.mjs";
+import { createLatencyReport } from "./latency/report.mjs";
+import { calibrateBrowserClock, calibrationBounds } from "./latency/clock.mjs";
 
 const argumentsByName = parseArguments(process.argv.slice(2));
 const requestedURL = argumentsByName.get("url") || "";
@@ -24,6 +37,10 @@ if ((requestedURL === "") === (whepEndpoint === "")) {
 const outputDirectory = requiredArgument(argumentsByName, "output-directory");
 const phaseFile = requiredArgument(argumentsByName, "phase-file");
 const producerMetricsURL = argumentsByName.get("producer-metrics-url") || "";
+const sourceQualityFile = argumentsByName.get("source-quality-file") || "";
+const sourceQualityCredential = sourceQualityFile
+  ? await readSourceQualityCredential(sourceQualityFile)
+  : null;
 const pathScope = whepEndpoint ? "viewer" : "end-to-end";
 const icePolicy = argumentsByName.get("ice-policy") || "relay";
 if (!new Set(["direct", "relay"]).has(icePolicy)) {
@@ -56,6 +73,47 @@ const browserExecutable =
   argumentsByName.get("browser-executable") ||
   process.env.BROWSER_EXECUTABLE_PATH ||
   defaultBrowserExecutable();
+const latencyMode = argumentsByName.get("latency-probe") || "disabled";
+if (!["enabled", "disabled"].includes(latencyMode)) {
+  throw new Error("latency-probe must be enabled or disabled");
+}
+const latencyEnabled = latencyMode === "enabled";
+let latencyClocks = null;
+if (latencyEnabled) {
+  if (process.platform !== "linux")
+    throw new Error("latency qualification requires a shared Linux host clock");
+  const producerBootHash = requiredArgument(
+    argumentsByName,
+    "producer-boot-hash",
+  );
+  if (!/^[a-f0-9]{64}$/.test(producerBootHash))
+    throw new Error("invalid producer boot hash");
+  const receiverBootHash = createHash("sha256")
+    .update(await readFile("/proc/sys/kernel/random/boot_id"))
+    .digest("hex");
+  if (producerBootHash !== receiverBootHash)
+    throw new Error("producer and collector must share a Linux host clock");
+  const producerMonotonicOffsetHash = requiredArgument(
+    argumentsByName,
+    "producer-monotonic-offset-hash",
+  );
+  const receiverMonotonicOffsetHash = createHash("sha256")
+    .update(await readFile("/proc/self/timens_offsets"))
+    .digest("hex");
+  if (
+    !/^[a-f0-9]{64}$/.test(producerMonotonicOffsetHash) ||
+    producerMonotonicOffsetHash !== receiverMonotonicOffsetHash
+  )
+    throw new Error(
+      "producer and collector must share monotonic clock offsets",
+    );
+  latencyClocks = {
+    producerBootHash,
+    receiverBootHash,
+    producerMonotonicOffsetHash,
+    receiverMonotonicOffsetHash,
+  };
+}
 
 await mkdir(outputDirectory, { recursive: true });
 const samplesPath = `${outputDirectory}/samples.jsonl`;
@@ -66,6 +124,8 @@ const failurePath = `${outputDirectory}/collector-failure.json`;
 let browser;
 let page;
 let viewerServer;
+const latencySnapshots = [];
+let latencyReportWritten = false;
 
 try {
   let url = requestedURL;
@@ -294,6 +354,9 @@ try {
     { timeout: 60_000 },
   );
   await page.selectOption("#turn-policy", icePolicy);
+  if (!(await page.evaluate(installStartupTiming))) {
+    throw new Error("the viewer cannot measure first-frame presentation");
+  }
   await page.click("#connect");
   await page.waitForFunction(
     () => {
@@ -371,6 +434,22 @@ try {
     });
   });
   let initialSample = null;
+  await page.evaluate(installFrameDiagnostics);
+  await page.evaluate(installTransitionBoundary);
+  if (latencyEnabled) {
+    latencyClocks.initialCalibration = await calibrateBrowserClock(() =>
+      page.evaluate(() => ({
+        nowMilliseconds: performance.now(),
+        timeOriginMilliseconds: performance.timeOrigin,
+      })),
+    );
+    await page.evaluate((offset) => {
+      window.__rstreamLatencyClockOffsetMilliseconds = offset;
+    }, calibrationBounds(latencyClocks.initialCalibration).offsetMilliseconds);
+    await page.evaluate(
+      await readFile(new URL("./latency-probe.js", import.meta.url), "utf8"),
+    );
+  }
   let pathStable = false;
   const pathStability = new PathStability(3000, pathScope);
   const pathDeadline = performance.now() + 30_000;
@@ -420,17 +499,27 @@ try {
   let disconnectedSince = null;
   while (performance.now() - startedAt < maximumDurationSeconds * 1000) {
     const phase = await readPhase(phaseFile);
-    const sample = await collectSample(page);
+    const sample = await collectSample(page, phase);
     if (producerMetricsURL) {
       Object.assign(
         sample,
         await collectProducerOpenMetrics(producerMetricsURL),
       );
     }
+    if (sourceQualityCredential) {
+      sample.sourceQuality = await collectSourceQuality(
+        sourceQualityCredential,
+      );
+    }
     sample.capturedAt = new Date().toISOString();
     sample.elapsedMilliseconds = Math.round(performance.now() - startedAt);
     sample.phase = phase.name;
     sample.phaseStartedAt = phase.startedAt;
+    if (latencyEnabled) {
+      if (latencySnapshots.length >= 4096)
+        throw new Error("latency snapshot limit exceeded");
+      latencySnapshots.push({ phase: sample.phase, latency: sample.latency });
+    }
     await appendFile(samplesPath, `${JSON.stringify(sample)}\n`, "utf8");
     const connected =
       sample.peerConnectionState === "connected" &&
@@ -455,6 +544,24 @@ try {
       `collector reached its ${maximumDurationSeconds}s safety deadline before the scenario completed`,
     );
   }
+  if (latencyEnabled) {
+    latencyClocks.finalCalibration = await calibrateBrowserClock(() =>
+      page.evaluate(() => ({
+        nowMilliseconds: performance.now(),
+        timeOriginMilliseconds: performance.timeOrigin,
+      })),
+    ).catch((error) => {
+      latencyClocks.finalCalibrationFailure = redactError(
+        normalizeError(error),
+      ).message.slice(0, 512);
+      return null;
+    });
+    const report = createLatencyReport(latencySnapshots, latencyClocks, true);
+    await writeJSONAtomic(`${outputDirectory}/latency.json`, report);
+    latencyReportWritten = true;
+    // Invalid measurements remain a failed gate in the runner's final result.
+    // Finish collection so teardown, network and resource evidence is retained.
+  }
 } catch (error) {
   const normalized = redactError(normalizeError(error));
   const pageContext = await collectFailureContext(page);
@@ -467,6 +574,14 @@ try {
   throw normalized;
 } finally {
   if (page) {
+    await page
+      .evaluate(() => {
+        window.__rstreamFrameDiagnostics?.stop();
+        window.__rstreamTransitionBoundary?.stop();
+        window.__rstreamStartupTiming?.stop();
+        window.__rstreamLatencyProbe?.stop();
+      })
+      .catch(() => {});
     await page.click("#disconnect").catch(() => {});
     await page
       .waitForFunction(
@@ -493,6 +608,12 @@ try {
   }
   if (viewerServer) {
     await closeServer(viewerServer).catch(() => {});
+  }
+  if (latencyEnabled && !latencyReportWritten) {
+    await writeJSONAtomic(
+      `${outputDirectory}/latency.json`,
+      createLatencyReport(latencySnapshots, latencyClocks, false),
+    ).catch(() => {});
   }
 }
 
@@ -523,80 +644,9 @@ async function collectFailureContext(activePage) {
   }
 }
 
-async function startQualificationViewer(endpoint) {
-  const bundle = await readFile(new URL("./viewer.js", import.meta.url));
-  const config = JSON.stringify({ authorization: "", endpoint }).replaceAll(
-    "<",
-    "\\u003c",
-  );
-  const html = `<!doctype html>
-<html lang="en">
-  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>rstream qualification viewer</title></head>
-  <body>
-    <video id="video" autoplay muted playsinline></video>
-    <button id="connect" disabled>Connect</button>
-    <button id="disconnect" disabled>Disconnect</button>
-    <select id="turn-policy"><option value="direct">Direct</option><option value="relay">Relay</option></select>
-    <span id="peer-status">Peer: idle</span>
-    <span id="playback-status">Idle</span>
-    <span id="signaling-status">Idle</span>
-    <span id="twcc-target-status">-</span>
-    <span id="encoder-target-status">-</span>
-    <script>window.__rstreamQualificationViewer=${config}</script>
-    <script type="module" src="/viewer.js"></script>
-  </body>
-</html>`;
-  const server = createServer((request, response) => {
-    if (request.method !== "GET") {
-      response.writeHead(405, { Allow: "GET" }).end();
-      return;
-    }
-    if (request.url === "/viewer.js") {
-      response
-        .writeHead(200, {
-          "Cache-Control": "no-store",
-          "Content-Type": "application/javascript; charset=utf-8",
-        })
-        .end(bundle);
-      return;
-    }
-    if (request.url === "/" || request.url === "/favicon.ico") {
-      if (request.url === "/favicon.ico") {
-        response.writeHead(204).end();
-      } else {
-        response
-          .writeHead(200, {
-            "Cache-Control": "no-store",
-            "Content-Security-Policy":
-              "default-src 'self'; connect-src http: https:; media-src blob:; script-src 'self' 'unsafe-inline'",
-            "Content-Type": "text/html; charset=utf-8",
-          })
-          .end(html);
-      }
-      return;
-    }
-    response.writeHead(404).end();
-  });
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolve);
-  });
-  const address = server.address();
-  if (!address || typeof address === "string") {
-    throw new Error("qualification viewer did not bind a TCP address");
-  }
-  return { server, url: `http://127.0.0.1:${address.port}/` };
-}
-
-function closeServer(server) {
-  return new Promise((resolve, reject) => {
-    server.close((error) => (error ? reject(error) : resolve()));
-    server.closeAllConnections();
-  });
-}
-
-async function collectSample(activePage) {
-  return activePage.evaluate(async () => {
+async function collectSample(activePage, phase = null) {
+  return activePage.evaluate(async (phase) => {
+    window.__rstreamTransitionBoundary?.observe(phase);
     const peers = window.__rstreamQualificationPeers || [];
     const peer = [...peers]
       .reverse()
@@ -692,6 +742,24 @@ async function collectSample(activePage) {
       delayThresholdMilliseconds: bandwidth?.delayThresholdMs ?? null,
       estimatedPlayoutTimestamp: inbound?.estimatedPlayoutTimestamp ?? null,
       framesDecoded: inbound?.framesDecoded || 0,
+      framePresentation: window.__rstreamFrameDiagnostics?.drain() ?? null,
+      transitionBoundary:
+        window.__rstreamTransitionBoundary?.snapshot() ?? null,
+      videoStats: inbound
+        ? {
+            id: inbound.id,
+            ssrc: inbound.ssrc ?? null,
+            collectedAtMilliseconds:
+              typeof inbound.timestamp === "number"
+                ? inbound.timestamp - performance.timeOrigin
+                : null,
+            framesDecoded: inbound.framesDecoded ?? null,
+            framesDropped: inbound.framesDropped ?? null,
+            freezeCount: inbound.freezeCount ?? null,
+            totalFreezesDurationSeconds: inbound.totalFreezesDuration ?? null,
+          }
+        : null,
+      latency: window.__rstreamLatencyProbe?.read() ?? null,
       framesDropped: inbound?.framesDropped || 0,
       framesPerSecond: inbound?.framesPerSecond || 0,
       frameHeight: inbound?.frameHeight || 0,
@@ -885,7 +953,7 @@ async function collectSample(activePage) {
       const amount = Number.parseFloat(match[1]);
       return match[2].toLowerCase() === "mbps" ? amount * 1000 : amount;
     }
-  });
+  }, phase);
 }
 
 async function collectSignalingMetadata(activePage) {
@@ -893,6 +961,7 @@ async function collectSignalingMetadata(activePage) {
     const telemetry = window.__rstreamQualificationTelemetry || {};
     return {
       closeResult: window.__rstreamQualificationViewer?.closeResult || null,
+      startup: window.__rstreamStartupTiming?.snapshot() ?? null,
       events: telemetry.events || [],
       iceRestartOffers: telemetry.iceRestartOffers || 0,
       localCandidatesSent: telemetry.localCandidatesSent || 0,

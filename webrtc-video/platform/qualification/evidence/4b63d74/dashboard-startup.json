@@ -1,0 +1,798 @@
+{
+  "schemaVersion": 1,
+  "scope": "Authenticated organization/discovered dashboard, production Next.js, real rstream producer tunnel, adaptive MediaMTX 1.21.1 and native headless Chromium on macOS. Membership and inventory requests previously exercised; live inventory is still read for every protected request. Producer process ready with low source preset. GitHub membership is a fixture; OAuth and physical capture/display are excluded.",
+  "producerImage": "sha256:b80c0841d31e3321ae60c0925c0416008a850d8c755288aa4f50440b4e5ad5e4",
+  "distributorImage": "sha256:68a7b830f07df9aeb90251bac262ebace14aa0525b6e57dca81755a1f25f058a",
+  "attempts": [
+    {
+      "revision": "5677906",
+      "qualificationPassed": false,
+      "failure": {
+        "passed": false,
+        "gates": {
+          "realDiscoveryWithoutEnrollment": true,
+          "sourceControlAndConcurrentSelection": true
+        },
+        "stage": "mediamtx playback from discovered producer",
+        "name": "AssertionError",
+        "commandStatus": null,
+        "message": "First presentation must be measured from navigation and authorization"
+      },
+      "runtime": {
+        "browserVersion": "143.0.7499.4",
+        "browserSelection": "explicit executable",
+        "versionSource": "Installed qualification executable version checked after the trial; runtime report was not yet implemented"
+      },
+      "viewers": [
+        {
+          "actor": "alice",
+          "supported": true,
+          "armedAtMilliseconds": 369.10000002384186,
+          "readyStateAtArm": 0,
+          "longTasks": [
+            {
+              "startedAt": 440.19999998807907,
+              "duration": 57
+            },
+            {
+              "startedAt": 3696.199999988079,
+              "duration": 127
+            }
+          ],
+          "measurementValid": false,
+          "authorization": [
+            {
+              "startedAt": 506.80000001192093,
+              "headersAt": 3695.600000023842,
+              "status": 200,
+              "bodyReadAt": 3696.199999988079
+            }
+          ],
+          "whep": [
+            {
+              "startedAt": 3831.300000011921,
+              "headersAt": 4969.800000011921,
+              "status": 201
+            }
+          ],
+          "peers": [
+            {
+              "createdAt": 3816.5,
+              "connectedAt": 4981.899999976158
+            }
+          ],
+          "firstFrame": {
+            "callbackMilliseconds": 5117.3,
+            "observedAtMilliseconds": 5120.5,
+            "expectedDisplayMilliseconds": 5111.1,
+            "width": 1280,
+            "height": 720,
+            "presentedFrames": 3
+          },
+          "navigationToExpectedDisplayMilliseconds": null,
+          "authorizationToExpectedDisplayMilliseconds": null,
+          "authorizationMilliseconds": null
+        },
+        {
+          "actor": "bob",
+          "supported": true,
+          "armedAtMilliseconds": 231.5999999642372,
+          "readyStateAtArm": 0,
+          "longTasks": [
+            {
+              "startedAt": 282.39999997615814,
+              "duration": 58
+            }
+          ],
+          "measurementValid": true,
+          "authorization": [
+            {
+              "startedAt": 347.69999998807907,
+              "headersAt": 563.3000000119209,
+              "status": 200,
+              "bodyReadAt": 563.5
+            }
+          ],
+          "whep": [
+            {
+              "startedAt": 576.5,
+              "headersAt": 595.8000000119209,
+              "status": 201
+            }
+          ],
+          "peers": [
+            {
+              "createdAt": 569.5,
+              "connectedAt": 639.8000000119209
+            }
+          ],
+          "firstFrame": {
+            "callbackMilliseconds": 700.6,
+            "observedAtMilliseconds": 700.8000000119209,
+            "expectedDisplayMilliseconds": 697,
+            "width": 1280,
+            "height": 720,
+            "presentedFrames": 1
+          },
+          "navigationToExpectedDisplayMilliseconds": 697,
+          "authorizationToExpectedDisplayMilliseconds": 349.30000001192093,
+          "authorizationMilliseconds": 215.80000001192093
+        }
+      ],
+      "linuxSocketLimitsRestored": {
+        "receive": 212992,
+        "send": 212992
+      }
+    },
+    {
+      "revision": "a5d2272",
+      "qualificationPassed": false,
+      "failure": {
+        "passed": false,
+        "gates": {
+          "realDiscoveryWithoutEnrollment": true,
+          "sourceControlAndConcurrentSelection": true
+        },
+        "stage": "mediamtx playback from discovered producer",
+        "name": "AssertionError",
+        "commandStatus": null,
+        "message": "First presentation must be measured from navigation and authorization"
+      },
+      "runtime": {
+        "browserVersion": "143.0.7499.4",
+        "browserSelection": "explicit executable",
+        "versionSource": "Installed qualification executable version checked after the trial; runtime report was not yet implemented"
+      },
+      "viewers": [
+        {
+          "actor": "alice",
+          "supported": true,
+          "navigationTimeOrigin": 1791127937849.1,
+          "armedAtMilliseconds": 347.5,
+          "readyStateAtArm": 0,
+          "longTasks": [
+            {
+              "startedAt": 396.5,
+              "duration": 57
+            },
+            {
+              "startedAt": 899.3000000119209,
+              "duration": 89
+            }
+          ],
+          "mediaEvents": [
+            {
+              "kind": "loadeddata",
+              "atMilliseconds": 2208.900000035763,
+              "coveredByStatus": true
+            },
+            {
+              "kind": "playing",
+              "atMilliseconds": 2208.900000035763,
+              "coveredByStatus": true
+            }
+          ],
+          "measurementValid": false,
+          "authorization": [
+            {
+              "startedAt": 459.80000001192093,
+              "headersAt": 899,
+              "status": 200,
+              "bodyReadAt": 899.3000000119209
+            }
+          ],
+          "whep": [
+            {
+              "startedAt": 993.4000000357628,
+              "headersAt": 2071.2000000476837,
+              "status": 201
+            }
+          ],
+          "peers": [
+            {
+              "createdAt": 987.3000000119209,
+              "connectedAt": 2079.600000023842
+            }
+          ],
+          "firstFrame": {
+            "callbackMilliseconds": 2209,
+            "observedAtMilliseconds": 2209.100000023842,
+            "expectedDisplayMilliseconds": 2208.6,
+            "width": 1280,
+            "height": 720,
+            "presentedFrames": 3
+          },
+          "navigationToExpectedDisplayMilliseconds": null,
+          "authorizationToExpectedDisplayMilliseconds": null,
+          "authorizationMilliseconds": null
+        },
+        {
+          "actor": "bob",
+          "supported": true,
+          "navigationTimeOrigin": 1791127940236.1,
+          "armedAtMilliseconds": 181,
+          "readyStateAtArm": 0,
+          "longTasks": [
+            {
+              "startedAt": 231.10000002384186,
+              "duration": 59
+            }
+          ],
+          "mediaEvents": [
+            {
+              "kind": "loadeddata",
+              "atMilliseconds": 631.3000000119209,
+              "coveredByStatus": true
+            },
+            {
+              "kind": "playing",
+              "atMilliseconds": 631.3999999761581,
+              "coveredByStatus": true
+            }
+          ],
+          "measurementValid": true,
+          "authorization": [
+            {
+              "startedAt": 298.39999997615814,
+              "headersAt": 507.69999998807907,
+              "status": 200,
+              "bodyReadAt": 508
+            }
+          ],
+          "whep": [
+            {
+              "startedAt": 519.1999999880791,
+              "headersAt": 539.6999999880791,
+              "status": 201
+            }
+          ],
+          "peers": [
+            {
+              "createdAt": 512.8000000119209,
+              "connectedAt": 579
+            }
+          ],
+          "firstFrame": {
+            "callbackMilliseconds": 629,
+            "observedAtMilliseconds": 630.8000000119209,
+            "expectedDisplayMilliseconds": 630.3,
+            "width": 1280,
+            "height": 720,
+            "presentedFrames": 1
+          },
+          "navigationToExpectedDisplayMilliseconds": 630.3,
+          "authorizationToExpectedDisplayMilliseconds": 331.9000000238418,
+          "authorizationMilliseconds": 209.60000002384186
+        }
+      ],
+      "dependencyTimings": {
+        "project": {
+          "observations": 58,
+          "maximumHeadersMilliseconds": 864.4663339999997
+        },
+        "inventory": {
+          "observations": 43,
+          "maximumHeadersMilliseconds": 110.05787500000042
+        },
+        "turn-key": {
+          "observations": 3,
+          "maximumHeadersMilliseconds": 25.980333999999857
+        }
+      },
+      "projectLookupsOverlappingViewerAuthorization": [
+        {
+          "actor": "alice",
+          "observations": 5,
+          "headersMilliseconds": [
+            139.0584170000002, 132.44362499999988, 337.9359170000007,
+            345.1217919999999, 488.33758399999897
+          ]
+        },
+        {
+          "actor": "bob",
+          "observations": 4,
+          "headersMilliseconds": [
+            140.73816700000134, 139.7364579999994, 141.1740000000009,
+            224.47733399999925
+          ]
+        }
+      ],
+      "linuxSocketLimitsRestored": {
+        "receive": 212992,
+        "send": 212992
+      }
+    },
+    {
+      "revision": "ec74843",
+      "qualificationPassed": false,
+      "failure": {
+        "passed": false,
+        "gates": {
+          "realDiscoveryWithoutEnrollment": true,
+          "sourceControlAndConcurrentSelection": true
+        },
+        "stage": "mediamtx playback from discovered producer",
+        "name": "AssertionError",
+        "commandStatus": null,
+        "message": "First presentation must be measured from navigation and authorization"
+      },
+      "runtime": {
+        "browserVersion": "153.0.8010.12",
+        "playwrightVersion": "1.63.0",
+        "nodeVersion": "v26.7.0",
+        "browserSelection": "bundled"
+      },
+      "viewers": [
+        {
+          "actor": "alice",
+          "supported": true,
+          "navigationTimeOrigin": 1791128525897.2,
+          "armedAtMilliseconds": 840.3000000119209,
+          "readyStateAtArm": 0,
+          "longTasks": [
+            {
+              "startedAt": 882.4000000357628,
+              "duration": 57
+            },
+            {
+              "startedAt": 1536.300000011921,
+              "duration": 94
+            }
+          ],
+          "mediaEvents": [
+            {
+              "kind": "loadeddata",
+              "atMilliseconds": 2795.400000035763,
+              "coveredByStatus": true
+            },
+            {
+              "kind": "playing",
+              "atMilliseconds": 2795.5,
+              "coveredByStatus": true
+            }
+          ],
+          "measurementValid": false,
+          "authorization": [
+            {
+              "startedAt": 956.9000000357628,
+              "headersAt": 1535.699999988079,
+              "status": 200,
+              "bodyReadAt": 1536.4000000357628
+            }
+          ],
+          "whep": [
+            {
+              "startedAt": 1635.699999988079,
+              "headersAt": 2689.300000011921,
+              "status": 201
+            }
+          ],
+          "peers": [
+            {
+              "createdAt": 1628,
+              "connectedAt": 2697.900000035763
+            }
+          ],
+          "firstFrame": {
+            "callbackMilliseconds": 2800,
+            "observedAtMilliseconds": 2802.100000023842,
+            "expectedDisplayMilliseconds": 2794.9,
+            "width": 1280,
+            "height": 720,
+            "presentedFrames": 3
+          },
+          "navigationToExpectedDisplayMilliseconds": null,
+          "authorizationToExpectedDisplayMilliseconds": null,
+          "authorizationMilliseconds": null
+        },
+        {
+          "actor": "bob",
+          "supported": true,
+          "navigationTimeOrigin": 1791128529047.6,
+          "armedAtMilliseconds": 187.89999997615814,
+          "readyStateAtArm": 0,
+          "longTasks": [
+            {
+              "startedAt": 239.5999999642372,
+              "duration": 57
+            }
+          ],
+          "mediaEvents": [
+            {
+              "kind": "loadeddata",
+              "atMilliseconds": 3492.199999988079,
+              "coveredByStatus": true
+            },
+            {
+              "kind": "playing",
+              "atMilliseconds": 3492.2999999523163,
+              "coveredByStatus": true
+            }
+          ],
+          "measurementValid": true,
+          "authorization": [
+            {
+              "startedAt": 303.19999998807907,
+              "headersAt": 3403.199999988079,
+              "status": 200,
+              "bodyReadAt": 3403.399999976158
+            }
+          ],
+          "whep": [
+            {
+              "startedAt": 3413.699999988079,
+              "headersAt": 3423.2999999523163,
+              "status": 201
+            }
+          ],
+          "peers": [
+            {
+              "createdAt": 3407.199999988079,
+              "connectedAt": 3428.699999988079
+            }
+          ],
+          "firstFrame": {
+            "callbackMilliseconds": 3484.1,
+            "observedAtMilliseconds": 3491.7999999523163,
+            "expectedDisplayMilliseconds": 3491.2,
+            "width": 1280,
+            "height": 720,
+            "presentedFrames": 1
+          },
+          "navigationToExpectedDisplayMilliseconds": 3491.2,
+          "authorizationToExpectedDisplayMilliseconds": 3188.0000000119207,
+          "authorizationMilliseconds": 3100.199999988079
+        }
+      ],
+      "functionalObservations": {
+        "viewers": [
+          {
+            "actor": "alice",
+            "at": 9748,
+            "framesDecoded": 210,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 30.630930580988846
+          },
+          {
+            "actor": "bob",
+            "at": 6597.699999988079,
+            "framesDecoded": 94,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 30.96181376314848
+          }
+        ],
+        "activeEncoders": 1,
+        "afterSharedQualityChange": [
+          {
+            "actor": "alice",
+            "at": 19404.19999998808,
+            "framesDecoded": 500,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.978016121629928
+          },
+          {
+            "actor": "bob",
+            "at": 16253.799999952316,
+            "framesDecoded": 383,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.979014690074326
+          }
+        ],
+        "remainingMember": [
+          {
+            "actor": "bob",
+            "at": 19488.69999998808,
+            "framesDecoded": 480,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.94709346808738
+          }
+        ],
+        "mediaMTXReaders": 2,
+        "sourceViewerLimit": 1,
+        "sharedQuality": "medium",
+        "continuesAfterFirstMemberCloses": true,
+        "pageErrors": 0
+      },
+      "dependencyTimings": {
+        "project": {
+          "observations": 68,
+          "maximumHeadersMilliseconds": 3159.8988329999993
+        },
+        "inventory": {
+          "observations": 49,
+          "maximumHeadersMilliseconds": 254.42420800000036
+        },
+        "turn-key": {
+          "observations": 3,
+          "maximumHeadersMilliseconds": 72.9778750000005
+        }
+      },
+      "projectLookupsOverlappingViewerAuthorization": [
+        {
+          "actor": "alice",
+          "observations": 5,
+          "headersMilliseconds": [
+            139.78312499999993, 242.08633299999929, 491.4485829999994,
+            3159.8988329999993, 3031.247374999999
+          ]
+        },
+        {
+          "actor": "bob",
+          "observations": 7,
+          "headersMilliseconds": [
+            135.41370800000004, 145.8161250000012, 241.80066699999952,
+            132.02520899999945, 3159.8988329999993, 3031.247374999999,
+            3023.8735000000015
+          ]
+        }
+      ],
+      "linuxSocketLimitsRestored": {
+        "receive": 212992,
+        "send": 212992
+      }
+    },
+    {
+      "revision": "4b63d74",
+      "qualificationPassed": false,
+      "failure": {
+        "passed": false,
+        "gates": {
+          "realDiscoveryWithoutEnrollment": true,
+          "sourceControlAndConcurrentSelection": true
+        },
+        "stage": "mediamtx playback from discovered producer",
+        "name": "AssertionError",
+        "commandStatus": null,
+        "message": "First presentation must be measured from navigation and authorization"
+      },
+      "runtime": {
+        "browserVersion": "153.0.8010.12",
+        "playwrightVersion": "1.63.0",
+        "nodeVersion": "v26.7.0",
+        "browserSelection": "bundled"
+      },
+      "viewers": [
+        {
+          "actor": "alice",
+          "supported": true,
+          "navigationTimeOrigin": 1791129416274.1,
+          "armedAtMilliseconds": 370.5,
+          "readyStateAtArm": 0,
+          "longTasks": [
+            {
+              "startedAt": 437.60000002384186,
+              "duration": 56
+            },
+            {
+              "startedAt": 796.6000000238419,
+              "duration": 115
+            }
+          ],
+          "mediaEvents": [
+            {
+              "kind": "loadeddata",
+              "atMilliseconds": 2348.699999988079,
+              "coveredByStatus": true
+            },
+            {
+              "kind": "playing",
+              "atMilliseconds": 2348.800000011921,
+              "coveredByStatus": true
+            }
+          ],
+          "measurementValid": false,
+          "authorization": [
+            {
+              "startedAt": 501.80000001192093,
+              "headersAt": 796.1999999880791,
+              "status": 200,
+              "bodyReadAt": 796.6000000238419
+            }
+          ],
+          "whep": [
+            {
+              "startedAt": 923.6000000238419,
+              "headersAt": 2238,
+              "status": 201
+            }
+          ],
+          "peers": [
+            {
+              "createdAt": 900.8999999761581,
+              "connectedAt": 2256.100000023842
+            }
+          ],
+          "firstFrame": {
+            "callbackMilliseconds": 2359.3,
+            "observedAtMilliseconds": 2361.899999976158,
+            "expectedDisplayMilliseconds": 2347.6,
+            "width": 1280,
+            "height": 720,
+            "presentedFrames": 3
+          },
+          "navigationToExpectedDisplayMilliseconds": null,
+          "authorizationToExpectedDisplayMilliseconds": null,
+          "authorizationMilliseconds": null
+        },
+        {
+          "actor": "bob",
+          "supported": true,
+          "navigationTimeOrigin": 1791129418758.9,
+          "armedAtMilliseconds": 194.30000001192093,
+          "readyStateAtArm": 0,
+          "longTasks": [
+            {
+              "startedAt": 247,
+              "duration": 59
+            }
+          ],
+          "mediaEvents": [
+            {
+              "kind": "loadeddata",
+              "atMilliseconds": 604.7000000476837,
+              "coveredByStatus": true
+            },
+            {
+              "kind": "playing",
+              "atMilliseconds": 604.7000000476837,
+              "coveredByStatus": true
+            }
+          ],
+          "measurementValid": true,
+          "authorization": [
+            {
+              "startedAt": 312.60000002384186,
+              "headersAt": 527.6000000238419,
+              "status": 200,
+              "bodyReadAt": 527.9000000357628
+            }
+          ],
+          "whep": [
+            {
+              "startedAt": 538.8000000119209,
+              "headersAt": 549.1000000238419,
+              "status": 201
+            }
+          ],
+          "peers": [
+            {
+              "createdAt": 532,
+              "connectedAt": 554.6000000238419
+            }
+          ],
+          "firstFrame": {
+            "callbackMilliseconds": 612.4,
+            "observedAtMilliseconds": 612.6000000238419,
+            "expectedDisplayMilliseconds": 604.1,
+            "width": 1280,
+            "height": 720,
+            "presentedFrames": 1
+          },
+          "navigationToExpectedDisplayMilliseconds": 604.1,
+          "authorizationToExpectedDisplayMilliseconds": 291.49999997615816,
+          "authorizationMilliseconds": 215.30000001192093
+        }
+      ],
+      "functionalObservations": {
+        "viewers": [
+          {
+            "actor": "alice",
+            "at": 6109.199999988079,
+            "framesDecoded": 115,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.958058717913964
+          },
+          {
+            "actor": "bob",
+            "at": 3624.7000000476837,
+            "framesDecoded": 91,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.953073517679545
+          }
+        ],
+        "activeEncoders": 1,
+        "afterSharedQualityChange": [
+          {
+            "actor": "alice",
+            "at": 11892.699999988079,
+            "framesDecoded": 288,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.979014690074326
+          },
+          {
+            "actor": "bob",
+            "at": 9407.700000047684,
+            "framesDecoded": 264,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.646902065289808
+          }
+        ],
+        "remainingMember": [
+          {
+            "actor": "bob",
+            "at": 13896.800000011921,
+            "framesDecoded": 399,
+            "width": 1280,
+            "height": 720,
+            "localCandidateType": "prflx",
+            "remoteCandidateType": "host",
+            "framesPerSecond": 29.952076677197464
+          }
+        ],
+        "mediaMTXReaders": 2,
+        "sourceViewerLimit": 1,
+        "sharedQuality": "medium",
+        "continuesAfterFirstMemberCloses": true,
+        "pageErrors": 0
+      },
+      "dependencyTimings": {
+        "project": {
+          "observations": 42,
+          "maximumHeadersMilliseconds": 453.57645800000046
+        },
+        "inventory": {
+          "observations": 43,
+          "maximumHeadersMilliseconds": 102.47187500000109
+        },
+        "turn-key": {
+          "observations": 3,
+          "maximumHeadersMilliseconds": 87.35775000000103
+        }
+      },
+      "projectLookupsOverlappingViewerAuthorization": [
+        {
+          "actor": "alice",
+          "observations": 2,
+          "headersMilliseconds": [134.44087500000023, 135.97929099999965]
+        },
+        {
+          "actor": "bob",
+          "observations": 2,
+          "headersMilliseconds": [133.03816600000027, 135.21016599999894]
+        }
+      ],
+      "linuxSocketLimitsRestored": {
+        "receive": 212992,
+        "send": 212992
+      }
+    }
+  ],
+  "interpretation": [
+    "All four trials remain failed at the exact-first-presentation gate: the first reader reports presentedFrames=3, despite an observer armed with readyState=0. No cold first-picture estimate is promoted as valid.",
+    "Request-local reuse at 5677906 removes duplicate project resolution and the second discovered-source inventory read from viewer/source authorization. Access integration proves one resolution and one source inventory read per sequential authorization; a tunneled distributor has its own distinct live lookup.",
+    "Before cross-request coalescing, two warm-member observations have valid navigation-to-first-presentation of 697.0 and 630.3ms, with authorization taking 215.8 and 209.6ms. The first 5677906 authorization nevertheless takes 3189.4ms, and a later ec74843 warm authorization takes 3100.2ms. Preserve both slow observations.",
+    "The ec74843 dependency trace isolates three roughly three-second responses in project resolution. TURN-key and inventory response maxima in that trial remain below 74ms and 255ms respectively. Concurrent dashboard routes overlap; these spans cannot all be attributed to one viewer request or summed as its duration.",
+    "Pinned Chromium 153.0.8010.12 repeats the missed-first-callback behavior observed with the earlier explicit Chromium 143 executable. The browser upgrade alone does not explain or correct it.",
+    "At 4b63d74 identical concurrent project lookups share only an in-progress bounded operation. Individual cancellation is independent; the final departure aborts it. No completed project metadata or authorization decision is cached. The full database/access suite and all 193 platform unit tests pass.",
+    "The single 4b63d74 real trial records 294.8 and 215.3ms authorization. Its additional reader has valid first presentation at 604.1ms from navigation and 291.5ms from authorization request. Two project lookups overlap each viewer authorization instead of four to seven in the prior instrumented trials; other routes still perform their own live inventory reads.",
+    "One coalesced trial cannot establish removal of the intermittent three-second delay, a performance percentile or a deployment guarantee. Browser callback attribution, repetitions and target-environment measurements remain required.",
+    "The ec74843 and 4b63d74 full functional observations retain two readers near 30 decoded fps, one encoder, source-wide quality change, nonmember rejection and continued playback after the first member closes. Subsequent discovery-history phases were not reached because startup measurement failed."
+  ]
+}

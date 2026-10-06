@@ -4,7 +4,8 @@ import { z } from "zod"
 export const deviceViewSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
-  secretPrefix: z.string().min(1),
+  inventory: z.enum(["managed", "discovered"]).default("managed"),
+  secretPrefix: z.string().min(1).nullable(),
   tunnelName: z.string().min(1),
   online: z.boolean(),
   onlineSince: z.string().nullable(),
@@ -30,6 +31,7 @@ export const createDeviceResponseSchema = z.object({
 })
 
 export const viewerPayloadSchema = z.object({
+  allowDirectFallback: z.boolean().default(true),
   distributor: z.discriminatedUnion("kind", [
     z.object({
       kind: z.literal("direct"),

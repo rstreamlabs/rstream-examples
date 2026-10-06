@@ -1,3 +1,12 @@
+import {
+  deviceInventoryConfig,
+  discoveryLabels,
+  type DiscoveredSource,
+} from "@/lib/device-inventory"
+import {
+  discoverDevices,
+  discoveredDeviceViews,
+} from "@/lib/discovered-devices"
 import { APP_LABEL } from "@/lib/rstream-labels"
 import { createHash } from "crypto"
 import { credentialExpiresAt } from "@/lib/video-distributor-token"
@@ -13,7 +22,12 @@ import { type DeviceView } from "@/lib/validations/device"
 import { type ViewerDistributionPreference } from "@/lib/validations/device"
 import { type MediaMTXSourcePurpose } from "@/lib/validations/video-distributor"
 import { type Tunnel } from "@rstreamlabs/rstream/tunnel"
-import { USER_LABEL } from "@/lib/rstream-labels"
+import {
+  deviceOwner,
+  deviceOwnerLabels,
+  deviceOwnerWhere,
+  type DeviceAccess,
+} from "@/lib/device-access"
 import { issueSourceCredentials } from "@/lib/video-source-resolution"
 import { mediaMTXPublisherCredential } from "@/lib/video-distributor"
 import { mediaMTXViewerCredential } from "@/lib/video-distributor"
@@ -21,8 +35,39 @@ import { mediaMTXPath } from "@/lib/video-distributor"
 import { mediaMTXWHEPURL } from "@/lib/video-distributor-endpoint"
 import { videoDistributorMode } from "@/lib/video-distributor"
 import prisma from "@/lib/prisma"
+import { boundedFetch } from "@/lib/bounded-rstream"
 
-const maxDevicesPerUser = 20
+type SourceDevice =
+  | Pick<Device, "id" | "tunnelName" | "userId" | "organizationId">
+  | DiscoveredSource
+
+type SourceIdentity =
+  Pick<Device, "id" | "userId" | "organizationId"> | DiscoveredSource
+
+export function requireManagedInventory() {
+  if (deviceInventoryConfig().mode !== "managed")
+    throw new HTTPError(
+      409,
+      "Devices are discovered from the configured rstream project. Provisioning and deletion are disabled.",
+    )
+}
+
+export async function findSourceDevice(
+  id: string,
+  access?: DeviceAccess,
+  signal?: AbortSignal,
+) {
+  if (deviceInventoryConfig().mode === "discovered") {
+    if (access && access.kind !== "organization")
+      throw new HTTPError(403, "Organization access required.")
+    return (await discoverDevices(id, signal)).sources.get(id) ?? null
+  }
+  return prisma.device.findFirst({
+    where: { id, ...(access ? deviceOwnerWhere(access) : {}) },
+  })
+}
+
+const maxDevicesPerOwner = 20
 const maxDeviceCreationsPerWindow = 5
 const deviceCreationWindowMs = 60 * 60 * 1000
 const maxTurnCredentialsPerWindow = 20
@@ -49,11 +94,13 @@ if (!globalThis.rstreamExampleQuota) {
   globalThis.rstreamExampleQuota = memoryQuota
 }
 
-export function labels(device: Pick<Device, "id" | "userId">) {
+export function labels(device: SourceIdentity) {
+  if ("inventory" in device)
+    return { ...discoveryLabels, [DEVICE_LABEL]: device.id }
   return {
     app: APP_LABEL,
     [DEVICE_LABEL]: device.id,
-    [USER_LABEL]: device.userId,
+    ...deviceOwnerLabels(deviceOwner(device)),
   }
 }
 
@@ -65,55 +112,73 @@ export function createSecret() {
   return `dev_${randomBytes(32).toString("base64url")}`
 }
 
-export async function createDevice(userId: string, name: string) {
+export async function createDevice(
+  access: DeviceAccess,
+  createdById: string,
+  name: string,
+) {
+  requireManagedInventory()
   requireMemoryQuota(
-    `device:create:${userId}`,
+    `device:create:${createdById}`,
     maxDeviceCreationsPerWindow,
     deviceCreationWindowMs,
   )
-  const deviceCount = await prisma.device.count({
-    where: { userId },
-  })
-  if (deviceCount >= maxDevicesPerUser) {
-    throw new HTTPError(429, "Device limit reached.")
-  }
   const id = randomUUID()
   const secret = createSecret()
   const deviceName = name.trim()
-  const duplicate = await prisma.device.findFirst({
-    where: { userId, name: deviceName },
-    select: { id: true },
-  })
-  if (duplicate) {
-    throw new HTTPError(409, "A device with this name already exists.")
+  const owner = deviceOwnerWhere(access)
+  try {
+    const device = await prisma.$transaction(async (transaction) => {
+      // Serialize inventory limits across processes and users of the same owner.
+      await transaction.$executeRaw`SET LOCAL lock_timeout = '3s'`
+      const lockKey = `${access.kind}:${access.id}`
+      await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))::text`
+      const deviceCount = await transaction.device.count({ where: owner })
+      if (deviceCount >= maxDevicesPerOwner)
+        throw new HTTPError(429, "Device limit reached.")
+      return transaction.device.create({
+        data: {
+          id,
+          ...owner,
+          createdById,
+          name: deviceName,
+          secretHash: hashSecret(secret),
+          secretPrefix: secret.slice(0, 12),
+          tunnelName: `device-${id}`,
+        },
+      })
+    })
+    return { device, secret }
+  } catch (error) {
+    if (hasPrismaCode(error, "P2002"))
+      throw new HTTPError(409, "A device with this name already exists.")
+    if (hasPrismaCode(error, "P2028") || isDatabaseLockTimeout(error))
+      throw new HTTPError(503, "Device inventory is busy. Retry shortly.")
+    throw error
   }
-  const device = await createDeviceRecord(userId, deviceName, id, secret)
-  return { device, secret }
 }
 
-function createDeviceRecord(
-  userId: string,
-  name: string,
-  id: string,
-  secret: string,
-) {
-  return prisma.device
-    .create({
-      data: {
-        id,
-        userId,
-        name,
-        secretHash: hashSecret(secret),
-        secretPrefix: secret.slice(0, 12),
-        tunnelName: `device-${id}`,
-      },
-    })
-    .catch((err: unknown) => {
-      if (hasPrismaCode(err, "P2002")) {
-        throw new HTTPError(409, "A device with this name already exists.")
-      }
-      throw err
-    })
+function isDatabaseLockTimeout(error: unknown) {
+  if (
+    !hasPrismaCode(error, "P2010") ||
+    !error ||
+    typeof error !== "object" ||
+    !("meta" in error)
+  )
+    return false
+  const meta = error.meta
+  if (!meta || typeof meta !== "object") return false
+  if ("code" in meta && meta.code === "55P03") return true
+  const adapter = "driverAdapterError" in meta ? meta.driverAdapterError : null
+  if (!adapter || typeof adapter !== "object" || !("cause" in adapter))
+    return false
+  const cause = adapter.cause
+  return (
+    !!cause &&
+    typeof cause === "object" &&
+    "originalCode" in cause &&
+    cause.originalCode === "55P03"
+  )
 }
 
 function hasPrismaCode(err: unknown, code: string) {
@@ -143,6 +208,7 @@ function bearerSecret(request: Request) {
 }
 
 export async function requireDevice(request: Request) {
+  requireManagedInventory()
   const device = await deviceBySecret(bearerSecret(request))
   if (!device) {
     throw new HTTPError(401, "Unauthorized")
@@ -155,12 +221,17 @@ function tunnelEntry(tunnel: Tunnel): [string, Tunnel][] {
   return deviceId ? [[deviceId, tunnel]] : []
 }
 
-export async function deviceViews(userId: string) {
+export async function deviceViews(access: DeviceAccess, signal?: AbortSignal) {
+  if (deviceInventoryConfig().mode === "discovered") {
+    if (access.kind !== "organization")
+      throw new HTTPError(403, "Organization access required.")
+    return discoveredDeviceViews(signal)
+  }
   const devices: Device[] = await prisma.device.findMany({
-    where: { userId },
+    where: deviceOwnerWhere(access),
     orderBy: { createdAt: "desc" },
   })
-  const tunnelByDevice = new Map(await onlineTunnelEntries(userId))
+  const tunnelByDevice = new Map(await onlineTunnelEntries(access))
   return devices.map((device) => toView(device, tunnelByDevice.has(device.id)))
 }
 
@@ -168,6 +239,7 @@ export function toView(device: Device, online = false): DeviceView {
   return {
     id: device.id,
     name: device.name,
+    inventory: "managed",
     secretPrefix: device.secretPrefix,
     tunnelName: device.tunnelName,
     online,
@@ -179,17 +251,15 @@ export function toView(device: Device, online = false): DeviceView {
 
 export async function engine() {
   const env = requireRstreamEnv()
-  const rstream = getRstreamClient()
+  const rstream = await getRstreamClient()
   // Reuse the SDK engine resolver so device agents receive the project engine URL.
   return env.RSTREAM_ENGINE ?? rstream.getEngine()
 }
 
 // Producer tokens are scoped to one tunnel name and one device label.
-export async function createTunnelToken(
-  device: Pick<Device, "id" | "tunnelName" | "userId">,
-) {
+export async function createTunnelToken(device: SourceDevice) {
   const env = requireRstreamEnv()
-  const rstream = getRstreamClient()
+  const rstream = await getRstreamClient()
   const token = await rstream.auth.createAuthToken({
     expires_in: env.DEVICE_TOKEN_TTL_SECONDS,
     resources: {
@@ -215,26 +285,39 @@ export async function createTunnelToken(
 
 // Viewer tokens can only connect to the selected online tunnel WebRTC path.
 export async function createViewerToken(
-  device: Pick<Device, "id" | "userId">,
+  device: SourceIdentity,
   tunnel: Tunnel,
+  signal?: AbortSignal,
 ) {
-  return createDeviceConnectToken(device, tunnel, "^/whep(?:/[^/?#]{1,256})?$")
+  return createDeviceConnectToken(
+    device,
+    tunnel,
+    "^/whep(?:/[^/?#]{1,256})?$",
+    signal,
+  )
 }
 
 export async function createWHEPSourceToken(
-  device: Pick<Device, "id" | "userId">,
+  device: SourceIdentity,
   tunnel: Tunnel,
+  signal?: AbortSignal,
 ) {
-  return createDeviceConnectToken(device, tunnel, "^/whep(?:/[^/?#]{1,256})?$")
+  return createDeviceConnectToken(
+    device,
+    tunnel,
+    "^/whep(?:/[^/?#]{1,256})?$",
+    signal,
+  )
 }
 
 async function createDeviceConnectToken(
-  device: Pick<Device, "id" | "userId">,
+  device: SourceIdentity,
   tunnel: Tunnel,
   pathRegex: string,
+  signal?: AbortSignal,
 ) {
   const env = requireRstreamEnv()
-  const rstream = getRstreamClient()
+  const rstream = await getRstreamClient(signal)
   const issuedAt = new Date()
   const token = await rstream.auth.createAuthToken({
     expires_in: env.VIEWER_TOKEN_TTL_SECONDS,
@@ -266,9 +349,13 @@ async function createDeviceConnectToken(
   } satisfies ExpiringConnectToken
 }
 
-async function createMediaMTXConnectToken(tunnel: Tunnel, path: string) {
+async function createMediaMTXConnectToken(
+  tunnel: Tunnel,
+  path: string,
+  signal?: AbortSignal,
+) {
   const env = requireRstreamEnv()
-  const rstream = getRstreamClient()
+  const rstream = await getRstreamClient(signal)
   const escapedPath = escapeRegex(path)
   const issuedAt = new Date()
   const token = await rstream.auth.createAuthToken({
@@ -302,9 +389,9 @@ async function createMediaMTXConnectToken(tunnel: Tunnel, path: string) {
   } satisfies ExpiringConnectToken
 }
 
-export async function createWatchToken(userId: string) {
+export async function createWatchToken(access: DeviceAccess) {
   const env = requireRstreamEnv()
-  const rstream = getRstreamClient()
+  const rstream = await getRstreamClient()
   // Watch tokens are short-lived because the browser sends them as query tokens.
   const token = await rstream.auth.createAuthToken({
     expires_in: env.WATCH_TOKEN_TTL_SECONDS,
@@ -315,10 +402,10 @@ export async function createWatchToken(userId: string) {
           tunnels: {
             list: {
               filters: {
-                labels: {
-                  app: APP_LABEL,
-                  [USER_LABEL]: userId,
-                },
+                labels:
+                  deviceInventoryConfig().mode === "discovered"
+                    ? discoveryLabels
+                    : { app: APP_LABEL, ...deviceOwnerLabels(access) },
                 protocol: "http",
                 publish: true,
               },
@@ -346,6 +433,11 @@ function requireMemoryQuota(key: string, maxCount: number, windowMs: number) {
   const now = Date.now()
   const current = memoryQuota.get(key)
   if (!current || current.expiresAt <= now) {
+    for (const [quotaKey, quota] of memoryQuota) {
+      if (quota.expiresAt <= now) memoryQuota.delete(quotaKey)
+    }
+    if (memoryQuota.size >= 4096)
+      throw new HTTPError(503, "Request quota capacity reached. Retry shortly.")
     memoryQuota.set(key, { count: 1, expiresAt: now + windowMs })
     return
   }
@@ -355,11 +447,15 @@ function requireMemoryQuota(key: string, maxCount: number, windowMs: number) {
   current.count += 1
 }
 
-export async function onlineTunnel(
-  device: Pick<Device, "id" | "tunnelName" | "userId">,
-) {
+async function onlineTunnel(device: SourceDevice, signal?: AbortSignal) {
+  signal?.throwIfAborted()
+  // Every caller received this discovered source from findSourceDevice in the
+  // current request. Reuse that live, label-validated snapshot; history is never
+  // a source of authorization. Issued connect tokens still require this exact
+  // tunnel ID, online status and labels when used at the edge.
+  if ("inventory" in device) return device.tunnel
   requireRstreamEnv()
-  const rstream = getRstreamClient()
+  const rstream = await getRstreamClient(signal)
   // Online state is read from rstream inventory and narrowed by stable labels.
   const activeTunnels = await rstream.tunnels.list({
     limit: 20,
@@ -374,9 +470,9 @@ export async function onlineTunnel(
   return newestTunnel(activeTunnels)
 }
 
-export async function onlineTunnels(userId: string) {
+export async function onlineTunnels(access: DeviceAccess) {
   requireRstreamEnv()
-  const rstream = getRstreamClient()
+  const rstream = await getRstreamClient()
   // The dashboard lists only published HTTP tunnels owned by this application.
   return rstream.tunnels.list({
     limit: 100,
@@ -386,13 +482,13 @@ export async function onlineTunnels(userId: string) {
       protocol: "http",
       labels: {
         app: APP_LABEL,
-        [USER_LABEL]: userId,
+        ...deviceOwnerLabels(access),
       },
     },
   })
 }
 
-export async function onlineMediaMTXTunnel() {
+export async function onlineMediaMTXTunnel(signal?: AbortSignal) {
   const env = requireRstreamEnv()
   if (
     env.VIDEO_DISTRIBUTOR !== "mediamtx" ||
@@ -400,7 +496,7 @@ export async function onlineMediaMTXTunnel() {
   ) {
     return null
   }
-  const rstream = getRstreamClient()
+  const rstream = await getRstreamClient(signal)
   const activeTunnels = await rstream.tunnels.list({
     limit: 20,
     filters: {
@@ -448,9 +544,9 @@ export async function tunnelPayload(device: Device) {
   }
 }
 
-export async function turnPayload(deviceId: string) {
+export async function turnPayload(deviceId: string, signal?: AbortSignal) {
   const env = requireRstreamEnv()
-  const rstream = getRstreamClient()
+  const rstream = await getRstreamClient(signal)
   requireMemoryQuota(
     `turn:${deviceId}`,
     maxTurnCredentialsPerWindow,
@@ -458,8 +554,19 @@ export async function turnPayload(deviceId: string) {
   )
   // TURN credentials are minted on demand and expire quickly for each viewer.
   const issuedAt = new Date()
+  const target = await rstream.getTURNTarget()
+  const keyring = new URL(
+    `/keyrings/turn/${encodeURIComponent(target.turnRealm)}.spki.der.hex`,
+    env.RSTREAM_TURN_KEYRING_BASE_URL ??
+      env.RSTREAM_API_URL ??
+      "https://rstream.io",
+  )
+  const keyResponse = await boundedFetch(signal, 16 * 1024)(keyring)
+  if (!keyResponse.ok) throw new HTTPError(503, "TURN keyring is unavailable")
   const credentials = await rstream.turn.createCredentials({
-    keyringBaseUrl: env.RSTREAM_TURN_KEYRING_BASE_URL,
+    projectEndpoint: env.RSTREAM_PROJECT_ENDPOINT,
+    serverPublicKeyHex: (await keyResponse.text()).trim(),
+    ...target,
     ttlSeconds: env.TURN_CREDENTIAL_TTL_SECONDS,
   })
   return {
@@ -477,13 +584,13 @@ function requireRstreamEnv() {
 }
 
 async function onlineTunnelEntries(
-  userId: string,
+  access: DeviceAccess,
 ): Promise<[string, Tunnel][]> {
   if (!rstreamEnvResult().success) {
     return []
   }
   try {
-    return (await onlineTunnels(userId)).flatMap(tunnelEntry)
+    return (await onlineTunnels(access)).flatMap(tunnelEntry)
   } catch {
     return []
   }
@@ -504,26 +611,39 @@ function withToken(rawUrl: string, token: string) {
 }
 
 export async function viewerPayload(
-  device: Device,
+  device: SourceDevice,
   distribution: ViewerDistributionPreference = "automatic",
+  signal?: AbortSignal,
 ) {
-  if (distribution === "automatic" && videoDistributorMode() === "mediamtx") {
-    const distributed = await mediaMTXViewerPayload(device)
-    if (distributed) {
-      return distributed
-    }
+  const allowDirectFallback = requireRstreamEnv().MEDIAMTX_ALLOW_DIRECT_FALLBACK
+  if (
+    distribution === "direct" &&
+    videoDistributorMode() === "mediamtx" &&
+    !allowDirectFallback
+  ) {
+    throw new HTTPError(403, "This deployment requires MediaMTX playback.")
   }
-  return directViewerPayload(device)
+  if (distribution === "automatic" && videoDistributorMode() === "mediamtx") {
+    const distributed = await mediaMTXViewerPayload(device, signal)
+    if (distributed) return { ...distributed, allowDirectFallback }
+    if (!allowDirectFallback)
+      throw new HTTPError(
+        503,
+        "MediaMTX is unavailable. Direct fallback is disabled.",
+      )
+  }
+  const direct = await directViewerPayload(device, signal)
+  return direct ? { ...direct, allowDirectFallback } : null
 }
 
-async function directViewerPayload(device: Device) {
-  const tunnel = await onlineTunnel(device)
+async function directViewerPayload(device: SourceDevice, signal?: AbortSignal) {
+  const tunnel = await onlineTunnel(device, signal)
   if (!tunnel) {
     return null
   }
   const [credential, turn] = await Promise.all([
-    createViewerToken(device, tunnel),
-    turnPayload(device.id),
+    createViewerToken(device, tunnel, signal),
+    turnPayload(device.id, signal),
   ])
   const base = publicUrl(tunnel)
   if (!base) {
@@ -540,18 +660,21 @@ async function directViewerPayload(device: Device) {
   }
 }
 
-async function mediaMTXViewerPayload(device: Device) {
-  const endpoint = await mediaMTXViewerEndpoint()
+async function mediaMTXViewerPayload(
+  device: SourceDevice,
+  signal?: AbortSignal,
+) {
+  const endpoint = await mediaMTXViewerEndpoint(signal)
   if (!endpoint) {
     return null
   }
   const path = mediaMTXPath(device.id)
   const [accessCredential, mediaCredential, turn] = await Promise.all([
     endpoint.kind === "rstream"
-      ? createMediaMTXConnectToken(endpoint.tunnel, path)
+      ? createMediaMTXConnectToken(endpoint.tunnel, path, signal)
       : Promise.resolve(null),
     Promise.resolve(mediaMTXViewerCredential(device.id)),
-    turnPayload(device.id),
+    turnPayload(device.id, signal),
   ])
   const expiresAt = accessCredential
     ? earliestDate(accessCredential.expiresAt, mediaCredential.expiresAt)
@@ -567,7 +690,7 @@ async function mediaMTXViewerPayload(device: Device) {
   }
 }
 
-async function mediaMTXViewerEndpoint() {
+async function mediaMTXViewerEndpoint(signal?: AbortSignal) {
   const env = requireRstreamEnv()
   if (env.MEDIAMTX_EXPOSURE === "public") {
     return {
@@ -575,7 +698,7 @@ async function mediaMTXViewerEndpoint() {
       kind: "public" as const,
     }
   }
-  const tunnel = await onlineMediaMTXTunnel()
+  const tunnel = await onlineMediaMTXTunnel(signal)
   if (!tunnel) {
     return null
   }
@@ -584,17 +707,18 @@ async function mediaMTXViewerEndpoint() {
 }
 
 export async function mediaMTXSourcePayload(
-  device: Device,
+  device: SourceDevice,
   purpose: MediaMTXSourcePurpose,
+  signal?: AbortSignal,
 ) {
-  const tunnel = await onlineTunnel(device)
+  const tunnel = await onlineTunnel(device, signal)
   if (!tunnel) {
     return null
   }
   const credentials = await issueSourceCredentials(purpose, {
-    issueSource: () => createWHEPSourceToken(device, tunnel),
+    issueSource: () => createWHEPSourceToken(device, tunnel, signal),
     issueDestination: async () => mediaMTXPublisherCredential(device.id),
-    issueTURN: () => turnPayload(device.id),
+    issueTURN: () => turnPayload(device.id, signal),
   })
   const base = publicUrl(tunnel)
   if (!base) {
@@ -628,4 +752,23 @@ function escapeRegex(value: string) {
 
 function earliestDate(left: Date, right: Date) {
   return left < right ? left : right
+}
+
+// Control credentials never leave the platform. They cannot reach WHEP, and
+// viewer/source credentials cannot reach this endpoint.
+export async function qualityEndpoint(
+  device: SourceDevice,
+  signal?: AbortSignal,
+) {
+  const tunnel = await onlineTunnel(device, signal)
+  if (!tunnel) throw new HTTPError(409, "Device is offline")
+  const base = publicUrl(tunnel)
+  if (!base) throw new HTTPError(503, "Device control is unavailable")
+  const credential = await createDeviceConnectToken(
+    device,
+    tunnel,
+    "^/api/quality$",
+    signal,
+  )
+  return withToken(`${base}/api/quality`, credential.token)
 }

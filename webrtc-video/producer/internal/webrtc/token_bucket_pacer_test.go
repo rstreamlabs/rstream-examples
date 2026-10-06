@@ -6,6 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/pion/interceptor"
@@ -49,6 +50,7 @@ func TestTokenBucketPacerWritesPrimaryAndRepairStreams(t *testing.T) {
 
 func TestTokenBucketPacerReportsRepairStreamIdentityAndSequence(t *testing.T) {
 	pacer := newTokenBucketPacer(10_000_000, 1, 16)
+	defer pacer.Close()
 	written := make(chan struct{}, 1)
 	writer := interceptor.RTPWriterFunc(func(
 		header *rtp.Header,
@@ -75,6 +77,11 @@ func TestTokenBucketPacerReportsRepairStreamIdentityAndSequence(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for RTX write")
 	}
+	// Receiving the writer notification does not synchronize the diagnostics
+	// recorded after Write returns. Close joins the worker before inspection.
+	if err := pacer.Close(); err != nil {
+		t.Fatalf("close pacer: %v", err)
+	}
 	stats := pacer.Stats()
 	if stats["pacerPrimarySSRC"] != uint32(10) ||
 		stats["pacerRetransmissionSSRC"] != uint32(11) ||
@@ -85,9 +92,6 @@ func TestTokenBucketPacerReportsRepairStreamIdentityAndSequence(t *testing.T) {
 		stats["pacerLastRetransmissionSequence"] != uint32(65535) ||
 		stats["pacerRetransmissionSequenceSamples"] != uint64(1) {
 		t.Fatalf("unexpected RTX sequence diagnostics: %+v", stats)
-	}
-	if err := pacer.Close(); err != nil {
-		t.Fatalf("close pacer: %v", err)
 	}
 }
 
@@ -640,6 +644,36 @@ func TestTokenBucketPacerSmoothsAndBoundsObservedRTT(t *testing.T) {
 	}
 }
 
+func TestTokenBucketPacerRetryUsesCurrentRTT(t *testing.T) {
+	for _, test := range []struct {
+		name                       string
+		initial, observed, elapsed time.Duration
+		want                       retransmissionReservation
+	}{
+		{"increasing RTT", 60 * time.Millisecond, 540 * time.Millisecond, 70 * time.Millisecond, retransmissionRecentlySent},
+		{"decreasing RTT", 500 * time.Millisecond, 100 * time.Millisecond, 460 * time.Millisecond, retransmissionReserved},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			pacer := newTokenBucketPacer(10_000_000, 1, 16)
+			t.Cleanup(func() {
+				if err := pacer.Close(); err != nil {
+					t.Error(err)
+				}
+			})
+			key := retransmissionKey{ssrc: 11, originalSequence: 123}
+			start := time.Unix(100, 0)
+			pacer.observeRoundTripTime(test.initial)
+			pacer.reserveRetransmissionAt(key, start)
+			pacer.markRetransmissionSent(key, start)
+			pacer.observeRoundTripTime(test.observed)
+			if got := pacer.reserveRetransmissionAt(key, start.Add(test.elapsed)); got != test.want {
+				t.Fatalf("reservation = %v, want %v with current RTT %v", got, test.want, pacer.retransmissionRTT())
+			}
+			pacer.releaseRetransmission(key)
+		})
+	}
+}
+
 func TestTokenBucketPacerDoesNotThrottleAnUnsentRetransmission(t *testing.T) {
 	pacer := newTokenBucketPacer(10_000_000, 1, 16)
 	t.Cleanup(func() {
@@ -675,7 +709,7 @@ func TestTokenBucketPacerPrunesCompletedRetransmissionWindows(t *testing.T) {
 		pacer.markRetransmissionSent(key, start)
 	}
 	trigger := retransmissionKey{ssrc: 11, originalSequence: 129}
-	if got := pacer.reserveRetransmissionAt(trigger, start.Add(2*time.Second)); got != retransmissionReserved {
+	if got := pacer.reserveRetransmissionAt(trigger, start.Add(maximumObservedRTT+retransmissionSafetyMargin)); got != retransmissionReserved {
 		t.Fatalf("prune-trigger reservation = %v, want reserved", got)
 	}
 	pacer.retransmissionMu.Lock()
@@ -685,6 +719,29 @@ func TestTokenBucketPacerPrunesCompletedRetransmissionWindows(t *testing.T) {
 		t.Fatalf("retained completed retransmission windows = %d, want 0", recent)
 	}
 	pacer.releaseRetransmission(trigger)
+}
+
+func TestTokenBucketPacerRetainsSendTimesAcrossRTTIncreases(t *testing.T) {
+	pacer := newTokenBucketPacer(10_000_000, 1, 16)
+	t.Cleanup(func() {
+		if err := pacer.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	start := time.Unix(100, 0)
+	key := retransmissionKey{ssrc: 11, originalSequence: 123}
+	pacer.observeRoundTripTime(time.Millisecond)
+	pacer.reserveRetransmissionAt(key, start)
+	pacer.markRetransmissionSent(key, start)
+	trigger := retransmissionKey{ssrc: 11, originalSequence: 124}
+	pacer.reserveRetransmissionAt(trigger, start.Add(time.Second))
+	pacer.releaseRetransmission(trigger)
+	for range 8 {
+		pacer.observeRoundTripTime(10 * time.Second)
+	}
+	if got := pacer.reserveRetransmissionAt(key, start.Add(1500*time.Millisecond)); got != retransmissionRecentlySent {
+		t.Fatalf("reservation after RTT increase = %v, want recently sent", got)
+	}
 }
 
 func TestTokenBucketPacerRepairsLossBeforeAReceiverReorderWindowCanOverflow(t *testing.T) {
@@ -1619,4 +1676,51 @@ func setSyntheticQueuedBytes(pacer *tokenBucketPacer, bytes int64) {
 	pacer.queuedPrimaryServiceNs.Store(
 		queueDelayAtRate(bytes, pacer.sustainedBytesPerSecond()).Nanoseconds(),
 	)
+}
+
+func TestTokenBucketPacerWakesForRTXWhileAwaitingFEC(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		pacer := newTokenBucketPacer(10_000_000, 1, 16)
+		defer pacer.Close()
+		pacer.configureForwardErrorCorrection(flexFECProtection{mediaPackets: 5, repairPackets: 1})
+		written := make(chan uint32, 6)
+		writer := interceptor.RTPWriterFunc(func(header *rtp.Header, payload []byte, _ interceptor.Attributes) (int, error) {
+			written <- header.SSRC
+			return header.MarshalSize() + len(payload), nil
+		})
+		pacer.AddStream(10, writer)
+		pacer.AddStream(11, writer)
+		pacer.markRetransmissionStream(11)
+		for sequence := uint16(0); sequence < 5; sequence++ {
+			if _, err := pacer.Write(&rtp.Header{SSRC: 10, SequenceNumber: sequence}, []byte{1}, nil); err != nil {
+				t.Fatal(err)
+			}
+		}
+		// The worker must now be parked awaiting a repair packet for this group.
+		synctest.Wait()
+		for range 5 {
+			select {
+			case ssrc := <-written:
+				if ssrc != 10 {
+					t.Fatalf("primary SSRC = %d", ssrc)
+				}
+			default:
+				t.Fatal("primary group did not drain")
+			}
+		}
+		// No further media or FEC arrives. A pending FEC group must not prevent
+		// a later NACK from waking the worker and repairing the existing video.
+		if _, err := pacer.Write(&rtp.Header{SSRC: 11, SequenceNumber: 100}, []byte{0, 1}, nil); err != nil {
+			t.Fatal(err)
+		}
+		synctest.Wait()
+		select {
+		case ssrc := <-written:
+			if ssrc != 11 {
+				t.Fatalf("repair SSRC = %d", ssrc)
+			}
+		default:
+			t.Fatal("RTX remained blocked behind absent FEC and media")
+		}
+	})
 }

@@ -1,0 +1,497 @@
+{
+  "schemaVersion": 1,
+  "passed": true,
+  "profile": {
+    "warmupSeconds": 10,
+    "measurementSeconds": 20,
+    "recording": "fMP4, 1s parts, 5s target segments, 5m retention, 512 MiB bounded tmpfs",
+    "probe": false
+  },
+  "scope": "Three independent adaptive-adapter recording startups after the destination-readiness fix, plus one native MediaMTX recording smoke test. This does not replace the earlier failed delivery matrix or the ICE shutdown investigation.",
+  "cases": [
+    {
+      "case": "adapter-1",
+      "revision": "2b225615a12d14d86dffcef94057a853fe75332e",
+      "workingTreeDirty": false,
+      "mode": "mediamtx",
+      "passed": true,
+      "gates": {
+        "recordingEvidence": true,
+        "sourceFormats": true,
+        "sourceQualityEvidence": true,
+        "latencyMeasurement": true,
+        "media": true,
+        "playback": true,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": true,
+        "sourceTargetRecovery": true
+      },
+      "runtimeHealth": {
+        "fatalErrors": 0,
+        "h264PacketizationErrors": 0,
+        "packetLossWarnings": 0,
+        "transportBufferWarnings": 0
+      },
+      "recording": {
+        "enabled": true,
+        "segmentFiles": 7,
+        "bytes": 31336284,
+        "storageLimitBytes": 536870912
+      },
+      "setup": {
+        "peerCreatedMilliseconds": 104,
+        "whepPostDurationMilliseconds": 453,
+        "whepPostCompletedMilliseconds": 569,
+        "connectedMilliseconds": 632,
+        "playbackReadyMilliseconds": 2397,
+        "firstDecodedFrameMilliseconds": 2401,
+        "postToConnectedMilliseconds": 63,
+        "peerToFirstDecodedFrameMilliseconds": 2297
+      },
+      "teardown": {
+        "whepDeleteDurationMilliseconds": 13,
+        "whepDeleteCompletedMilliseconds": 36779
+      },
+      "nativeSourceProfile": {
+        "required": false
+      },
+      "framesDecoded": 1031,
+      "framesDropped": 0,
+      "freezeCount": 0,
+      "totalFreezesDurationSeconds": 0,
+      "images": {
+        "producer": "sha256:ed0dd0a8355f60a7168908319f68862292ad8d96cb0ab4a758921b00ac3d84e4",
+        "distributor": "sha256:27ce5f6f78466fd0eefa0560083172229e74da4f55f72499e8fec44dcd084822",
+        "browser": "sha256:5c6437f0d018835c54ecabe14c65ad674d76073e832f2e21e327f30ccddd51ce"
+      },
+      "baselineVideo": {
+        "samples": 20,
+        "durationMilliseconds": 19159,
+        "receivedBitrateKbps": 7025.853123858239,
+        "decodedFramesPerSecond": 30.012004801920767,
+        "averageDecodedQP": 9.796521739130435,
+        "framesPerSecond": {
+          "minimum": 29,
+          "maximum": 30
+        },
+        "encoderTargetKbps": {
+          "first": 7335,
+          "last": 7335,
+          "minimum": 7335,
+          "maximum": 7335,
+          "medianLast10Seconds": 7335,
+          "sustainedMinimumLast10Seconds": 7335
+        },
+        "twccTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "jitterMilliseconds": {
+          "average": 1.3000000000000005,
+          "maximum": 2
+        },
+        "roundTripTimeMilliseconds": {
+          "average": 0,
+          "maximum": 0
+        },
+        "nacks": 0,
+        "packetsLostNetChange": 0,
+        "framesDropped": 0,
+        "freezes": 0,
+        "freezeDurationSeconds": 0
+      },
+      "inputSHA256": {
+        "result.json": "0816298bddf5fe14537d0bc8465569b40bbb5728d451c21d428863f32313254f",
+        "distributor.log": "0b4b25cf5c5619d3fb459b53ec7f434064cd8c643891a24dbd35118789401680",
+        "producer.log": "4ba905ca54af61fac328bbcb32d91c2bf03b6b2f025c3daf73f83cffdb504edd",
+        "runtime-health.json": "5d993c8b8ebbdb02ebf1e727ca61516163a8b18a7ebfff4a9c239545b4918cd6",
+        "recording.json": "2e295c1f219542c4b76958e8ae8309bf89f8051076797f6822b9a486a301a785",
+        "samples.jsonl": "68c5e396691152e732e0ec48ab5d6e053b8972ff4feb15a69e85768889268381"
+      }
+    },
+    {
+      "case": "adapter-2",
+      "revision": "2b225615a12d14d86dffcef94057a853fe75332e",
+      "workingTreeDirty": false,
+      "mode": "mediamtx",
+      "passed": true,
+      "gates": {
+        "recordingEvidence": true,
+        "sourceFormats": true,
+        "sourceQualityEvidence": true,
+        "latencyMeasurement": true,
+        "media": true,
+        "playback": true,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": true,
+        "sourceTargetRecovery": true
+      },
+      "runtimeHealth": {
+        "fatalErrors": 0,
+        "h264PacketizationErrors": 0,
+        "packetLossWarnings": 0,
+        "transportBufferWarnings": 0
+      },
+      "recording": {
+        "enabled": true,
+        "segmentFiles": 7,
+        "bytes": 33259465,
+        "storageLimitBytes": 536870912
+      },
+      "setup": {
+        "peerCreatedMilliseconds": 100,
+        "whepPostDurationMilliseconds": 437,
+        "whepPostCompletedMilliseconds": 549,
+        "connectedMilliseconds": 671,
+        "playbackReadyMilliseconds": 2377,
+        "firstDecodedFrameMilliseconds": 2381,
+        "postToConnectedMilliseconds": 122,
+        "peerToFirstDecodedFrameMilliseconds": 2281
+      },
+      "teardown": {
+        "whepDeleteDurationMilliseconds": 13,
+        "whepDeleteCompletedMilliseconds": 36742
+      },
+      "nativeSourceProfile": {
+        "required": false
+      },
+      "framesDecoded": 1030,
+      "framesDropped": 0,
+      "freezeCount": 0,
+      "totalFreezesDurationSeconds": 0,
+      "images": {
+        "producer": "sha256:ed0dd0a8355f60a7168908319f68862292ad8d96cb0ab4a758921b00ac3d84e4",
+        "distributor": "sha256:27ce5f6f78466fd0eefa0560083172229e74da4f55f72499e8fec44dcd084822",
+        "browser": "sha256:5c6437f0d018835c54ecabe14c65ad674d76073e832f2e21e327f30ccddd51ce"
+      },
+      "baselineVideo": {
+        "samples": 20,
+        "durationMilliseconds": 19152,
+        "receivedBitrateKbps": 7625.881370091896,
+        "decodedFramesPerSecond": 29.970760233918128,
+        "averageDecodedQP": 7.944250871080139,
+        "framesPerSecond": {
+          "minimum": 29,
+          "maximum": 31
+        },
+        "encoderTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "twccTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "jitterMilliseconds": {
+          "average": 1.3500000000000005,
+          "maximum": 2
+        },
+        "roundTripTimeMilliseconds": {
+          "average": 0,
+          "maximum": 0
+        },
+        "nacks": 0,
+        "packetsLostNetChange": 0,
+        "framesDropped": 0,
+        "freezes": 0,
+        "freezeDurationSeconds": 0
+      },
+      "inputSHA256": {
+        "result.json": "5e6c94c14b94f5c896a99d5c635f5f9f9fbbf8d471b1f622d3bb111cac6553cd",
+        "distributor.log": "11d132c4a6e47ee14fc1f28b96721c4ab88d9d5df5742fbf9ff9702f57838104",
+        "producer.log": "b21349ff05a01bbc68fcbc602461d48a23a45c357bb4b9f4d5f65332a40663f0",
+        "runtime-health.json": "5d993c8b8ebbdb02ebf1e727ca61516163a8b18a7ebfff4a9c239545b4918cd6",
+        "recording.json": "7a8f0debd13bd608ac48fa6706c924580db5e74716183c1a6793a054f037dd2a",
+        "samples.jsonl": "5bb0a76b20ce3c1ed0fd30de53887feb913e51ad537807e9e921cbfde1cc72bd"
+      }
+    },
+    {
+      "case": "adapter-3",
+      "revision": "2b225615a12d14d86dffcef94057a853fe75332e",
+      "workingTreeDirty": false,
+      "mode": "mediamtx",
+      "passed": true,
+      "gates": {
+        "recordingEvidence": true,
+        "sourceFormats": true,
+        "sourceQualityEvidence": true,
+        "latencyMeasurement": true,
+        "media": true,
+        "playback": true,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": true,
+        "sourceTargetRecovery": true
+      },
+      "runtimeHealth": {
+        "fatalErrors": 0,
+        "h264PacketizationErrors": 0,
+        "packetLossWarnings": 0,
+        "transportBufferWarnings": 0
+      },
+      "recording": {
+        "enabled": true,
+        "segmentFiles": 7,
+        "bytes": 33667854,
+        "storageLimitBytes": 536870912
+      },
+      "setup": {
+        "peerCreatedMilliseconds": 104,
+        "whepPostDurationMilliseconds": 447,
+        "whepPostCompletedMilliseconds": 563,
+        "connectedMilliseconds": 631,
+        "playbackReadyMilliseconds": 2397,
+        "firstDecodedFrameMilliseconds": 2401,
+        "postToConnectedMilliseconds": 68,
+        "peerToFirstDecodedFrameMilliseconds": 2297
+      },
+      "teardown": {
+        "whepDeleteDurationMilliseconds": 13,
+        "whepDeleteCompletedMilliseconds": 36762
+      },
+      "nativeSourceProfile": {
+        "required": false
+      },
+      "framesDecoded": 1031,
+      "framesDropped": 0,
+      "freezeCount": 0,
+      "totalFreezesDurationSeconds": 0,
+      "images": {
+        "producer": "sha256:ed0dd0a8355f60a7168908319f68862292ad8d96cb0ab4a758921b00ac3d84e4",
+        "distributor": "sha256:27ce5f6f78466fd0eefa0560083172229e74da4f55f72499e8fec44dcd084822",
+        "browser": "sha256:5c6437f0d018835c54ecabe14c65ad674d76073e832f2e21e327f30ccddd51ce"
+      },
+      "baselineVideo": {
+        "samples": 20,
+        "durationMilliseconds": 19145,
+        "receivedBitrateKbps": 7622.7936275790025,
+        "decodedFramesPerSecond": 30.03395142334813,
+        "averageDecodedQP": 7.947826086956522,
+        "framesPerSecond": {
+          "minimum": 29,
+          "maximum": 30
+        },
+        "encoderTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "twccTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "jitterMilliseconds": {
+          "average": 1.2000000000000004,
+          "maximum": 2
+        },
+        "roundTripTimeMilliseconds": {
+          "average": 0,
+          "maximum": 0
+        },
+        "nacks": 0,
+        "packetsLostNetChange": 0,
+        "framesDropped": 0,
+        "freezes": 0,
+        "freezeDurationSeconds": 0
+      },
+      "inputSHA256": {
+        "result.json": "6feda547a7b289b15bf486f8d759ca8f8ba9234c032ad9b79905c741f507d738",
+        "distributor.log": "e6eaccd1b63aeb1a7f698586633508674c69f3429a91fa086b6dfcd45d50364a",
+        "producer.log": "f39efbff04535a9a621e1d0d9b51174af4ff172ef153aecb6bac3fd33a4e9558",
+        "runtime-health.json": "5d993c8b8ebbdb02ebf1e727ca61516163a8b18a7ebfff4a9c239545b4918cd6",
+        "recording.json": "057f0dc6d94469b3bb967e547998a5a40ad1798ab5b60c4651f5a46e8be6fb38",
+        "samples.jsonl": "3509e03034baf39d09fa6052a1003af7d3027c2477259b06315eab501892b99e"
+      }
+    },
+    {
+      "case": "native",
+      "revision": "2b225615a12d14d86dffcef94057a853fe75332e",
+      "workingTreeDirty": false,
+      "mode": "mediamtx-native",
+      "passed": true,
+      "gates": {
+        "recordingEvidence": true,
+        "sourceFormats": true,
+        "sourceQualityEvidence": true,
+        "latencyMeasurement": true,
+        "media": true,
+        "playback": true,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": true,
+        "sourceTargetRecovery": true
+      },
+      "runtimeHealth": {
+        "fatalErrors": 0,
+        "h264PacketizationErrors": 0,
+        "packetLossWarnings": 0,
+        "transportBufferWarnings": 0
+      },
+      "recording": {
+        "enabled": true,
+        "segmentFiles": 6,
+        "bytes": 21110149,
+        "storageLimitBytes": 536870912
+      },
+      "setup": {
+        "peerCreatedMilliseconds": 103,
+        "whepPostDurationMilliseconds": 683,
+        "whepPostCompletedMilliseconds": 798,
+        "connectedMilliseconds": 925,
+        "playbackReadyMilliseconds": 2863,
+        "firstDecodedFrameMilliseconds": 2866,
+        "postToConnectedMilliseconds": 127,
+        "peerToFirstDecodedFrameMilliseconds": 2763
+      },
+      "teardown": {
+        "whepDeleteDurationMilliseconds": 13,
+        "whepDeleteCompletedMilliseconds": 37260
+      },
+      "nativeSourceProfile": {
+        "required": true,
+        "activeSessions": 1,
+        "createdSessions": 1,
+        "negotiated": {
+          "twcc": 1,
+          "nack": 1,
+          "rtx": 1,
+          "flexfec": 0
+        },
+        "fixedSourcePacing": {
+          "adaptiveUpdates": 0,
+          "adaptiveFailures": 0,
+          "queueDrops": 0,
+          "mediaFrameDrops": 0
+        },
+        "activeAfterTeardown": 0
+      },
+      "framesDecoded": 1031,
+      "framesDropped": 0,
+      "freezeCount": 0,
+      "totalFreezesDurationSeconds": 0,
+      "images": {
+        "producer": "sha256:ed0dd0a8355f60a7168908319f68862292ad8d96cb0ab4a758921b00ac3d84e4",
+        "distributor": "sha256:27ce5f6f78466fd0eefa0560083172229e74da4f55f72499e8fec44dcd084822",
+        "browser": "sha256:5c6437f0d018835c54ecabe14c65ad674d76073e832f2e21e327f30ccddd51ce"
+      },
+      "baselineVideo": {
+        "samples": 20,
+        "durationMilliseconds": 19170,
+        "receivedBitrateKbps": 4773.3241523213355,
+        "decodedFramesPerSecond": 29.994783515910278,
+        "averageDecodedQP": 15.617391304347827,
+        "framesPerSecond": {
+          "minimum": 29,
+          "maximum": 30
+        },
+        "encoderTargetKbps": {
+          "first": 5000,
+          "last": 5000,
+          "minimum": 5000,
+          "maximum": 5000,
+          "medianLast10Seconds": 5000,
+          "sustainedMinimumLast10Seconds": 5000
+        },
+        "twccTargetKbps": {
+          "first": 0,
+          "last": 0,
+          "minimum": 0,
+          "maximum": 0,
+          "medianLast10Seconds": 0,
+          "sustainedMinimumLast10Seconds": 0
+        },
+        "jitterMilliseconds": {
+          "average": 2.000000000000001,
+          "maximum": 3
+        },
+        "roundTripTimeMilliseconds": {
+          "average": 0,
+          "maximum": 0
+        },
+        "nacks": 0,
+        "packetsLostNetChange": 0,
+        "framesDropped": 0,
+        "freezes": 0,
+        "freezeDurationSeconds": 0
+      },
+      "inputSHA256": {
+        "result.json": "7e4103414b75d89d99412a04b743467fd8c8ef8d9517c431f6603e31e010e47c",
+        "distributor.log": "342dab7706e4a2c120043050d08e6fb5d9e5113ba24e518011e78a5bfe3c22b7",
+        "producer.log": "bf4229a8335d98368091988dacd011efb324008aa0aa2931ad4f2e1e2c3827e6",
+        "runtime-health.json": "5d993c8b8ebbdb02ebf1e727ca61516163a8b18a7ebfff4a9c239545b4918cd6",
+        "recording.json": "b83ee3fbe32c32dd09e3f538632bf0f1c8a11648b6b078e7e3f7b8367f154d36",
+        "samples.jsonl": "5eab2b8d18882d8d12e733a931f362b2321d75481c09bdd3d8f5ff6b975c6a2a"
+      }
+    }
+  ],
+  "cleanup": {
+    "ownedContainersRemoved": true,
+    "socketReceiveLimitRestored": 212992,
+    "socketSendLimitRestored": 212992
+  }
+}

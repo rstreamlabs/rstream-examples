@@ -1,0 +1,2968 @@
+{
+  "schemaVersion": 1,
+  "complete": true,
+  "expectedCases": 12,
+  "observedCases": 12,
+  "allDeliveryPassed": false,
+  "allCasesComparable": true,
+  "sameRevision": true,
+  "sameImages": true,
+  "rows": [
+    {
+      "case": "run-1-reference",
+      "repetition": 1,
+      "profile": "reference",
+      "revision": "5b839343f79a3d10f12db135c8dcfefcef9075eb",
+      "workingTreeDirty": false,
+      "passed": true,
+      "failedGates": [],
+      "images": {
+        "producer": "sha256:ed0dd0a8355f60a7168908319f68862292ad8d96cb0ab4a758921b00ac3d84e4",
+        "distributor": "sha256:ff93ecc81678d944520d9f43e59c0605538403ca8d23c60bab3787f79b3848ac",
+        "browser": "sha256:5c6437f0d018835c54ecabe14c65ad674d76073e832f2e21e327f30ccddd51ce"
+      },
+      "configuration": {
+        "edgeAuthentication": true,
+        "edgeCredentialLifetimeSeconds": 340,
+        "warmupSeconds": 40,
+        "phaseSeconds": 60,
+        "recoverySeconds": 45,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "7df329151df01019a324cbef08b0af4575a66469b1416a1b229623f8490493f0",
+        "latencyProbe": false,
+        "sourceQualityObserved": false,
+        "expectedNetworkFormat": null,
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "recording": {
+        "enabled": false
+      },
+      "runtimeHealth": {
+        "fatalErrors": 0,
+        "h264PacketizationErrors": 0,
+        "packetLossWarnings": 0,
+        "transportBufferWarnings": 0
+      },
+      "setup": {
+        "peerCreatedMilliseconds": 101,
+        "whepPostDurationMilliseconds": 469,
+        "whepPostCompletedMilliseconds": 583,
+        "connectedMilliseconds": 647,
+        "playbackReadyMilliseconds": 2411,
+        "firstDecodedFrameMilliseconds": 2415,
+        "postToConnectedMilliseconds": 64,
+        "peerToFirstDecodedFrameMilliseconds": 2314
+      },
+      "overallPlayback": {
+        "framesDecoded": 3118,
+        "framesDropped": 0,
+        "freezeCount": 0,
+        "totalFreezesDurationSeconds": 0
+      },
+      "baselineVideo": {
+        "samples": 59,
+        "durationMilliseconds": 58447,
+        "receivedBitrateKbps": 7627.269149828049,
+        "decodedFramesPerSecond": 29.9929850976098,
+        "averageDecodedQP": 7.946948088990302,
+        "framesPerSecond": {
+          "minimum": 29,
+          "maximum": 30
+        },
+        "encoderTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "twccTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "jitterMilliseconds": {
+          "average": 1.0677966101694922,
+          "maximum": 2
+        },
+        "roundTripTimeMilliseconds": {
+          "average": 0.0847457627118644,
+          "maximum": 1
+        },
+        "nacks": 0,
+        "packetsLostNetChange": 0,
+        "framesDropped": 0,
+        "freezes": 0,
+        "freezeDurationSeconds": 0
+      },
+      "baselineResources": {
+        "browser": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.17091578947368422,
+            "p95": 0.2104,
+            "maximum": 0.2104
+          },
+          "residentBytes": {
+            "average": 366328303.83157897,
+            "p95": 371091046.4,
+            "maximum": 371091046.4,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 132
+          },
+          "network": {
+            "receivedBytes": 103000000,
+            "transmittedBytes": 176000
+          }
+        },
+        "distributor": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.14183684210526315,
+            "p95": 0.15539999999999998,
+            "maximum": 0.15539999999999998
+          },
+          "residentBytes": {
+            "average": 52177693.642105274,
+            "p95": 53026488.32,
+            "maximum": 53026488.32,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 39
+          },
+          "network": {
+            "receivedBytes": 129000000,
+            "transmittedBytes": 101000000
+          }
+        },
+        "producer": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.3640263157894737,
+            "p95": 0.38799999999999996,
+            "maximum": 0.38799999999999996
+          },
+          "residentBytes": {
+            "average": 52671076.24421051,
+            "p95": 54452551.68,
+            "maximum": 54452551.68,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 37
+          },
+          "network": {
+            "receivedBytes": 299000,
+            "transmittedBytes": 130000000
+          }
+        }
+      },
+      "stableResourceSampleCount": {
+        "browser": 19,
+        "distributor": 19,
+        "producer": 19
+      },
+      "samplesWithoutStablePhase": 0,
+      "baselineLatency": null,
+      "latencyAlignmentMaximumErrorMilliseconds": null,
+      "inputSHA256": {
+        "result.json": "94a6d95abb0d24c14cc94d0b1238a893d25e967a72e3705860ebc55d6a3c3e88",
+        "resources.json": "b96e07781f9b390b30af7bbff458e46b2de318ffc88c846180fae4bd14a54f0a",
+        "resource-samples.jsonl": "0dc2175188947815847cb23deb489261ad48d483748b6b163b4d58e57104ad69",
+        "recording.json": "7187d1e8e2a4d61b1dc5dfedb22d703a462df21470e0c145365b20fb3ed467c3",
+        "samples.jsonl": "c318fcbc04b843bdfe3f4e15cb644cd5639f6d54233f9839c850d9009d11eb4d",
+        "latency.json": "4a30c9be3f878a9b2ecf59f5e0ada934c9d7e390f09c232597a46d5b4e929a50"
+      },
+      "comparable": true
+    },
+    {
+      "case": "run-1-probe",
+      "repetition": 1,
+      "profile": "probe",
+      "revision": "5b839343f79a3d10f12db135c8dcfefcef9075eb",
+      "workingTreeDirty": false,
+      "passed": true,
+      "failedGates": [],
+      "images": {
+        "producer": "sha256:ed0dd0a8355f60a7168908319f68862292ad8d96cb0ab4a758921b00ac3d84e4",
+        "distributor": "sha256:ff93ecc81678d944520d9f43e59c0605538403ca8d23c60bab3787f79b3848ac",
+        "browser": "sha256:5c6437f0d018835c54ecabe14c65ad674d76073e832f2e21e327f30ccddd51ce"
+      },
+      "configuration": {
+        "edgeAuthentication": true,
+        "edgeCredentialLifetimeSeconds": 340,
+        "warmupSeconds": 40,
+        "phaseSeconds": 60,
+        "recoverySeconds": 45,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "eace3c1bba6f697dc724a1ae690cbef4e82cf6d12c0f8fd0c3049bf1d3652ff3",
+        "latencyProbe": true,
+        "sourceQualityObserved": false,
+        "expectedNetworkFormat": null,
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "recording": {
+        "enabled": false
+      },
+      "runtimeHealth": {
+        "fatalErrors": 0,
+        "h264PacketizationErrors": 0,
+        "packetLossWarnings": 0,
+        "transportBufferWarnings": 0
+      },
+      "setup": {
+        "peerCreatedMilliseconds": 96,
+        "whepPostDurationMilliseconds": 446,
+        "whepPostCompletedMilliseconds": 554,
+        "connectedMilliseconds": 673,
+        "playbackReadyMilliseconds": 2389,
+        "firstDecodedFrameMilliseconds": 2392,
+        "postToConnectedMilliseconds": 119,
+        "peerToFirstDecodedFrameMilliseconds": 2296
+      },
+      "overallPlayback": {
+        "framesDecoded": 3120,
+        "framesDropped": 0,
+        "freezeCount": 0,
+        "totalFreezesDurationSeconds": 0
+      },
+      "baselineVideo": {
+        "samples": 59,
+        "durationMilliseconds": 58498,
+        "receivedBitrateKbps": 7574.572805907895,
+        "decodedFramesPerSecond": 30.00102567609149,
+        "averageDecodedQP": 7.934472934472934,
+        "framesPerSecond": {
+          "minimum": 29,
+          "maximum": 31
+        },
+        "encoderTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "twccTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "jitterMilliseconds": {
+          "average": 0.9830508474576277,
+          "maximum": 2
+        },
+        "roundTripTimeMilliseconds": {
+          "average": 0.05084745762711865,
+          "maximum": 1
+        },
+        "nacks": 0,
+        "packetsLostNetChange": 0,
+        "framesDropped": 0,
+        "freezes": 0,
+        "freezeDurationSeconds": 0
+      },
+      "baselineResources": {
+        "browser": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.17782105263157896,
+            "p95": 0.2306,
+            "maximum": 0.2306
+          },
+          "residentBytes": {
+            "average": 607136541.6421053,
+            "p95": 611739238.4,
+            "maximum": 611739238.4,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 132
+          },
+          "network": {
+            "receivedBytes": 103000000,
+            "transmittedBytes": 174000
+          }
+        },
+        "distributor": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.13678947368421054,
+            "p95": 0.14550000000000002,
+            "maximum": 0.14550000000000002
+          },
+          "residentBytes": {
+            "average": 54983462.26526315,
+            "p95": 55605985.28,
+            "maximum": 55605985.28,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 39
+          },
+          "network": {
+            "receivedBytes": 130000000,
+            "transmittedBytes": 102000000
+          }
+        },
+        "producer": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.36366315789473685,
+            "p95": 0.37439999999999996,
+            "maximum": 0.37439999999999996
+          },
+          "residentBytes": {
+            "average": 49717955.09894737,
+            "p95": 50342133.76,
+            "maximum": 50342133.76,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 37
+          },
+          "network": {
+            "receivedBytes": 301000,
+            "transmittedBytes": 131000000
+          }
+        }
+      },
+      "stableResourceSampleCount": {
+        "browser": 19,
+        "distributor": 19,
+        "producer": 19
+      },
+      "samplesWithoutStablePhase": 3,
+      "baselineLatency": {
+        "measurementValid": true,
+        "samples": 251,
+        "rejected": 0,
+        "omitted": 0,
+        "malformed": 0,
+        "maximumProbeMilliseconds": 2.5,
+        "latencyMilliseconds": {
+          "minimum": 26.363500028848648,
+          "median": 61.51250001788139,
+          "p95": 64.74250000715256,
+          "p99": 65.01249998807907,
+          "maximum": 65.04050001502037
+        }
+      },
+      "latencyAlignmentMaximumErrorMilliseconds": 1.3064999878406525,
+      "inputSHA256": {
+        "result.json": "10528f0a42393b9082ba920e8f24697bd793c12cfbc7d248fcbf8639ab04ca4e",
+        "resources.json": "62bfec2264c8b2d2c68e6e99bca70414947e9583683a31ab539114ce056f22b5",
+        "resource-samples.jsonl": "bba4a9c6a3119cea4db7a618902e89471f26d4b1c9e82c23e0ed8a81136537c5",
+        "recording.json": "7187d1e8e2a4d61b1dc5dfedb22d703a462df21470e0c145365b20fb3ed467c3",
+        "samples.jsonl": "9addd2ac0c2b3535be3499957bf287c15c9936b3b73490e89c474af7d972dabf",
+        "latency.json": "9a558b342bb2eb7939fe42d5e38ad08ed01bbbf96e25cfdeff90d339a22b5cdb"
+      },
+      "comparable": true
+    },
+    {
+      "case": "run-1-record",
+      "repetition": 1,
+      "profile": "record",
+      "revision": "5b839343f79a3d10f12db135c8dcfefcef9075eb",
+      "workingTreeDirty": false,
+      "passed": true,
+      "failedGates": [],
+      "images": {
+        "producer": "sha256:ed0dd0a8355f60a7168908319f68862292ad8d96cb0ab4a758921b00ac3d84e4",
+        "distributor": "sha256:ff93ecc81678d944520d9f43e59c0605538403ca8d23c60bab3787f79b3848ac",
+        "browser": "sha256:5c6437f0d018835c54ecabe14c65ad674d76073e832f2e21e327f30ccddd51ce"
+      },
+      "configuration": {
+        "edgeAuthentication": true,
+        "edgeCredentialLifetimeSeconds": 340,
+        "warmupSeconds": 40,
+        "phaseSeconds": 60,
+        "recoverySeconds": 45,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "7df329151df01019a324cbef08b0af4575a66469b1416a1b229623f8490493f0",
+        "latencyProbe": false,
+        "sourceQualityObserved": false,
+        "expectedNetworkFormat": null,
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "recording": {
+        "enabled": true,
+        "segmentFiles": 18,
+        "bytes": 99117064,
+        "storageLimitBytes": 536870912
+      },
+      "runtimeHealth": {
+        "fatalErrors": 0,
+        "h264PacketizationErrors": 0,
+        "packetLossWarnings": 0,
+        "transportBufferWarnings": 0
+      },
+      "setup": {
+        "peerCreatedMilliseconds": 107,
+        "whepPostDurationMilliseconds": 465,
+        "whepPostCompletedMilliseconds": 584,
+        "connectedMilliseconds": 640,
+        "playbackReadyMilliseconds": 2401,
+        "firstDecodedFrameMilliseconds": 2405,
+        "postToConnectedMilliseconds": 56,
+        "peerToFirstDecodedFrameMilliseconds": 2298
+      },
+      "overallPlayback": {
+        "framesDecoded": 3120,
+        "framesDropped": 0,
+        "freezeCount": 0,
+        "totalFreezesDurationSeconds": 0
+      },
+      "baselineVideo": {
+        "samples": 59,
+        "durationMilliseconds": 58500,
+        "receivedBitrateKbps": 7630.322051282052,
+        "decodedFramesPerSecond": 30,
+        "averageDecodedQP": 7.945868945868946,
+        "framesPerSecond": {
+          "minimum": 29,
+          "maximum": 31
+        },
+        "encoderTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "twccTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "jitterMilliseconds": {
+          "average": 0.8644067796610175,
+          "maximum": 1
+        },
+        "roundTripTimeMilliseconds": {
+          "average": 0.05084745762711865,
+          "maximum": 1
+        },
+        "nacks": 0,
+        "packetsLostNetChange": 0,
+        "framesDropped": 0,
+        "freezes": 0,
+        "freezeDurationSeconds": 0
+      },
+      "baselineResources": {
+        "browser": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.1686684210526316,
+            "p95": 0.1867,
+            "maximum": 0.1867
+          },
+          "residentBytes": {
+            "average": 366173776.8421052,
+            "p95": 369623040,
+            "maximum": 369623040,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 130
+          },
+          "network": {
+            "receivedBytes": 105000000,
+            "transmittedBytes": 175000
+          }
+        },
+        "distributor": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.15071052631578946,
+            "p95": 0.20620000000000002,
+            "maximum": 0.20620000000000002
+          },
+          "residentBytes": {
+            "average": 126421289.4989474,
+            "p95": 155608678.4,
+            "maximum": 155608678.4,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 40
+          },
+          "network": {
+            "receivedBytes": 133000000,
+            "transmittedBytes": 105000000
+          }
+        },
+        "producer": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.3502315789473684,
+            "p95": 0.5414,
+            "maximum": 0.5414
+          },
+          "residentBytes": {
+            "average": 63756180.21052632,
+            "p95": 72592916.48,
+            "maximum": 72592916.48,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 36
+          },
+          "network": {
+            "receivedBytes": 302000,
+            "transmittedBytes": 132000000
+          }
+        }
+      },
+      "stableResourceSampleCount": {
+        "browser": 19,
+        "distributor": 19,
+        "producer": 19
+      },
+      "samplesWithoutStablePhase": 3,
+      "baselineLatency": null,
+      "latencyAlignmentMaximumErrorMilliseconds": null,
+      "inputSHA256": {
+        "result.json": "a0fe774194595ccb3cd39b210ffaaafffece4b73013ca89a0829eefdaba36dad",
+        "resources.json": "a1b2939b56cdafddf4d61cd8ef9e8a413dced3e896b53029e0515fe405c1f84e",
+        "resource-samples.jsonl": "20dbf1143cb8ed0129b8f69e788009c258df87f0283850fe34bcb407098fa76d",
+        "recording.json": "341ecf67e9fcd6d423d26839485222356dc0f028aa6562dc85e920f5393767dc",
+        "samples.jsonl": "4d00de143a7eaa46d5071df2713d88b1dffab473e156959a1f72275b34e9c714",
+        "latency.json": "4a30c9be3f878a9b2ecf59f5e0ada934c9d7e390f09c232597a46d5b4e929a50"
+      },
+      "comparable": true
+    },
+    {
+      "case": "run-1-probe-record",
+      "repetition": 1,
+      "profile": "probe-record",
+      "revision": "5b839343f79a3d10f12db135c8dcfefcef9075eb",
+      "workingTreeDirty": false,
+      "passed": true,
+      "failedGates": [],
+      "images": {
+        "producer": "sha256:ed0dd0a8355f60a7168908319f68862292ad8d96cb0ab4a758921b00ac3d84e4",
+        "distributor": "sha256:ff93ecc81678d944520d9f43e59c0605538403ca8d23c60bab3787f79b3848ac",
+        "browser": "sha256:5c6437f0d018835c54ecabe14c65ad674d76073e832f2e21e327f30ccddd51ce"
+      },
+      "configuration": {
+        "edgeAuthentication": true,
+        "edgeCredentialLifetimeSeconds": 340,
+        "warmupSeconds": 40,
+        "phaseSeconds": 60,
+        "recoverySeconds": 45,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "eace3c1bba6f697dc724a1ae690cbef4e82cf6d12c0f8fd0c3049bf1d3652ff3",
+        "latencyProbe": true,
+        "sourceQualityObserved": false,
+        "expectedNetworkFormat": null,
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "recording": {
+        "enabled": true,
+        "segmentFiles": 18,
+        "bytes": 98598039,
+        "storageLimitBytes": 536870912
+      },
+      "runtimeHealth": {
+        "fatalErrors": 0,
+        "h264PacketizationErrors": 0,
+        "packetLossWarnings": 0,
+        "transportBufferWarnings": 0
+      },
+      "setup": {
+        "peerCreatedMilliseconds": 108,
+        "whepPostDurationMilliseconds": 463,
+        "whepPostCompletedMilliseconds": 582,
+        "connectedMilliseconds": 642,
+        "playbackReadyMilliseconds": 2418,
+        "firstDecodedFrameMilliseconds": 2423,
+        "postToConnectedMilliseconds": 60,
+        "peerToFirstDecodedFrameMilliseconds": 2315
+      },
+      "overallPlayback": {
+        "framesDecoded": 3121,
+        "framesDropped": 0,
+        "freezeCount": 0,
+        "totalFreezesDurationSeconds": 0
+      },
+      "baselineVideo": {
+        "samples": 59,
+        "durationMilliseconds": 58491,
+        "receivedBitrateKbps": 7580.146005368348,
+        "decodedFramesPerSecond": 30.004616094783813,
+        "averageDecodedQP": 7.942450142450142,
+        "framesPerSecond": {
+          "minimum": 29,
+          "maximum": 31
+        },
+        "encoderTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "twccTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "jitterMilliseconds": {
+          "average": 1.0000000000000007,
+          "maximum": 2
+        },
+        "roundTripTimeMilliseconds": {
+          "average": 0.0847457627118644,
+          "maximum": 1
+        },
+        "nacks": 0,
+        "packetsLostNetChange": 0,
+        "framesDropped": 0,
+        "freezes": 0,
+        "freezeDurationSeconds": 0
+      },
+      "baselineResources": {
+        "browser": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.18040000000000003,
+            "p95": 0.1977,
+            "maximum": 0.1977
+          },
+          "residentBytes": {
+            "average": 612131074.6947368,
+            "p95": 616352972.8,
+            "maximum": 616352972.8,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 132
+          },
+          "network": {
+            "receivedBytes": 102000000,
+            "transmittedBytes": 170000
+          }
+        },
+        "distributor": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.14629473684210528,
+            "p95": 0.1593,
+            "maximum": 0.1593
+          },
+          "residentBytes": {
+            "average": 124311444.21052629,
+            "p95": 151833804.8,
+            "maximum": 151833804.8,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 40
+          },
+          "network": {
+            "receivedBytes": 128000000,
+            "transmittedBytes": 101000000
+          }
+        },
+        "producer": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.3581894736842106,
+            "p95": 0.37729999999999997,
+            "maximum": 0.37729999999999997
+          },
+          "residentBytes": {
+            "average": 68941664.47157896,
+            "p95": 73159147.52,
+            "maximum": 73159147.52,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 37
+          },
+          "network": {
+            "receivedBytes": 298000,
+            "transmittedBytes": 130000000
+          }
+        }
+      },
+      "stableResourceSampleCount": {
+        "browser": 19,
+        "distributor": 19,
+        "producer": 19
+      },
+      "samplesWithoutStablePhase": 0,
+      "baselineLatency": {
+        "measurementValid": true,
+        "samples": 273,
+        "rejected": 0,
+        "omitted": 0,
+        "malformed": 0,
+        "maximumProbeMilliseconds": 2.5999999940395355,
+        "latencyMilliseconds": {
+          "minimum": 43.5460000038147,
+          "median": 47.61200001835823,
+          "p95": 48.92800000309944,
+          "p99": 49.092000007629395,
+          "maximum": 49.159000009298325
+        }
+      },
+      "latencyAlignmentMaximumErrorMilliseconds": 1.4620000123977661,
+      "inputSHA256": {
+        "result.json": "e50212d5f3cc1623c9a314bec245a3470e512e329fa547e32ed0bab516af9eb5",
+        "resources.json": "f27f90e4bd4f7513a986633f7fc48729cd670b32d4ce745d305fc47081351e9b",
+        "resource-samples.jsonl": "b9fd2bde872a9a7cc0f952ce084db20feb1b19ded30bf3894930bc002c202695",
+        "recording.json": "e452ffece7fe69dd999b1df54168d6e667e82753be658e116a53fba973ecd658",
+        "samples.jsonl": "34f852307c4e61cf0e57a64803869b7b0b75b3e33bacce0a82350a0f9ff87797",
+        "latency.json": "fdf9591b3a13a7822a24c9705b63bce2f2d2bd2d85926012f74b6cb815c03f8e"
+      },
+      "comparable": true
+    },
+    {
+      "case": "run-2-reference",
+      "repetition": 2,
+      "profile": "reference",
+      "revision": "5b839343f79a3d10f12db135c8dcfefcef9075eb",
+      "workingTreeDirty": false,
+      "passed": true,
+      "failedGates": [],
+      "images": {
+        "producer": "sha256:ed0dd0a8355f60a7168908319f68862292ad8d96cb0ab4a758921b00ac3d84e4",
+        "distributor": "sha256:ff93ecc81678d944520d9f43e59c0605538403ca8d23c60bab3787f79b3848ac",
+        "browser": "sha256:5c6437f0d018835c54ecabe14c65ad674d76073e832f2e21e327f30ccddd51ce"
+      },
+      "configuration": {
+        "edgeAuthentication": true,
+        "edgeCredentialLifetimeSeconds": 340,
+        "warmupSeconds": 40,
+        "phaseSeconds": 60,
+        "recoverySeconds": 45,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "7df329151df01019a324cbef08b0af4575a66469b1416a1b229623f8490493f0",
+        "latencyProbe": false,
+        "sourceQualityObserved": false,
+        "expectedNetworkFormat": null,
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "recording": {
+        "enabled": false
+      },
+      "runtimeHealth": {
+        "fatalErrors": 0,
+        "h264PacketizationErrors": 0,
+        "packetLossWarnings": 0,
+        "transportBufferWarnings": 0
+      },
+      "setup": {
+        "peerCreatedMilliseconds": 106,
+        "whepPostDurationMilliseconds": 476,
+        "whepPostCompletedMilliseconds": 594,
+        "connectedMilliseconds": 659,
+        "playbackReadyMilliseconds": 2417,
+        "firstDecodedFrameMilliseconds": 2421,
+        "postToConnectedMilliseconds": 65,
+        "peerToFirstDecodedFrameMilliseconds": 2315
+      },
+      "overallPlayback": {
+        "framesDecoded": 3120,
+        "framesDropped": 0,
+        "freezeCount": 0,
+        "totalFreezesDurationSeconds": 0
+      },
+      "baselineVideo": {
+        "samples": 59,
+        "durationMilliseconds": 58496,
+        "receivedBitrateKbps": 7631.326039387309,
+        "decodedFramesPerSecond": 30.002051422319475,
+        "averageDecodedQP": 7.9452991452991455,
+        "framesPerSecond": {
+          "minimum": 29,
+          "maximum": 30
+        },
+        "encoderTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "twccTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "jitterMilliseconds": {
+          "average": 1.1694915254237295,
+          "maximum": 2
+        },
+        "roundTripTimeMilliseconds": {
+          "average": 0.22033898305084748,
+          "maximum": 2
+        },
+        "nacks": 0,
+        "packetsLostNetChange": 0,
+        "framesDropped": 0,
+        "freezes": 0,
+        "freezeDurationSeconds": 0
+      },
+      "baselineResources": {
+        "browser": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.1784052631578948,
+            "p95": 0.20329999999999998,
+            "maximum": 0.20329999999999998
+          },
+          "residentBytes": {
+            "average": 370108696.2526316,
+            "p95": 374761062.4,
+            "maximum": 374761062.4,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 132
+          },
+          "network": {
+            "receivedBytes": 103000000,
+            "transmittedBytes": 172000
+          }
+        },
+        "distributor": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.1497526315789474,
+            "p95": 0.1714,
+            "maximum": 0.1714
+          },
+          "residentBytes": {
+            "average": 48559002.677894734,
+            "p95": 49922703.36,
+            "maximum": 49922703.36,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 40
+          },
+          "network": {
+            "receivedBytes": 129000000,
+            "transmittedBytes": 102000000
+          }
+        },
+        "producer": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.3471210526315789,
+            "p95": 0.3847,
+            "maximum": 0.3847
+          },
+          "residentBytes": {
+            "average": 66153556.075789474,
+            "p95": 76325847.04,
+            "maximum": 76325847.04,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 37
+          },
+          "network": {
+            "receivedBytes": 296000,
+            "transmittedBytes": 129000000
+          }
+        }
+      },
+      "stableResourceSampleCount": {
+        "browser": 19,
+        "distributor": 19,
+        "producer": 19
+      },
+      "samplesWithoutStablePhase": 0,
+      "baselineLatency": null,
+      "latencyAlignmentMaximumErrorMilliseconds": null,
+      "inputSHA256": {
+        "result.json": "982755c82e5956413ef962d639514758625e98a52abf212ec7925e4664893ed3",
+        "resources.json": "46e3dec5003ba0178b97242b55781f34052a80ebb049b3f7e65ce893fdda4dba",
+        "resource-samples.jsonl": "5ddb85cae149b42b5e3b09293b8ce9e3f84b2625e974fe301c0059ceecbfe76f",
+        "recording.json": "7187d1e8e2a4d61b1dc5dfedb22d703a462df21470e0c145365b20fb3ed467c3",
+        "samples.jsonl": "6490444c5b550ea78ed1425c2c1cde66ed0a274080c8d8fe3705ab884cd6faf8",
+        "latency.json": "4a30c9be3f878a9b2ecf59f5e0ada934c9d7e390f09c232597a46d5b4e929a50"
+      },
+      "comparable": true
+    },
+    {
+      "case": "run-2-probe",
+      "repetition": 2,
+      "profile": "probe",
+      "revision": "5b839343f79a3d10f12db135c8dcfefcef9075eb",
+      "workingTreeDirty": false,
+      "passed": true,
+      "failedGates": [],
+      "images": {
+        "producer": "sha256:ed0dd0a8355f60a7168908319f68862292ad8d96cb0ab4a758921b00ac3d84e4",
+        "distributor": "sha256:ff93ecc81678d944520d9f43e59c0605538403ca8d23c60bab3787f79b3848ac",
+        "browser": "sha256:5c6437f0d018835c54ecabe14c65ad674d76073e832f2e21e327f30ccddd51ce"
+      },
+      "configuration": {
+        "edgeAuthentication": true,
+        "edgeCredentialLifetimeSeconds": 340,
+        "warmupSeconds": 40,
+        "phaseSeconds": 60,
+        "recoverySeconds": 45,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "eace3c1bba6f697dc724a1ae690cbef4e82cf6d12c0f8fd0c3049bf1d3652ff3",
+        "latencyProbe": true,
+        "sourceQualityObserved": false,
+        "expectedNetworkFormat": null,
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "recording": {
+        "enabled": false
+      },
+      "runtimeHealth": {
+        "fatalErrors": 0,
+        "h264PacketizationErrors": 0,
+        "packetLossWarnings": 0,
+        "transportBufferWarnings": 0
+      },
+      "setup": {
+        "peerCreatedMilliseconds": 104,
+        "whepPostDurationMilliseconds": 461,
+        "whepPostCompletedMilliseconds": 578,
+        "connectedMilliseconds": 639,
+        "playbackReadyMilliseconds": 2398,
+        "firstDecodedFrameMilliseconds": 2402,
+        "postToConnectedMilliseconds": 61,
+        "peerToFirstDecodedFrameMilliseconds": 2298
+      },
+      "overallPlayback": {
+        "framesDecoded": 3120,
+        "framesDropped": 0,
+        "freezeCount": 0,
+        "totalFreezesDurationSeconds": 0
+      },
+      "baselineVideo": {
+        "samples": 59,
+        "durationMilliseconds": 58515,
+        "receivedBitrateKbps": 7575.895001281722,
+        "decodedFramesPerSecond": 29.99230966418867,
+        "averageDecodedQP": 7.941310541310541,
+        "framesPerSecond": {
+          "minimum": 29,
+          "maximum": 30
+        },
+        "encoderTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "twccTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "jitterMilliseconds": {
+          "average": 1.0338983050847466,
+          "maximum": 2
+        },
+        "roundTripTimeMilliseconds": {
+          "average": 0.05084745762711865,
+          "maximum": 1
+        },
+        "nacks": 0,
+        "packetsLostNetChange": 0,
+        "framesDropped": 0,
+        "freezes": 0,
+        "freezeDurationSeconds": 0
+      },
+      "baselineResources": {
+        "browser": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.1782789473684211,
+            "p95": 0.1895,
+            "maximum": 0.1895
+          },
+          "residentBytes": {
+            "average": 612456685.1368423,
+            "p95": 616877260.8,
+            "maximum": 616877260.8,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 133
+          },
+          "network": {
+            "receivedBytes": 102000000,
+            "transmittedBytes": 173000
+          }
+        },
+        "distributor": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.14233157894736842,
+            "p95": 0.1861,
+            "maximum": 0.1861
+          },
+          "residentBytes": {
+            "average": 58221354.57684212,
+            "p95": 59076771.84,
+            "maximum": 59076771.84,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 40
+          },
+          "network": {
+            "receivedBytes": 130000000,
+            "transmittedBytes": 102000000
+          }
+        },
+        "producer": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.3491105263157895,
+            "p95": 0.40340000000000004,
+            "maximum": 0.40340000000000004
+          },
+          "residentBytes": {
+            "average": 52483988.21052631,
+            "p95": 54106521.6,
+            "maximum": 54106521.6,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 36
+          },
+          "network": {
+            "receivedBytes": 295000,
+            "transmittedBytes": 128000000
+          }
+        }
+      },
+      "stableResourceSampleCount": {
+        "browser": 19,
+        "distributor": 19,
+        "producer": 19
+      },
+      "samplesWithoutStablePhase": 0,
+      "baselineLatency": {
+        "measurementValid": true,
+        "samples": 275,
+        "rejected": 0,
+        "omitted": 0,
+        "malformed": 0,
+        "maximumProbeMilliseconds": 3.800000011920929,
+        "latencyMilliseconds": {
+          "minimum": 43.83449998497963,
+          "median": 48.53750002384186,
+          "p95": 49.752499997615814,
+          "p99": 50.007500022649765,
+          "maximum": 50.17750000953674
+        }
+      },
+      "latencyAlignmentMaximumErrorMilliseconds": 1.4524999856948853,
+      "inputSHA256": {
+        "result.json": "8b51d4c4fd4bdff72c1bfbbfb5b41919b8fce99b29d721c95d2fec21abdb7f18",
+        "resources.json": "ce6da8c7f2d1ee941d9b0cab153cf77c6d2baa993725e8686c9f78c6f59d19b2",
+        "resource-samples.jsonl": "61cb9c84b0b4f3dc00bbe5b8a7ceeb638b8cf805d97b2bb5255b3c009a86f94f",
+        "recording.json": "7187d1e8e2a4d61b1dc5dfedb22d703a462df21470e0c145365b20fb3ed467c3",
+        "samples.jsonl": "89b3e547d88dad4a8f3cbec50578bb142b1c6619e653920398ef2006af86ebbe",
+        "latency.json": "fa63ca273d4c7ed52427873852c4644fd535a43a4d2376ed566499feff855397"
+      },
+      "comparable": true
+    },
+    {
+      "case": "run-2-record",
+      "repetition": 2,
+      "profile": "record",
+      "revision": "5b839343f79a3d10f12db135c8dcfefcef9075eb",
+      "workingTreeDirty": false,
+      "passed": false,
+      "failedGates": [
+        "runtimeMediaIntegrity"
+      ],
+      "images": {
+        "producer": "sha256:ed0dd0a8355f60a7168908319f68862292ad8d96cb0ab4a758921b00ac3d84e4",
+        "distributor": "sha256:ff93ecc81678d944520d9f43e59c0605538403ca8d23c60bab3787f79b3848ac",
+        "browser": "sha256:5c6437f0d018835c54ecabe14c65ad674d76073e832f2e21e327f30ccddd51ce"
+      },
+      "configuration": {
+        "edgeAuthentication": true,
+        "edgeCredentialLifetimeSeconds": 340,
+        "warmupSeconds": 40,
+        "phaseSeconds": 60,
+        "recoverySeconds": 45,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "7df329151df01019a324cbef08b0af4575a66469b1416a1b229623f8490493f0",
+        "latencyProbe": false,
+        "sourceQualityObserved": false,
+        "expectedNetworkFormat": null,
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "recording": {
+        "enabled": true,
+        "segmentFiles": 18,
+        "bytes": 99202940,
+        "storageLimitBytes": 536870912
+      },
+      "runtimeHealth": {
+        "fatalErrors": 1,
+        "h264PacketizationErrors": 0,
+        "packetLossWarnings": 0,
+        "transportBufferWarnings": 0
+      },
+      "setup": {
+        "peerCreatedMilliseconds": 109,
+        "whepPostDurationMilliseconds": 254,
+        "whepPostCompletedMilliseconds": 373,
+        "connectedMilliseconds": 441,
+        "playbackReadyMilliseconds": 2401,
+        "firstDecodedFrameMilliseconds": 2405,
+        "postToConnectedMilliseconds": 68,
+        "peerToFirstDecodedFrameMilliseconds": 2296
+      },
+      "overallPlayback": {
+        "framesDecoded": 3119,
+        "framesDropped": 0,
+        "freezeCount": 0,
+        "totalFreezesDurationSeconds": 0
+      },
+      "baselineVideo": {
+        "samples": 59,
+        "durationMilliseconds": 58480,
+        "receivedBitrateKbps": 7635.234336525308,
+        "decodedFramesPerSecond": 30.010259917920656,
+        "averageDecodedQP": 7.945868945868946,
+        "framesPerSecond": {
+          "minimum": 30,
+          "maximum": 30
+        },
+        "encoderTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "twccTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "jitterMilliseconds": {
+          "average": 1.1525423728813566,
+          "maximum": 2
+        },
+        "roundTripTimeMilliseconds": {
+          "average": 0.13559322033898305,
+          "maximum": 1
+        },
+        "nacks": 0,
+        "packetsLostNetChange": 0,
+        "framesDropped": 0,
+        "freezes": 0,
+        "freezeDurationSeconds": 0
+      },
+      "baselineResources": {
+        "browser": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.17013684210526311,
+            "p95": 0.1975,
+            "maximum": 0.1975
+          },
+          "residentBytes": {
+            "average": 369523701.2210526,
+            "p95": 373188198.4,
+            "maximum": 373188198.4,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 129
+          },
+          "network": {
+            "receivedBytes": 103000000,
+            "transmittedBytes": 172000
+          }
+        },
+        "distributor": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.14851052631578948,
+            "p95": 0.2133,
+            "maximum": 0.2133
+          },
+          "residentBytes": {
+            "average": 124527781.99578948,
+            "p95": 150156083.2,
+            "maximum": 150156083.2,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 40
+          },
+          "network": {
+            "receivedBytes": 129000000,
+            "transmittedBytes": 102000000
+          }
+        },
+        "producer": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.34694210526315783,
+            "p95": 0.3856,
+            "maximum": 0.3856
+          },
+          "residentBytes": {
+            "average": 52461912.92631579,
+            "p95": 53351546.88,
+            "maximum": 53351546.88,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 37
+          },
+          "network": {
+            "receivedBytes": 299000,
+            "transmittedBytes": 131000000
+          }
+        }
+      },
+      "stableResourceSampleCount": {
+        "browser": 19,
+        "distributor": 19,
+        "producer": 19
+      },
+      "samplesWithoutStablePhase": 0,
+      "baselineLatency": null,
+      "latencyAlignmentMaximumErrorMilliseconds": null,
+      "inputSHA256": {
+        "result.json": "0e8f8cf613dfc20692f1384be0f9657bf69365a7716759cffe15a9b4f28a2bc4",
+        "resources.json": "e9ed02510b9fbdf728e4668136037734b86554e746f8b9c26cabafe41ae4a482",
+        "resource-samples.jsonl": "8b292b2c185b331b03e89f7d14ec52a5577edf391fe30d96e562042f65f5eda5",
+        "recording.json": "fd85c63f278501bdb3fff5dcba77b826018709f34417dcef94206b80ba9c5a63",
+        "samples.jsonl": "071b7802938fb5892a506ebaa6c8621b8fd60994c930090ae370e014674320ef",
+        "latency.json": "4a30c9be3f878a9b2ecf59f5e0ada934c9d7e390f09c232597a46d5b4e929a50"
+      },
+      "comparable": true
+    },
+    {
+      "case": "run-2-probe-record",
+      "repetition": 2,
+      "profile": "probe-record",
+      "revision": "5b839343f79a3d10f12db135c8dcfefcef9075eb",
+      "workingTreeDirty": false,
+      "passed": false,
+      "failedGates": [
+        "playback"
+      ],
+      "images": {
+        "producer": "sha256:ed0dd0a8355f60a7168908319f68862292ad8d96cb0ab4a758921b00ac3d84e4",
+        "distributor": "sha256:ff93ecc81678d944520d9f43e59c0605538403ca8d23c60bab3787f79b3848ac",
+        "browser": "sha256:5c6437f0d018835c54ecabe14c65ad674d76073e832f2e21e327f30ccddd51ce"
+      },
+      "configuration": {
+        "edgeAuthentication": true,
+        "edgeCredentialLifetimeSeconds": 340,
+        "warmupSeconds": 40,
+        "phaseSeconds": 60,
+        "recoverySeconds": 45,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "eace3c1bba6f697dc724a1ae690cbef4e82cf6d12c0f8fd0c3049bf1d3652ff3",
+        "latencyProbe": true,
+        "sourceQualityObserved": false,
+        "expectedNetworkFormat": null,
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "recording": {
+        "enabled": true,
+        "segmentFiles": 18,
+        "bytes": 98471476,
+        "storageLimitBytes": 536870912
+      },
+      "runtimeHealth": {
+        "fatalErrors": 0,
+        "h264PacketizationErrors": 0,
+        "packetLossWarnings": 0,
+        "transportBufferWarnings": 0
+      },
+      "setup": {
+        "peerCreatedMilliseconds": 112,
+        "whepPostDurationMilliseconds": 471,
+        "whepPostCompletedMilliseconds": 596,
+        "connectedMilliseconds": 651,
+        "playbackReadyMilliseconds": 2423,
+        "firstDecodedFrameMilliseconds": 2426,
+        "postToConnectedMilliseconds": 55,
+        "peerToFirstDecodedFrameMilliseconds": 2314
+      },
+      "overallPlayback": {
+        "framesDecoded": 3119,
+        "framesDropped": 0,
+        "freezeCount": 1,
+        "totalFreezesDurationSeconds": 0.22
+      },
+      "baselineVideo": {
+        "samples": 59,
+        "durationMilliseconds": 58489,
+        "receivedBitrateKbps": 7578.5145240985485,
+        "decodedFramesPerSecond": 30.00564208654619,
+        "averageDecodedQP": 7.944729344729344,
+        "framesPerSecond": {
+          "minimum": 27,
+          "maximum": 33
+        },
+        "encoderTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "twccTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "jitterMilliseconds": {
+          "average": 1.186440677966102,
+          "maximum": 13
+        },
+        "roundTripTimeMilliseconds": {
+          "average": 0,
+          "maximum": 0
+        },
+        "nacks": 0,
+        "packetsLostNetChange": 0,
+        "framesDropped": 0,
+        "freezes": 1,
+        "freezeDurationSeconds": 0.22
+      },
+      "baselineResources": {
+        "browser": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.17961052631578944,
+            "p95": 0.1975,
+            "maximum": 0.1975
+          },
+          "residentBytes": {
+            "average": 610663068.2947369,
+            "p95": 617716121.6,
+            "maximum": 617716121.6,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 131
+          },
+          "network": {
+            "receivedBytes": 101000000,
+            "transmittedBytes": 176000
+          }
+        },
+        "distributor": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.15180526315789475,
+            "p95": 0.17129999999999998,
+            "maximum": 0.17129999999999998
+          },
+          "residentBytes": {
+            "average": 132495855.83157893,
+            "p95": 159383552,
+            "maximum": 159383552,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 41
+          },
+          "network": {
+            "receivedBytes": 130000000,
+            "transmittedBytes": 102000000
+          }
+        },
+        "producer": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.3465894736842105,
+            "p95": 0.3636,
+            "maximum": 0.3636
+          },
+          "residentBytes": {
+            "average": 59346642.18947368,
+            "p95": 61100523.52,
+            "maximum": 61100523.52,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 37
+          },
+          "network": {
+            "receivedBytes": 298000,
+            "transmittedBytes": 130000000
+          }
+        }
+      },
+      "stableResourceSampleCount": {
+        "browser": 19,
+        "distributor": 19,
+        "producer": 19
+      },
+      "samplesWithoutStablePhase": 0,
+      "baselineLatency": {
+        "measurementValid": true,
+        "samples": 274,
+        "rejected": 0,
+        "omitted": 0,
+        "malformed": 0,
+        "maximumProbeMilliseconds": 19.200000017881393,
+        "latencyMilliseconds": {
+          "minimum": 33.91049998998642,
+          "median": 41.97749999165535,
+          "p95": 56.81649997830391,
+          "p99": 84.75349998474121,
+          "maximum": 238.68549999594688
+        }
+      },
+      "latencyAlignmentMaximumErrorMilliseconds": 1.2975000143051147,
+      "inputSHA256": {
+        "result.json": "a6aeec70759466eb15ac5ea27efedc57f922d7484650a9811254ca943a752c53",
+        "resources.json": "6a2765e383d1b683368f7cbe3ab66af366d7764a7127079b49ccaaa1fcd0cc18",
+        "resource-samples.jsonl": "c8e801e3e4ddfb241f83b0ce4ec47610b9b9d7bcede0509865d840686066d6e0",
+        "recording.json": "e9970ccb84ee54babf2e85047446791514522407e00f1eb41a1e7b4a12178598",
+        "samples.jsonl": "03c434d7e746b45474f9b63fc5a802ea63626a6924eaa8304211661da58273cb",
+        "latency.json": "64299b4839530a018fbded8566fff91b1dbc689a3e265ac3c1689288b2fb5301"
+      },
+      "comparable": true
+    },
+    {
+      "case": "run-3-reference",
+      "repetition": 3,
+      "profile": "reference",
+      "revision": "5b839343f79a3d10f12db135c8dcfefcef9075eb",
+      "workingTreeDirty": false,
+      "passed": true,
+      "failedGates": [],
+      "images": {
+        "producer": "sha256:ed0dd0a8355f60a7168908319f68862292ad8d96cb0ab4a758921b00ac3d84e4",
+        "distributor": "sha256:ff93ecc81678d944520d9f43e59c0605538403ca8d23c60bab3787f79b3848ac",
+        "browser": "sha256:5c6437f0d018835c54ecabe14c65ad674d76073e832f2e21e327f30ccddd51ce"
+      },
+      "configuration": {
+        "edgeAuthentication": true,
+        "edgeCredentialLifetimeSeconds": 340,
+        "warmupSeconds": 40,
+        "phaseSeconds": 60,
+        "recoverySeconds": 45,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "7df329151df01019a324cbef08b0af4575a66469b1416a1b229623f8490493f0",
+        "latencyProbe": false,
+        "sourceQualityObserved": false,
+        "expectedNetworkFormat": null,
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "recording": {
+        "enabled": false
+      },
+      "runtimeHealth": {
+        "fatalErrors": 0,
+        "h264PacketizationErrors": 0,
+        "packetLossWarnings": 0,
+        "transportBufferWarnings": 0
+      },
+      "setup": {
+        "peerCreatedMilliseconds": 118,
+        "whepPostDurationMilliseconds": 661,
+        "whepPostCompletedMilliseconds": 790,
+        "connectedMilliseconds": 848,
+        "playbackReadyMilliseconds": 2611,
+        "firstDecodedFrameMilliseconds": 2614,
+        "postToConnectedMilliseconds": 58,
+        "peerToFirstDecodedFrameMilliseconds": 2496
+      },
+      "overallPlayback": {
+        "framesDecoded": 3118,
+        "framesDropped": 0,
+        "freezeCount": 0,
+        "totalFreezesDurationSeconds": 0
+      },
+      "baselineVideo": {
+        "samples": 60,
+        "durationMilliseconds": 59476,
+        "receivedBitrateKbps": 7627.237339431031,
+        "decodedFramesPerSecond": 29.99529221871007,
+        "averageDecodedQP": 7.946188340807175,
+        "framesPerSecond": {
+          "minimum": 29,
+          "maximum": 31
+        },
+        "encoderTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "twccTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "jitterMilliseconds": {
+          "average": 0.983333333333334,
+          "maximum": 2
+        },
+        "roundTripTimeMilliseconds": {
+          "average": 0.1,
+          "maximum": 1
+        },
+        "nacks": 0,
+        "packetsLostNetChange": 0,
+        "framesDropped": 0,
+        "freezes": 0,
+        "freezeDurationSeconds": 0
+      },
+      "baselineResources": {
+        "browser": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.1674631578947369,
+            "p95": 0.17980000000000002,
+            "maximum": 0.17980000000000002
+          },
+          "residentBytes": {
+            "average": 393955522.02105266,
+            "p95": 398354022.4,
+            "maximum": 398354022.4,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 138
+          },
+          "network": {
+            "receivedBytes": 102000000,
+            "transmittedBytes": 174000
+          }
+        },
+        "distributor": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.1364842105263158,
+            "p95": 0.151,
+            "maximum": 0.151
+          },
+          "residentBytes": {
+            "average": 63758939.62105263,
+            "p95": 65284341.76,
+            "maximum": 65284341.76,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 39
+          },
+          "network": {
+            "receivedBytes": 130000000,
+            "transmittedBytes": 102000000
+          }
+        },
+        "producer": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.36057894736842105,
+            "p95": 0.3711,
+            "maximum": 0.3711
+          },
+          "residentBytes": {
+            "average": 102705811.67157893,
+            "p95": 105696460.8,
+            "maximum": 105696460.8,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 37
+          },
+          "network": {
+            "receivedBytes": 295000,
+            "transmittedBytes": 129000000
+          }
+        }
+      },
+      "stableResourceSampleCount": {
+        "browser": 19,
+        "distributor": 19,
+        "producer": 19
+      },
+      "samplesWithoutStablePhase": 3,
+      "baselineLatency": null,
+      "latencyAlignmentMaximumErrorMilliseconds": null,
+      "inputSHA256": {
+        "result.json": "a079b173e38b4cde8802d90af08c33b90d161e6f4c7b513589a4f87fbb84ca16",
+        "resources.json": "4872ba0ad64718a7b4a49b005c7bf3ded31c85a3d256150574a97649b1658a3f",
+        "resource-samples.jsonl": "70fb0cb0aec3b493f8cc6670ce425d4ed7e1a29cbe034aa1088cac61a261c106",
+        "recording.json": "7187d1e8e2a4d61b1dc5dfedb22d703a462df21470e0c145365b20fb3ed467c3",
+        "samples.jsonl": "cc36dd41d2eab0dc5d3bfcc0a016fea19b674a06208b9c51d0d2c7ac20cba508",
+        "latency.json": "4a30c9be3f878a9b2ecf59f5e0ada934c9d7e390f09c232597a46d5b4e929a50"
+      },
+      "comparable": true
+    },
+    {
+      "case": "run-3-probe",
+      "repetition": 3,
+      "profile": "probe",
+      "revision": "5b839343f79a3d10f12db135c8dcfefcef9075eb",
+      "workingTreeDirty": false,
+      "passed": true,
+      "failedGates": [],
+      "images": {
+        "producer": "sha256:ed0dd0a8355f60a7168908319f68862292ad8d96cb0ab4a758921b00ac3d84e4",
+        "distributor": "sha256:ff93ecc81678d944520d9f43e59c0605538403ca8d23c60bab3787f79b3848ac",
+        "browser": "sha256:5c6437f0d018835c54ecabe14c65ad674d76073e832f2e21e327f30ccddd51ce"
+      },
+      "configuration": {
+        "edgeAuthentication": true,
+        "edgeCredentialLifetimeSeconds": 340,
+        "warmupSeconds": 40,
+        "phaseSeconds": 60,
+        "recoverySeconds": 45,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "eace3c1bba6f697dc724a1ae690cbef4e82cf6d12c0f8fd0c3049bf1d3652ff3",
+        "latencyProbe": true,
+        "sourceQualityObserved": false,
+        "expectedNetworkFormat": null,
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "recording": {
+        "enabled": false
+      },
+      "runtimeHealth": {
+        "fatalErrors": 0,
+        "h264PacketizationErrors": 0,
+        "packetLossWarnings": 0,
+        "transportBufferWarnings": 0
+      },
+      "setup": {
+        "peerCreatedMilliseconds": 114,
+        "whepPostDurationMilliseconds": 454,
+        "whepPostCompletedMilliseconds": 580,
+        "connectedMilliseconds": 633,
+        "playbackReadyMilliseconds": 2407,
+        "firstDecodedFrameMilliseconds": 2411,
+        "postToConnectedMilliseconds": 53,
+        "peerToFirstDecodedFrameMilliseconds": 2297
+      },
+      "overallPlayback": {
+        "framesDecoded": 3119,
+        "framesDropped": 0,
+        "freezeCount": 0,
+        "totalFreezesDurationSeconds": 0
+      },
+      "baselineVideo": {
+        "samples": 59,
+        "durationMilliseconds": 58485,
+        "receivedBitrateKbps": 7574.7597503633415,
+        "decodedFramesPerSecond": 30.007694280584765,
+        "averageDecodedQP": 7.943019943019943,
+        "framesPerSecond": {
+          "minimum": 29,
+          "maximum": 31
+        },
+        "encoderTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "twccTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "jitterMilliseconds": {
+          "average": 1.084745762711865,
+          "maximum": 2
+        },
+        "roundTripTimeMilliseconds": {
+          "average": 0.0847457627118644,
+          "maximum": 1
+        },
+        "nacks": 0,
+        "packetsLostNetChange": 0,
+        "framesDropped": 0,
+        "freezes": 0,
+        "freezeDurationSeconds": 0
+      },
+      "baselineResources": {
+        "browser": {
+          "samples": 20,
+          "cpuCoreRatio": {
+            "average": 0.17763,
+            "p95": 0.1898,
+            "maximum": 0.1977
+          },
+          "residentBytes": {
+            "average": 616746188.8000001,
+            "p95": 619918131.2,
+            "maximum": 620442419.2,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 131
+          },
+          "network": {
+            "receivedBytes": 103000000,
+            "transmittedBytes": 174000
+          }
+        },
+        "distributor": {
+          "samples": 20,
+          "cpuCoreRatio": {
+            "average": 0.13878,
+            "p95": 0.1464,
+            "maximum": 0.1467
+          },
+          "residentBytes": {
+            "average": 61390454.784,
+            "p95": 62358814.72,
+            "maximum": 62379786.24,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 40
+          },
+          "network": {
+            "receivedBytes": 129000000,
+            "transmittedBytes": 102000000
+          }
+        },
+        "producer": {
+          "samples": 20,
+          "cpuCoreRatio": {
+            "average": 0.355015,
+            "p95": 0.3619,
+            "maximum": 0.3669
+          },
+          "residentBytes": {
+            "average": 53280243.712,
+            "p95": 54169436.16,
+            "maximum": 54484008.96,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 37
+          },
+          "network": {
+            "receivedBytes": 301000,
+            "transmittedBytes": 131000000
+          }
+        }
+      },
+      "stableResourceSampleCount": {
+        "browser": 20,
+        "distributor": 20,
+        "producer": 20
+      },
+      "samplesWithoutStablePhase": 0,
+      "baselineLatency": {
+        "measurementValid": true,
+        "samples": 272,
+        "rejected": 0,
+        "omitted": 0,
+        "malformed": 0,
+        "maximumProbeMilliseconds": 6.4000000059604645,
+        "latencyMilliseconds": {
+          "minimum": 37.35999998450279,
+          "median": 41.796999990940094,
+          "p95": 57.016999989748,
+          "p99": 57.33500000834465,
+          "maximum": 57.34400001168251
+        }
+      },
+      "latencyAlignmentMaximumErrorMilliseconds": 1.3300000131130219,
+      "inputSHA256": {
+        "result.json": "6f2f0dc667c1d1d3678aeff4a29b744cb44ed5bca29dde43af8f46f2d2ed25c4",
+        "resources.json": "e9f15ec3adfaf64190e9c58cffae7c6805df9753a3f890ba120b77d67a3d6585",
+        "resource-samples.jsonl": "efad6a01d17e7652f23d05ece53f60f51f6c9d6c3e16031e9d3f3b7fb811735b",
+        "recording.json": "7187d1e8e2a4d61b1dc5dfedb22d703a462df21470e0c145365b20fb3ed467c3",
+        "samples.jsonl": "73e7fa087a38c9946f0d1e9a59bb242ff9551b14d126c62d8715d4169f68c243",
+        "latency.json": "f98736efda5fa558a0ba036de8745b6be7800be1710e3b7eaca453f1cc7c9e67"
+      },
+      "comparable": true
+    },
+    {
+      "case": "run-3-record",
+      "repetition": 3,
+      "profile": "record",
+      "revision": "5b839343f79a3d10f12db135c8dcfefcef9075eb",
+      "workingTreeDirty": false,
+      "passed": true,
+      "failedGates": [],
+      "images": {
+        "producer": "sha256:ed0dd0a8355f60a7168908319f68862292ad8d96cb0ab4a758921b00ac3d84e4",
+        "distributor": "sha256:ff93ecc81678d944520d9f43e59c0605538403ca8d23c60bab3787f79b3848ac",
+        "browser": "sha256:5c6437f0d018835c54ecabe14c65ad674d76073e832f2e21e327f30ccddd51ce"
+      },
+      "configuration": {
+        "edgeAuthentication": true,
+        "edgeCredentialLifetimeSeconds": 340,
+        "warmupSeconds": 40,
+        "phaseSeconds": 60,
+        "recoverySeconds": 45,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "7df329151df01019a324cbef08b0af4575a66469b1416a1b229623f8490493f0",
+        "latencyProbe": false,
+        "sourceQualityObserved": false,
+        "expectedNetworkFormat": null,
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "recording": {
+        "enabled": true,
+        "segmentFiles": 18,
+        "bytes": 98869566,
+        "storageLimitBytes": 536870912
+      },
+      "runtimeHealth": {
+        "fatalErrors": 0,
+        "h264PacketizationErrors": 0,
+        "packetLossWarnings": 0,
+        "transportBufferWarnings": 0
+      },
+      "setup": {
+        "peerCreatedMilliseconds": 101,
+        "whepPostDurationMilliseconds": 444,
+        "whepPostCompletedMilliseconds": 557,
+        "connectedMilliseconds": 630,
+        "playbackReadyMilliseconds": 2378,
+        "firstDecodedFrameMilliseconds": 2381,
+        "postToConnectedMilliseconds": 73,
+        "peerToFirstDecodedFrameMilliseconds": 2280
+      },
+      "overallPlayback": {
+        "framesDecoded": 3117,
+        "framesDropped": 0,
+        "freezeCount": 0,
+        "totalFreezesDurationSeconds": 0
+      },
+      "baselineVideo": {
+        "samples": 59,
+        "durationMilliseconds": 58466,
+        "receivedBitrateKbps": 7626.718160982451,
+        "decodedFramesPerSecond": 30.000342079157118,
+        "averageDecodedQP": 7.9469783352337515,
+        "framesPerSecond": {
+          "minimum": 29,
+          "maximum": 31
+        },
+        "encoderTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "twccTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "jitterMilliseconds": {
+          "average": 1.2033898305084754,
+          "maximum": 2
+        },
+        "roundTripTimeMilliseconds": {
+          "average": 0.1016949152542373,
+          "maximum": 1
+        },
+        "nacks": 0,
+        "packetsLostNetChange": 0,
+        "framesDropped": 0,
+        "freezes": 0,
+        "freezeDurationSeconds": 0
+      },
+      "baselineResources": {
+        "browser": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.16704736842105258,
+            "p95": 0.1805,
+            "maximum": 0.1805
+          },
+          "residentBytes": {
+            "average": 371637409.68421054,
+            "p95": 377067929.6,
+            "maximum": 377067929.6,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 133
+          },
+          "network": {
+            "receivedBytes": 103000000,
+            "transmittedBytes": 173000
+          }
+        },
+        "distributor": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.14259999999999998,
+            "p95": 0.17600000000000002,
+            "maximum": 0.17600000000000002
+          },
+          "residentBytes": {
+            "average": 129352335.35999998,
+            "p95": 157391257.6,
+            "maximum": 157391257.6,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 40
+          },
+          "network": {
+            "receivedBytes": 129000000,
+            "transmittedBytes": 101000000
+          }
+        },
+        "producer": {
+          "samples": 19,
+          "cpuCoreRatio": {
+            "average": 0.35869473684210534,
+            "p95": 0.3699,
+            "maximum": 0.3699
+          },
+          "residentBytes": {
+            "average": 70463755.31789473,
+            "p95": 78276198.4,
+            "maximum": 78276198.4,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 37
+          },
+          "network": {
+            "receivedBytes": 299000,
+            "transmittedBytes": 130000000
+          }
+        }
+      },
+      "stableResourceSampleCount": {
+        "browser": 19,
+        "distributor": 19,
+        "producer": 19
+      },
+      "samplesWithoutStablePhase": 0,
+      "baselineLatency": null,
+      "latencyAlignmentMaximumErrorMilliseconds": null,
+      "inputSHA256": {
+        "result.json": "97d87ef7d2482687b757486fa5a85c006a09024cc70e0adc5a982d9eed28efec",
+        "resources.json": "347eb415b797289ff3a1ec78a8c906c4e27b6cc605aee338f338993285949b3b",
+        "resource-samples.jsonl": "d9f1559855997191de8dae8566ca785e36de02345c0986df31534b56b63ff71d",
+        "recording.json": "fa4af489feb4526fb71ab45cf794803707d309ea879280e5f66e274d7008f44a",
+        "samples.jsonl": "f66beaa3a2fc7ce4e8d95aae51d970b2dbbcf28dbc74dcc7a862e8ebc7dffd58",
+        "latency.json": "4a30c9be3f878a9b2ecf59f5e0ada934c9d7e390f09c232597a46d5b4e929a50"
+      },
+      "comparable": true
+    },
+    {
+      "case": "run-3-probe-record",
+      "repetition": 3,
+      "profile": "probe-record",
+      "revision": "5b839343f79a3d10f12db135c8dcfefcef9075eb",
+      "workingTreeDirty": false,
+      "passed": true,
+      "failedGates": [],
+      "images": {
+        "producer": "sha256:ed0dd0a8355f60a7168908319f68862292ad8d96cb0ab4a758921b00ac3d84e4",
+        "distributor": "sha256:ff93ecc81678d944520d9f43e59c0605538403ca8d23c60bab3787f79b3848ac",
+        "browser": "sha256:5c6437f0d018835c54ecabe14c65ad674d76073e832f2e21e327f30ccddd51ce"
+      },
+      "configuration": {
+        "edgeAuthentication": true,
+        "edgeCredentialLifetimeSeconds": 340,
+        "warmupSeconds": 40,
+        "phaseSeconds": 60,
+        "recoverySeconds": 45,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "eace3c1bba6f697dc724a1ae690cbef4e82cf6d12c0f8fd0c3049bf1d3652ff3",
+        "latencyProbe": true,
+        "sourceQualityObserved": false,
+        "expectedNetworkFormat": null,
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "recording": {
+        "enabled": true,
+        "segmentFiles": 18,
+        "bytes": 98564996,
+        "storageLimitBytes": 536870912
+      },
+      "runtimeHealth": {
+        "fatalErrors": 0,
+        "h264PacketizationErrors": 0,
+        "packetLossWarnings": 0,
+        "transportBufferWarnings": 0
+      },
+      "setup": {
+        "peerCreatedMilliseconds": 113,
+        "whepPostDurationMilliseconds": 438,
+        "whepPostCompletedMilliseconds": 564,
+        "connectedMilliseconds": 625,
+        "playbackReadyMilliseconds": 2390,
+        "firstDecodedFrameMilliseconds": 2393,
+        "postToConnectedMilliseconds": 61,
+        "peerToFirstDecodedFrameMilliseconds": 2280
+      },
+      "overallPlayback": {
+        "framesDecoded": 3119,
+        "framesDropped": 0,
+        "freezeCount": 0,
+        "totalFreezesDurationSeconds": 0
+      },
+      "baselineVideo": {
+        "samples": 59,
+        "durationMilliseconds": 58489,
+        "receivedBitrateKbps": 7571.741695019577,
+        "decodedFramesPerSecond": 29.988544854588042,
+        "averageDecodedQP": 7.93842645381984,
+        "framesPerSecond": {
+          "minimum": 29,
+          "maximum": 31
+        },
+        "encoderTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "twccTargetKbps": {
+          "first": 8000,
+          "last": 8000,
+          "minimum": 8000,
+          "maximum": 8000,
+          "medianLast10Seconds": 8000,
+          "sustainedMinimumLast10Seconds": 8000
+        },
+        "jitterMilliseconds": {
+          "average": 1.118644067796611,
+          "maximum": 2
+        },
+        "roundTripTimeMilliseconds": {
+          "average": 0,
+          "maximum": 0
+        },
+        "nacks": 0,
+        "packetsLostNetChange": 0,
+        "framesDropped": 0,
+        "freezes": 0,
+        "freezeDurationSeconds": 0
+      },
+      "baselineResources": {
+        "browser": {
+          "samples": 20,
+          "cpuCoreRatio": {
+            "average": 0.177085,
+            "p95": 0.1826,
+            "maximum": 0.1889
+          },
+          "residentBytes": {
+            "average": 619121213.4399998,
+            "p95": 623063859.2,
+            "maximum": 623273574.4,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 131
+          },
+          "network": {
+            "receivedBytes": 104000000,
+            "transmittedBytes": 179000
+          }
+        },
+        "distributor": {
+          "samples": 20,
+          "cpuCoreRatio": {
+            "average": 0.14016999999999996,
+            "p95": 0.1457,
+            "maximum": 0.1467
+          },
+          "residentBytes": {
+            "average": 137562685.44,
+            "p95": 162948710.4,
+            "maximum": 165045862.4,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 40
+          },
+          "network": {
+            "receivedBytes": 131000000,
+            "transmittedBytes": 103000000
+          }
+        },
+        "producer": {
+          "samples": 20,
+          "cpuCoreRatio": {
+            "average": 0.36069500000000004,
+            "p95": 0.3697,
+            "maximum": 0.3701
+          },
+          "residentBytes": {
+            "average": 74667524.096,
+            "p95": 78213283.84,
+            "maximum": 78349598.72,
+            "sources": [
+              "container-cgroup"
+            ]
+          },
+          "tasks": {
+            "maximum": 37
+          },
+          "network": {
+            "receivedBytes": 304000,
+            "transmittedBytes": 133000000
+          }
+        }
+      },
+      "stableResourceSampleCount": {
+        "browser": 20,
+        "distributor": 20,
+        "producer": 20
+      },
+      "samplesWithoutStablePhase": 0,
+      "baselineLatency": {
+        "measurementValid": true,
+        "samples": 278,
+        "rejected": 0,
+        "omitted": 0,
+        "malformed": 0,
+        "maximumProbeMilliseconds": 3.199999988079071,
+        "latencyMilliseconds": {
+          "minimum": 42.65999999642372,
+          "median": 51.10799998044968,
+          "p95": 52.59499999880791,
+          "p99": 52.78700000047684,
+          "maximum": 52.90099999308586
+        }
+      },
+      "latencyAlignmentMaximumErrorMilliseconds": 1.354999989271164,
+      "inputSHA256": {
+        "result.json": "5ad809ff782618534d22ca600816a16bf8f9049b191ee0b18ac54073c3f9b4a0",
+        "resources.json": "d3398ed0a5ecd91a5e2b1e5ffc471cf92eda2f04c65e79e437e2d53b6f9cbc4c",
+        "resource-samples.jsonl": "53ee9687b444cdd388021bcd12dba29e1d64270cc4e9b303523d6a7474a60fad",
+        "recording.json": "c963f91a479cefcb8a29cf32ab53067a6f2df56d43e21e3a986c502beef423ae",
+        "samples.jsonl": "01459ad996b2ef2812e8e5617cc65ede631fc9a3cc016995d84955a35fd5e156",
+        "latency.json": "6e55181533e03499441621fdda607220fdb110b554365e9726f9a019f547f398"
+      },
+      "comparable": true
+    }
+  ],
+  "comparisons": {
+    "probe_without_recording": {
+      "pairs": 3,
+      "allPairsComparable": true,
+      "allPairsPassDelivery": true,
+      "meanCPUCoreDelta": {
+        "producer": {
+          "minimum": -0.0055639473684210294,
+          "median": -0.000363157894736843,
+          "maximum": 0.0019894736842105964,
+          "values": [
+            -0.000363157894736843,
+            0.0019894736842105964,
+            -0.0055639473684210294
+          ]
+        },
+        "distributor": {
+          "minimum": -0.007421052631578967,
+          "median": -0.005047368421052606,
+          "maximum": 0.0022957894736841955,
+          "values": [
+            -0.005047368421052606,
+            -0.007421052631578967,
+            0.0022957894736841955
+          ]
+        },
+        "browser": {
+          "minimum": -0.0001263157894736966,
+          "median": 0.006905263157894748,
+          "maximum": 0.010166842105263113,
+          "values": [
+            0.006905263157894748,
+            -0.0001263157894736966,
+            0.010166842105263113
+          ]
+        }
+      },
+      "peakResidentBytesDelta": {
+        "producer": {
+          "minimum": -51212451.839999996,
+          "median": -22219325.440000005,
+          "maximum": -4110417.920000002,
+          "values": [
+            -4110417.920000002,
+            -22219325.440000005,
+            -51212451.839999996
+          ]
+        },
+        "distributor": {
+          "minimum": -2904555.519999996,
+          "median": 2579496.960000001,
+          "maximum": 9154068.480000004,
+          "values": [
+            2579496.960000001,
+            9154068.480000004,
+            -2904555.519999996
+          ]
+        },
+        "browser": {
+          "minimum": 222088396.80000007,
+          "median": 240648192.0,
+          "maximum": 242116198.39999998,
+          "values": [
+            240648192.0,
+            242116198.39999998,
+            222088396.80000007
+          ]
+        }
+      }
+    },
+    "recording_without_probe": {
+      "pairs": 3,
+      "allPairsComparable": true,
+      "allPairsPassDelivery": false,
+      "meanCPUCoreDelta": {
+        "producer": {
+          "minimum": -0.013794736842105304,
+          "median": -0.0018842105263157105,
+          "maximum": -0.0001789473684210563,
+          "values": [
+            -0.013794736842105304,
+            -0.0001789473684210563,
+            -0.0018842105263157105
+          ]
+        },
+        "distributor": {
+          "minimum": -0.0012421052631579055,
+          "median": 0.006115789473684186,
+          "maximum": 0.008873684210526311,
+          "values": [
+            0.008873684210526311,
+            -0.0012421052631579055,
+            0.006115789473684186
+          ]
+        },
+        "browser": {
+          "minimum": -0.008268421052631675,
+          "median": -0.002247368421052609,
+          "maximum": -0.00041578947368431374,
+          "values": [
+            -0.002247368421052609,
+            -0.008268421052631675,
+            -0.00041578947368431374
+          ]
+        }
+      },
+      "peakResidentBytesDelta": {
+        "producer": {
+          "minimum": -27420262.39999999,
+          "median": -22974300.160000004,
+          "maximum": 18140364.800000004,
+          "values": [
+            18140364.800000004,
+            -22974300.160000004,
+            -27420262.39999999
+          ]
+        },
+        "distributor": {
+          "minimum": 92106915.84,
+          "median": 100233379.83999999,
+          "maximum": 102582190.08000001,
+          "values": [
+            102582190.08000001,
+            100233379.83999999,
+            92106915.84
+          ]
+        },
+        "browser": {
+          "minimum": -21286092.799999952,
+          "median": -1572864.0,
+          "maximum": -1468006.3999999762,
+          "values": [
+            -1468006.3999999762,
+            -1572864.0,
+            -21286092.799999952
+          ]
+        }
+      }
+    },
+    "recording_with_probe": {
+      "pairs": 3,
+      "allPairsComparable": true,
+      "allPairsPassDelivery": false,
+      "meanCPUCoreDelta": {
+        "producer": {
+          "minimum": -0.005473684210526242,
+          "median": -0.0025210526315789794,
+          "maximum": 0.005680000000000018,
+          "values": [
+            -0.005473684210526242,
+            -0.0025210526315789794,
+            0.005680000000000018
+          ]
+        },
+        "distributor": {
+          "minimum": 0.0013899999999999746,
+          "median": 0.009473684210526329,
+          "maximum": 0.009505263157894739,
+          "values": [
+            0.009505263157894739,
+            0.009473684210526329,
+            0.0013899999999999746
+          ]
+        },
+        "browser": {
+          "minimum": -0.0005450000000000177,
+          "median": 0.0013315789473683504,
+          "maximum": 0.0025789473684210695,
+          "values": [
+            0.0025789473684210695,
+            0.0013315789473683504,
+            -0.0005450000000000177
+          ]
+        }
+      },
+      "peakResidentBytesDelta": {
+        "producer": {
+          "minimum": 6994001.920000002,
+          "median": 22817013.759999998,
+          "maximum": 23865589.759999998,
+          "values": [
+            22817013.759999998,
+            6994001.920000002,
+            23865589.759999998
+          ]
+        },
+        "distributor": {
+          "minimum": 96227819.52000001,
+          "median": 100306780.16,
+          "maximum": 102666076.16,
+          "values": [
+            96227819.52000001,
+            100306780.16,
+            102666076.16
+          ]
+        },
+        "browser": {
+          "minimum": 838860.8000000715,
+          "median": 2831155.1999999285,
+          "maximum": 4613734.399999976,
+          "values": [
+            4613734.399999976,
+            838860.8000000715,
+            2831155.1999999285
+          ]
+        }
+      },
+      "latencyMillisecondsDelta": {
+        "median": {
+          "minimum": -13.900499999523163,
+          "median": -6.560000032186508,
+          "maximum": 9.310999989509583,
+          "values": [
+            -13.900499999523163,
+            -6.560000032186508,
+            9.310999989509583
+          ]
+        },
+        "p95": {
+          "minimum": -15.814500004053116,
+          "median": -4.421999990940094,
+          "maximum": 7.063999980688095,
+          "values": [
+            -15.814500004053116,
+            7.063999980688095,
+            -4.421999990940094
+          ]
+        },
+        "maximum": {
+          "minimum": -15.881500005722046,
+          "median": -4.443000018596649,
+          "maximum": 188.50799998641014,
+          "values": [
+            -15.881500005722046,
+            188.50799998641014,
+            -4.443000018596649
+          ]
+        }
+      }
+    },
+    "probe_with_recording": {
+      "pairs": 3,
+      "allPairsComparable": true,
+      "allPairsPassDelivery": false,
+      "meanCPUCoreDelta": {
+        "producer": {
+          "minimum": -0.00035263157894732666,
+          "median": 0.0020002631578946994,
+          "maximum": 0.00795789473684222,
+          "values": [
+            0.00795789473684222,
+            -0.00035263157894732666,
+            0.0020002631578946994
+          ]
+        },
+        "distributor": {
+          "minimum": -0.0044157894736841785,
+          "median": -0.0024300000000000155,
+          "maximum": 0.003294736842105267,
+          "values": [
+            -0.0044157894736841785,
+            0.003294736842105267,
+            -0.0024300000000000155
+          ]
+        },
+        "browser": {
+          "minimum": 0.009473684210526329,
+          "median": 0.010037631578947409,
+          "maximum": 0.011731578947368426,
+          "values": [
+            0.011731578947368426,
+            0.009473684210526329,
+            0.010037631578947409
+          ]
+        }
+      },
+      "peakResidentBytesDelta": {
+        "producer": {
+          "minimum": 73400.31999999285,
+          "median": 566231.0399999917,
+          "maximum": 7748976.640000001,
+          "values": [
+            566231.0399999917,
+            7748976.640000001,
+            73400.31999999285
+          ]
+        },
+        "distributor": {
+          "minimum": -3774873.599999994,
+          "median": 7654604.800000012,
+          "maximum": 9227468.800000012,
+          "values": [
+            -3774873.599999994,
+            9227468.800000012,
+            7654604.800000012
+          ]
+        },
+        "browser": {
+          "minimum": 244527923.20000005,
+          "median": 246205644.79999995,
+          "maximum": 246729932.79999995,
+          "values": [
+            246729932.79999995,
+            244527923.20000005,
+            246205644.79999995
+          ]
+        }
+      }
+    }
+  },
+  "limitations": [
+    "Measurements are specific to this shared macOS/Docker Linux host and synthetic x264 720p30 source; they are not embedded-hardware resource guarantees.",
+    "Three repetitions per condition provide ranges of paired observations, not a formal confidence interval or universal regression budget.",
+    "CPU ratios are fractions of one logical core; source, distribution and browser costs are reported separately.",
+    "Memory uses the measurement source reported per component. Docker cgroup usage can include recording tmpfs pages; process PSS/RSS fallback excludes the file storage, whose bytes are reported separately.",
+    "Negative paired differences are retained and indicate variation; they are not evidence that enabling a feature reduces its inherent cost.",
+    "The pixel marker changes source content slightly. Both profiles use explicit I420 caps and otherwise identical pipeline/configuration; production pipelines do not contain the marker.",
+    "Latency covers the marker before encoding to browser composition; physical exposure and display scanout are excluded.",
+    "Recordings use a bounded tmpfs: this compares memory-backed recording overhead, not sustained physical-disk or cloud-volume I/O latency.",
+    "This unshaped, one-reader comparison does not replace loss/capacity, full-storage or multiple-reader qualification."
+  ],
+  "method": {
+    "source": "Synthetic x264 H264 constrained-baseline, explicit I420, 1280x720 at 30 fps; adaptive encoder settles at 8000 kbit/s in every measured baseline.",
+    "topology": "One source, one custom adapter/MediaMTX 1.21.1 instance, one Chromium viewer on one macOS-hosted Docker Linux VM. No artificial network impairment.",
+    "repetitions": 3,
+    "warmupSeconds": 40,
+    "measurementSeconds": 60,
+    "order": [
+      "reference, probe, record, probe-record",
+      "probe-record, record, probe, reference",
+      "reference, probe, record, probe-record"
+    ],
+    "recording": "fMP4, 1s parts, 5s target segments, 5m retention, 512 MiB bounded tmpfs; playback endpoint disabled.",
+    "probe": "Qualification-only pre-encoding pixel timestamp and browser crop readback. Disabled in production.",
+    "resourceScope": "Only batches wholly within the stable baseline phase. CPU is a fraction of one logical core. Cgroup memory includes tmpfs storage, not only process RSS.",
+    "configurationHashes": {
+      "reference": "7df329151df01019a324cbef08b0af4575a66469b1416a1b229623f8490493f0",
+      "probe": "eace3c1bba6f697dc724a1ae690cbef4e82cf6d12c0f8fd0c3049bf1d3652ff3"
+    }
+  },
+  "diagnostics": [
+    {
+      "case": "run-2-probe-record",
+      "failedGate": "playback",
+      "freezeSeconds": 0.22,
+      "observedAt": "2026-10-04T09:59:52.952Z",
+      "receiveGapMilliseconds": 219.6,
+      "rtpTimestampDelta": 3000,
+      "packetLossNetChange": 0,
+      "peakMeasuredLatencyMilliseconds": 238.6855,
+      "interpretation": "Coincides with earlier ten-minute host-pause observations; correlation does not prove a cause or justify changing the delivery verdict."
+    },
+    {
+      "case": "run-2-record",
+      "failedGate": "runtimeMediaIntegrity",
+      "mediaMTXLog": "2026/10/04 10:00:13 ERR [path camera] [recorder] SPS not received yet",
+      "recorderRestartAt": "2026-10-04T10:00:15Z",
+      "interpretation": "Recorder startup lacks H264 parameters, then recovers; live has no freeze/drop. The adapter returns from destination setup after SDP rather than transport connection. A separate deterministic regression is being used to address this startup race."
+    }
+  ],
+  "cleanup": {
+    "ownedContainersRemoved": true,
+    "socketReceiveLimitRestored": 212992,
+    "socketSendLimitRestored": 212992
+  },
+  "analysisScriptSHA256": "a680ad610416b5a158008811107f69be20cb87028158d483528b3cdd44bbe389"
+}

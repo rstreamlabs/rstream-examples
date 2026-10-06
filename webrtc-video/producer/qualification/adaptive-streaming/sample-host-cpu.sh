@@ -22,29 +22,64 @@ fi
 interval_seconds="$(printf '%d.%03d' "$((interval_milliseconds / 1000))" "$((interval_milliseconds % 1000))")"
 
 running=1
+sleep_pid=""
 stop() {
   running=0
+  if [ -n "${sleep_pid}" ]; then
+    kill -TERM "${sleep_pid}" 2>/dev/null || true
+  fi
 }
 trap stop INT TERM
 
-previous_epoch_milliseconds=""
+previous_boot_milliseconds=""
 while [ "${running}" -eq 1 ]; do
+  # Linux exposes CLOCK_BOOTTIME at centisecond precision. Unlike realtime,
+  # it cannot step when the host synchronizes its civil clock; suspend still
+  # counts as a pause. Keep UTC below only for correlation with phase events.
+  read -r uptime _ < /proc/uptime
+  uptime_seconds="${uptime%.*}"
+  uptime_centiseconds="${uptime#*.}"
+  case "${uptime_seconds}" in
+    '' | *[!0-9]*)
+      printf 'Linux /proc/uptime did not contain a valid boot time\n' >&2
+      exit 1
+      ;;
+  esac
+  case "${uptime_centiseconds}" in
+    [0-9][0-9]) ;;
+    *)
+      printf 'Linux /proc/uptime did not contain centisecond precision\n' >&2
+      exit 1
+      ;;
+  esac
+  # Prefix the fractional part to avoid POSIX shell octal arithmetic (08/09).
+  boot_milliseconds="$((uptime_seconds * 1000 + (1${uptime_centiseconds} - 100) * 10))"
   read -r label user nice system idle iowait irq softirq steal _ < /proc/stat
   if [ "${label}" != "cpu" ]; then
     printf 'Linux /proc/stat did not start with aggregate CPU counters\n' >&2
     exit 1
   fi
-  captured="$(date -u +'%s%3N|%Y-%m-%dT%H:%M:%S.%3NZ')"
-  captured_epoch_milliseconds="${captured%%|*}"
-  captured_at="${captured#*|}"
+  captured_at="$(date -u +'%Y-%m-%dT%H:%M:%S.%3NZ')"
   gap_milliseconds=0
-  if [ -n "${previous_epoch_milliseconds}" ]; then
-    gap_milliseconds="$((captured_epoch_milliseconds - previous_epoch_milliseconds))"
+  if [ -n "${previous_boot_milliseconds}" ]; then
+    gap_milliseconds="$((boot_milliseconds - previous_boot_milliseconds))"
+    if [ "${gap_milliseconds}" -lt 0 ]; then
+      printf 'Linux boot time moved backwards while sampling host CPU\n' >&2
+      exit 1
+    fi
   fi
-  previous_epoch_milliseconds="${captured_epoch_milliseconds}"
-  printf '{"capturedAt":"%s","gapMilliseconds":%s,"userTicks":%s,"niceTicks":%s,"systemTicks":%s,"idleTicks":%s,"ioWaitTicks":%s,"irqTicks":%s,"softIRQTicks":%s,"stealTicks":%s}\n' \
-    "${captured_at}" "${gap_milliseconds}" "${user}" "${nice}" "${system}" "${idle}" \
+  previous_boot_milliseconds="${boot_milliseconds}"
+  printf '{"capturedAt":"%s","gapClock":"linux-boottime","bootMilliseconds":%s,"gapMilliseconds":%s,"userTicks":%s,"niceTicks":%s,"systemTicks":%s,"idleTicks":%s,"ioWaitTicks":%s,"irqTicks":%s,"softIRQTicks":%s,"stealTicks":%s}\n' \
+    "${captured_at}" "${boot_milliseconds}" "${gap_milliseconds}" "${user}" "${nice}" "${system}" "${idle}" \
     "${iowait}" "${irq}" "${softirq}" "${steal}" >> "${output}"
   sleep "${interval_seconds}" &
-  wait $! || true
+  sleep_pid=$!
+  if [ "${running}" -eq 0 ]; then
+    kill -TERM "${sleep_pid}" 2>/dev/null || true
+  fi
+  wait "${sleep_pid}" || true
+  if [ "${running}" -eq 0 ]; then
+    wait "${sleep_pid}" 2>/dev/null || true
+  fi
+  sleep_pid=""
 done

@@ -37,9 +37,16 @@ const rstreamEnvSchema = z
     TURN_CREDENTIAL_TTL_SECONDS: secondsSchema("600"),
     VIEWER_TOKEN_TTL_SECONDS: secondsSchema("120"),
     WATCH_TOKEN_TTL_SECONDS: secondsSchema("120"),
+    MEDIAMTX_ALLOW_DIRECT_FALLBACK: z
+      .enum(["true", "false"])
+      .default("true")
+      .transform((value) => value === "true"),
     VIDEO_DISTRIBUTOR: z.enum(["direct", "mediamtx"]).default("direct"),
     MEDIAMTX_EXPOSURE: z.enum(["public", "rstream"]).default("rstream"),
     MEDIAMTX_PUBLIC_URL: optionalUrlSchema,
+    MEDIAMTX_METRICS_URL: optionalUrlSchema,
+    MEDIAMTX_PLAYBACK_URL: optionalUrlSchema,
+    MEDIAMTX_RECORDING_WINDOW_SECONDS: secondsSchema("300"),
     MEDIAMTX_TUNNEL_NAME: optionalStringSchema,
     MEDIAMTX_SOURCE_RESOLVER_JWKS: optionalStringSchema,
     MEDIAMTX_SOURCE_RESOLVER_ISSUER: z
@@ -71,11 +78,15 @@ const rstreamEnvSchema = z
     MEDIAMTX_TOKEN_TTL_SECONDS: secondsSchema("300"),
   })
   .superRefine((env, ctx) => {
-    if (!env.RSTREAM_PROJECT_ID && !env.RSTREAM_PROJECT_ENDPOINT) {
+    // Every viewer receives locally issued TURN APP credentials. Both their
+    // username and realm resolution require the managed project endpoint;
+    // an engine override and a project ID alone cannot provide that contract.
+    if (!env.RSTREAM_PROJECT_ENDPOINT) {
       ctx.addIssue({
         code: "custom",
-        path: ["RSTREAM_PROJECT_ID_OR_ENDPOINT"],
-        message: "RSTREAM_PROJECT_ID or RSTREAM_PROJECT_ENDPOINT is required.",
+        path: ["RSTREAM_PROJECT_ENDPOINT"],
+        message:
+          "RSTREAM_PROJECT_ENDPOINT is required for engine and TURN resolution.",
       })
     }
     if (
@@ -89,9 +100,61 @@ const rstreamEnvSchema = z
           "TURN_CREDENTIAL_TTL_SECONDS must be from 90 through 3600 seconds.",
       })
     }
+    if (env.MEDIAMTX_METRICS_URL) {
+      const url = new URL(env.MEDIAMTX_METRICS_URL)
+      if (
+        env.VIDEO_DISTRIBUTOR !== "mediamtx" ||
+        env.MEDIAMTX_METRICS_URL.length > 2048 ||
+        !["http:", "https:"].includes(url.protocol) ||
+        url.username ||
+        url.password ||
+        url.search ||
+        url.hash ||
+        !url.pathname.endsWith("/metrics")
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["MEDIAMTX_METRICS_URL"],
+          message:
+            "MEDIAMTX_METRICS_URL requires VIDEO_DISTRIBUTOR=mediamtx and an HTTP(S) metrics endpoint without credentials, query or fragment.",
+        })
+      }
+    }
     if (env.VIDEO_DISTRIBUTOR !== "mediamtx") {
+      if (env.MEDIAMTX_PLAYBACK_URL)
+        ctx.addIssue({
+          code: "custom",
+          path: ["MEDIAMTX_PLAYBACK_URL"],
+          message: "Playback requires VIDEO_DISTRIBUTOR=mediamtx.",
+        })
       return
     }
+    if (env.MEDIAMTX_PLAYBACK_URL) {
+      const url = new URL(env.MEDIAMTX_PLAYBACK_URL)
+      if (
+        env.MEDIAMTX_PLAYBACK_URL.length > 2048 ||
+        !["http:", "https:"].includes(url.protocol) ||
+        url.username ||
+        url.password ||
+        url.search ||
+        url.hash
+      )
+        ctx.addIssue({
+          code: "custom",
+          path: ["MEDIAMTX_PLAYBACK_URL"],
+          message:
+            "Playback requires an HTTP(S) base URL without credentials, query or fragment.",
+        })
+    }
+    if (
+      env.MEDIAMTX_RECORDING_WINDOW_SECONDS < 30 ||
+      env.MEDIAMTX_RECORDING_WINDOW_SECONDS > 600
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["MEDIAMTX_RECORDING_WINDOW_SECONDS"],
+        message: "Recording window must be from 30 through 600 seconds.",
+      })
     for (const [name, value] of [
       ["MEDIAMTX_SOURCE_RESOLVER_JWKS", env.MEDIAMTX_SOURCE_RESOLVER_JWKS],
       ["MEDIAMTX_JWT_PRIVATE_KEY_BASE64", env.MEDIAMTX_JWT_PRIVATE_KEY_BASE64],
@@ -204,11 +267,14 @@ export function rstreamConfigMissingMessage(error: ZodError): string {
 }
 
 export function demoCleanupEnabled(): boolean {
-  return z
+  const enabled = z
     .enum(["true", "false", "1", "0"])
     .default("false")
     .transform((value) => value === "true" || value === "1")
     .parse(process.env.DEMO_CLEANUP_ENABLED)
+  if (enabled && process.env.DEVICE_ACCESS_MODE === "organization")
+    throw new Error("Demo cleanup cannot be enabled in organization mode.")
+  return enabled
 }
 
 export function rstreamWebhookSigningSecret(): string | null {

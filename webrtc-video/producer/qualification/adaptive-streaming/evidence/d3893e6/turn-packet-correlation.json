@@ -1,0 +1,264 @@
+{
+  "schemaVersion": 1,
+  "revision": "2c15bbcf1e606d56e023bc28bba6f5d7289fdf9d",
+  "scope": "Exact identity correlation of bounded TURN ChannelData RTP header captures; diagnostic only.",
+  "git": {
+    "revision": "2c15bbcf1e606d56e023bc28bba6f5d7289fdf9d",
+    "producerTree": "724f5b9e8f18cb712d6b42db172bee33cb5ecf75",
+    "dirty": false
+  },
+  "images": {
+    "producer": "sha256:ed0dd0a8355f60a7168908319f68862292ad8d96cb0ab4a758921b00ac3d84e4",
+    "browser": "sha256:5c6437f0d018835c54ecabe14c65ad674d76073e832f2e21e327f30ccddd51ce",
+    "capture": "sha256:ba28315ef4d3976aeac11d93a9eda731ae4949c396d917f73c58c18956eba5c5"
+  },
+  "inputSHA256": {
+    "producer.pcap": "5c68b563fe837aae5ecba2935e278d17cbc0891f8dea4811761eb459db39e6d1",
+    "receiver.pcap": "00625e4ab1520847e431ac2f9491c145b14e5f82db3f3b1917b3e834533a3e1f",
+    "producer-capture.log": "116902a6f2050b0d83c7f4ae7fc6d5d7c2120dae4f8331dd8ab353cd4953ed74",
+    "receiver-capture.log": "a0e7500815d8db06585e8461acaf2e67c3ede22aa516c043a60e7f31dfb7702e",
+    "capture-manifest.json": "a8d2151d4398375e154d6f79a95fe2aff6e9043128d35c5cc8262d8eebf078bc",
+    "relay-2c15bbc/summary.json": "82d3b82f34bf7cc6139551e7737b1eca534fa0803f57172599741923e82b7d34",
+    "relay-2c15bbc/manifest.json": "7292d21df30a48307326863ef7aeb5550228cb56afabf500ccaf51b8cf3e2d5b",
+    "relay-2c15bbc/samples.jsonl": "4a011d88a1f8164b60e785650b4d2174ec1e9fe3629d9955ca2de8d50e459936",
+    "relay-2c15bbc/phase-timeline.jsonl": "4c47c37fea26959b32faebc3c1080af4d9fb7c7510c3e1d485c3d90ca5bf7dec",
+    "analyze.py": "620d7601be5c5961b5734b6976e49a45baad80ffe006973b7de8f30bd5081692",
+    "run.py": "52bb202b4df084802ada71b6ea7805790fccce4ccbf4f3c0ddff49e49bd2bd46"
+  },
+  "qualificationPassed": false,
+  "failedGates": [
+    "receiver-host-scheduler",
+    "playout-effective-latency-budget",
+    "healthy-link-freezes",
+    "impaired-link-freezes",
+    "repair-amplification",
+    "twcc-loss-fidelity"
+  ],
+  "packetCounts": {
+    "producer": 136771,
+    "receiver": 115064
+  },
+  "captureKernelDrops": {
+    "producer": 0,
+    "receiver": 0
+  },
+  "captureTail": {
+    "producerFiltered": 136771,
+    "receiverFiltered": 115205,
+    "receiverWritten": 115064,
+    "note": "Capture stops when the owned parent interface disappears. Receiver has 141 filtered packets not written at teardown; comparison excludes the last second of its written capture. The baseline precedes teardown by more than three minutes."
+  },
+  "coverageGuardMilliseconds": 1000,
+  "phases": [
+    {
+      "phase": "baseline",
+      "payloadType": 108,
+      "sentPackets": 11259,
+      "uniquePackets": 11259,
+      "notObservedAtReceiver": 1684,
+      "notObservedPercent": 14.956923350208722,
+      "matchedDelayMedianMilliseconds": 10.568115234375,
+      "matchedDelayP95Milliseconds": 13.361083984375,
+      "matchedDelayMinimumMilliseconds": 6.923095703125,
+      "matchedDelayMaximumMilliseconds": 35.18896484375
+    },
+    {
+      "phase": "baseline",
+      "payloadType": 49,
+      "sentPackets": 2252,
+      "uniquePackets": 2252,
+      "notObservedAtReceiver": 319,
+      "notObservedPercent": 14.1651865008881,
+      "matchedDelayMedianMilliseconds": 10.586181640625,
+      "matchedDelayP95Milliseconds": 13.328125,
+      "matchedDelayMinimumMilliseconds": 7.109130859375,
+      "matchedDelayMaximumMilliseconds": 35.135009765625
+    },
+    {
+      "phase": "baseline",
+      "payloadType": 109,
+      "sentPackets": 1755,
+      "uniquePackets": 1755,
+      "notObservedAtReceiver": 149,
+      "notObservedPercent": 8.49002849002849,
+      "matchedDelayMedianMilliseconds": 10.04345703125,
+      "matchedDelayP95Milliseconds": 12.052978515625,
+      "matchedDelayMinimumMilliseconds": 6.953125,
+      "matchedDelayMaximumMilliseconds": 21.845947265625
+    },
+    {
+      "phase": "conditioning",
+      "payloadType": 108,
+      "sentPackets": 19957,
+      "uniquePackets": 19957,
+      "notObservedAtReceiver": 3199,
+      "notObservedPercent": 16.02946334619432,
+      "matchedDelayMedianMilliseconds": 10.425537109375,
+      "matchedDelayP95Milliseconds": 13.452880859375,
+      "matchedDelayMinimumMilliseconds": 6.881103515625,
+      "matchedDelayMaximumMilliseconds": 34.348876953125
+    },
+    {
+      "phase": "conditioning",
+      "payloadType": 49,
+      "sentPackets": 3991,
+      "uniquePackets": 3991,
+      "notObservedAtReceiver": 603,
+      "notObservedPercent": 15.108995239288399,
+      "matchedDelayMedianMilliseconds": 10.554443359375,
+      "matchedDelayP95Milliseconds": 13.60400390625,
+      "matchedDelayMinimumMilliseconds": 7.051025390625,
+      "matchedDelayMaximumMilliseconds": 33.68896484375
+    },
+    {
+      "phase": "conditioning",
+      "payloadType": 109,
+      "sentPackets": 3322,
+      "uniquePackets": 3322,
+      "notObservedAtReceiver": 308,
+      "notObservedPercent": 9.271523178807946,
+      "matchedDelayMedianMilliseconds": 9.98681640625,
+      "matchedDelayP95Milliseconds": 12.424072265625,
+      "matchedDelayMinimumMilliseconds": 6.89013671875,
+      "matchedDelayMaximumMilliseconds": 24.85986328125
+    },
+    {
+      "phase": "constrained",
+      "payloadType": 49,
+      "sentPackets": 3983,
+      "uniquePackets": 3983,
+      "notObservedAtReceiver": 685,
+      "notObservedPercent": 17.198091890534773,
+      "matchedDelayMedianMilliseconds": 9.8719482421875,
+      "matchedDelayP95Milliseconds": 13.3271484375,
+      "matchedDelayMinimumMilliseconds": 6.97705078125,
+      "matchedDelayMaximumMilliseconds": 31.52392578125
+    },
+    {
+      "phase": "constrained",
+      "payloadType": 108,
+      "sentPackets": 19911,
+      "uniquePackets": 19911,
+      "notObservedAtReceiver": 3582,
+      "notObservedPercent": 17.99005574807895,
+      "matchedDelayMedianMilliseconds": 9.864990234375,
+      "matchedDelayP95Milliseconds": 13.218994140625,
+      "matchedDelayMinimumMilliseconds": 6.60107421875,
+      "matchedDelayMaximumMilliseconds": 34.969970703125
+    },
+    {
+      "phase": "constrained",
+      "payloadType": 109,
+      "sentPackets": 3867,
+      "uniquePackets": 3867,
+      "notObservedAtReceiver": 647,
+      "notObservedPercent": 16.73131626583915,
+      "matchedDelayMedianMilliseconds": 9.81396484375,
+      "matchedDelayP95Milliseconds": 12.512939453125,
+      "matchedDelayMinimumMilliseconds": 7.010986328125,
+      "matchedDelayMaximumMilliseconds": 23.614013671875
+    },
+    {
+      "phase": "impaired",
+      "payloadType": 108,
+      "sentPackets": 15192,
+      "uniquePackets": 15192,
+      "notObservedAtReceiver": 2649,
+      "notObservedPercent": 17.436808846761455,
+      "matchedDelayMedianMilliseconds": 9.925048828125,
+      "matchedDelayP95Milliseconds": 13.14892578125,
+      "matchedDelayMinimumMilliseconds": 6.669921875,
+      "matchedDelayMaximumMilliseconds": 73.205078125
+    },
+    {
+      "phase": "impaired",
+      "payloadType": 49,
+      "sentPackets": 3021,
+      "uniquePackets": 3021,
+      "notObservedAtReceiver": 565,
+      "notObservedPercent": 18.702416418404503,
+      "matchedDelayMedianMilliseconds": 9.8438720703125,
+      "matchedDelayP95Milliseconds": 13.225830078125,
+      "matchedDelayMinimumMilliseconds": 6.673095703125,
+      "matchedDelayMaximumMilliseconds": 83.7119140625
+    },
+    {
+      "phase": "impaired",
+      "payloadType": 109,
+      "sentPackets": 3418,
+      "uniquePackets": 3418,
+      "notObservedAtReceiver": 626,
+      "notObservedPercent": 18.31480397893505,
+      "matchedDelayMedianMilliseconds": 9.9854736328125,
+      "matchedDelayP95Milliseconds": 13.262939453125,
+      "matchedDelayMinimumMilliseconds": 6.658935546875,
+      "matchedDelayMaximumMilliseconds": 57.81689453125
+    },
+    {
+      "phase": "recovery",
+      "payloadType": 49,
+      "sentPackets": 3997,
+      "uniquePackets": 3997,
+      "notObservedAtReceiver": 607,
+      "notObservedPercent": 15.186389792344258,
+      "matchedDelayMedianMilliseconds": 10.5380859375,
+      "matchedDelayP95Milliseconds": 14.072998046875,
+      "matchedDelayMinimumMilliseconds": 6.95703125,
+      "matchedDelayMaximumMilliseconds": 36.93994140625
+    },
+    {
+      "phase": "recovery",
+      "payloadType": 108,
+      "sentPackets": 19986,
+      "uniquePackets": 19986,
+      "notObservedAtReceiver": 3127,
+      "notObservedPercent": 15.645952166516562,
+      "matchedDelayMedianMilliseconds": 10.419189453125,
+      "matchedDelayP95Milliseconds": 13.85693359375,
+      "matchedDelayMinimumMilliseconds": 6.780029296875,
+      "matchedDelayMaximumMilliseconds": 40.031005859375
+    },
+    {
+      "phase": "recovery",
+      "payloadType": 109,
+      "sentPackets": 3315,
+      "uniquePackets": 3315,
+      "notObservedAtReceiver": 378,
+      "notObservedPercent": 11.402714932126697,
+      "matchedDelayMedianMilliseconds": 10.05517578125,
+      "matchedDelayP95Milliseconds": 13.114990234375,
+      "matchedDelayMinimumMilliseconds": 6.915771484375,
+      "matchedDelayMaximumMilliseconds": 22.43701171875
+    }
+  ],
+  "localUDPBufferErrors": {
+    "producer": 0,
+    "receiver": 0
+  },
+  "baselineFreezeSeconds": 4.064000000000001,
+  "baselineFreezeRatio": 0.16142357801080398,
+  "baselineEncoderMaximumGapMilliseconds": 40.96866600000794,
+  "receiverMaximumHeartbeatMilliseconds": 370,
+  "receiverMaximumHeartbeatAt": "2026-10-04T09:19:52.581Z",
+  "finding": "During the unshaped baseline, 1684 of 11259 captured primary RTP packets (14.9569%) are not observed in the receiving network namespace. FEC and RTX also show loss. Zero kernel capture drops and zero endpoint UDP buffer errors rule out those observed counters; they do not locate the loss within the route between capture points. This is evidence of missing packets before browser decoding, not merely GCC feedback accounting.",
+  "limitations": [
+    "Capture counters must show zero kernel drops before interpreting unmatched packets.",
+    "UTC packet timestamps are used for phase grouping and approximate transit delay, not capture-to-display latency.",
+    "Capture observes only ChannelData RTP; STUN, RTCP and other traffic are excluded.",
+    "Boundary guard discards one second at each receiver capture edge.",
+    "Sending capture position relative to Linux traffic control is not independently qualified; conditioned-phase losses must not be equated directly to configured netem loss.",
+    "A 370ms receiver boot-time heartbeat gap occurs during warmup near the previously suspected periodic window. It does not explain sustained baseline loss.",
+    "This single instrumented trial does not replace or add a successful repetition to the failed release matrix."
+  ],
+  "cleanup": {
+    "socketLimitsBefore": [
+      "212992",
+      "212992"
+    ],
+    "socketLimitsRestored": [
+      212992,
+      212992
+    ],
+    "ownedContainersRemoved": true
+  }
+}

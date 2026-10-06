@@ -11,23 +11,12 @@ func (e *associatedStreamBandwidthEstimator) WriteRTCP(
 ) error {
 	normalized := packets
 	copied := false
-	type lossObservation struct {
-		reported int
-		lost     int
-	}
-	observations := make([]lossObservation, 0, len(packets))
 	for index, packet := range packets {
 		feedback, ok := packet.(*rtcp.TransportLayerCC)
 		if !ok {
 			continue
 		}
-		reported, lost, valid := e.recordTransportCCFeedback(feedback)
-		if valid {
-			observations = append(observations, lossObservation{
-				reported: reported,
-				lost:     lost,
-			})
-		}
+		e.recordTransportCCFeedback(feedback)
 		trimmed, changed := trimTransportCCPadding(feedback)
 		if !changed {
 			continue
@@ -38,23 +27,7 @@ func (e *associatedStreamBandwidthEstimator) WriteRTCP(
 		}
 		normalized[index] = trimmed
 	}
-	if err := e.SendSideBWE.WriteRTCP(normalized, attributes); err != nil {
-		return err
-	}
-	if e.lossGuard == nil {
-		return nil
-	}
-	for _, observation := range observations {
-		target, changed := e.lossGuard.observe(
-			observation.reported,
-			observation.lost,
-			e.effectiveMediaBitrate(mediaBitrate(e.SendSideBWE.GetTargetBitrate(), e.protection)),
-		)
-		if changed {
-			e.deliverEffectiveBitrate(target)
-		}
-	}
-	return nil
+	return e.SendSideBWE.WriteRTCP(normalized, attributes)
 }
 
 func (e *associatedStreamBandwidthEstimator) recordTransportCCFeedback(

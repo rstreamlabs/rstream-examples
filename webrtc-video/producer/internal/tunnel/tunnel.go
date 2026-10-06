@@ -7,6 +7,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/config"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/logs"
@@ -17,6 +18,7 @@ import (
 type Manager struct {
 	logger    *logs.Logger
 	control   interface{ Close() error }
+	client    interface{ Close() error }
 	tunnel    rstream.BytestreamTunnel
 	publicURL string
 	auth      config.TunnelAuthConfig
@@ -33,10 +35,27 @@ type OpenOptions struct {
 }
 
 func Open(ctx context.Context, cfg config.Config, logger *logs.Logger, opts OpenOptions) (*Manager, error) {
+	timeout, err := cfg.TunnelConnectTimeout()
+	if err != nil {
+		return nil, err
+	}
 	client, err := newRstreamClient(opts, cfg.Tunnel.Transport)
 	if err != nil {
 		return nil, err
 	}
+	return openClient(ctx, cfg, logger, opts, client, timeout)
+}
+
+func openClient(ctx context.Context, cfg config.Config, logger *logs.Logger, opts OpenOptions, client *rstream.Client, timeout time.Duration) (_ *Manager, err error) {
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, client.Close())
+		}
+	}()
+	// This context owns setup only. The SDK detaches a successful channel from
+	// it, so completion does not cancel the long-lived published tunnel.
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	control, err := client.Connect(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("connect to rstream tunnel engine: %w", err)
@@ -95,6 +114,7 @@ func Open(ctx context.Context, cfg config.Config, logger *logs.Logger, opts Open
 	return &Manager{
 		logger:    logger,
 		control:   control,
+		client:    client,
 		tunnel:    tunnel,
 		publicURL: publicURL,
 		auth:      auth,
@@ -121,6 +141,7 @@ func newRstreamClient(opts OpenOptions, transportConfig config.TunnelTransportCo
 			return nil, fmt.Errorf("resolve tunnel transport: %w", err)
 		}
 		options.Transport = transport
+		options.OwnTransport = true
 		// Provisioned devices receive an explicit engine URL and scoped token.
 		client, err := rstream.NewClient(options)
 		if err != nil {
@@ -186,6 +207,9 @@ func (m *Manager) Close() error {
 		}
 		if m.control != nil {
 			m.closeErr = errors.Join(m.closeErr, m.control.Close())
+		}
+		if m.client != nil {
+			m.closeErr = errors.Join(m.closeErr, m.client.Close())
 		}
 		if m.closeErr != nil && m.logger != nil {
 			m.logger.Warn("Public tunnel close failed: %v", m.closeErr)

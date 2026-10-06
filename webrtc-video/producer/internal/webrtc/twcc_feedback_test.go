@@ -1,13 +1,63 @@
 package webrtc
 
 import (
+	"encoding/binary"
 	"testing"
+	"time"
 
 	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/pkg/gcc"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 )
+
+func TestAssociatedEstimatorFeedsTransportRTTToRetransmissionPacer(t *testing.T) {
+	pacer := newMinimumBitratePacer(5_000_000, 500_000)
+	underlying, err := gcc.NewSendSideBWE(gcc.SendSideBWEPacer(pacer))
+	if err != nil {
+		t.Fatal(err)
+	}
+	estimator := &associatedStreamBandwidthEstimator{SendSideBWE: underlying, pacer: pacer}
+	t.Cleanup(func() {
+		if err := estimator.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	sent := make(chan uint16, 1)
+	writer := estimator.AddStream(&interceptor.StreamInfo{
+		SSRC:                42,
+		RTPHeaderExtensions: []interceptor.RTPHeaderExtension{{URI: transportCCHeaderExtensionURI, ID: 1}},
+	}, interceptor.RTPWriterFunc(func(header *rtp.Header, payload []byte, _ interceptor.Attributes) (int, error) {
+		sent <- binary.BigEndian.Uint16(header.GetExtension(1))
+		return header.MarshalSize() + len(payload), nil
+	}))
+	if _, err := writer.Write(&rtp.Header{SSRC: 42, SequenceNumber: 1}, []byte{1}, nil); err != nil {
+		t.Fatal(err)
+	}
+	var sequence uint16
+	select {
+	case sequence = <-sent:
+	case <-time.After(time.Second):
+		t.Fatal("pacer did not send the test packet")
+	}
+	feedback := &rtcp.TransportLayerCC{
+		BaseSequenceNumber: sequence, PacketStatusCount: 1,
+		PacketChunks: []rtcp.PacketStatusChunk{&rtcp.RunLengthChunk{
+			Type: rtcp.TypeTCCRunLengthChunk, PacketStatusSymbol: rtcp.TypeTCCPacketReceivedSmallDelta, RunLength: 1,
+		}},
+		RecvDeltas: []*rtcp.RecvDelta{{Type: rtcp.TypeTCCPacketReceivedSmallDelta, Delta: 1000}},
+	}
+	if err := estimator.WriteRTCP([]rtcp.Packet{feedback}, nil); err != nil {
+		t.Fatal(err)
+	}
+	delegate := pacer.delegate.(*tokenBucketPacer)
+	delegate.retransmissionMu.Lock()
+	samples := delegate.retransmissionRoundTripSamples
+	delegate.retransmissionMu.Unlock()
+	if samples != 1 {
+		t.Fatalf("RTT observations after transport feedback = %d, want 1", samples)
+	}
+}
 
 func TestTrimTransportCCPaddingPreservesTheReportedStatuses(t *testing.T) {
 	feedback := transportCCFeedbackWithPadding()
@@ -157,7 +207,7 @@ func TestAssociatedEstimatorDoesNotCountTransportFeedbackPaddingAsLoss(t *testin
 }
 
 func TestAssociatedEstimatorAppliesPersistentHighLossWithoutDelayCallback(t *testing.T) {
-	delegate := &recordingPacer{}
+	delegate := &forwardingFeedbackPacer{}
 	pacer := wrapMinimumBitratePacer(delegate, 2_000_000)
 	underlying, err := gcc.NewSendSideBWE(
 		gcc.SendSideBWEInitialBitrate(8_000_000),
@@ -172,7 +222,6 @@ func TestAssociatedEstimatorAppliesPersistentHighLossWithoutDelayCallback(t *tes
 		SendSideBWE:         underlying,
 		minimumMediaBitrate: 2_000_000,
 		maximumMediaBitrate: 8_000_000,
-		lossGuard:           newFeedbackLossGuard(2_000_000),
 		pacer:               pacer,
 	}
 	callbackTargets := make(chan int, 4)
@@ -199,8 +248,15 @@ func TestAssociatedEstimatorAppliesPersistentHighLossWithoutDelayCallback(t *tes
 			return header.MarshalSize() + len(payload), nil
 		}),
 	)
-	writeTransportPackets(t, writer, 0, 200)
-	for index, base := range []uint16{0, 100} {
+	// Supply a real 260 ms send-time observation through the public writer.
+	// Loss statistics intentionally do not act on an incomplete short report.
+	for batch := range 3 {
+		if batch > 0 {
+			time.Sleep(130 * time.Millisecond)
+		}
+		writeTransportPackets(t, writer, uint16(batch*100), 100)
+	}
+	for index, base := range []uint16{0, 100, 200} {
 		if err := estimator.WriteRTCP(
 			[]rtcp.Packet{transportCCFeedbackWithLoss(base, uint8(index))},
 			nil,
@@ -209,29 +265,26 @@ func TestAssociatedEstimatorAppliesPersistentHighLossWithoutDelayCallback(t *tes
 		}
 	}
 	if target := estimator.GetTargetBitrate(); target >= 8_000_000 {
-		t.Fatalf("guarded target = %d, want an immediate reduction", target)
+		t.Fatalf("guarded target = %d, want a completed-observation reduction", target)
 	}
-	lastCallbackTarget := 0
-drainCallbacks:
-	for {
-		select {
-		case lastCallbackTarget = <-callbackTargets:
-		default:
-			break drainCallbacks
+	select {
+	case target := <-callbackTargets:
+		if target <= 0 || target >= 8_000_000 {
+			t.Fatalf("loss callback target = %d, want a reduction", target)
 		}
+	case <-time.After(time.Second):
+		t.Fatal("completed loss observation did not publish a target")
 	}
-	if lastCallbackTarget == 0 || lastCallbackTarget >= 8_000_000 {
-		t.Fatalf("last callback target = %d, want an immediate reduction", lastCallbackTarget)
-	}
+
 	delegate.mu.Lock()
 	lastPacerTarget := delegate.bitrates[len(delegate.bitrates)-1]
 	delegate.mu.Unlock()
 	if lastPacerTarget >= 8_000_000 {
-		t.Fatalf("pacer target = %d, want an immediate reduction", lastPacerTarget)
+		t.Fatalf("pacer target = %d, want a completed-observation reduction", lastPacerTarget)
 	}
 	stats := estimator.GetStats()
 	if reductions, ok := stats["lossGuardReductions"].(uint64); !ok || reductions == 0 {
-		t.Fatalf("loss guard reductions = %v, want at least one", stats["lossGuardReductions"])
+		t.Fatalf("loss controller reductions = %v, want at least one", stats["lossGuardReductions"])
 	}
 }
 
@@ -312,4 +365,44 @@ func transportCCFeedbackWithPadding() *rtcp.TransportLayerCC {
 			{Type: rtcp.TypeTCCPacketReceivedSmallDelta, Delta: 250},
 		},
 	}
+}
+
+func TestAssociatedEstimatorDoesNotReduceForUnknownOverlappingFeedback(t *testing.T) {
+	underlying, err := gcc.NewSendSideBWE(
+		gcc.SendSideBWEInitialBitrate(8_000_000),
+		gcc.SendSideBWEMinBitrate(2_000_000),
+		gcc.SendSideBWEMaxBitrate(8_000_000),
+		gcc.SendSideBWEPacer(&recordingPacer{}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	estimator := &associatedStreamBandwidthEstimator{
+		SendSideBWE: underlying, minimumMediaBitrate: 2_000_000, maximumMediaBitrate: 8_000_000,
+	}
+	t.Cleanup(func() {
+		if err := estimator.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	// No matching send history exists. Raw status counts in overlapping reports
+	// cannot establish loss for this sender or authorize a rate reduction.
+	for report := range 2 {
+		if err := estimator.WriteRTCP([]rtcp.Packet{transportCCFeedbackWithLoss(0, uint8(report))}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if target := estimator.GetTargetBitrate(); target != 8_000_000 {
+		t.Fatalf("unknown feedback reduced the source target to %d", target)
+	}
+}
+
+// Unlike the write-count-only pacer, this exercises GCC send-history insertion.
+type forwardingFeedbackPacer struct{ recordingPacer }
+
+func (p *forwardingFeedbackPacer) Write(header *rtp.Header, payload []byte, attributes interceptor.Attributes) (int, error) {
+	p.mu.Lock()
+	writer := p.streams[header.SSRC]
+	p.mu.Unlock()
+	return writer.Write(header, payload, attributes)
 }

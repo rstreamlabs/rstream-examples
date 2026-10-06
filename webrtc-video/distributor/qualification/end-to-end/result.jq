@@ -22,7 +22,7 @@ def phase_counter_delta(phase; name):
     ($indices[0] - (if $indices[0] > 0 then 1 else 0 end)) as $before |
     $samples[$indices[-1]][name] - $samples[$before][name]
   end;
-def phase_delta_after(phase; offset; name):
+def phase_sampled_delta_after(phase; offset; name):
   . as $samples |
   [$samples[] | select(.phase == phase)] as $phase_samples |
   if ($phase_samples | length) == 0 then 0 else
@@ -35,6 +35,79 @@ def phase_delta_after(phase; offset; name):
       $samples[$indices[-1]][name] - $samples[$before][name]
     end
   end;
+def native_boundary_required: ($ARGS.named.native_boundary_required // false);
+def counter_names: ["framesDecoded", "framesDropped", "freezeCount", "totalFreezesDurationSeconds"];
+def valid_native_counters:
+  type == "object" and
+  (.id | type == "string" and length > 0) and
+  (.ssrc | type == "number" and . >= 0 and . <= 4294967295 and floor == .) and
+  (.collectedAtMilliseconds | type == "number" and isfinite and . >= 0) and
+  ([.framesDecoded, .framesDropped, .freezeCount] |
+    all(type == "number" and . >= 0 and . <= 9007199254740991 and floor == .)) and
+  (.totalFreezesDurationSeconds | type == "number" and isfinite and . >= 0);
+def monotonic_native_counters:
+  . as $values |
+  all(range(1; $values | length); . as $i |
+    $values[$i].collectedAtMilliseconds >= $values[$i - 1].collectedAtMilliseconds and
+    all(counter_names[]; . as $name | $values[$i][$name] >= $values[$i - 1][$name]));
+def phase_boundary(phase):
+  [.[] | select(.phase == phase)] as $samples |
+  ($samples[-1].transitionBoundary // {}) as $boundary |
+  [$samples[].videoStats] as $regular |
+  [$boundary.before, $boundary.after] as $bracket |
+  ($regular + $bracket) as $all |
+  ($boundary.status == "valid" and $boundary.schemaVersion == 1 and
+    ($bracket | all(valid_native_counters)) and ($regular | length) >= 2 and
+    ($regular | all(valid_native_counters))) as $snapshots_valid |
+  (if $snapshots_valid then {
+    snapshots: true,
+    timing: ($boundary.phase == phase and
+      ($boundary.phaseStartedAt | type == "string" and length > 0) and
+      $boundary.graceMilliseconds == capacity_transition_grace_milliseconds and
+      $boundary.bracketMilliseconds == 250 and
+      ($boundary.timeOriginMilliseconds | type == "number" and isfinite and . > 0) and
+      ($boundary.observedAtMilliseconds | type == "number" and isfinite and . >= 0) and
+      ($boundary.cutoffMilliseconds | type == "number" and isfinite) and
+      ($boundary.cutoffMilliseconds - $boundary.observedAtMilliseconds) == capacity_transition_grace_milliseconds and
+      $boundary.before.collectedAtMilliseconds >= ($boundary.cutoffMilliseconds - 250) and
+      $boundary.before.collectedAtMilliseconds < $boundary.cutoffMilliseconds and
+      $boundary.after.collectedAtMilliseconds >= $boundary.cutoffMilliseconds and
+      $boundary.after.collectedAtMilliseconds <= ($boundary.cutoffMilliseconds + 250) and
+      $boundary.observedAtMilliseconds <= $samples[0].framePresentation.sampledAtMilliseconds and
+      $boundary.observedAtMilliseconds >= ($regular[0].collectedAtMilliseconds - 250) and
+      all($samples[];
+        .phaseStartedAt == $boundary.phaseStartedAt and
+        .framePresentation.timeOriginMilliseconds == $boundary.timeOriginMilliseconds and
+        .videoStats.collectedAtMilliseconds <= (.framePresentation.sampledAtMilliseconds + 1) and
+        .transitionBoundary.observedAtMilliseconds == $boundary.observedAtMilliseconds)),
+    identity: (all($all[]; .id == $boundary.after.id and .ssrc == $boundary.after.ssrc)),
+    consistentSampleCounters: (all($samples[]; . as $sample |
+      all(counter_names[]; . as $name | $sample.videoStats[$name] == $sample[$name]))),
+    constantBoundaryCounters: (all(counter_names[] | select(. != "framesDecoded");
+      . as $name | $boundary.before[$name] == $boundary.after[$name])),
+    monotonicCounters: (($regular | monotonic_native_counters) and
+      ($all | sort_by(.collectedAtMilliseconds) | monotonic_native_counters)),
+    postBoundaryCoverage: (
+      ([$regular[] | select(.collectedAtMilliseconds > $boundary.after.collectedAtMilliseconds)] | length) >= 2 and
+      ($regular[-1].collectedAtMilliseconds - $boundary.after.collectedAtMilliseconds) >= 1000)
+  } else {snapshots: false} end) as $checks |
+  ($checks | all(.[]; . == true)) as $valid |
+  {
+    measurementValid: $valid,
+    checks: $checks,
+    samples: ($samples | length),
+    boundary: $boundary,
+    steadyDeltas: (if $valid then
+      reduce counter_names[] as $name ({}; .[$name] = ($regular[-1][$name] - $boundary.after[$name]))
+      else null end),
+    legacySampledDeltas: (. as $input | reduce counter_names[] as $name ({};
+      .[$name] = ($input | phase_sampled_delta_after(phase; capacity_transition_grace_milliseconds; $name))))
+  };
+def phase_delta_after(phase; offset; name):
+  if native_boundary_required then
+    phase_boundary(phase) |
+    if .samples == 0 then 0 else .steadyDeltas[name] end
+  else phase_sampled_delta_after(phase; offset; name) end;
 def producer_metrics_complete:
   .producerMetricsSource == "openmetrics" and
   ([
@@ -145,11 +218,14 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
 (event("playback-ready")) as $playback_ready |
 (event("first-decoded-frame")) as $first_decoded_frame |
 (whep_event("DELETE")) as $whep_delete |
+($ARGS.named.recording // {enabled: false}) as $recording |
 {
   revision: $revision,
   mode: $mode,
   workingTreeDirty: $working_tree_dirty,
+  recording: $recording,
   profile: {
+    controlPath: ($ARGS.named.control_path // "rstream"),
     edgeAuthentication: $edge_auth,
     edgeCredentialLifetimeSeconds: (if $edge_auth then $connect_token_ttl_seconds else null end),
     warmupSeconds: $warmup_seconds,
@@ -160,6 +236,10 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
       repairPackets: $flexfec_repair_packets
     },
     playoutDelayHintSeconds: $playout_delay_hint_seconds,
+    producerConfigSHA256: $producer_config_sha256,
+    latencyProbe: $latency_probe,
+    sourceQualityObserved: $quality_observer,
+    expectedNetworkFormat: (if $expected_format == "" then null else $expected_format end),
     acceptance: {
       capacityTransitionGraceMilliseconds: capacity_transition_grace_milliseconds,
       maximumCapacityTransitionFreezeSeconds: maximum_capacity_transition_freeze_seconds,
@@ -168,6 +248,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
       maximumDroppedFrameRatio: maximum_dropped_frame_ratio,
       minimumFrameRateRatio: minimum_frame_rate_ratio
     },
+    steadyCounterMethod: (if native_boundary_required then "native-four-second-boundary" else "legacy-sampled-interval" end),
     viewerNetwork: {
       enabled: $viewer_network[0].enabled,
       capacityKbps: $viewer_network[0].capacityKbps,
@@ -186,6 +267,8 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     }
   },
   images: {producer: $producer_image, distributor: (if $distributor_image == "" then null else $distributor_image end), browser: $browser_image},
+  latency: $latency[0],
+  sourceFormats: $source_formats[0],
   samples: length,
   framesDecoded: maximum("framesDecoded"),
   framesDropped: maximum("framesDropped"),
@@ -203,6 +286,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
   signaling: $signaling[0],
   setupMilliseconds: $connected.elapsedMilliseconds,
   setup: {
+    presentation: $signaling[0].startup,
     peerCreatedMilliseconds: $peer_created.elapsedMilliseconds,
     whepPostDurationMilliseconds: $whep_post.durationMilliseconds,
     whepPostCompletedMilliseconds: $whep_post.elapsedMilliseconds,
@@ -217,6 +301,18 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     whepDeleteCompletedMilliseconds: $whep_delete.elapsedMilliseconds
   },
   resources: $resources[0],
+  transitionBoundaryDiagnostics: {
+    scope: "Raw native snapshots; validated deltas and acceptance use are reported separately",
+    viewerNetwork: ([.[] | select(.phase == "viewer-network") | .transitionBoundary] | last),
+    sourceNetwork: ([.[] | select(.phase == "source-network") | .transitionBoundary] | last),
+    recovery: ([.[] | select(.phase == "recovery") | .transitionBoundary] | last)
+  },
+  transitionBoundaryEvidence: {
+    required: native_boundary_required,
+    viewerNetwork: phase_boundary("viewer-network"),
+    sourceNetwork: phase_boundary("source-network"),
+    recovery: phase_boundary("recovery")
+  },
   phases: {
     baseline: phase_summary("baseline"),
     sourceNetwork: phase_summary("source-network"),
@@ -264,12 +360,45 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
     steadyRecoveryFreezeDurationDeltaSeconds: phase_delta_after("recovery"; capacity_transition_grace_milliseconds; "totalFreezesDurationSeconds")
   }),
   gates: {
+    recordingEvidence: ($recording.enabled == false or (
+      $recording.enabled == true and $mode != "direct" and
+      ($recording.segmentFiles | type) == "number" and $recording.segmentFiles > 0 and
+      ($recording.bytes | type) == "number" and $recording.bytes > 0 and
+      $recording.storageLimitBytes == 536870912 and $recording.bytes <= $recording.storageLimitBytes
+    )),
+    sourceFormats: ($expected_format == "" or (
+      $source_formats[0].enabled == true and $source_formats[0].networkProfile == $expected_format and $source_formats[0].passed == true
+    )),
+    sourceQualityEvidence: (($quality_observer | not) or (
+      length > 0 and all(.sourceQuality != null and .sourceQuality.failedUpdates == 0)
+    )),
+    latencyMeasurement: (($latency_probe | not) or (
+      $latency[0].enabled == true and $latency[0].collectionComplete == true and
+      $latency[0].measurementValid == true
+    )),
     media: (maximum("framesDecoded") >= 150 and maximum("bytesReceived") > 0),
     playback: (maximum("freezeCount") == 0 and maximum("totalFreezesDurationSeconds") == 0),
     sourceFeedback: (maximum("twccFeedbackPackets") > 0 and ($mode == "mediamtx-native" or maximum("pacerSentFEC") > 0)),
     producerMetrics: (([.[] | select(producer_metrics_complete)] | length) == length),
     qualityEvidence: ([phase_summary("baseline"), phase_summary("source-network"), phase_summary("viewer-network"), phase_summary("recovery")] | map(select(. != null)) | all(.averageDecodedQP != null and .averageDecodedQP >= 0)),
     setupEvidence: ([$peer_created, $whep_post, $connected, $playback_ready, $first_decoded_frame] | all(. != null)),
+    startupPresentationEvidence: (
+      $signaling[0].startup as $startup |
+      $startup.firstVisibleFrame as $frame |
+      $startup.visiblePresentationValid == true and
+      ($startup.requestedAtMilliseconds | type == "number" and . >= 0) and
+      ([$frame.callbackMilliseconds, $frame.observedAtMilliseconds, $frame.expectedDisplayMilliseconds] |
+        all(type == "number" and isfinite and . >= $startup.requestedAtMilliseconds)) and
+      ($frame.width | type == "number" and . > 0) and
+      ($frame.height | type == "number" and . > 0) and
+      ($frame.presentedFrames | type == "number" and floor == . and . > 0) and
+      ([$frame.visibility.documentVisible, $frame.visibility.elementVisible,
+        $frame.visibility.centerInViewport, $frame.visibility.centerUnobstructed,
+        $frame.visibility.mediaReady, $frame.visibility.visible] | all(. == true)) and
+      ($startup.requestToVisiblePresentationMilliseconds | type == "number" and isfinite and . >= 0) and
+      $startup.requestToVisiblePresentationMilliseconds ==
+        (([$frame.observedAtMilliseconds, $frame.expectedDisplayMilliseconds] | max) - $startup.requestedAtMilliseconds)
+    ),
     teardownEvidence: ($whep_delete != null and $whep_delete.durationMilliseconds >= 0),
     adapterIntegrity: (
       $mode != "mediamtx" or (
@@ -298,7 +427,7 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
         $native_source_profile[0].required and
         $native_source_profile[0].activeSessions == 1 and
         $native_source_profile[0].createdSessions == 1 and
-        $native_source_profile[0].negotiated == {twcc: 1, nack: 1, rtx: 0, flexfec: 0} and
+        $native_source_profile[0].negotiated == {twcc: 1, nack: 1, rtx: 1, flexfec: 0} and
         $native_source_profile[0].fixedSourcePacing == {adaptiveUpdates: 0, adaptiveFailures: 0, queueDrops: 0, mediaFrameDrops: 0} and
         $native_source_profile[0].activeAfterTeardown == 0
       else
@@ -370,6 +499,18 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
       (.viewerNetwork + {phase: null})
     end
   )
+| .gates.transitionBoundaryEvidence = (
+    if .transitionBoundaryEvidence.required then
+      (if .viewerNetwork.enabled and .viewerNetwork.capacityKbps > 0 and
+          .viewerNetwork.delayMilliseconds == 0 and .viewerNetwork.jitterMilliseconds == 0 and .viewerNetwork.lossPercent == 0 then
+        .transitionBoundaryEvidence.viewerNetwork.measurementValid else true end) and
+      (if .sourceNetwork.enabled and .sourceNetwork.capacityKbps > 0 and
+          .sourceNetwork.delayMilliseconds == 0 and .sourceNetwork.jitterMilliseconds == 0 and .sourceNetwork.lossPercent == 0 then
+        .transitionBoundaryEvidence.sourceNetwork.measurementValid else true end) and
+      (if .viewerNetwork.enabled or .sourceNetwork.enabled then
+        .transitionBoundaryEvidence.recovery.measurementValid else true end)
+    else true end
+  )
 | .gates.playback = (
     if .networkImpairment.enabled then
       .networkImpairment.baselineFreezeCountDelta == 0 and
@@ -407,8 +548,10 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
   )
 | .gates.sourceNetworkResponse = (
     if .sourceNetwork.enabled then
-      .phases.sourceNetwork.decodedFramesPerSecond >=
-        (.phases.baseline.decodedFramesPerSecond * minimum_frame_rate_ratio) and
+      (if $expected_format != "" then
+        $source_formats[0].phases["source-network"].cadencePassed == true
+      else .phases.sourceNetwork.decodedFramesPerSecond >=
+        (.phases.baseline.decodedFramesPerSecond * minimum_frame_rate_ratio) end) and
       (if .sourceNetwork.capacityKbps > 0 and
           .sourceNetwork.delayMilliseconds == 0 and
           .sourceNetwork.jitterMilliseconds == 0 and
@@ -432,8 +575,10 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
       .viewerNetwork.qdisc.packets > 0 and
       (if .viewerNetwork.qdisc.drops > 0 then .viewerNetwork.nackCountDelta > 0 else true end) and
       (if .viewerNetwork.lossPercent > 0 then .viewerNetwork.qdisc.drops > 0 else true end) and
-      .phases.viewerNetwork.decodedFramesPerSecond >=
-        (.phases.baseline.decodedFramesPerSecond * minimum_frame_rate_ratio) and
+      (if $expected_format != "" then
+        $source_formats[0].phases["viewer-network"].cadencePassed == true
+      else .phases.viewerNetwork.decodedFramesPerSecond >=
+        (.phases.baseline.decodedFramesPerSecond * minimum_frame_rate_ratio) end) and
       (if .viewerNetwork.capacityKbps > 0 and
           .viewerNetwork.delayMilliseconds == 0 and
           .viewerNetwork.jitterMilliseconds == 0 and
@@ -446,8 +591,10 @@ def whep_event(method): [$signaling[0].events[]? | select(.kind == "whep-request
         .viewerNetwork.frameDropRatio <= maximum_dropped_frame_ratio and
         .viewerNetwork.freezeRatio <= maximum_freeze_ratio
       end) and
-      .phases.recovery.decodedFramesPerSecond >=
-        (.phases.baseline.decodedFramesPerSecond * minimum_frame_rate_ratio) and
+      (if $expected_format != "" then
+        $source_formats[0].phases.recovery.cadencePassed == true
+      else .phases.recovery.decodedFramesPerSecond >=
+        (.phases.baseline.decodedFramesPerSecond * minimum_frame_rate_ratio) end) and
       .viewerNetwork.recoveryFreezeDurationDeltaSeconds <= maximum_capacity_transition_freeze_seconds and
       .viewerNetwork.steadyRecoveryFreezeCountDelta == 0 and
       .viewerNetwork.steadyRecoveryFreezeDurationDeltaSeconds == 0

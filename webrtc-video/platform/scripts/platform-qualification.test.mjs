@@ -7,6 +7,246 @@ import {
   unexpectedBrowserDiagnostics,
 } from "../qualification/end-to-end/evidence.mjs"
 
+test("quality aborts require a matching intentional cancellation, never a timeout", () => {
+  const url = "http://localhost:3000/api/devices/camera/quality"
+  const diagnostic = {
+    at: 1000,
+    type: "request-failed",
+    message: `GET ${url} net::ERR_ABORTED`,
+    phase: "quality-started",
+  }
+  const event = {
+    name: "quality-request-aborted",
+    method: "GET",
+    url,
+    at: 990,
+    reason: "Error: Source quality request superseded",
+  }
+  assert.deepEqual(unexpectedBrowserDiagnostics([diagnostic], [], [event]), [])
+  for (const events of [
+    [],
+    [{ ...event, reason: "Error: Source quality request timed out." }],
+    [{ ...event, url: `${url}-other` }],
+    [{ ...event, at: 3000 }],
+  ]) {
+    assert.deepEqual(unexpectedBrowserDiagnostics([diagnostic], [], events), [
+      diagnostic,
+    ])
+  }
+})
+
+test("completed quality responses require a browser JSON-body observation, not just 200 headers", () => {
+  const url = "http://localhost:3000/api/devices/camera/quality"
+  const diagnostic = {
+    at: 1000,
+    type: "request-failed",
+    message: `GET ${url} net::ERR_ABORTED`,
+  }
+  const body = {
+    name: "quality-response-read",
+    method: "GET",
+    url,
+    at: 990,
+    status: 200,
+  }
+  assert.deepEqual(unexpectedBrowserDiagnostics([diagnostic], [], [body]), [])
+  assert.deepEqual(
+    unexpectedBrowserDiagnostics([diagnostic], [{ ...body, observedAt: 990 }]),
+    [diagnostic],
+  )
+  for (const event of [
+    { ...body, status: 503 },
+    { ...body, at: 3000 },
+    { ...body, url: `${url}-other` },
+  ])
+    assert.deepEqual(unexpectedBrowserDiagnostics([diagnostic], [], [event]), [
+      diagnostic,
+    ])
+})
+
+test("recording index aborts require complete browser JSON, never headers or unrelated reads", () => {
+  const url = "http://localhost:3000/api/devices/camera/recordings"
+  const diagnostic = {
+    at: 1000,
+    type: "request-failed",
+    message: `GET ${url} net::ERR_ABORTED`,
+    phase: "quality-started",
+  }
+  const body = {
+    name: "recording-index-response-read",
+    method: "GET",
+    url,
+    at: 990,
+    status: 200,
+  }
+  assert.deepEqual(unexpectedBrowserDiagnostics([diagnostic], [], [body]), [])
+  assert.deepEqual(
+    unexpectedBrowserDiagnostics([diagnostic], [{ ...body, observedAt: 990 }]),
+    [diagnostic],
+  )
+  for (const event of [
+    { ...body, name: "quality-response-read" },
+    { ...body, method: "POST" },
+    { ...body, status: 503 },
+    { ...body, at: 3000 },
+    { ...body, at: NaN },
+    { ...body, url: `${url}/playback?start=now` },
+    { ...body, url: url.replace("camera", "another") },
+  ])
+    assert.deepEqual(unexpectedBrowserDiagnostics([diagnostic], [], [event]), [
+      diagnostic,
+    ])
+  for (const message of [
+    `GET ${url} net::ERR_TIMED_OUT`,
+    `GET ${url} net::ERR_FAILED`,
+    `POST ${url} net::ERR_ABORTED`,
+  ]) {
+    const failure = { ...diagnostic, message }
+    assert.deepEqual(unexpectedBrowserDiagnostics([failure], [], [body]), [
+      failure,
+    ])
+  }
+})
+
+test("metrics outage diagnostics require the matching 503 and deliberate stopped phase", () => {
+  const url = "http://localhost:3000/api/devices/camera/metrics"
+  const response = { method: "GET", url, status: 503, observedAt: 1000 }
+  for (const [type, message] of [
+    ["http-error", `GET ${url} 503`],
+    ["request-failed", `GET ${url} net::ERR_ABORTED`],
+    [
+      "console-error",
+      `${url}:0:0 Failed to load resource: the server responded with a status of 503 (Service Unavailable)`,
+    ],
+  ]) {
+    const diagnostic = {
+      type,
+      message,
+      phase: "mediamtx-stopped",
+      observedAt: 1001,
+    }
+    assert.equal(expectedBrowserDiagnostic(diagnostic, [response]), true)
+    for (const records of [
+      [],
+      [{ ...response, status: 200 }],
+      [{ ...response, url: `${url}-other` }],
+      [{ ...response, method: "PUT" }],
+      [{ ...response, observedAt: 3000 }],
+    ])
+      assert.equal(expectedBrowserDiagnostic(diagnostic, records), false)
+    for (const change of [
+      { phase: "mediamtx-playing" },
+      { phase: "mediamtx-recovered" },
+      { observedAt: NaN },
+      { message: message.replace("metrics", "quality") },
+      { message: message.replace("503", "500") },
+      { message: message.replace("ERR_ABORTED", "ERR_FAILED") },
+    ]) {
+      if (change.message === message) continue
+      assert.equal(
+        expectedBrowserDiagnostic({ ...diagnostic, ...change }, [response]),
+        false,
+      )
+    }
+  }
+})
+
+test("native recording cancellation requires the observed return-to-live action for that exact media URL", () => {
+  const url =
+    "http://localhost:3000/api/devices/camera/recordings/playback?start=2026-10-03T12%3A00%3A00Z&duration=10"
+  const diagnostic = {
+    type: "request-failed",
+    message: `GET ${url} net::ERR_ABORTED`,
+    phase: "recording-return-live-requested",
+    at: 1000,
+  }
+  const event = { name: "recording-return-live-requested", url, at: 990 }
+  assert.deepEqual(unexpectedBrowserDiagnostics([diagnostic], [], [event]), [])
+  for (const events of [
+    [],
+    [{ ...event, url: url + "0" }],
+    [{ ...event, at: 4000 }],
+    [{ ...event, name: "recording-baseline" }],
+  ])
+    assert.deepEqual(unexpectedBrowserDiagnostics([diagnostic], [], events), [
+      diagnostic,
+    ])
+  for (const changed of [
+    { ...diagnostic, phase: "recording-baseline" },
+    {
+      ...diagnostic,
+      message: diagnostic.message.replace("ERR_ABORTED", "ERR_FAILED"),
+    },
+  ])
+    assert.deepEqual(unexpectedBrowserDiagnostics([changed], [], [event]), [
+      changed,
+    ])
+})
+
+test("recording outage diagnostics stay scoped to deliberate server or storage faults", () => {
+  const url = "http://localhost:3000/api/devices/camera/recordings"
+  const response = { method: "GET", url, status: 503, observedAt: 1000 }
+  const diagnostic = {
+    type: "http-error",
+    message: `GET ${url} 503`,
+    phase: "direct-fallback-playing",
+    observedAt: 1001,
+  }
+  for (const phase of [
+    "direct-fallback-playing",
+    "recording-storage-full",
+    "recording-storage-recovering",
+  ])
+    assert.equal(
+      expectedBrowserDiagnostic({ ...diagnostic, phase }, [response]),
+      true,
+    )
+  for (const phase of [
+    "recording-baseline",
+    "recording-recovered",
+    "mediamtx-recovered",
+  ])
+    assert.equal(
+      expectedBrowserDiagnostic({ ...diagnostic, phase }, [response]),
+      false,
+    )
+  for (const records of [
+    [],
+    [{ ...response, method: "POST" }],
+    [{ ...response, status: 200 }],
+    [{ ...response, observedAt: 4000 }],
+  ])
+    assert.equal(expectedBrowserDiagnostic(diagnostic, records), false)
+  for (const path of ["metrics", "quality", "recordings/playback?start=x"])
+    assert.equal(
+      expectedBrowserDiagnostic(
+        {
+          ...diagnostic,
+          message: diagnostic.message.replace("recordings", path),
+        },
+        [{ ...response, url: url.replace("recordings", path) }],
+      ),
+      false,
+    )
+})
+
+test("disabled recording abort requires matching 204 headers, never an unavailable service", () => {
+  const url = "http://localhost:3000/api/devices/camera/recordings"
+  const diagnostic = {
+    type: "request-failed",
+    message: `GET ${url} net::ERR_ABORTED`,
+    phase: "navigation-started",
+    observedAt: 1001,
+  }
+  const response = { method: "GET", url, status: 204, observedAt: 1000 }
+  assert.equal(expectedBrowserDiagnostic(diagnostic, [response]), true)
+  assert.equal(
+    expectedBrowserDiagnostic(diagnostic, [{ ...response, status: 503 }]),
+    false,
+  )
+  assert.equal(expectedBrowserDiagnostic(diagnostic, []), false)
+})
+
 test("platform qualification accepts only diagnostics caused by deliberate transitions", () => {
   const accepted = [
     {
@@ -175,6 +415,29 @@ test("platform qualification accepts a WHEP abort only after the same request re
   }
 })
 
+test("quality without presets accepts only a correlated, completed 204 response", () => {
+  const url = "https://platform.example/api/devices/device-id/quality"
+  const diagnostic = {
+    type: "request-failed",
+    message: `GET ${url} net::ERR_ABORTED`,
+    observedAt: 2010,
+    phase: "mediamtx-playing",
+  }
+  const response = { method: "GET", url, status: 204, observedAt: 2000 }
+  assert.deepEqual(unexpectedBrowserDiagnostics([diagnostic], [response]), [])
+  for (const responses of [
+    [],
+    [{ ...response, status: 200 }],
+    [{ ...response, method: "PUT" }],
+    [{ ...response, observedAt: 0 }],
+    [{ ...response, url: `${url}/another` }],
+  ]) {
+    assert.deepEqual(unexpectedBrowserDiagnostics([diagnostic], responses), [
+      diagnostic,
+    ])
+  }
+})
+
 test("platform qualification tolerates an unavailable page while writing failure evidence", async () => {
   const events = []
   await drainBrowserEvents(undefined, events)
@@ -188,4 +451,25 @@ test("platform qualification tolerates an unavailable page while writing failure
     events,
   )
   assert.deepEqual(events, [])
+})
+
+test("required MediaMTX retries identify root WHEP console locations only during an intentional outage", () => {
+  const diagnostic = {
+    message:
+      "http://localhost:8889/devices/device-id/whep:0:0 Failed to load resource: net::ERR_CONNECTION_REFUSED",
+    phase: "mediamtx-stopped",
+    type: "console-error",
+  }
+  assert.equal(expectedBrowserDiagnostic(diagnostic), true)
+  assert.equal(
+    expectedBrowserDiagnostic({ ...diagnostic, phase: "mediamtx-playing" }),
+    false,
+  )
+  assert.equal(
+    expectedBrowserDiagnostic({
+      ...diagnostic,
+      message: diagnostic.message.replace("whep:0:0", "health:0:0"),
+    }),
+    false,
+  )
 })

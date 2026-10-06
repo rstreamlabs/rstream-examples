@@ -50,7 +50,7 @@ def range(path): values(path) | if length == 0 then null else {minimum: min, max
       required: true,
       activeSessions: 1,
       createdSessions: 1,
-      negotiated: {twcc: 1, nack: 1, rtx: 0, flexfec: 0},
+      negotiated: {twcc: 1, nack: 1, rtx: 1, flexfec: 0},
       fixedSourcePacing: {adaptiveUpdates: 0, adaptiveFailures: 0, queueDrops: 0, mediaFrameDrops: 0},
       activeAfterTeardown: 0
     }] | length == $requested_runs and all),

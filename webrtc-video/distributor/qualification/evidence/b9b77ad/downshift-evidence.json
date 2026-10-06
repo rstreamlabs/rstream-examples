@@ -1,0 +1,345 @@
+{
+  "purpose": "Qualify continuous downshift evidence with a private one-second down-hold profile; public default remains three seconds",
+  "passed": false,
+  "interpretation": [
+    "The deterministic regression demonstrates that changing between lower rungs no longer restarts the active-format shortfall timer. The complete producer race suite passes.",
+    "The adaptive MediaMTX run passes every gate. The direct run passes source-format and target-rate recovery, host/runtime and lifecycle gates, but fails playback: 3.065 seconds of initial disruption exceeds the unchanged 3-second bound; the final part is also reported after the 4-second grace. No recovery freezes or decoded-frame drops occur in either run.",
+    "One successful MediaMTX run is not a stable series. The one-second down-hold profile remains experimental; no acceptance threshold or reference profile has changed."
+  ],
+  "cases": [
+    {
+      "case": "direct-small-fast-down",
+      "resultSHA256": "856d7d2d8ebc2aba2665b0b822059de0d2b882eb7fa04b8d4448a16de2b6fa48",
+      "revision": "b9b77ad1430cea79cd7bc0bd3a1c734226582453",
+      "workingTreeDirty": false,
+      "mode": "direct",
+      "passed": false,
+      "publishable": false,
+      "images": {
+        "producer": "sha256:773c58bfc8d6887bca5a3d6d158a8a7c16233356ebd196223e0af25adeca6dda",
+        "distributor": null,
+        "browser": "sha256:20a815c4fb5200ac7930db5e431b9b1e102a99cd82c1e75b6dee4f673ce00ee1"
+      },
+      "profile": {
+        "edgeAuthentication": true,
+        "edgeCredentialLifetimeSeconds": 440,
+        "warmupSeconds": 20,
+        "phaseSeconds": 45,
+        "recoverySeconds": 90,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "37741fcc4516ba4cb207ca796576246280b6a860271939d56e9a0ebc22448fd8",
+        "latencyProbe": false,
+        "sourceQualityObserved": true,
+        "expectedNetworkFormat": "small",
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": true,
+          "capacityKbps": 1500,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 256
+        },
+        "sourceNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        }
+      },
+      "gates": {
+        "sourceFormats": true,
+        "sourceQualityEvidence": true,
+        "latencyMeasurement": true,
+        "media": true,
+        "playback": false,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": false,
+        "sourceTargetRecovery": true
+      },
+      "sourceFormats": {
+        "enabled": true,
+        "scope": "Automatic source-format observations and decoded browser dimensions/cadence; sampled media-time continuity, not physical capture latency.",
+        "networkProfile": "small",
+        "minimumDwellMilliseconds": 10000,
+        "maximumSampleGapMilliseconds": 1082,
+        "gates": {
+          "qualityComplete": true,
+          "stableConfiguration": true,
+          "lowerNetworkFormat": true,
+          "samplingContinuous": true,
+          "sampledMediaContinuous": true,
+          "decodedCountersContinuous": true,
+          "singleSession": true,
+          "minimumDwell": true,
+          "expectedSteadyFormats": true,
+          "configuredCadence": true,
+          "phaseOrder": true
+        },
+        "passed": true,
+        "transitions": [
+          {
+            "profile": "large",
+            "atMilliseconds": 20765,
+            "phase": "baseline"
+          },
+          {
+            "profile": "small",
+            "atMilliseconds": 69447,
+            "phase": "viewer-network"
+          },
+          {
+            "profile": "medium",
+            "atMilliseconds": 137239,
+            "phase": "recovery"
+          },
+          {
+            "profile": "large",
+            "atMilliseconds": 152762,
+            "phase": "recovery"
+          }
+        ],
+        "phases": {
+          "baseline": {
+            "expectedProfile": "large",
+            "expectedFramesPerSecond": 30,
+            "samples": 44,
+            "steadyMilliseconds": 9301,
+            "steadyDecodedFramesPerSecond": 29.996774540372,
+            "configuredFrameRatio": 1.0000299410161981,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          },
+          "viewer-network": {
+            "expectedProfile": "small",
+            "expectedFramesPerSecond": 15,
+            "samples": 43,
+            "steadyMilliseconds": 9372,
+            "steadyDecodedFramesPerSecond": 14.938113529662825,
+            "configuredFrameRatio": 0.8831338473115531,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          },
+          "recovery": {
+            "expectedProfile": "large",
+            "expectedFramesPerSecond": 30,
+            "samples": 87,
+            "steadyMilliseconds": 9316,
+            "steadyDecodedFramesPerSecond": 30.055817947617005,
+            "configuredFrameRatio": 1.0017012949556239,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          }
+        },
+        "failures": []
+      },
+      "runtimeHealth": {
+        "fatalErrors": 0,
+        "h264PacketizationErrors": 0,
+        "packetLossWarnings": 0,
+        "transportBufferWarnings": 0
+      },
+      "networkMeasurements": {
+        "freezeDurationDeltaSeconds": 3.065,
+        "capacityTransitionDisruptionSeconds": 3.065,
+        "steadyStateFreezeCountDelta": 1,
+        "steadyStateFreezeDurationDeltaSeconds": 2.876,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "steadyStateFrameDropRatio": 0
+      }
+    },
+    {
+      "case": "source-small-fast-down",
+      "resultSHA256": "ce69648ac97ec11b9ec226506bd7546f0df767bc081a221b04c579103d61842f",
+      "revision": "b9b77ad1430cea79cd7bc0bd3a1c734226582453",
+      "workingTreeDirty": false,
+      "mode": "mediamtx",
+      "passed": true,
+      "publishable": true,
+      "images": {
+        "producer": "sha256:773c58bfc8d6887bca5a3d6d158a8a7c16233356ebd196223e0af25adeca6dda",
+        "distributor": "sha256:5b621674d0d3c90fa4d0c3e7e519dc83495f7d26f7206eb40a1570ea758ada5e",
+        "browser": "sha256:20a815c4fb5200ac7930db5e431b9b1e102a99cd82c1e75b6dee4f673ce00ee1"
+      },
+      "profile": {
+        "edgeAuthentication": true,
+        "edgeCredentialLifetimeSeconds": 440,
+        "warmupSeconds": 20,
+        "phaseSeconds": 45,
+        "recoverySeconds": 90,
+        "flexFEC": {
+          "mediaPackets": 5,
+          "repairPackets": 1
+        },
+        "playoutDelayHintSeconds": 0,
+        "producerConfigSHA256": "37741fcc4516ba4cb207ca796576246280b6a860271939d56e9a0ebc22448fd8",
+        "latencyProbe": false,
+        "sourceQualityObserved": true,
+        "expectedNetworkFormat": "small",
+        "acceptance": {
+          "capacityTransitionGraceMilliseconds": 4000,
+          "maximumCapacityTransitionFreezeSeconds": 3,
+          "maximumCapacityTransitionDisruptionSeconds": 3,
+          "maximumContinuousImpairmentFreezeRatio": 0.02,
+          "maximumDroppedFrameRatio": 0.01,
+          "minimumFrameRateRatio": 0.8
+        },
+        "viewerNetwork": {
+          "enabled": false,
+          "capacityKbps": 0,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 0
+        },
+        "sourceNetwork": {
+          "enabled": true,
+          "capacityKbps": 1500,
+          "delayMilliseconds": 0,
+          "jitterMilliseconds": 0,
+          "lossPercent": 0,
+          "queuePackets": 256
+        }
+      },
+      "gates": {
+        "sourceFormats": true,
+        "sourceQualityEvidence": true,
+        "latencyMeasurement": true,
+        "media": true,
+        "playback": true,
+        "sourceFeedback": true,
+        "producerMetrics": true,
+        "qualityEvidence": true,
+        "setupEvidence": true,
+        "teardownEvidence": true,
+        "adapterIntegrity": true,
+        "runtimeMediaIntegrity": true,
+        "performanceEnvironment": true,
+        "nativeSourceLifecycle": true,
+        "viewerNegotiation": true,
+        "resourceLifecycle": true,
+        "sourceNetworkCausality": true,
+        "sourceNetworkResponse": true,
+        "viewerNetworkRecovery": true,
+        "sourceTargetRecovery": true
+      },
+      "sourceFormats": {
+        "enabled": true,
+        "scope": "Automatic source-format observations and decoded browser dimensions/cadence; sampled media-time continuity, not physical capture latency.",
+        "networkProfile": "small",
+        "minimumDwellMilliseconds": 10000,
+        "maximumSampleGapMilliseconds": 1049,
+        "gates": {
+          "qualityComplete": true,
+          "stableConfiguration": true,
+          "lowerNetworkFormat": true,
+          "samplingContinuous": true,
+          "sampledMediaContinuous": true,
+          "decodedCountersContinuous": true,
+          "singleSession": true,
+          "minimumDwell": true,
+          "expectedSteadyFormats": true,
+          "configuredCadence": true,
+          "phaseOrder": true
+        },
+        "passed": true,
+        "transitions": [
+          {
+            "profile": "large",
+            "atMilliseconds": 20822,
+            "phase": "baseline"
+          },
+          {
+            "profile": "small",
+            "atMilliseconds": 68455,
+            "phase": "source-network"
+          },
+          {
+            "profile": "medium",
+            "atMilliseconds": 138282,
+            "phase": "recovery"
+          },
+          {
+            "profile": "large",
+            "atMilliseconds": 154856,
+            "phase": "recovery"
+          }
+        ],
+        "phases": {
+          "baseline": {
+            "expectedProfile": "large",
+            "expectedFramesPerSecond": 30,
+            "samples": 44,
+            "steadyMilliseconds": 9322,
+            "steadyDecodedFramesPerSecond": 30.03647285990131,
+            "configuredFrameRatio": 1.000389373109294,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          },
+          "source-network": {
+            "expectedProfile": "small",
+            "expectedFramesPerSecond": 15,
+            "samples": 44,
+            "steadyMilliseconds": 9354,
+            "steadyDecodedFramesPerSecond": 14.859952961299978,
+            "configuredFrameRatio": 0.9270120212985277,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          },
+          "recovery": {
+            "expectedProfile": "large",
+            "expectedFramesPerSecond": 30,
+            "samples": 86,
+            "steadyMilliseconds": 9317,
+            "steadyDecodedFramesPerSecond": 29.94526135022003,
+            "configuredFrameRatio": 1.003058376512188,
+            "steadyFormatPassed": true,
+            "cadencePassed": true
+          }
+        },
+        "failures": []
+      },
+      "runtimeHealth": {
+        "fatalErrors": 0,
+        "h264PacketizationErrors": 0,
+        "packetLossWarnings": 0,
+        "transportBufferWarnings": 0
+      },
+      "networkMeasurements": {
+        "freezeDurationDeltaSeconds": 1.676,
+        "capacityTransitionDisruptionSeconds": 1.676,
+        "steadyStateFreezeCountDelta": 0,
+        "steadyStateFreezeDurationDeltaSeconds": 0,
+        "recoveryFreezeDurationDeltaSeconds": 0,
+        "steadyRecoveryFreezeDurationDeltaSeconds": 0,
+        "steadyStateFrameDropRatio": 0
+      }
+    }
+  ]
+}

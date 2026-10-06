@@ -13,6 +13,7 @@ import (
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/bridge"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/config"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/host"
+	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/readnotify"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/source"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/supervisor"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/telemetry"
@@ -38,6 +39,9 @@ func main() {
 }
 
 func run(ctx context.Context, arguments []string, logger *slog.Logger) error {
+	if len(arguments) == 1 && arguments[0] == "reader-started" {
+		return readnotify.Notify(ctx, os.Getenv(readnotify.DirectoryEnvironmentVariable), os.Getenv("MTX_PATH"))
+	}
 	if len(arguments) > 0 && arguments[0] == "host" {
 		return runHost(ctx, arguments[1:])
 	}

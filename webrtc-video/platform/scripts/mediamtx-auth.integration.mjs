@@ -6,10 +6,13 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { spawn } from "node:child_process"
 
+import { MediaMTXMetricsReader } from "../src/lib/mediamtx-metrics.ts"
+
 import { MediaMTXTokenService } from "../src/lib/video-distributor-token.ts"
 
 const issuer = "rstream-webrtc-video-platform-integration"
 const audience = "rstream-mediamtx-integration"
+const allowedOrigin = "https://platform.example"
 const deviceID = "fd8c2b34-1da2-4c71-8f38-343af59c0a11"
 const path = `devices/${deviceID}`
 const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 })
@@ -33,6 +36,7 @@ const jwksAddress = jwks.address()
 assert(jwksAddress && typeof jwksAddress !== "string")
 const httpPort = await availableTCPPort()
 const icePort = await availableUDPPort()
+const metricsPort = await availableTCPPort()
 const directory = await mkdtemp(join(tmpdir(), "rstream-mediamtx-auth-"))
 const config = join(directory, "mediamtx.yml")
 const onDemandMarker = join(directory, "on-demand-started")
@@ -54,7 +58,8 @@ authMethod: jwt
 authJWTJWKS: http://127.0.0.1:${jwksAddress.port}/jwks
 authJWTIssuer: ${issuer}
 authJWTAudience: ${audience}
-authJWTExclude: []
+authJWTExclude:
+  - action: metrics
 rtsp: false
 rtmp: false
 hls: false
@@ -62,10 +67,12 @@ srt: false
 moq: false
 playback: false
 api: false
-metrics: false
+metrics: true
+metricsAddress: 127.0.0.1:${metricsPort}
 pprof: false
 webrtc: true
 webrtcAddress: 127.0.0.1:${httpPort}
+webrtcAllowOrigins: [${allowedOrigin}]
 webrtcLocalUDPAddress: 127.0.0.1:${icePort}
 webrtcLocalTCPAddress: ""
 webrtcIPsFromInterfaces: false
@@ -90,6 +97,15 @@ mediaMTX.stdout.on("data", (chunk) => logs.push(String(chunk)))
 mediaMTX.stderr.on("data", (chunk) => logs.push(String(chunk)))
 try {
   await waitForHTTP(httpPort, mediaMTX)
+  const metrics = new MediaMTXMetricsReader({
+    endpoint: `http://127.0.0.1:${metricsPort}/metrics`,
+  })
+  const absent = await metrics.read(path, AbortSignal.timeout(5000))
+  assert.equal(absent.state, "idle")
+  assert.equal(absent.readers, 0)
+  assert.equal(absent.inboundBitsPerSecond, null)
+  await assertFileRemainsMissing(onDemandMarker)
+
   const read = tokens.sign({
     action: "read",
     path,
@@ -110,6 +126,26 @@ try {
     ttlSeconds: 1,
   })
   const base = `http://127.0.0.1:${httpPort}/${path}`
+  // POST requests must be checked by the server even without a preflight.
+  // A valid path-scoped credential does not authorize an unrelated web origin.
+  for (const origin of [
+    "https://untrusted.invalid",
+    "http://platform.example",
+    "https://platform.example.untrusted.invalid",
+    "null",
+  ]) {
+    assert.equal(await exchange(`${base}/whep`, read, "recvonly", origin), 403)
+    assert.equal(
+      await exchange(`${base}/whip`, publish, "sendonly", origin),
+      403,
+    )
+    await assertFileRemainsMissing(onDemandMarker)
+  }
+  assert.equal(
+    await exchange(`${base}/whep`, "", "recvonly", allowedOrigin),
+    401,
+  )
+  await assertFileRemainsMissing(onDemandMarker)
   assert.equal(await exchange(`${base}/whep`), 401)
   await assertFileRemainsMissing(onDemandMarker)
   assert.equal(await exchange(`${base}/whep`, expired), 401)
@@ -124,8 +160,18 @@ try {
   })
   assert.equal(await exchange(`${base}/whep`, wrongPath), 401)
   await assertFileRemainsMissing(onDemandMarker)
-  assert.equal(await exchange(`${base}/whep`, read), 400)
+  assert.equal(
+    await exchange(`${base}/whep`, read, "recvonly", allowedOrigin),
+    400,
+  )
   await waitForFile(onDemandMarker)
+  // A fresh reader avoids the two-second cache and exercises the actual path
+  // exposition while the on-demand source is starting, without starting a viewer.
+  const starting = await new MediaMTXMetricsReader({
+    endpoint: `http://127.0.0.1:${metricsPort}/metrics`,
+  }).read(path, AbortSignal.timeout(5000))
+  assert.equal(starting.state, "idle")
+  assert.equal(starting.readers, 0)
   assert.equal(await exchange(`${base}/whip`, read, "sendonly"), 401)
   assert.equal(await exchange(`${base}/whip`, publish, "sendonly"), 201)
   const wrongPathPublish = tokens.sign({
@@ -164,7 +210,7 @@ try {
     wrongPath: { delete: 200, patch: 204 },
   })
   process.stdout.write(
-    "MediaMTX authenticated session creation and bound lifecycle requests to opaque resource URLs.\n",
+    "MediaMTX enforced browser origins, authenticated session creation and bound lifecycle requests to opaque resource URLs.\n",
   )
 } catch (error) {
   process.stderr.write(logs.join(""))
@@ -208,21 +254,26 @@ function shellQuote(value) {
   return `'${value.replaceAll("'", `'"'"'`)}'`
 }
 
-async function exchange(url, token = "", direction = "recvonly") {
-  const session = await createSession(url, token, direction)
+async function exchange(url, token = "", direction = "recvonly", origin) {
+  const session = await createSession(url, token, direction, origin)
   if (session.status === 201 && session.location) {
     assert.equal(await deleteSession(session.location, token), 200)
   }
   return session.status
 }
 
-async function createSession(url, token = "", direction = "recvonly") {
+async function createSession(url, token = "", direction = "recvonly", origin) {
   const headers = {
     Accept: "application/sdp",
     "Content-Type": "application/sdp",
   }
   if (token) {
     headers.Authorization = `Bearer ${token}`
+  }
+  if (origin !== undefined) {
+    headers.Origin = origin
+    // Node fetch does not emit the browser's fetch-site metadata itself.
+    headers["Sec-Fetch-Site"] = "cross-site"
   }
   const response = await fetch(url, {
     body: offer(direction),

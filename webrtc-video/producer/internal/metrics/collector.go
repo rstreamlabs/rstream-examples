@@ -42,6 +42,9 @@ type Collector struct {
 	transportNegotiatedSessions   *prometheus.Desc
 	estimatedAvailableBytesSecond *prometheus.Desc
 	controllerTargetBytesSecond   *prometheus.Desc
+	acknowledgedRTPRate           *prometheus.Desc
+	delayRecoveryRTPRate          *prometheus.Desc
+	delayIncreaseModeSessions     *prometheus.Desc
 	delayControllerStateSessions  *prometheus.Desc
 	delayControllerUsageSessions  *prometheus.Desc
 	encoderTargetBytesSecond      *prometheus.Desc
@@ -182,6 +185,21 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 			nil,
 			"bytes_per_second",
 		),
+		acknowledgedRTPRate: newDesc(
+			namespace+"_twcc_acknowledged_rtp_bytes_per_second",
+			"Sum of acknowledged primary/RTX RTP throughput across active sessions, including RTP headers but excluding untracked FlexFEC and network encapsulation.",
+			nil, nil, "bytes_per_second",
+		),
+		delayRecoveryRTPRate: newDesc(
+			namespace+"_twcc_delay_recovery_rtp_bytes_per_second",
+			"Sum of delay-controller recovery targets across active sessions in tracked primary/RTX RTP units, excluding untracked FlexFEC.",
+			nil, nil, "bytes_per_second",
+		),
+		delayIncreaseModeSessions: newDesc(
+			namespace+"_twcc_delay_increase_mode_sessions",
+			"Current sessions by the algorithm selected for their next delay-controller increase, including while held.",
+			[]string{"mode"}, nil,
+		),
 		delayControllerStateSessions: newDesc(
 			namespace+"_twcc_delay_controller_state_sessions",
 			"Current sessions in each delay controller rate-control state.",
@@ -229,7 +247,7 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 		),
 		lossGuardObservedLossRatio: newDesc(
 			namespace+"_loss_guard_maximum_observed_loss_ratio",
-			"Highest packet loss ratio most recently observed by a loss guard among active sessions.",
+			"Highest reconciled packet loss ratio most recently observed by GCC among active sessions.",
 			nil,
 			nil,
 		),
@@ -297,13 +315,13 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 		),
 		lossGuardActiveSessions: newDesc(
 			namespace+"_loss_guard_active_sessions",
-			"Current sessions whose loss guard is constraining bitrate recovery.",
+			"Current sessions whose GCC loss estimate is limiting bitrate below the delay estimate.",
 			nil,
 			nil,
 		),
 		lossGuardTargetBytesSecond: newDesc(
 			namespace+"_loss_guard_target_bytes_per_second",
-			"Sum of current loss guard bitrate ceilings across sessions actively constrained by the guard.",
+			"Sum of GCC loss bitrate ceilings across sessions actively constrained by persistent loss.",
 			nil,
 			nil,
 			"bytes_per_second",
@@ -340,7 +358,7 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 		),
 		lossGuardTransitions: newDesc(
 			namespace+"_loss_guard_transitions_total",
-			"Total loss guard state transitions by direction.",
+			"Total GCC loss-controller bitrate changes by direction.",
 			[]string{"transition"},
 			nil,
 		),
@@ -429,6 +447,9 @@ func NewCollector(cfg config.Config, source sourceProvider, producer producerPro
 		c.transportNegotiatedSessions,
 		c.estimatedAvailableBytesSecond,
 		c.controllerTargetBytesSecond,
+		c.acknowledgedRTPRate,
+		c.delayRecoveryRTPRate,
+		c.delayIncreaseModeSessions,
 		c.delayControllerStateSessions,
 		c.delayControllerUsageSessions,
 		c.encoderTargetBytesSecond,
@@ -527,6 +548,11 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(c.estimatedAvailableBytesSecond, prometheus.GaugeValue, bitsToBytes(producer.EstimatedBitrateBps))
 	ch <- prometheus.MustNewConstMetric(c.controllerTargetBytesSecond, prometheus.GaugeValue, bitsToBytes(producer.LossControllerTargetBitrateBps), "loss")
 	ch <- prometheus.MustNewConstMetric(c.controllerTargetBytesSecond, prometheus.GaugeValue, bitsToBytes(producer.DelayControllerTargetBitrateBps), "delay")
+	ch <- prometheus.MustNewConstMetric(c.acknowledgedRTPRate, prometheus.GaugeValue, bitsToBytes(producer.AcknowledgedRTPBitrateBps))
+	ch <- prometheus.MustNewConstMetric(c.delayRecoveryRTPRate, prometheus.GaugeValue, bitsToBytes(producer.DelayRecoveryRTPBitrateBps))
+	ch <- prometheus.MustNewConstMetric(c.delayIncreaseModeSessions, prometheus.GaugeValue, float64(producer.DelayAdditiveSessions), "additive")
+	ch <- prometheus.MustNewConstMetric(c.delayIncreaseModeSessions, prometheus.GaugeValue, float64(producer.DelayMultiplicativeSessions), "multiplicative")
+	ch <- prometheus.MustNewConstMetric(c.delayIncreaseModeSessions, prometheus.GaugeValue, float64(producer.DelayRecoverySessions), "recovery")
 	ch <- prometheus.MustNewConstMetric(c.delayControllerStateSessions, prometheus.GaugeValue, float64(producer.DelayControllerIncreaseSessions), "increase")
 	ch <- prometheus.MustNewConstMetric(c.delayControllerStateSessions, prometheus.GaugeValue, float64(producer.DelayControllerDecreaseSessions), "decrease")
 	ch <- prometheus.MustNewConstMetric(c.delayControllerStateSessions, prometheus.GaugeValue, float64(producer.DelayControllerHoldSessions), "hold")

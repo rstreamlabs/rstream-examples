@@ -78,6 +78,29 @@ export function producerSample(samples) {
       "outcome",
       "applied",
     ),
+    acknowledgedRTPKbps: scale(
+      value("rstream_video_producer_twcc_acknowledged_rtp_bytes_per_second"),
+      8 / 1000,
+    ),
+    delayRecoveryRTPKbps: scale(
+      value("rstream_video_producer_twcc_delay_recovery_rtp_bytes_per_second"),
+      8 / 1000,
+    ),
+    delayAdditiveSessions: labeled(
+      "rstream_video_producer_twcc_delay_increase_mode_sessions",
+      "mode",
+      "additive",
+    ),
+    delayMultiplicativeSessions: labeled(
+      "rstream_video_producer_twcc_delay_increase_mode_sessions",
+      "mode",
+      "multiplicative",
+    ),
+    delayRecoverySessions: labeled(
+      "rstream_video_producer_twcc_delay_increase_mode_sessions",
+      "mode",
+      "recovery",
+    ),
     delayTargetKbps: scale(
       labeled(
         "rstream_video_producer_twcc_controller_target_bytes_per_second",

@@ -33,6 +33,31 @@ func TestDefaultConfigIsValid(t *testing.T) {
 	}
 }
 
+func TestTunnelConnectTimeout(t *testing.T) {
+	for _, testCase := range []struct {
+		value string
+		want  time.Duration
+	}{
+		{"", 15 * time.Second},
+		{" 25s ", 25 * time.Second},
+		{"5m", 5 * time.Minute},
+	} {
+		cfg := Default()
+		cfg.Tunnel.ConnectTimeout = testCase.value
+		got, err := cfg.TunnelConnectTimeout()
+		if err != nil || got != testCase.want {
+			t.Fatalf("TunnelConnectTimeout(%q) = %v, %v", testCase.value, got, err)
+		}
+	}
+	for _, value := range []string{"0s", "-1s", "never", "5m1s", "999999999999999999h"} {
+		cfg := Default()
+		cfg.Tunnel.ConnectTimeout = value
+		if err := cfg.Validate(); err == nil {
+			t.Fatalf("unbounded or invalid connectTimeout %q accepted", value)
+		}
+	}
+}
+
 func TestMetricsListenValidation(t *testing.T) {
 	for _, testCase := range []struct {
 		name   string
@@ -163,6 +188,9 @@ func TestReferenceConfigsAreValid(t *testing.T) {
 	configs := []string{
 		"config.h264.yaml",
 		"config.provisioning.h264.yaml",
+		"config.provisioning.quality.h264.yaml",
+		"config.provisioning.source-formats.h264.yaml",
+		"qualification/adaptive-streaming/formats/config.automatic.yaml",
 		"config.test-pattern.h264.twcc-gcc.yaml",
 		"config.test-pattern.h264.twcc-gcc-flexfec.yaml",
 		"config.av1.yaml",
@@ -329,7 +357,7 @@ func TestAdaptiveBackendEnforcesBitrateBounds(t *testing.T) {
 	cfg.Media.Mode = MediaModePerViewer
 	cfg.WebRTC.Adaptive.Enabled = true
 	cfg.WebRTC.Adaptive.Backend = AdaptiveBackendTWCCGCC
-	cfg.WebRTC.Adaptive.TWCCGCC.MaxBitrateKbps = 9000
+	cfg.WebRTC.Adaptive.TWCCGCC.MaxBitrateKbps = MaxBitrateKbps + 1
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("expected maximum bitrate above supported range to fail validation")
 	}

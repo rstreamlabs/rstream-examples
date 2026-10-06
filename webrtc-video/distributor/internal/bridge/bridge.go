@@ -17,6 +17,7 @@ import (
 	"github.com/pion/webrtc/v4"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/config"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/media"
+	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/readnotify"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/repair"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/source"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/whipwhep"
@@ -25,6 +26,7 @@ import (
 const (
 	httpTimeout                       = 15 * time.Second
 	sourceTrackTimeout                = 10 * time.Second
+	destinationConnectTimeout         = 10 * time.Second
 	sessionCleanupTimeout             = 3 * time.Second
 	workerShutdownTimeout             = 3 * time.Second
 	minimumResolvedCredentialLifetime = 60 * time.Second
@@ -36,7 +38,7 @@ const (
 	metricsObservationInterval        = time.Second
 	packetQueueCapacity               = 256
 	maxRTPPacketBytes                 = 65535
-	baseWorkerCount                   = 6
+	baseWorkerCount                   = 7
 )
 
 var ErrWorkerShutdownTimeout = errors.New("worker shutdown timed out")
@@ -71,9 +73,10 @@ type workerResult struct {
 }
 
 type runOptions struct {
-	dropMediaSequence *uint16
-	dropFirstFEC      bool
-	observe           func(Result)
+	readerNotifications *readnotify.Listener
+	dropMediaSequence   *uint16
+	dropFirstFEC        bool
+	observe             func(Result)
 }
 
 type peerConnectionStateSource interface {
@@ -98,6 +101,13 @@ func RunObserved(ctx context.Context, configuration config.Config, observe func(
 }
 
 func run(ctx context.Context, configuration config.Config, options runOptions) (result Result, err error) {
+	if configuration.ReadNotifyDirectory != "" {
+		options.readerNotifications, err = readnotify.Listen(configuration.ReadNotifyDirectory, configuration.Path)
+		if err != nil {
+			return Result{}, source.Permanent(err)
+		}
+		defer func() { err = errors.Join(err, options.readerNotifications.Close()) }()
+	}
 	client := &http.Client{Timeout: httpTimeout}
 	resolver, err := configuredSourceResolver(configuration, client)
 	if err != nil {
@@ -426,7 +436,43 @@ func openDestination(
 		_ = peer.Close()
 		return nil, nil, nil, nil, fmt.Errorf("open MediaMTX WHIP session: %w", err)
 	}
+	connectCtx, cancelConnect := context.WithTimeout(ctx, destinationConnectTimeout)
+	err = waitForPeerConnection(connectCtx, peer)
+	cancelConnect()
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("connect MediaMTX WHIP transport: %w", errors.Join(err, closeSession(session)))
+	}
 	return peer, sender, output, session, nil
+}
+
+// SDP completion does not imply that DTLS/SRTP is ready. Pion can silently
+// discard writes before connection, including the initial H264 parameter sets.
+// Wait only at startup; the live forwarding path needs no additional buffering.
+func waitForPeerConnection(ctx context.Context, peer peerConnectionStateSource) error {
+	changed := make(chan struct{}, 1)
+	peer.OnConnectionStateChange(func(webrtc.PeerConnectionState) {
+		select {
+		case changed <- struct{}{}:
+		default:
+		}
+	})
+	defer peer.OnConnectionStateChange(nil)
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		switch state := peer.ConnectionState(); state {
+		case webrtc.PeerConnectionStateConnected:
+			return nil
+		case webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed:
+			return fmt.Errorf("peer connection entered %s state before media was ready", state)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-changed:
+		}
+	}
 }
 
 func openSource(
@@ -508,6 +554,9 @@ func forward(
 	events := make(chan decoderEvent, packetQueueCapacity)
 	packets := make(chan repair.Packet, packetQueueCapacity)
 	workerCount := baseWorkerCount
+	if options.readerNotifications != nil {
+		workerCount++
+	}
 	if maintain != nil {
 		workerCount++
 	}
@@ -530,6 +579,9 @@ func forward(
 	startWorker(results, "source media reader", func() error {
 		return readSourceMedia(workerCtx, incoming.track, events)
 	})
+	startWorker(results, "source RTCP reader", func() error {
+		return readSourceRTCP(workerCtx, incoming.receiver)
+	})
 	if decoder != nil {
 		startWorker(results, "source FlexFEC reader", func() error {
 			return readSourceFEC(workerCtx, incoming.receiver, events, options.dropFirstFEC)
@@ -541,6 +593,13 @@ func forward(
 	startWorker(results, "destination RTCP reader", func() error {
 		return forwardDestinationRTCP(workerCtx, sender, sourcePeer, uint32(incoming.track.SSRC()))
 	})
+	if options.readerNotifications != nil {
+		startWorker(results, "reader key-frame requests", func() error {
+			return options.readerNotifications.Run(workerCtx, func() error {
+				return requestSourceKeyFrame(sourcePeer, uint32(incoming.track.SSRC()))
+			})
+		})
+	}
 	startWorker(results, "source peer monitor", func() error {
 		return watchPeerConnection(workerCtx, sourcePeer)
 	})
@@ -821,6 +880,21 @@ func sendPacket(ctx context.Context, packets chan<- repair.Packet, packet repair
 		return ctx.Err()
 	case packets <- packet:
 		return nil
+	}
+}
+
+// Pion processes incoming Sender Reports through the receiver's RTCP reader.
+// Without this worker, Receiver Reports cannot echo LSR/DLSR and the producer
+// never observes source RTT. Closing the source peer during supervised shutdown
+// interrupts a blocked read. Reports stay on this congestion domain.
+func readSourceRTCP(ctx context.Context, receiver *webrtc.RTPReceiver) error {
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if _, _, err := receiver.ReadRTCP(); err != nil {
+			return fmt.Errorf("read source RTCP: %w", err)
+		}
 	}
 }
 

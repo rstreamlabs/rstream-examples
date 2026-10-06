@@ -15,6 +15,7 @@ import (
 
 func main() {
 	contextName := flag.String("context", "", "rstream CLI context to resolve")
+	localReference := flag.Bool("local-reference", false, "prepare only a credential-free direct Docker reference")
 	embeddedViewer := flag.Bool("embedded-viewer", true, "serve the same-origin embedded viewer")
 	flexFEC := flag.Bool("flex-fec", false, "enable FlexFEC in the qualification producer profiles")
 	flexFECMediaPackets := flag.Uint("flex-fec-media-packets", producerconfig.DefaultFlexFECMediaPackets, "media packets in each FlexFEC protection group")
@@ -32,10 +33,49 @@ func main() {
 		mediaPackets:  *flexFECMediaPackets,
 		repairPackets: *flexFECRepairPackets,
 	}
-	if err := run(*contextName, *outputDirectory, *producerConfig, *producerTURNPolicy, *producerTURNTTL, *turnTransport, *embeddedViewer, *tunnelTokenAuth, *allowMediaMTXNativeOffer, protection); err != nil {
+	var err error
+	if *localReference {
+		if *contextName != "" || *producerTURNPolicy != "disabled" || *producerTURNTTL != "" || *turnTransport != "" || *tunnelTokenAuth {
+			err = errors.New("local reference cannot use a context, TURN or edge authentication")
+		} else {
+			err = runLocal(*outputDirectory, *producerConfig, *embeddedViewer, *allowMediaMTXNativeOffer, protection)
+		}
+	} else {
+		err = run(*contextName, *outputDirectory, *producerConfig, *producerTURNPolicy, *producerTURNTTL, *turnTransport, *embeddedViewer, *tunnelTokenAuth, *allowMediaMTXNativeOffer, protection)
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+// runLocal never resolves the user's rstream configuration or credentials.
+// The consumer must select direct-config.yaml, not the unused source profile.
+func runLocal(outputDirectory, producerConfigPath string, embeddedViewer, allowMediaMTXNativeOffer bool, protection flexFECConfig) error {
+	if strings.TrimSpace(outputDirectory) == "" {
+		return errors.New("output directory is required")
+	}
+	if err := validateFlexFECConfig(protection); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(outputDirectory, 0o700); err != nil {
+		return err
+	}
+	if err := os.Chmod(outputDirectory, 0o700); err != nil {
+		return err
+	}
+	if err := writePrivate(filepath.Join(outputDirectory, "config.yaml"), []byte("version: 1\n")); err != nil {
+		return err
+	}
+	if err := writePrivate(filepath.Join(outputDirectory, "runtime.env"), nil); err != nil {
+		return err
+	}
+	cfg, err := producerconfig.Load(producerConfigPath)
+	if err != nil {
+		return fmt.Errorf("load producer config: %w", err)
+	}
+	cfg.Tunnel.Enabled = false
+	return writeLoadedProducerConfigs(cfg, outputDirectory, "disabled", "", "", embeddedViewer, false, allowMediaMTXNativeOffer, protection)
 }
 
 type flexFECConfig struct {
@@ -147,6 +187,10 @@ func writeProducerConfigs(sourcePath, outputDirectory, producerTURNPolicy, produ
 	if err != nil {
 		return fmt.Errorf("load producer config: %w", err)
 	}
+	return writeLoadedProducerConfigs(cfg, outputDirectory, producerTURNPolicy, producerTURNTTL, turnTransport, embeddedViewer, tunnelTokenAuth, allowMediaMTXNativeOffer, flexFEC)
+}
+
+func writeLoadedProducerConfigs(cfg producerconfig.Config, outputDirectory, producerTURNPolicy, producerTURNTTL, turnTransport string, embeddedViewer, tunnelTokenAuth, allowMediaMTXNativeOffer bool, flexFEC flexFECConfig) error {
 	cfg.WebRTC.Interceptors.FlexFEC = flexFEC.enabled
 	cfg.Web.Viewer.Enabled = embeddedViewer
 	cfg.Web.WHEP.AllowMediaMTXNativeOffer = allowMediaMTXNativeOffer
@@ -189,6 +233,10 @@ func writeProducerConfigs(sourcePath, outputDirectory, producerTURNPolicy, produ
 	}
 	direct := cfg
 	direct.Server.Listen = "0.0.0.0:8080"
+	if len(direct.Quality.Presets) > 0 {
+		// The local quality API must keep its production loopback-only guard.
+		direct.Server.Listen = "127.0.0.1:8080"
+	}
 	direct.Tunnel.Enabled = false
 	direct.Tunnel.Auth.Token = false
 	direct.Tunnel.Reconnect.Enabled = false

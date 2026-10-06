@@ -3,6 +3,7 @@ module github.com/rstreamlabs/rstream-examples/webrtc-video/producer
 go 1.27.0
 
 require (
+	github.com/go-gst/go-glib v1.4.0
 	github.com/go-gst/go-gst v1.4.0
 	github.com/pion/ice/v4 v4.4.1
 	github.com/pion/interceptor v0.1.47
@@ -13,7 +14,7 @@ require (
 	github.com/pion/webrtc/v4 v4.2.19
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/client_model v0.6.3
-	github.com/rstreamlabs/rstream-go v1.30.0
+	github.com/rstreamlabs/rstream-go v1.30.1-0.20261004135859-e3359f085d92
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -21,7 +22,6 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/eclipse-keypont/crypto11 v1.6.8 // indirect
-	github.com/go-gst/go-glib v1.4.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/johnstarich/go/dns v0.2.5 // indirect
@@ -46,13 +46,15 @@ require (
 	github.com/thales-e-security/pool v0.0.2 // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
-	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/exp v0.0.0-20260820142414-ca536658362e // indirect
 	golang.org/x/net v0.58.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 )
 
-replace github.com/pion/interceptor => github.com/rstreamlabs/pion-interceptor v0.1.48-0.20260822042700-f4a26c59b0fa
+replace github.com/pion/interceptor => github.com/rstreamlabs/pion-interceptor v0.1.48-0.20261004062019-94d47092806b
+
+replace github.com/pion/webrtc/v4 => github.com/rstreamlabs/pion-webrtc/v4 v4.2.19-0.20261004104852-5924f8e74b64

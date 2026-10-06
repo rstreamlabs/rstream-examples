@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"net/http"
 	"sync"
@@ -56,11 +57,20 @@ func New(cfg config.Config) (*App, error) {
 			return nil, err
 		}
 	}
+	var formatControl *media.GStreamerFormatConfig
+	if cfg.Media.Format != nil {
+		timings, err := cfg.Media.Format.Timings()
+		if err != nil {
+			return nil, err
+		}
+		formatControl = &media.GStreamerFormatConfig{CapsFilter: cfg.Media.Format.CapsFilter, TransitionTimeout: timings.Transition}
+	}
 	sourceFactory := media.NewGStreamerFactory(
 		cfg.Media.Pipeline,
 		cfg.Media.SinkName,
 		cfg.InitialBitrateKbps(),
 		logger,
+		formatControl,
 	)
 	turn, err := turnprovider.NewProvider(cfg, provisioningClient)
 	if err != nil {
@@ -95,7 +105,9 @@ func New(cfg config.Config) (*App, error) {
 			return broadcaster.OpenSession(ctx)
 		},
 		web.ServerOptions{
-			Viewer: cfg.Web.Viewer.Enabled,
+			Viewer:        cfg.Web.Viewer.Enabled,
+			QualityState:  broadcaster.QualityState,
+			SelectQuality: broadcaster.SelectQuality,
 		},
 	)
 	instance.metrics = producerMetrics.NewHandler(cfg, sourceFactory, broadcaster, instance.web)
@@ -142,7 +154,7 @@ func (a *App) Run(ctx context.Context) error {
 			return fmt.Errorf("failed to listen on %s: %w", a.cfg.Server.Listen, err)
 		}
 		a.info.LocalURL = "http://" + localListener.Addr().String()
-		localServer = newHTTPServer(handler)
+		localServer = newHTTPServer(web.LocalHandler(handler))
 		a.logger.Info("Local URL: %s", a.info.LocalURL)
 	}
 	var metricsServerErrors <-chan error
@@ -312,7 +324,7 @@ func (a *App) resolveTunnelOpenOptions(ctx context.Context) (tunnel.OpenOptions,
 			Provisioned: true,
 		}, nil
 	}
-	return tunnel.OpenOptions{}, nil
+	return tunnel.OpenOptions{Labels: maps.Clone(a.cfg.Tunnel.Labels)}, nil
 }
 
 func (a *App) setTunnelInfo(tunnelManager tunnelManager) {

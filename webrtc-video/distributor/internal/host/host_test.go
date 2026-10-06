@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/readnotify"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/telemetry"
 )
 
@@ -29,6 +30,14 @@ func TestRunHostsMetricsAndStopsTheCompleteProcessGroup(t *testing.T) {
 		done <- Run(ctx, helperOptions("graceful", readyPath, stoppedPath, socketPath, metricsAddress, time.Second))
 	}()
 	eventually(t, func() bool { return fileContains(readyPath, socketPath) })
+	ready, err := os.ReadFile(readyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	readDirectory := strings.Split(string(ready), "\n")[1]
+	if info, err := os.Stat(readDirectory); err != nil || !info.IsDir() || info.Mode().Perm() != 0o700 {
+		t.Fatalf("child reader directory is not private: %v %v", info, err)
+	}
 	eventually(t, func() bool {
 		response, err := http.Get("http://" + metricsAddress + "/metrics")
 		if err != nil {
@@ -47,6 +56,9 @@ func TestRunHostsMetricsAndStopsTheCompleteProcessGroup(t *testing.T) {
 	}
 	if _, err := os.Lstat(socketPath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("telemetry socket survived shutdown: %v", err)
+	}
+	if _, err := os.Lstat(readDirectory); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("reader directory survived host shutdown: %v", err)
 	}
 }
 
@@ -113,7 +125,7 @@ func TestHostHelperProcess(t *testing.T) {
 		}
 		attempt.Observe(telemetry.Counters{Received: 5})
 	}
-	if err := os.WriteFile(readyPath, []byte(os.Getenv(telemetry.SocketEnvironmentVariable)+"\n"+mode), 0o600); err != nil {
+	if err := os.WriteFile(readyPath, []byte(os.Getenv(telemetry.SocketEnvironmentVariable)+"\n"+os.Getenv(readnotify.DirectoryEnvironmentVariable)+"\n"+mode), 0o600); err != nil {
 		os.Exit(8)
 	}
 	if mode == "ignore" {

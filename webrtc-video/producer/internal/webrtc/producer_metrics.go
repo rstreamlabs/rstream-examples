@@ -3,6 +3,11 @@ package webrtc
 import "github.com/rstreamlabs/rstream-examples/webrtc-video/producer/internal/config"
 
 type ProducerStats struct {
+	AcknowledgedRTPBitrateBps                  int64
+	DelayRecoveryRTPBitrateBps                 int64
+	DelayAdditiveSessions                      int
+	DelayMultiplicativeSessions                int
+	DelayRecoverySessions                      int
 	ActiveSessions                             int
 	OpeningSessions                            int
 	TWCCNegotiatedSessions                     int
@@ -186,6 +191,16 @@ func addActiveSessionStats(producer *ProducerStats, session SessionStats, shared
 	producer.MaximumRetransmissionRetryIntervalSeconds = max(producer.MaximumRetransmissionRetryIntervalSeconds, bandwidth.PacerRetransmissionRetryIntervalMs/1000)
 	producer.LossControllerTargetBitrateBps += int64(bandwidth.LossTargetBitrateBps)
 	producer.DelayControllerTargetBitrateBps += int64(bandwidth.DelayTargetBitrateBps)
+	producer.AcknowledgedRTPBitrateBps += int64(bandwidth.AcknowledgedRTPBitrateBps)
+	producer.DelayRecoveryRTPBitrateBps += int64(bandwidth.DelayRecoveryRTPBitrateBps)
+	switch bandwidth.DelayIncreaseMode {
+	case "additive":
+		producer.DelayAdditiveSessions++
+	case "multiplicative":
+		producer.DelayMultiplicativeSessions++
+	case "recovery":
+		producer.DelayRecoverySessions++
+	}
 	switch bandwidth.State {
 	case "increase":
 		producer.DelayControllerIncreaseSessions++

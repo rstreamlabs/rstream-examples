@@ -20,7 +20,7 @@ The repository currently includes the following examples:
 | `private-postgres-access`       | A private bytestream tunnel pattern for PostgreSQL, using `rstream nc` to connect local tools, migrations, or CI jobs to a database that stays inside a private network without a VPN.                                                                        |
 | `published-tcp-ssh`             | An OpenSSH server kept on a private Compose network and exposed through an ephemeral published TCP address, with public-key authentication and no host port mapping.                                                                                         |
 | `python-vision-inference`       | An edge vision workload split across `device/` and `worker/` roles with the Python SDK: devices stream frames to private YOLO inference workers discovered through tunnel labels and the real-time watch API, with live failover and a published annotated viewer. |
-| `webrtc-video`                  | A WebRTC scenario split into a Go `producer/` agent that runs on a device or homelab machine and a `platform/` Next.js application that provisions producers, authorizes viewers, and watches tunnel state.                                                |
+| `webrtc-video`                  | Adaptive WebRTC with a Go device producer, personal or shared-organization access, provisioned or discovered inventory, and optional MediaMTX distribution through a Next.js platform. |
 
 Each example directory contains its own README with the platform-specific setup, configuration profiles, build commands, and operational notes required by that example.
 
@@ -92,6 +92,13 @@ rstream is less abstracted from the machine: every host must be provisioned
 carefully, host credentials must be protected, and the active project must be
 intentional. That mobility is useful for operators, but it can be a source of
 mistakes in a product meant for unmanaged devices.
+
+The video platform also supports [shared organization access and discovered
+inventory](./webrtc-video/platform/README.md#select-managed-or-discovered-inventory).
+In discovery mode, producers use their existing CLI project credentials and
+appear automatically from labeled video tunnels, including an optional device
+name. Inventory history is optional; PostgreSQL still stores authentication
+accounts and sessions. Organization access can also retain managed provisioning.
 
 `private-llm-mesh` combines the two ideas without introducing a third posture.
 The web application is rstream-aware: it uses application credentials to watch
