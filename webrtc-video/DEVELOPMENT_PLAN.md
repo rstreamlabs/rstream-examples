@@ -6,7 +6,7 @@ qualification do not establish compatibility with untested cameras, encoders,
 operating systems or networks.
 
 The first technical stabilization is complete. All three video CI jobs pass at
-`4098c52`; the guides PR passes its complete CI, and the SDK correction passes
+`c24ccfa`; the guides PR passes its complete CI, and the SDK correction passes
 its eight jobs. Implementation, packaging, access/browser regressions, source
 presets/formats, delivery paths, metrics, replay and startup/lifecycle checks
 are mapped to revision-specific evidence in the [final acceptance table](#final-acceptance).
@@ -53,13 +53,19 @@ until that external condition changes. Physical-source implementations, target
 hardware budgets and actual GitHub OAuth/SSO policy require their target
 environment. These are not claimed as validated by synthetic media fixtures.
 
-The only outstanding acceptance decision for this first delivery is explicit
-quality/format/metrics visual approval. The final desktop/mobile views have
-been presented again; inventory and replay presentation are already accepted.
-No new UI change is pending implementation. The source and guides PRs remain
-drafts until that review is received. The goal remains open for this decision.
+Visual acceptance is complete. On 2026-10-06 the maintainer approved the final
+application after an interactive local review of `c24ccfa`, using Next.js,
+PostgreSQL, a real provisioned test producer and MediaMTX with recording enabled.
+The launch smoke check verified live playback, a low-resolution preset and
+return to Auto, same-page expansion, available recording spans and authorized
+metrics, with no browser page errors. Inventory and replay presentation had
+already been accepted. No further UI change is required for this delivery.
 
-## Implemented; visual acceptance pending
+The chronological work record below retains earlier investigations and pending
+decisions. The final acceptance table supersedes those historical status notes;
+failed qualification attempts and environment boundaries remain unchanged.
+
+## Implemented and visually accepted
 
 ### Added acceptance criterion: rapid first picture
 
@@ -1779,7 +1785,9 @@ changes do not change the built producer/shared sources.
 
 Current evidence is revision-specific. The rows below summarize the acceptance
 state; they do not turn a partial or failed network matrix into an overall pass.
-The sample and guides remain draft PRs, with no deployment in this work.
+Implementation and visual acceptance are complete, with no deployment in this
+work. The maintainer authorized integration of the reviewed source and guides
+on 2026-10-06.
 
 | Requirement | Verified evidence | Remaining acceptance or boundary |
 | --- | --- | --- |
@@ -1791,11 +1799,11 @@ The sample and guides remain draft PRs, with no deployment in this work.
 | Direct, adaptive MediaMTX and native delivery | Real media tests cover direct fallback, adaptive single-upstream sharing and [current native MediaMTX](./distributor/qualification/evidence/82c9c40/native-current.json), whose 22 gates pass. | Native pull is fixed-rate interoperability, not the adaptive platform backend or an optimized startup path. |
 | Congestion, latency and forced relay | [Current local relay](./producer/qualification/adaptive-streaming/evidence/18f6cc1/local-relay.json) and the earlier [extended diagnostic](./producer/qualification/adaptive-streaming/evidence/c585c3c/extended-relay-diagnostic.json) each pass 56 gates. [Four latency trials](./distributor/qualification/evidence/4a0d83a/latency-network.json) have valid measurements but only three delivery passes; the [current source-capacity repeat](./distributor/qualification/evidence/50c1262/source-capacity-latency.json) passes all 22 gates. | The historical 193ms recovery freeze remains failed and its scheduling attribution is unproven. [Hosted relay](./producer/qualification/adaptive-streaming/evidence/2a45705/hosted-relay.json) fails basic TCP reachability before media; identical retries are deferred until the external condition changes. |
 | Metrics and bounded recent recording/replay | Current route/browser regression covers authorized metrics, outages, replay gaps/expiry and return to the same live session. [Recording startup regressions](./distributor/qualification/evidence/2b22561/recording-startup.json) pass; [resource comparisons](./distributor/qualification/evidence/5b83934/recording-resources.json) retain all twelve attempts. | Recording remains opt-in. Historical failed resource/delivery trials remain failed; synthetic CPU measurements are not target-device budgets. |
-| Same-page expansion and responsive controls | Current browser regression passes on Chromium, WebKit and Linux Firefox with desktop/mobile/landscape captures, focus/scroll restoration and media continuity. | Inventory and replay visuals are accepted. Explicit quality/format/metrics visual approval is still pending. |
-| Packaging, dependencies, commands and guides | [Go 1.27 static H.264/AV1 runtime checks](./producer/qualification/evidence/90df80f/static-linux-go127.json) pass on ARM64 and emulated AMD64. [Guides PR #57](https://github.com/rstreamlabs/rstream-nextjs/pull/57) passes complete CI at `0ab4f9c`. All three video CI jobs pass at `4098c52`, including the platform build/audit, conservative visible-startup collector and isolated MediaMTX fixture. | No physical-camera or native-AMD64 performance claim. Runtime evidence data are unchanged by that formatting correction; unrelated example CI failures are not video regressions. |
+| Same-page expansion and responsive controls | Current browser regression passes on Chromium, WebKit and Linux Firefox with desktop/mobile/landscape captures, focus/scroll restoration and media continuity. The maintainer approved the final application after interactive review on 2026-10-06. | Visual acceptance is complete, including quality, source-format information, metrics, expansion and the previously accepted inventory/replay controls. |
+| Packaging, dependencies, commands and guides | [Go 1.27 static H.264/AV1 runtime checks](./producer/qualification/evidence/90df80f/static-linux-go127.json) pass on ARM64 and emulated AMD64. [Guides PR #57](https://github.com/rstreamlabs/rstream-nextjs/pull/57) passes complete CI at `0ab4f9c`. All three video CI jobs pass at `c24ccfa`, including the platform build/audit, conservative visible-startup collector and isolated MediaMTX fixture. | No physical-camera or native-AMD64 performance claim. Runtime evidence data are unchanged by the documentation-only acceptance update; unrelated example CI failures are not video regressions. |
 
 Technical stabilization is complete for the documented reference environments.
-The completion review still needs the outstanding visual approval. Target hardware and real OAuth are
+The completion review and visual approval are complete. Target hardware and real OAuth are
 explicit later-environment boundaries, not silently passing tests. No deployment,
 unrelated repository repair or public-demo configuration change is implied.
 
@@ -1811,6 +1819,7 @@ unrelated repository repair or public-demo configuration change is implied.
 - Static Linux builds and the test-pattern H.264/AV1 runtime checks are complete
   with Go 1.27 at `90df80f`; camera plugin availability is checked separately, without claiming
   physical camera or native AMD64 performance qualification.
-- Obtain the outstanding quality/format/metrics visual acceptance. Discovery and
-  replay presentation are already accepted; OAuth/SSO policy and physical-device
-  qualification remain explicit deployment/target-environment boundaries.
+- Final quality/format/metrics visual acceptance was received on 2026-10-06.
+  Discovery and replay presentation are also accepted; OAuth/SSO policy and
+  physical-device qualification remain explicit deployment/target-environment
+  boundaries.
