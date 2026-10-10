@@ -497,12 +497,14 @@ func TestWHEPTrickleICEAndRestartKeepOnePeerConnection(t *testing.T) {
 		t.Fatalf("create broadcaster: %v", err)
 	}
 	defer func() { _ = broadcaster.Close() }()
+	settings := localPeerSettings()
+	broadcaster.peerFactory.settings = &settings
 	session, err := broadcaster.OpenSession(context.Background())
 	if err != nil {
 		t.Fatalf("open WHEP session: %v", err)
 	}
 	defer session.Close("test complete")
-	client, err := webrtc.NewPeerConnection(webrtc.Configuration{BundlePolicy: webrtc.BundlePolicyMaxBundle})
+	client, err := webrtc.NewAPI(webrtc.WithSettingEngine(localPeerSettings())).NewPeerConnection(webrtc.Configuration{BundlePolicy: webrtc.BundlePolicyMaxBundle})
 	if err != nil {
 		t.Fatalf("create WHEP client: %v", err)
 	}
