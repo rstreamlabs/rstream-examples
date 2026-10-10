@@ -651,13 +651,24 @@ split-brain state; the raw loss and delay targets remain exposed in the session
 diagnostics so qualification can distinguish a conservative loss estimate from
 the effective encoder and pacing limits.
 
-The pacer admits a new frame only if its projected service time, including
-queued work and bounded repair priority, fits a 225 ms budget. If
-a source overshoot exceeds that envelope, the sender drops complete encoded
+For H.264, the source must produce Annex B access units and provide IDR pictures
+periodically or on request. A gradual intra-refresh recovery point is not an
+independent key frame: clearing GStreamer's `DELTA_UNIT` flag is insufficient.
+The producer checks for an IDR NAL before declaring a key frame. A source with
+only progressive refresh is unsuitable for browser startup and recovery in
+this WebRTC path; it needs an encoder configuration that supplies IDRs.
+
+The pacer normally admits a frame when its projected service time, including
+queued work and bounded repair priority, fits a 225 ms budget. An empty queue
+also admits one larger key frame so recovery cannot reject every key even when
+the complete GOP fits the link. Subsequent frames must drain that burst back
+toward the normal budget; it does not increase the pacing rate or packet-count
+limit. A large key can still add serialization latency and requires measurement.
+If sustained source overshoot exceeds that envelope, the sender drops complete encoded
 access units before RTP packetization and waits for a key frame before
 resuming. The request is deferred until the queue has room for the most recent
 key-frame size plus 25% headroom; this avoids generating a recovery frame only
-to reject it at the same admission boundary. The pacer neither deletes already
+to reject it at the same admission boundary. The pacer does not delete already
 packetized RTP. This avoids artificial RTP gaps, partial-frame corruption, and
 key-frame storms while keeping hard RTP queue exhaustion actionable. Complete
 frame drops, actual packet residence time, projected service backlog,
@@ -742,7 +753,7 @@ without relabeling them as results for the new profile.
 | Adaptive range         |                                                               2–8 Mbit/s | The 2 Mbit/s floor protects fixed 1080p quality observed through x264 QP; the ceiling bounds CPU and link demand. Operating below the floor calls for a source ladder, not a hidden quality collapse.                                                                                                                                                                                    |
 | Update hysteresis      |                                  2 s, 10% increases, immediate decreases | Filters optimistic estimator noise while keeping the encoder aligned with the protected-wire pacing budget. Decreases bypass the periodic increase gate.                                                                                                                                                                                                                                 |
 | Recovery gate          |                                  At most 1% loss, followed by a 5 s hold | Prevents a delayed optimistic estimate from raising the encoder while loss is still active. After the hold, the encoder follows GCC's current bounded target rather than applying a second application-side ramp that would starve the estimator of probe traffic.                                                                                                                       |
-| Pacing and admission   | 1.5x scheduling rate over the protected target, 225 ms admission ceiling | Media, proactive repair, and retransmissions share the same scheduling ceiling. The multiplier drains encoded access units and timely repair; it does not add a second long-term limiter at the lower target. Over-budget access units are rejected whole before RTP packetization.                                                                                                      |
+| Pacing and admission   | 1.5x scheduling rate over the protected target, 225 ms sustained admission budget | Media, proactive repair, and retransmissions share the same scheduling ceiling. The multiplier drains encoded access units and timely repair; it does not add a second long-term limiter at the lower target. Over-budget access units are rejected whole before RTP packetization.                                                                                                      |
 | Repair scheduling      |                    One repair packet per scheduling burst; 225 ms expiry | Gives a retransmission a prompt opportunity without starving current media, and discards a repair packet once its playback value is lower than the latency it would add.                                                                                                                                                                                                                 |
 | FlexFEC                |                                 One repair packet per five media packets | Adds moderate proactive protection for lossy, higher-RTT paths where reactive RTX can arrive after the playout window. Stronger ratios remain explicit stress profiles; leave FlexFEC disabled when measured NACK/RTX recovery is sufficient or the link cannot afford the overhead.                                                                                                     |
 

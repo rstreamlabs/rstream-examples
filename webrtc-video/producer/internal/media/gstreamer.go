@@ -177,7 +177,7 @@ func newGStreamerSource(
 				stats.sampleExtractionErrors.Add(1)
 				return gst.FlowError
 			}
-			keyFrame := sampleIsKeyFrame(sample)
+			keyFrame := sampleIsKeyFrame(sample, data)
 			if keyFrame && source.format != nil {
 				source.format.observe(sample)
 			}
@@ -552,7 +552,18 @@ func bufferDuration(buffer *gst.Buffer) time.Duration {
 	return duration
 }
 
-func sampleIsKeyFrame(sample *gst.Sample) bool {
+func sampleIsKeyFrame(sample *gst.Sample, data []byte) bool {
+	if caps := sample.GetCaps(); caps != nil && caps.GetSize() > 0 {
+		structure := caps.GetStructureAt(0)
+		if structure.Name() == "video/x-h264" {
+			// h264parse also clears DELTA_UNIT at a gradual recovery point.
+			// WebRTC requires an IDR; the first picture of an intra-refresh
+			// sweep is not independently decodable. The RTP payloader consumes
+			// Annex B, not AVC length-prefixed samples.
+			format, _ := structure.GetValue("stream-format")
+			return format == "byte-stream" && h264ContainsIDR(data)
+		}
+	}
 	if buffer := sample.GetBuffer(); buffer != nil {
 		return !buffer.HasFlags(gst.BufferFlagDeltaUnit)
 	}
