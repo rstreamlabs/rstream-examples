@@ -403,7 +403,7 @@ jobs:
       - name: Run static analysis
         working-directory: webrtc-video/distributor
         shell: bash
-        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
+        run: ../../.github/scripts/staticcheck.sh ./...
       - name: Scan reachable Go vulnerabilities
         working-directory: webrtc-video/distributor
         shell: bash
@@ -457,7 +457,7 @@ jobs:
       - name: Run static analysis
         working-directory: webrtc-video/producer
         shell: bash
-        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
+        run: ../../.github/scripts/staticcheck.sh ./...
       - name: Scan reachable Go vulnerabilities
         working-directory: webrtc-video/producer
         shell: bash
