@@ -651,6 +651,13 @@ split-brain state; the raw loss and delay targets remain exposed in the session
 diagnostics so qualification can distinguish a conservative loss estimate from
 the effective encoder and pacing limits.
 
+For H.264, the source must produce Annex B access units and provide IDR pictures
+periodically or on request. A gradual intra-refresh recovery point is not an
+independent key frame: clearing GStreamer's `DELTA_UNIT` flag is insufficient.
+The producer checks for an IDR NAL before declaring a key frame. A source with
+only progressive refresh is unsuitable for browser startup and recovery in
+this WebRTC path; it needs an encoder configuration that supplies IDRs.
+
 The pacer normally admits a frame when its projected service time, including
 queued work and bounded repair priority, fits a 225 ms budget. An empty queue
 also admits one larger key frame so recovery cannot reject every key even when
