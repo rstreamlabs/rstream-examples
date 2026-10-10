@@ -1,6 +1,6 @@
 module github.com/rstreamlabs/rstream-examples/webrtc-video/producer
 
-go 1.27.0
+go 1.27.2
 
 require (
 	github.com/go-gst/go-glib v1.4.0
@@ -48,7 +48,7 @@ require (
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/exp v0.0.0-20260820142414-ca536658362e // indirect
-	golang.org/x/net v0.58.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.15.0 // indirect

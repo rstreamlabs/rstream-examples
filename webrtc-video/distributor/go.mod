@@ -1,6 +1,6 @@
 module github.com/rstreamlabs/rstream-examples/webrtc-video/distributor
 
-go 1.27.0
+go 1.27.2
 
 require (
 	github.com/pion/interceptor v0.1.47
@@ -26,7 +26,7 @@ require (
 	github.com/pion/turn/v5 v5.0.13 // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
 	golang.org/x/crypto v0.57.0 // indirect
-	golang.org/x/net v0.58.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 )
 
