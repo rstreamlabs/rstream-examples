@@ -131,6 +131,12 @@ The application is stateless. Client credentials and the authentication configur
 
 ## Qualification
 
+The browser pool imports `useRstream` from `@rstreamlabs/react/hooks`. This
+focused entry point keeps inventory watches independent of optional WebTTY
+and native file-transfer dependencies during Next.js server rendering.
+`npm run verify` in `web/` covers types, unit tests, the production build and
+the dependency audit after SDK upgrades.
+
 The [`qualification/`](qualification) pack tests the routing and lifecycle
 claims against a real GGUF model. Its local profile runs admission,
 cancellation, concurrent shutdown, model behavior, and scheduler invariants

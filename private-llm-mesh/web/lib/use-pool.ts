@@ -1,6 +1,6 @@
 "use client";
 
-import { useRstream, type UseRstreamOptions } from "@rstreamlabs/react";
+import { useRstream, type UseRstreamOptions } from "@rstreamlabs/react/hooks";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
