@@ -2,7 +2,7 @@ module github.com/rstreamlabs/rstream-examples/private-llm-mesh/worker
 
 go 1.27.2
 
-require github.com/rstreamlabs/rstream-go v1.34.0
+require github.com/rstreamlabs/rstream-go v1.34.1
 
 require (
 	github.com/dunglas/httpsfv v1.1.1 // indirect
