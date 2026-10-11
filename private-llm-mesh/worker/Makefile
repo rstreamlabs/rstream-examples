@@ -18,7 +18,6 @@ LLAMA_CPP_DIR  ?= third_party/llama.cpp
 LLAMA_BUILD    := $(LLAMA_CPP_DIR)/build-static
 LLAMA_BUILD_JOBS ?=
 LLAMA_BUILD_PARALLEL := $(if $(strip $(LLAMA_BUILD_JOBS)),-j$(LLAMA_BUILD_JOBS),-j)
-STATICCHECK_VERSION ?= v0.8.1
 GOVULNCHECK_VERSION ?= v1.7.0
 GO_TEST_FLAGS ?=
 
@@ -127,7 +126,7 @@ vet: check-go deps
 	$(GO) vet ./...
 
 staticcheck: check-go deps
-	$(GO) run honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION) ./...
+	GO=$(GO) ../../.github/scripts/staticcheck.sh ./...
 
 vulncheck: check-go deps
 	$(GO) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...

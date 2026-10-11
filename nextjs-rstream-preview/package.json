@@ -19,8 +19,8 @@
     "verify": "npm run test && npm run build && npm run audit"
   },
   "dependencies": {
-    "@rstreamlabs/runtime": "^0.8.2",
-    "next": "^16.3.2",
+    "@rstreamlabs/runtime": "0.9.1",
+    "next": "^16.4.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
@@ -37,7 +37,7 @@
   "overrides": {
     "esbuild": "0.28.1",
     "postcss": "8.5.23",
-    "protobufjs": "8.7.1",
-    "sharp": "0.35.3"
+    "protobufjs": "8.7.2",
+    "sharp": "0.35.5"
   }
 }
