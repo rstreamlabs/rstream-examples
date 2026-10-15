@@ -311,6 +311,28 @@ reorder window closes, and RTX/FlexFEC packets that arrived too late. The
 current on-demand process deliberately does not open a second metrics listener
 per device.
 
+## Optional session associations
+
+To associate downstream readers with a source session, the host can expose
+`GET /bindings/v1` on a private Unix socket. Set
+`RSTREAM_DISTRIBUTOR_BINDINGS_SOCKET=/private/distributor/bindings.sock`; its
+parent directory must already exist with mode 0700 and the socket uses 0600.
+Share that directory only with the trusted consuming service. This endpoint
+is absent from the metrics HTTP listener and does not start a video source.
+
+Each entry contains the MediaMTX path, bridge attempt ID, source and destination
+session IDs, and heartbeat age. IDs come only from the optional `ID` response
+header, as provided by MediaMTX. Source servers must expose an equivalent
+non-secret identifier to enable association. Missing or invalid IDs leave the
+association unavailable; video continues normally. Neither `Location` resource
+URLs, SDP nor credentials are exported.
+
+Entries disappear when an attempt ends or its process heartbeat expires. A host
+restart changes the returned runtime ID. Consumers must also verify the current
+MediaMTX publisher and reader membership, and source validity: the snapshot alone
+is not proof of delivery to a particular viewer or of RTP timestamp preservation.
+No association can be inferred from a matching path or timestamp alone.
+
 ## Optional recent recordings
 
 The bundled configuration leaves `record` and `playback` disabled. To enable a
