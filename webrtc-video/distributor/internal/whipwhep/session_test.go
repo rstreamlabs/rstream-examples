@@ -68,6 +68,7 @@ func TestExchangeCreatesAndDeletesSession(t *testing.T) {
 			w.Header().Set("Content-Type", "application/sdp")
 			w.Header().Set("ETag", `"generation-1"`)
 			w.Header().Set("Location", "/sessions/opaque")
+			w.Header().Set("ID", "public-session-id")
 			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(serverPeer.LocalDescription().SDP))
 		case http.MethodPatch:
@@ -97,6 +98,9 @@ func TestExchangeCreatesAndDeletesSession(t *testing.T) {
 	session, err := Exchange(context.Background(), clientPeer, mustURL(t, server.URL+"/whep"), authorization, server.Client())
 	if err != nil {
 		t.Fatalf("exchange SDP: %v", err)
+	}
+	if session.PublicID() != "public-session-id" {
+		t.Fatal("missing non-secret response identity", session.PublicID())
 	}
 	deadline := time.Now().Add(time.Second)
 	for patches.Load() == 0 && time.Now().Before(deadline) {

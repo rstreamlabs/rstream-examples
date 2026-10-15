@@ -93,6 +93,7 @@ type restartRequest struct {
 }
 
 type Session struct {
+	publicID         string // Optional non-secret ID response header; never the Location resource.
 	peer             *webrtc.PeerConnection
 	target           *url.URL
 	endpoint         *url.URL
@@ -168,6 +169,7 @@ func Exchange(ctx context.Context, peer *webrtc.PeerConnection, endpoint *url.UR
 		session.abort()
 		return nil, Permanent(err)
 	}
+	session.publicID = publicSessionID(result.response.Header.Get("ID"))
 	sessionEstablished := false
 	defer func() {
 		if !sessionEstablished {
@@ -1382,4 +1384,20 @@ func cleanupFailedExchange(endpoint *url.URL, authorization string, client *http
 	}
 	drain(response.Body)
 	_ = response.Body.Close()
+}
+
+// PublicID returns the optional opaque ID exposed by the WHEP/WHIP server.
+// It never falls back to Location, whose path may itself be an access secret.
+func (s *Session) PublicID() string { return s.publicID }
+
+func publicSessionID(id string) string {
+	if len(id) == 0 || len(id) > 128 {
+		return ""
+	}
+	for _, c := range id {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_') {
+			return ""
+		}
+	}
+	return id
 }

@@ -24,6 +24,7 @@ type Options struct {
 	Command         []string
 	Environment     []string
 	MetricsAddress  string
+	BindingsSocket  string
 	SocketPath      string
 	ShutdownTimeout time.Duration
 	Stdin           io.Reader
@@ -49,6 +50,11 @@ func Run(ctx context.Context, options Options) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("start adapter telemetry collector: %w", err)
 	}
+	stopBindings, err := serveBindings(options.BindingsSocket, collector.BindingsHandler())
+	if err != nil {
+		return errors.Join(err, collector.Close())
+	}
+	defer stopBindings()
 	listener, err := net.Listen("tcp", options.MetricsAddress)
 	if err != nil {
 		result := fmt.Errorf("listen for adapter metrics: %w", err)
