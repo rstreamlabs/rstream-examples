@@ -661,6 +661,14 @@ The producer checks for an IDR NAL before declaring a key frame. A source with
 only progressive refresh is unsuitable for browser startup and recovery in
 this WebRTC path; it needs an encoder configuration that supplies IDRs.
 
+Each live subscriber has an independent eight-picture queue. A slow reader
+cannot block capture or another reader. If its queue fills, the producer drops
+that backlog and waits for a new random-access picture before resuming delivery;
+it does not forward dependent pictures after losing one of their references.
+Delivery-drop counters include the discarded backlog. This is a live-viewing
+policy, not a lossless recording queue, and recovery still depends on the source
+providing periodic or requested key frames.
+
 The pacer normally admits a frame when its projected service time, including
 queued work and bounded repair priority, fits a 225 ms budget. An empty queue
 also admits one larger key frame so recovery cannot reject every key even when
