@@ -380,7 +380,9 @@ administrative API to the browser. Scraping never starts an on-demand source.
 Keep device identity in scrape-target labels rather than adding session or
 viewer identifiers in application metrics. The adapter's structured shutdown
 log distinguishes received recovery packets, repairs delivered before the
-reorder window closes, and RTX/FlexFEC packets that arrived too late. The
+reorder window closes, and RTX/FlexFEC packets that arrived too late. It also
+includes the attempt's error when closing the publication causes MediaMTX to
+stop the on-demand process before its retry log can run. The
 current on-demand process deliberately does not open a second metrics listener
 per device.
 

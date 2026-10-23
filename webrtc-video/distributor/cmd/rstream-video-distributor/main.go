@@ -101,6 +101,7 @@ func runDistributor(ctx context.Context, logger *slog.Logger) (runErr error) {
 		logger.Info(
 			"video distributor attempt stopped",
 			"path", configuration.Path,
+			"error", attemptErr,
 			"received", result.Repair.Received,
 			"rtx_received", result.Repair.RTXReceived,
 			"fec_received", result.SourceFECPackets,
