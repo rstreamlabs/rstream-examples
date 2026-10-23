@@ -7,3 +7,6 @@
 !internal/
 !internal/**
 !mediamtx.yml
+!mediamtx-build/
+!mediamtx-build/*.py
+!mediamtx-build/sources.json
