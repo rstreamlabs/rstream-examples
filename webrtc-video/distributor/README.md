@@ -204,7 +204,7 @@ into an unprivileged Alpine runtime with a shell and CA roots. Both processes
 still run in one container.
 
 ```bash
-docker build -t rstream-video-distributor:local .
+make image
 ```
 
 ### H.264 access-unit budget
