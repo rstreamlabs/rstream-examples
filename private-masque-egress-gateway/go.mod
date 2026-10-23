@@ -1,6 +1,6 @@
 module github.com/rstreamlabs/rstream-examples/private-masque-egress-gateway
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/quic-go/connect-ip-go v0.1.0

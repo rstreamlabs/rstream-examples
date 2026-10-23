@@ -7,7 +7,7 @@ COPY producer/internal/web/embed ./internal/web/embed
 COPY shared ../shared
 RUN npm run build
 
-FROM golang:1.27.2-bookworm AS build
+FROM golang:1.27.3-bookworm AS build
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
