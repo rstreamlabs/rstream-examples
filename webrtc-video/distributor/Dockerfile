@@ -19,7 +19,7 @@ FROM alpine:3.22.1@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8
 RUN apk add --no-cache ca-certificates \
     && addgroup -S -g 10001 rstream \
     && adduser -S -D -H -u 10001 -G rstream rstream \
-    && install -d -m 0555 /etc/rstream
+    && install -d -m 0555 /etc/rstream /usr/local/share/licenses/mediamtx
 COPY --from=mediamtx --chmod=0555 /mediamtx /usr/local/bin/mediamtx
 COPY --from=mediamtx --chmod=0444 /mediamtx.build.json /usr/local/share/mediamtx.build.json
 COPY --from=mediamtx --chmod=0444 /mediamtx.LICENSES /usr/local/share/licenses/mediamtx/LICENSES
