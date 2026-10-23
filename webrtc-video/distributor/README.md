@@ -220,7 +220,8 @@ fresh temporary directory, and refuses a changed patch context. It does not
 modify the Go module cache. The generated binary identifies itself as
 `v1.21.2-rstream.1`; its adjacent `.build.json` records the source checksums,
 budgets and binary SHA-256. The container retains this manifest at
-`/usr/local/share/mediamtx.build.json`.
+`/usr/local/share/mediamtx.build.json` and the three upstream license notices at
+`/usr/local/share/licenses/mediamtx/LICENSES`.
 
 Run `make mediamtx-test` with Python 3, Go and FFmpeg installed. This runs the
 upstream H.264 codec and RTP decoder tests under the race detector, tests single

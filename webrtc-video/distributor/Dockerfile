@@ -22,6 +22,7 @@ RUN apk add --no-cache ca-certificates \
     && install -d -m 0555 /etc/rstream
 COPY --from=mediamtx --chmod=0555 /mediamtx /usr/local/bin/mediamtx
 COPY --from=mediamtx --chmod=0444 /mediamtx.build.json /usr/local/share/mediamtx.build.json
+COPY --from=mediamtx --chmod=0444 /mediamtx.LICENSES /usr/local/share/licenses/mediamtx/LICENSES
 COPY --from=build --chmod=0555 /out/rstream-video-distributor /usr/local/bin/rstream-video-distributor
 COPY --chmod=0444 mediamtx.yml /etc/rstream/mediamtx.yml
 

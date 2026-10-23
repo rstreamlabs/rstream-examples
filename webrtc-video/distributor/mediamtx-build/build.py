@@ -98,6 +98,8 @@ def build(output, verify):
         for package in ("internal/servers/hls", "internal/staticsources/rpicamera"):
             run(["go", "generate", "./" + package], media)
         run(["go", "build", "-mod=readonly", "-trimpath", "-ldflags=-s -w", "-o", str(output), "."], media, env={"CGO_ENABLED": "0"})
+        notices = [source["module"] + "@" + source["version"] + "\n\n" + (Path(temporary) / name / "LICENSE").read_text() for name, source in sources.items()]
+        output.with_suffix(output.suffix + ".LICENSES").write_text("\n\n".join(notices))
     proof = {"sources": sources, "max_nalus": MAX_NALUS, "max_access_unit_bytes": 8 * 1024 * 1024, "sha256": hashlib.sha256(output.read_bytes()).hexdigest()}
     output.with_suffix(output.suffix + ".build.json").write_text(json.dumps(proof, indent=2) + "\n")
 
