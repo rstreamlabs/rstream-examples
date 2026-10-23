@@ -16,8 +16,10 @@ RUN apt-get update \
         pkg-config \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
-COPY producer/go.mod producer/go.sum ./
-RUN go mod download
+COPY ice-patch /ice-patch
+
+COPY producer/go.mod producer/go.sum producer/ice-patch.sh ./
+RUN go mod download && ./ice-patch.sh
 COPY producer/cmd ./cmd
 COPY producer/internal ./internal
 COPY producer/qualification/adaptive-streaming/cmd/local-control ./qualification/adaptive-streaming/cmd/local-control
@@ -27,8 +29,8 @@ RUN mkdir -p /out \
     && cc -shared -fPIC -O2 -Wall -Wextra -Werror \
         -o /out/libgstlatencystamp.so latency/gstlatencystamp.c \
         $(pkg-config --cflags --libs gstreamer-video-1.0)
-RUN CGO_ENABLED=1 go build -trimpath -o /out/webrtc-video-producer ./cmd/webrtc-video-producer
-RUN CGO_ENABLED=0 go build -trimpath -o /out/local-control ./qualification/adaptive-streaming/cmd/local-control
+RUN CGO_ENABLED=1 go build -modfile=out/ice-patch/go.mod -trimpath -o /out/webrtc-video-producer ./cmd/webrtc-video-producer
+RUN CGO_ENABLED=0 go build -modfile=out/ice-patch/go.mod -trimpath -o /out/local-control ./qualification/adaptive-streaming/cmd/local-control
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
@@ -43,6 +45,7 @@ RUN apt-get update \
 RUN useradd --create-home --uid 10001 rstream
 WORKDIR /app
 COPY --from=build /out/webrtc-video-producer ./webrtc-video-producer
+COPY --from=build /src/out/ice-patch/provenance.json ./webrtc-video-producer.ice-patch.json
 COPY --from=build /out/local-control ./local-control
 COPY --from=build /out/libgstlatencystamp.so ./gstreamer-plugins/
 ENV GST_PLUGIN_PATH=/app/gstreamer-plugins
