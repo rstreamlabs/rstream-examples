@@ -24,6 +24,8 @@ const (
 )
 
 type Provider struct {
+	client         *rstream.Client
+	closed         bool
 	fetch          func(context.Context) (*rstream.TURNCredentials, error)
 	mu             sync.Mutex
 	cached         *rstream.TURNCredentials
@@ -36,6 +38,7 @@ type Provider struct {
 }
 
 type credentialRefresh struct {
+	cancel      context.CancelFunc
 	done        chan struct{}
 	credentials *rstream.TURNCredentials
 	validUntil  time.Time
@@ -55,21 +58,89 @@ func NewProvider(cfg config.Config, provisioningClient *provisioning.Client) (*P
 	for _, transport := range transports {
 		allowed[transport] = struct{}{}
 	}
-	fetch := func(ctx context.Context) (*rstream.TURNCredentials, error) {
-		return rsconfig.CreateTURNCredentialsFromEnv(ctx, rsconfig.TURNCredentialsEnvOptions{TTL: ttl})
-	}
-	if provisioningClient != nil {
-		fetch = provisioningClient.TURN
-	}
 	refreshTimeout, err := cfg.TunnelProvisioningTimeout()
 	if err != nil {
 		return nil, err
 	}
-	return &Provider{fetch: fetch, transports: allowed, now: time.Now, refreshTimeout: refreshTimeout}, nil
+	provider := &Provider{transports: allowed, now: time.Now, refreshTimeout: refreshTimeout}
+	provider.fetch = func(ctx context.Context) (*rstream.TURNCredentials, error) {
+		client, err := provider.localClient()
+		if err != nil {
+			return nil, err
+		}
+		return rsconfig.CreateTURNCredentialsFromEnv(ctx, rsconfig.TURNCredentialsEnvOptions{Client: client, TTL: ttl})
+	}
+	if provisioningClient != nil {
+		provider.fetch = provisioningClient.TURN
+	}
+	return provider, nil
+}
+
+// localClient retains the SDK discovery cache and HTTP pools across renewals.
+// Credentials serializes refreshes, while Close may cancel an active refresh.
+func (p *Provider) localClient() (*rstream.Client, error) {
+	p.mu.Lock()
+	client, closed := p.client, p.closed
+	p.mu.Unlock()
+	if closed {
+		return nil, errors.New("TURN provider is closed")
+	}
+	if client != nil {
+		return client, nil
+	}
+	resolution, err := rsconfig.ResolveFromEnv(rsconfig.ClientEnvOptions{RequireToken: true})
+	if err != nil {
+		return nil, err
+	}
+	if resolution.Resolved.Engine == "" {
+		return nil, nil
+	}
+	client, err = rsconfig.NewClientFromResolved(resolution.Resolved)
+	if err != nil {
+		return nil, err
+	}
+	p.mu.Lock()
+	closed = p.closed
+	if !closed {
+		p.client = client
+	}
+	p.mu.Unlock()
+	if closed {
+		_ = client.Close()
+		return nil, errors.New("TURN provider is closed")
+	}
+	return client, nil
+}
+
+func (p *Provider) Close() error {
+	if p == nil {
+		return nil
+	}
+	p.mu.Lock()
+	p.closed = true
+	refresh := p.refresh
+	p.mu.Unlock()
+	if refresh != nil {
+		refresh.cancel()
+		<-refresh.done
+	}
+	p.mu.Lock()
+	client := p.client
+	p.client = nil
+	p.cached = nil
+	p.mu.Unlock()
+	if client != nil {
+		return client.Close()
+	}
+	return nil
 }
 
 func (p *Provider) Credentials(ctx context.Context) (*rstream.TURNCredentials, error) {
 	p.mu.Lock()
+	if p.closed {
+		p.mu.Unlock()
+		return nil, errors.New("TURN provider is closed")
+	}
 	now := p.now()
 	if p.cached != nil && now.Before(p.refreshAt) {
 		credentials := cloneCredentialsAt(p.cached, p.validUntil, now)
@@ -78,9 +149,10 @@ func (p *Provider) Credentials(ctx context.Context) (*rstream.TURNCredentials, e
 	}
 	refresh := p.refresh
 	if refresh == nil {
-		refresh = &credentialRefresh{done: make(chan struct{})}
+		lifetime, cancel := context.WithCancel(context.WithoutCancel(ctx))
+		refresh = &credentialRefresh{done: make(chan struct{}), cancel: cancel}
 		p.refresh = refresh
-		go p.refreshCredentials(refresh, context.WithoutCancel(ctx))
+		go p.refreshCredentials(refresh, lifetime)
 	}
 	p.mu.Unlock()
 	select {
@@ -95,6 +167,7 @@ func (p *Provider) Credentials(ctx context.Context) (*rstream.TURNCredentials, e
 }
 
 func (p *Provider) refreshCredentials(refresh *credentialRefresh, parent context.Context) {
+	defer refresh.cancel()
 	now := p.now()
 	timeout := p.refreshTimeout
 	if timeout <= 0 {

@@ -311,3 +311,34 @@ func TestURLsByTransportIndexesEveryFallback(t *testing.T) {
 		t.Fatalf("TLS URL = %q, want %q", got, credentials.URLs[3])
 	}
 }
+
+func TestCloseCancelsAndJoinsPendingCredentialRefresh(t *testing.T) {
+	started := make(chan struct{})
+	stopped := make(chan struct{})
+	provider := &Provider{now: time.Now, fetch: func(ctx context.Context) (*rstream.TURNCredentials, error) {
+		close(started)
+		<-ctx.Done()
+		close(stopped)
+		return nil, ctx.Err()
+	}}
+	result := make(chan error, 1)
+	go func() { _, err := provider.Credentials(t.Context()); result <- err }()
+	<-started
+	if err := provider.Close(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-stopped:
+	default:
+		t.Fatal("Close returned before refresh stopped")
+	}
+	if err := <-result; !errors.Is(err, context.Canceled) {
+		t.Fatalf("refresh error = %v", err)
+	}
+	if _, err := provider.Credentials(t.Context()); err == nil {
+		t.Fatal("closed provider accepted a request")
+	}
+	if err := provider.Close(); err != nil {
+		t.Fatal(err)
+	}
+}

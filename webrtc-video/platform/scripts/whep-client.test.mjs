@@ -4,6 +4,7 @@ import test from "node:test"
 import {
   WHEPClient,
   WHEPHTTPError,
+  WHEPTimeoutError,
   addRTCPMuxOnly,
   createICEFragment,
   replaceICEGeneration,
@@ -920,7 +921,15 @@ test("WHEP client bounds stalled signaling requests", async () => {
     peerFactory: () => peer,
     requestTimeoutMs: 20,
   })
-  await assert.rejects(() => client.start(), /request timed out/)
+  await assert.rejects(
+    () => client.start(),
+    (error) => {
+      assert.ok(error instanceof WHEPTimeoutError)
+      assert.equal(error.name, "TimeoutError")
+      assert.equal(error.phase, "request")
+      return /request timed out/.test(error.message)
+    },
+  )
   assert.equal(aborted, true)
   await client.close()
   assert.equal(peer.closed, true)
@@ -932,6 +941,7 @@ test("WHEP client bounds a response body stalled after its headers", async () =>
   const body = new ReadableStream({
     cancel() {
       bodyCancelled = true
+      return new Promise(() => {})
     },
   })
   const client = new WHEPClient({
@@ -952,7 +962,15 @@ test("WHEP client bounds a response body stalled after its headers", async () =>
     peerFactory: () => peer,
     requestTimeoutMs: 20,
   })
-  await assert.rejects(() => client.start(), /response read timed out/)
+  await assert.rejects(
+    () => client.start(),
+    (error) => {
+      assert.ok(error instanceof WHEPTimeoutError)
+      assert.equal(error.name, "TimeoutError")
+      assert.equal(error.phase, "response")
+      return /response read timed out/.test(error.message)
+    },
+  )
   assert.equal(bodyCancelled, true)
   await client.close()
   assert.equal(peer.closed, true)
@@ -2028,4 +2046,102 @@ async function eventually(predicate, timeoutMilliseconds = 1000) {
     }
     await new Promise((resolve) => setTimeout(resolve, 5))
   }
+}
+
+test("WHEP close preserves the response cancellation reason and releases the body", async () => {
+  const peer = new FakePeer()
+  let cancelledReason
+  let bodyOpened = false
+  const body = new ReadableStream({
+    cancel(reason) {
+      cancelledReason = reason
+    },
+  })
+  const client = new WHEPClient({
+    authorization: "",
+    endpoint: "https://edge.example/whep",
+    iceServers: [],
+    onError: () => {},
+    onTrack: () => {},
+    peerFactory: () => peer,
+    requestTimeoutMs: 100,
+    fetch: async (_url, init) => {
+      if (init.method !== "POST") return response(null, 204)
+      bodyOpened = true
+      return new Response(body, {
+        status: 201,
+        headers: {
+          "Content-Type": "application/sdp",
+          ETag: '"generation-1"',
+          Location: "/whep/cancel-body",
+        },
+      })
+    },
+  })
+  const started = client.start()
+  const rejected = assert.rejects(started, (error) => {
+    assert.equal(error.name, "AbortError")
+    assert.equal(error, cancelledReason)
+    return true
+  })
+  await eventually(() => bodyOpened && body.locked)
+  await client.close()
+  await rejected
+  assert.equal(body.locked, false)
+  assert.equal(peer.closed, true)
+})
+
+for (const firstCause of ["deadline", "close"]) {
+  test(`WHEP restart request retains its first ${firstCause} cause after the competing abort`, async () => {
+    const peer = new FakePeer()
+    let observedReason
+    let rejectFetch
+    const client = new WHEPClient({
+      authorization: "",
+      endpoint: "https://edge.example/whep",
+      iceServers: [],
+      onError: () => {},
+      onTrack: () => {},
+      peerFactory: () => peer,
+      requestTimeoutMs: 20,
+      fetch: async (_url, init) => {
+        if (init.method === "POST")
+          return response(initialAnswer, 201, {
+            "Content-Type": "application/sdp",
+            ETag: '"generation-1"',
+            Location: "/whep/competing-aborts",
+          })
+        if (init.method !== "PATCH" || header(init.headers, "If-Match") !== "*")
+          return response(null, 204)
+        return new Promise((_resolve, reject) => {
+          rejectFetch = reject
+          init.signal.addEventListener(
+            "abort",
+            () => {
+              observedReason = init.signal.reason
+            },
+            { once: true },
+          )
+        })
+      },
+    })
+    await client.start()
+    const started = client.restart()
+    const rejected = assert.rejects(started, (error) => {
+      assert.equal(error, observedReason)
+      assert.equal(
+        error.name,
+        firstCause === "deadline" ? "TimeoutError" : "AbortError",
+      )
+      return true
+    })
+    await eventually(() => rejectFetch)
+    if (firstCause === "deadline") await eventually(() => observedReason)
+    const closing = client.close()
+    if (firstCause === "close")
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    rejectFetch(new Error("fetch substituted an untyped cancellation"))
+    await Promise.all([closing, rejected])
+    assert.equal(peer.closed, true)
+  })
 }

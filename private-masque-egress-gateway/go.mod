@@ -1,14 +1,14 @@
 module github.com/rstreamlabs/rstream-examples/private-masque-egress-gateway
 
-go 1.27.0
+go 1.27.3
 
 require (
 	github.com/quic-go/connect-ip-go v0.1.0
 	github.com/quic-go/masque-go v0.4.0
 	github.com/quic-go/quic-go v0.60.0
-	github.com/rstreamlabs/rstream-go v1.30.0
+	github.com/rstreamlabs/rstream-go v1.36.3
 	github.com/yosida95/uritemplate/v3 v3.0.2
-	golang.org/x/net v0.58.0
+	golang.org/x/net v0.60.0
 )
 
 require (
@@ -23,10 +23,11 @@ require (
 	github.com/pion/transport/v4 v4.1.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
+	github.com/quic-go/webtransport-go v0.11.1 // indirect
 	github.com/thales-e-security/pool v0.0.2 // indirect
-	golang.org/x/crypto v0.55.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
+	golang.org/x/crypto v0.57.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

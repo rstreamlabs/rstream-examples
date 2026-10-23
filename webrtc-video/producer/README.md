@@ -1,5 +1,8 @@
 # WebRTC Video Producer
 
+Builds use a verified temporary ICE concurrency patch. Applications derived
+from this sample must also adopt its build step; see the [ICE patch guide](../ICE-PATCH.md).
+
 This example streams video from a device to a browser with WebRTC, publishes the viewer through an `rstream` HTTP tunnel, and uses the managed `rstream` STUN/TURN service for ICE connectivity.
 
 The sample includes a complete device-side path: an embedded viewer UI, WHEP on the same origin as the page, TURN credential bootstrap, H.264 and AV1 reference profiles, shared or per-viewer pipeline allocation, optional adaptive bitrate driven by TWCC/GCC, and Linux distribution builds that produce a standalone binary.
@@ -912,6 +915,14 @@ If the process fails with `failed to create the GStreamer pipeline`, one or more
 
 If the process cannot connect to the `rstream` engine server, verify the current CLI context with `rstream login` and `rstream project use <project-endpoint> --default`, then inspect `~/.rstream/config.yaml`.
 
-If TURN credential generation fails, verify the current project endpoint, the active authentication token, and the TURN routing fields stored in the local `rstream` context.
+If TURN credential generation fails, verify the current project endpoint and
+credential permissions. Local PAT/APP derivation requires `turn.relay.allocate`;
+managed issuance requires `turn.credentials.create`. Certificate-only devices
+use the discovered mTLS Engine API directly, without a Control plane token. Grant
+Engine operations separately for the published tunnel. The local TURN provider
+retains one SDK client across renewals, so discovery is cached in memory and the
+existing CLI context/certificate setup is sufficient. It closes that client and
+cancels any pending refresh when the process stops. Remote provisioning continues
+to request TURN credentials from the configured product API.
 
 If the public URL opens but no video appears, start with the runtime log, the selected GStreamer pipeline, browser autoplay and permissions, TURN reachability from both peers, and the availability of the chosen encoder on the target machine.

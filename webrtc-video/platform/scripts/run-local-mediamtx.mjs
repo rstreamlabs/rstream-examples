@@ -498,9 +498,13 @@ async function runLocalMediaMTX() {
     await writeFile(tunnelsPath, tunnelConfiguration(names, options.exposure), {
       mode: 0o600,
     })
-    await runCommand("docker", ["build", "-t", image, "."], {
-      cwd: distributorDirectory,
-    })
+    await runCommand(
+      "docker",
+      ["build", "-f", "Dockerfile", "-t", image, ".."],
+      {
+        cwd: distributorDirectory,
+      },
+    )
     await Promise.all(
       [3000, 8889, 9998, 9999, ...(options.recording ? [9996] : [])].map(
         (port) => requireAvailablePort(port),

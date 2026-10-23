@@ -1,4 +1,4 @@
-module github.com/rstreamlabs/rstream-examples/tools
+module github.com/rstreamlabs/rstream-examples/ci-tools
 
 go 1.27.2
 
@@ -9,7 +9,6 @@ require (
 	golang.org/x/exp/typeparams v0.0.0-20231108232855-2478ac86f678 // indirect
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
-	// Go 1.27.2 export data requires the current importer.
 	golang.org/x/tools v0.51.0 // indirect
 	honnef.co/go/tools v0.8.1 // indirect
 )

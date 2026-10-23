@@ -78,6 +78,7 @@ func New(cfg config.Config) (*App, error) {
 	}
 	broadcaster, err := rtc.NewBroadcaster(cfg, sourceFactory, turn, logger)
 	if err != nil {
+		_ = turn.Close()
 		return nil, err
 	}
 	instance := &App{
@@ -115,6 +116,7 @@ func New(cfg config.Config) (*App, error) {
 }
 
 func (a *App) Run(ctx context.Context) error {
+	defer a.turn.Close()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	handler := a.web.Handler()
