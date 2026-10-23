@@ -397,6 +397,9 @@ jobs:
           docker cp "$container:/mediamtx" "${RUNNER_TEMP}/mediamtx"
           chmod 0555 "${RUNNER_TEMP}/mediamtx"
           printf '%s\n' "$RUNNER_TEMP" >>"$GITHUB_PATH"
+      - name: Install the H264 qualification decoder
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install --yes ffmpeg
       - name: Verify bounded and concurrent behavior
         working-directory: webrtc-video/distributor
         shell: bash

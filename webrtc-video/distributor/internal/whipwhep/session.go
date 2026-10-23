@@ -112,6 +112,8 @@ type Session struct {
 	candidateCount   atomic.Uint32
 	candidateBytes   atomic.Uint64
 	candidateMu      sync.Mutex
+	gatherDone       chan struct{}
+	gatherComplete   bool
 	ignoreCandidates atomic.Bool
 	closeMu          sync.Mutex
 	closing          bool
@@ -143,7 +145,7 @@ func Exchange(ctx context.Context, peer *webrtc.PeerConnection, endpoint *url.UR
 	}
 	client = withoutRedirects(client)
 	sessionCtx, cancel := context.WithCancel(ctx)
-	session := &Session{peer: peer, target: cloneURL(endpoint), authorization: strings.TrimSpace(authorization), client: client, ctx: sessionCtx, cancel: cancel, ready: make(chan struct{}), candidates: make(chan candidateEvent, maxCandidatesPerGeneration+1), restarts: make(chan restartRequest, 1), workerDone: make(chan struct{})}
+	session := &Session{peer: peer, target: cloneURL(endpoint), authorization: strings.TrimSpace(authorization), client: client, ctx: sessionCtx, cancel: cancel, ready: make(chan struct{}), candidates: make(chan candidateEvent, maxCandidatesPerGeneration+1), gatherDone: make(chan struct{}), restarts: make(chan restartRequest, 1), workerDone: make(chan struct{})}
 	go session.runCandidateWorker()
 	peer.OnICECandidate(session.handleLocalCandidate)
 	offer, err := peer.CreateOffer(nil)
@@ -501,6 +503,10 @@ func (s *Session) refreshedRequestCredentials(target *url.URL, authorization str
 
 func (s *Session) handleLocalCandidate(candidate *webrtc.ICECandidate) {
 	s.candidateMu.Lock()
+	if candidate == nil && s.gatherDone != nil && !s.gatherComplete {
+		s.gatherComplete = true
+		close(s.gatherDone)
+	}
 	if s.ignoreCandidates.Load() {
 		s.candidateMu.Unlock()
 		return
@@ -644,21 +650,25 @@ func (s *Session) performRestart(restart restartRequest) (err error) {
 	if s.etag == "" {
 		return Permanent(errors.New("WHEP endpoint did not enable ICE restart"))
 	}
-	s.beginRestartGeneration()
-	generationActive := false
-	defer func() {
-		if !generationActive {
-			s.endRestartGeneration()
-		}
-	}()
 	configuration := s.peer.GetConfiguration()
 	configuration.ICEServers = copyICEServers(restart.iceServers)
 	if err := s.peer.SetConfiguration(configuration); err != nil {
 		return Permanent(fmt.Errorf("apply refreshed ICE servers: %w", err))
 	}
+	if err := s.beginRestartGeneration(restart.ctx); err != nil {
+		return err
+	}
+	generationActive := false
+	defer func() {
+		if !generationActive {
+			s.discardRestartGeneration()
+		}
+	}()
 	offer, err := s.peer.CreateOffer(&webrtc.OfferOptions{ICERestart: true})
 	if err != nil {
-		return Permanent(fmt.Errorf("create WHEP ICE restart offer: %w", err))
+		restartErr := Permanent(fmt.Errorf("create WHEP ICE restart offer: %w", err))
+		s.fail(restartErr)
+		return restartErr
 	}
 	fragment, err := restartICEFragment(offer.SDP)
 	if err != nil {
@@ -715,8 +725,6 @@ func (s *Session) performRestart(restart restartRequest) (err error) {
 	if err != nil {
 		return Permanent(fmt.Errorf("apply WHEP ICE restart credentials: %w", err))
 	}
-	s.endRestartGeneration()
-	generationActive = true
 	if err := s.peer.SetLocalDescription(offer); err != nil {
 		restartErr := Permanent(fmt.Errorf("set WHEP ICE restart offer: %w", err))
 		s.fail(restartErr)
@@ -739,28 +747,60 @@ func (s *Session) performRestart(restart restartRequest) (err error) {
 		return err
 	}
 	s.etag = etag
+	generationActive = true
 	return nil
 }
 
-func (s *Session) beginRestartGeneration() {
+// Pion candidates (including completion) carry no generation identifier. Wait
+// for the previous callback sequence to finish before accepting a new sequence.
+// The worker owns restart signaling, so queued new candidates cannot be sent
+// until the matching answer, local description and ETag have been committed.
+func (s *Session) beginRestartGeneration(ctx context.Context) error {
 	s.candidateMu.Lock()
-	s.ignoreCandidates.Store(true)
+	done := s.gatherDone
+	s.candidateMu.Unlock()
+	if done != nil {
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return fmt.Errorf("wait for previous ICE gathering: %w", ctx.Err())
+		case <-s.ctx.Done():
+			return fmt.Errorf("wait for previous ICE gathering: %w", s.ctx.Err())
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("start ICE gathering: %w", err)
+	}
+	if err := s.ctx.Err(); err != nil {
+		return fmt.Errorf("start ICE gathering: %w", err)
+	}
+	s.candidateMu.Lock()
+	defer s.candidateMu.Unlock()
 	for {
 		select {
 		case <-s.candidates:
 		default:
 			s.candidateCount.Store(0)
 			s.candidateBytes.Store(0)
-			s.candidateMu.Unlock()
-			return
+			s.gatherDone = make(chan struct{})
+			s.gatherComplete = false
+			s.ignoreCandidates.Store(false)
+			return nil
 		}
 	}
 }
 
-func (s *Session) endRestartGeneration() {
+func (s *Session) discardRestartGeneration() {
 	s.candidateMu.Lock()
-	s.ignoreCandidates.Store(false)
-	s.candidateMu.Unlock()
+	defer s.candidateMu.Unlock()
+	s.ignoreCandidates.Store(true)
+	for {
+		select {
+		case <-s.candidates:
+		default:
+			return
+		}
+	}
 }
 
 func copyICEServers(servers []webrtc.ICEServer) []webrtc.ICEServer {
