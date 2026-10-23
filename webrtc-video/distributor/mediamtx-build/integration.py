@@ -44,8 +44,11 @@ def wait_ready(url, process, ready=True):
 
 
 def qualify(binary, directory):
+    qualification_frames = 120
+    lookahead_frames = 10
+    source_frames = qualification_frames + lookahead_frames
     fixture = directory / "source.h264"
-    run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=1280x1024:rate=10", "-frames:v", "121", "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency", "-x264-params", "slices=64:sliced-threads=0:threads=1:aud=1:repeat-headers=1:keyint=10:min-keyint=10:scenecut=0", "-f", "h264", str(fixture)])
+    run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=1280x1024:rate=10", "-frames:v", str(source_frames), "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency", "-x264-params", "slices=64:sliced-threads=0:threads=1:aud=1:repeat-headers=1:keyint=10:min-keyint=10:scenecut=0", "-f", "h264", str(fixture)])
     counts = []
     count = 0
     for nalu in re.split(b"\x00\x00(?:\x00)?\x01", fixture.read_bytes()):
@@ -57,10 +60,10 @@ def qualify(binary, directory):
             count = 0
         count += 1
     counts.append(count)
-    if len(counts) != 121 or min(counts) <= 50:
+    if len(counts) != source_frames or min(counts) <= 50:
         raise RuntimeError(f"fixture does not exercise the former limit: {counts}")
     expected = decoded_hashes(fixture)
-    if len(expected) != 121:
+    if len(expected) != source_frames:
         raise RuntimeError("fixture did not fully decode")
     rtsp, api = port(), port()
     config = directory / "mediamtx.yml"
@@ -112,13 +115,18 @@ paths:
             raise RuntimeError("received frames differ from the uninterrupted source")
         recordings = sorted((directory / "recordings/live").glob("*.mp4"))
         recorded = [digest for path in recordings for digest in decoded_hashes(path)]
-        # The upstream fMP4 recorder needs the next DTS to commit a frame.
-        # One final lookahead frame makes all 120 qualification frames durable.
-        if recorded != expected[:-1]:
-            raise RuntimeError(f"recorded frames differ: {len(recorded)}/{len(expected)}")
-        report = {"source_frames": len(expected), "recorder_lookahead_frames": 1, "received_frames": len(received), "recorded_frames": len(recorded), "recording_segments": len(recordings), "nalus_per_access_unit": {"min": min(counts), "max": max(counts)}, "decoded_frame_hashes_match": True}
+        # Recorder shutdown can stop its asynchronous reader with a final frame
+        # still queued; fMP4 also retains a frame until the next DTS arrives.
+        # Keep a full GOP beyond the 120 qualification frames so those frames
+        # must all be durable. Every additional recorded frame must also match.
+        complete = len(recorded) >= qualification_frames
+        exact = recorded == expected[:len(recorded)]
+        report = {"source_frames": len(expected), "qualification_frames": qualification_frames, "lookahead_frames": lookahead_frames, "received_frames": len(received), "recorded_frames": len(recorded), "recording_segments": len(recordings), "nalus_per_access_unit": {"min": min(counts), "max": max(counts)}, "decoded_frame_hashes_match": complete and exact}
         (directory / "result.json").write_text(json.dumps(report, indent=2) + "\n")
+        (directory / "frame-hashes.json").write_text(json.dumps({"source": expected, "received": received, "recorded": recorded}, indent=2) + "\n")
         print(json.dumps(report))
+        if not complete or not exact:
+            raise RuntimeError(f"recorded qualification frames differ: {len(recorded)}/{qualification_frames}, exact={exact}")
     finally:
         for process in reversed(processes):
             if process.poll() is None:

@@ -227,8 +227,10 @@ upstream H.264 codec and RTP decoder tests under the race detector, tests single
 NAL, STAP-A and FU-A input at and above the count/byte bounds, and verifies
 recovery after rejection. A real 64-slice video then passes through MediaMTX
 RTSP delivery and fMP4 recording. All received and recorded images must decode
-to the original frame hashes. The recording fixture includes one lookahead
-frame because fMP4 needs the next timestamp to commit the final tested frame.
+to the original frame hashes. The recording fixture includes a trailing GOP beyond its 120 qualification
+frames: fMP4 needs the next timestamp, and recorder shutdown can discard queued
+lookahead data. All 120 qualification frames and every recorded tail frame must
+match; missing or altered frames within that interval fail the test.
 The regular distributor integration suite separately checks real WebRTC
 fan-out, recovery and lifecycle against the same patched runtime.
 
