@@ -1194,11 +1194,6 @@ func TestResolveSessionURLCarriesTheEdgeCredentialOntoTheOpaqueResource(t *testi
 
 // Local signaling tests exercise both address families without depending on
 // external interfaces, VPN routes or neighbor discovery on the test host.
-func newSignalingPeer(t *testing.T) *webrtc.PeerConnection {
-	t.Helper()
-	return newSignalingPeerWithConfiguration(t, webrtc.Configuration{})
-}
-
 func newSignalingPeerWithConfiguration(t *testing.T, configuration webrtc.Configuration) *webrtc.PeerConnection {
 	t.Helper()
 	settings := webrtc.SettingEngine{}
