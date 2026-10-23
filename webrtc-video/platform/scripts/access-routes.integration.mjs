@@ -820,6 +820,11 @@ try {
   assert.match(sourceClaims, /"inventory":"discovered"/)
   assert.match(sourceClaims, /discovery-tunnel-1/)
   assert.doesNotMatch(sourceClaims, /api\/quality/)
+  setInventory([{ ...discoveryTunnel, id: undefined }])
+  resetCalls()
+  assert.equal((await resolveDiscoveredSource()).status, 404)
+  assert.deepEqual(upstreamCalls(), ["inventory"])
+  setInventory([discoveryTunnel])
   assert.equal(
     (
       await resolveDiscoveredSource(

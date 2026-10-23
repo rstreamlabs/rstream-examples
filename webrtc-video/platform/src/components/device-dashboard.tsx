@@ -22,7 +22,7 @@ import { Trash2 } from "lucide-react"
 import { type DeviceView } from "@/lib/validations/device"
 import { type FormEvent } from "react"
 import { type ReactNode } from "react"
-import { type Tunnel } from "@rstreamlabs/rstream/tunnel"
+import { type ListedTunnel } from "@rstreamlabs/tunnels"
 import { type UseRstreamOptions } from "@rstreamlabs/react/hooks"
 import { type WatchPayload } from "@/lib/validations/device"
 import { useEffect } from "react"
@@ -623,7 +623,7 @@ function useStableOnlineIds(liveOnlineIds: Set<string>) {
   return onlineIds
 }
 
-function onlineDeviceIds(tunnels: Tunnel[]) {
+function onlineDeviceIds(tunnels: ListedTunnel[]) {
   return new Set(
     tunnels.flatMap((tunnel) => {
       const deviceId = tunnel.labels?.[DEVICE_LABEL]

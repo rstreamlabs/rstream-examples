@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { type Tunnel } from "@rstreamlabs/rstream/tunnel"
+import { type ListedTunnel } from "@rstreamlabs/tunnels"
 
 export const discoveryLabels = {
   app: "webrtc-video-platform",
@@ -48,18 +48,19 @@ export type DiscoveredSource = {
   name: string
   projectId: string
   tunnelName: string
-  tunnel: Tunnel
+  tunnel: ListedTunnel
 }
 
 // Labels describe a source; they never grant access outside the configured
 // project. Recheck the returned properties even when the engine filters them.
 export function discoveredSource(
-  tunnel: Tunnel,
+  tunnel: ListedTunnel,
   projectId: string,
 ): DiscoveredSource | null {
   const labels = tunnel.labels
   const id = discoveryDeviceID.safeParse(labels?.device)
   if (
+    !tunnel.id ||
     !id.success ||
     tunnel.project_id !== projectId ||
     tunnel.status !== "online" ||
@@ -98,7 +99,7 @@ export function discoveredSource(
   }
 }
 
-export function discoveredSources(tunnels: Tunnel[], projectId: string) {
+export function discoveredSources(tunnels: ListedTunnel[], projectId: string) {
   const sources = new Map<string, DiscoveredSource>()
   const conflicts = new Set<string>()
   for (const tunnel of tunnels) {
