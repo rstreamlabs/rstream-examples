@@ -822,8 +822,10 @@ try {
   assert.doesNotMatch(sourceClaims, /api\/quality/)
   setInventory([{ ...discoveryTunnel, id: undefined }])
   resetCalls()
-  assert.equal((await resolveDiscoveredSource()).status, 404)
-  assert.deepEqual(upstreamCalls(), ["inventory"])
+  const projectedSource = await resolveDiscoveredSource()
+  assert.equal(projectedSource.status, 404)
+  assert.equal(projectedSource.body.url, undefined)
+  assert.deepEqual(upstreamCalls(), ["inventory", "project"])
   setInventory([discoveryTunnel])
   assert.equal(
     (
