@@ -5,6 +5,8 @@ TARGETARCH="${TARGETARCH:-$(go env GOARCH)}"
 GST_ROOT="${GST_ROOT:-/opt/gstreamer}"
 GST_PC_DIR="${GST_ROOT}/lib/pkgconfig:${GST_ROOT}/lib/gstreamer-1.0/pkgconfig"
 
+./ice-patch.sh
+
 export CGO_ENABLED=1
 export GOOS=linux
 export GOARCH="${TARGETARCH}"
@@ -20,7 +22,7 @@ export CGO_LDFLAGS="${CGO_LDFLAGS:-} ${GST_FULL_LDFLAGS}"
 
 mkdir -p /out
 
-go build \
+go build -modfile=out/ice-patch/go.mod \
   -buildvcs=false \
   -trimpath \
   -ldflags='-linkmode external -extldflags "-static" -s -w' \

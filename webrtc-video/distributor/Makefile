@@ -1,45 +1,66 @@
+.DEFAULT_GOAL := build
 GO ?= go
+ICE_MODFILE := out/ice-patch/go.mod
+ICE_GOFLAGS = $(filter-out -modfile=%,$(GOFLAGS)) -modfile=$(abspath $(ICE_MODFILE))
+
+.PHONY: ice-patch test-ice-patch
+
+ice-patch:
+	./ice-patch.sh
+
+test-ice-patch:
+	$(GO) test -race ../ice-patch/main.go ../ice-patch/main_test.go
+
 IMAGE ?= rstream-video-distributor:local
 OUT ?= out
 BINARY := $(OUT)/rstream-video-distributor
 
-.PHONY: build test test-qualification-tools test-qualification-compile test-race vet format-check verify integration compose-check image image-test qualify-fanout qualify-native qualify-source clean
+.PHONY: build test test-qualification-tools test-qualification-compile test-decoded-restarts test-race vet format-check verify integration compose-check image image-test mediamtx mediamtx-test qualify-fanout qualify-native qualify-source clean
 
-build:
+build: ice-patch
 	mkdir -p $(OUT)
-	$(GO) build -trimpath -o $(BINARY) ./cmd/rstream-video-distributor
+	$(GO) build -modfile=$(ICE_MODFILE) -trimpath -o $(BINARY) ./cmd/rstream-video-distributor
 
-test:
-	$(GO) test ./...
+test: ice-patch
+	GOFLAGS="$(ICE_GOFLAGS)" $(GO) test ./...
 
 test-qualification-tools:
 	node --test qualification/fanout/render.test.mjs
 
-test-qualification-compile:
-	$(GO) test -run '^$$' -tags='integration qualification' ./internal/bridge
+test-qualification-compile: ice-patch
+	GOFLAGS="$(ICE_GOFLAGS)" $(GO) test -run '^$$' -tags='integration qualification' ./internal/bridge
 
-test-race:
-	$(GO) test -race ./...
+test-decoded-restarts: ice-patch
+	GOFLAGS="$(ICE_GOFLAGS)" $(GO) test -race -tags=qualification -timeout=90s -count=1 ./internal/whipwhep -run '^TestICERestartDecodesH264ThroughTURN$$'
 
-vet:
-	$(GO) vet ./...
+test-race: ice-patch
+	GOFLAGS="$(ICE_GOFLAGS)" $(GO) test -race ./...
+
+vet: ice-patch
+	GOFLAGS="$(ICE_GOFLAGS)" $(GO) vet ./...
 
 format-check:
-	@test -z "$$($(GO) run mvdan.cc/gofumpt@v0.9.2 -l ./cmd ./internal)"
+	@test -z "$$($(GO) run mvdan.cc/gofumpt@v0.9.2 -l ./cmd ./internal ./mediamtx-build/testdata)"
 
-verify: format-check vet test test-qualification-tools test-qualification-compile test-race build
+verify: test-ice-patch format-check vet test test-qualification-tools test-qualification-compile test-decoded-restarts test-race build
 
-integration: compose-check image-test
-	$(GO) test -race -tags=integration ./internal/bridge
+integration: ice-patch compose-check image-test
+	GOFLAGS="$(ICE_GOFLAGS)" $(GO) test -race -tags=integration ./internal/bridge
 
 compose-check:
 	DISTRIBUTOR_ENV_FILE=distributor.env.example docker compose config --quiet
 
 image:
-	docker build -t $(IMAGE) .
+	docker build -f Dockerfile -t $(IMAGE) ..
 
 image-test: image
 	./scripts/image-smoke.sh $(IMAGE)
+
+mediamtx:
+	python3 mediamtx-build/build.py --verify --output $(OUT)/mediamtx
+
+mediamtx-test: mediamtx
+	python3 mediamtx-build/integration.py --binary $(OUT)/mediamtx
 
 qualify-fanout:
 	./qualification/fanout/run.sh $(OUT)/qualification/fanout

@@ -543,7 +543,7 @@ docker build --provenance=false --file "${qualification_directory}/Dockerfile" -
 docker build --provenance=false --file "${qualification_directory}/Browser.Dockerfile" --tag "${browser_image}" "${video_directory}"
 if [[ "${uses_mediamtx}" == true ]]; then
   printf 'Building the distributor image\n'
-  docker build --provenance=false --file "${distributor_directory}/Dockerfile" --tag "${distributor_image}" "${distributor_directory}"
+  docker build --provenance=false --file "${distributor_directory}/Dockerfile" --tag "${distributor_image}" "${video_directory}"
 fi
 
 docker network create --driver bridge "${network_name}" >/dev/null

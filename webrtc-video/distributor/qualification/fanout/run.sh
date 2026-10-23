@@ -22,6 +22,8 @@ for command in git go jq node; do
     exit 1
   fi
 done
+"${distributor_directory}/ice-patch.sh"
+
 if [[ -z "${mediamtx_binary}" ]]; then
   mediamtx_binary="$(command -v mediamtx || true)"
 fi
@@ -48,7 +50,7 @@ for run in $(seq 1 "${run_count}"); do
   RSTREAM_DISTRIBUTOR_QUALIFICATION_OUTPUT="${output_directory}/runs/${run}.json" \
   RSTREAM_DISTRIBUTOR_QUALIFICATION_REVISION="${revision}" \
   RSTREAM_MEDIAMTX_BINARY="${mediamtx_binary}" \
-    go -C "${distributor_directory}" test \
+    go -C "${distributor_directory}" test -modfile="${distributor_directory}/out/ice-patch/go.mod" \
       -count=1 \
       -timeout=3m \
       -tags='integration qualification' \

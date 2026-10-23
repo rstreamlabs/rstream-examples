@@ -1,5 +1,8 @@
 # Adaptive real-time WebRTC video
 
+Builds use a verified temporary ICE concurrency patch. Applications derived
+from this sample must also adopt its build step; see the [ICE patch guide](./ICE-PATCH.md).
+
 This reference implementation covers the path from a remote video source to a
 browser-facing product. The device adapts its encoder to live congestion,
 bounds sender queues, repairs recent packet loss, and keeps the WebRTC session

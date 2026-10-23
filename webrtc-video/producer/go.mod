@@ -1,6 +1,6 @@
 module github.com/rstreamlabs/rstream-examples/webrtc-video/producer
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/go-gst/go-glib v1.4.0
@@ -14,7 +14,7 @@ require (
 	github.com/pion/webrtc/v4 v4.2.20
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/client_model v0.6.3
-	github.com/rstreamlabs/rstream-go v1.34.1
+	github.com/rstreamlabs/rstream-go v1.36.3
 	gopkg.in/yaml.v3 v3.0.1
 )
 

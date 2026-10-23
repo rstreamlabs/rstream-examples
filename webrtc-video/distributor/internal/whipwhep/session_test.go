@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pion/rtp"
+	"github.com/pion/turn/v5"
 	"github.com/pion/webrtc/v4"
 )
 
@@ -183,9 +185,23 @@ func TestCandidateWorkerSendsASeparateEndOfCandidatesFragment(t *testing.T) {
 }
 
 func TestRestartRenewsCredentialsAndKeepsOneConnectedPeer(t *testing.T) {
+	for _, mode := range []string{"direct", "relay"} {
+		t.Run(mode, func(t *testing.T) {
+			configuration := webrtc.Configuration{}
+			if mode == "relay" {
+				configuration = localTURNConfiguration(t)
+			}
+			testRestartRenewsCredentialsAndKeepsOneConnectedPeer(t, configuration, startRestartPacketProbe)
+		})
+	}
+}
+
+func testRestartRenewsCredentialsAndKeepsOneConnectedPeer(t *testing.T, configuration webrtc.Configuration, startMedia func(*testing.T, *webrtc.PeerConnection, *webrtc.PeerConnection) func()) {
 	const initialAuthorization = "Bearer source-initial"
 	const refreshedAuthorization = "Bearer source-refreshed"
-	serverPeer := newSendingPeer(t)
+	serverPeer := newSendingPeerWithConfiguration(t, configuration)
+	clientPeer := newReceivingPeerWithConfiguration(t, configuration)
+	assertMedia := startMedia(t, serverPeer, clientPeer)
 	serverConnected := make(chan struct{})
 	var serverConnectedOnce sync.Once
 	serverPeer.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
@@ -194,6 +210,7 @@ func TestRestartRenewsCredentialsAndKeepsOneConnectedPeer(t *testing.T) {
 		}
 	})
 	var candidatePatches atomic.Uint32
+	var restartedCandidates atomic.Uint32
 	var restartAttempts atomic.Uint32
 	var restarts atomic.Uint32
 	var deletes atomic.Uint32
@@ -241,6 +258,9 @@ func TestRestartRenewsCredentialsAndKeepsOneConnectedPeer(t *testing.T) {
 				return
 			}
 			if request.Header.Get("If-Match") != "*" {
+				if request.Header.Get("If-Match") != `"generation-1"` {
+					restartedCandidates.Add(uint32(len(remote.candidates)))
+				}
 				for _, candidate := range remote.candidates {
 					if err := serverPeer.AddICECandidate(candidate); err != nil {
 						t.Errorf("apply initial candidate: %v", err)
@@ -299,9 +319,16 @@ func TestRestartRenewsCredentialsAndKeepsOneConnectedPeer(t *testing.T) {
 				http.Error(w, "restart response failed", http.StatusInternalServerError)
 				return
 			}
-			restarts.Add(1)
+			generation := restarts.Add(1) + 1
+			deadline := time.Now().Add(time.Second)
+			for clientPeer.ICEGatheringState() != webrtc.ICEGatheringStateComplete && time.Now().Before(deadline) {
+				time.Sleep(time.Millisecond)
+			}
+			if clientPeer.ICEGatheringState() != webrtc.ICEGatheringStateComplete {
+				t.Error("restart did not gather local candidates before the HTTP answer")
+			}
 			w.Header().Set("Content-Type", "application/trickle-ice-sdpfrag")
-			w.Header().Set("ETag", `"generation-2"`)
+			w.Header().Set("ETag", fmt.Sprintf(`"generation-%d"`, generation))
 			w.WriteHeader(http.StatusOK)
 			_, _ = io.WriteString(w, response)
 		case http.MethodDelete:
@@ -315,7 +342,6 @@ func TestRestartRenewsCredentialsAndKeepsOneConnectedPeer(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	clientPeer := newReceivingPeer(t)
 	initial := mustURL(t, server.URL+"/whep?rstream.token=edge-initial")
 	session, err := Exchange(context.Background(), clientPeer, initial, initialAuthorization, server.Client())
 	if err != nil {
@@ -335,7 +361,7 @@ func TestRestartRenewsCredentialsAndKeepsOneConnectedPeer(t *testing.T) {
 	}
 	refreshed := mustURL(t, server.URL+"/whep?rstream.token=edge-refreshed")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	if err := session.Restart(ctx, refreshed, refreshedAuthorization, nil); err == nil || IsPermanent(err) {
+	if err := session.Restart(ctx, refreshed, refreshedAuthorization, configuration.ICEServers); err == nil || IsPermanent(err) {
 		cancel()
 		t.Fatalf("temporary restart error = %v, want retryable failure", err)
 	}
@@ -344,7 +370,7 @@ func TestRestartRenewsCredentialsAndKeepsOneConnectedPeer(t *testing.T) {
 		t.Fatalf("failed restart state = signaling %s worker error %v", clientPeer.SignalingState(), session.workerError())
 	}
 	cancelledCtx, cancelRestart := context.WithTimeout(context.Background(), 20*time.Millisecond)
-	if err := session.Restart(cancelledCtx, refreshed, refreshedAuthorization, nil); !errors.Is(err, context.DeadlineExceeded) {
+	if err := session.Restart(cancelledCtx, refreshed, refreshedAuthorization, configuration.ICEServers); !errors.Is(err, context.DeadlineExceeded) {
 		cancelRestart()
 		cancel()
 		t.Fatalf("cancelled restart error = %v, want deadline", err)
@@ -354,7 +380,7 @@ func TestRestartRenewsCredentialsAndKeepsOneConnectedPeer(t *testing.T) {
 		cancel()
 		t.Fatalf("cancelled restart state = signaling %s worker error %v", clientPeer.SignalingState(), session.workerError())
 	}
-	if err := session.Restart(ctx, refreshed, refreshedAuthorization, nil); err != nil {
+	if err := session.Restart(ctx, refreshed, refreshedAuthorization, configuration.ICEServers); err != nil {
 		cancel()
 		t.Fatalf("restart WHEP ICE: %v", err)
 	}
@@ -368,6 +394,42 @@ func TestRestartRenewsCredentialsAndKeepsOneConnectedPeer(t *testing.T) {
 	}
 	if clientPeer.ConnectionState() != webrtc.PeerConnectionStateConnected {
 		t.Fatalf("connection state after restart = %s", clientPeer.ConnectionState())
+	}
+	deadline = time.Now().Add(time.Second)
+	for restartedCandidates.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if restartedCandidates.Load() == 0 {
+		t.Error("candidates gathered while the restart HTTP request was pending were not delivered with the new ETag")
+	}
+	for cycle := 0; cycle < 3; cycle++ {
+		if configuration.ICETransportPolicy == webrtc.ICETransportPolicyRelay {
+			for _, transport := range []*webrtc.ICETransport{clientPeer.GetReceivers()[0].Transport().ICETransport(), serverPeer.GetSenders()[0].Transport().ICETransport()} {
+				deadline = time.Now().Add(5 * time.Second)
+				for {
+					pair, err := transport.GetSelectedCandidatePair()
+					if err != nil {
+						t.Fatal(err)
+					}
+					if pair != nil && pair.Local.Typ == webrtc.ICECandidateTypeRelay {
+						break
+					}
+					if time.Now().After(deadline) {
+						t.Fatalf("restart %d did not select a relay candidate: %v", cycle, pair)
+					}
+					time.Sleep(10 * time.Millisecond)
+				}
+			}
+		}
+		assertMedia()
+		if cycle < 2 {
+			restartCtx, stop := context.WithTimeout(t.Context(), 5*time.Second)
+			err := session.Restart(restartCtx, refreshed, refreshedAuthorization, configuration.ICEServers)
+			stop()
+			if err != nil {
+				t.Fatalf("repeat restart: %v", err)
+			}
+		}
 	}
 	closeCtx, closeCancel := context.WithTimeout(context.Background(), time.Second)
 	defer closeCancel()
@@ -1136,13 +1198,13 @@ func TestResolveSessionURLCarriesTheEdgeCredentialOntoTheOpaqueResource(t *testi
 
 // Local signaling tests exercise both address families without depending on
 // external interfaces, VPN routes or neighbor discovery on the test host.
-func newSignalingPeer(t *testing.T) *webrtc.PeerConnection {
+func newSignalingPeerWithConfiguration(t *testing.T, configuration webrtc.Configuration) *webrtc.PeerConnection {
 	t.Helper()
 	settings := webrtc.SettingEngine{}
 	settings.SetNetworkTypes([]webrtc.NetworkType{webrtc.NetworkTypeUDP4, webrtc.NetworkTypeUDP6})
 	settings.SetIncludeLoopbackCandidate(true)
 	settings.SetIPFilter(func(ip net.IP) bool { return ip.IsLoopback() })
-	peer, err := webrtc.NewAPI(webrtc.WithSettingEngine(settings)).NewPeerConnection(webrtc.Configuration{})
+	peer, err := webrtc.NewAPI(webrtc.WithSettingEngine(settings)).NewPeerConnection(configuration)
 	if err != nil {
 		t.Fatalf("create local signaling peer: %v", err)
 	}
@@ -1152,7 +1214,12 @@ func newSignalingPeer(t *testing.T) *webrtc.PeerConnection {
 
 func newReceivingPeer(t *testing.T) *webrtc.PeerConnection {
 	t.Helper()
-	peer := newSignalingPeer(t)
+	return newReceivingPeerWithConfiguration(t, webrtc.Configuration{})
+}
+
+func newReceivingPeerWithConfiguration(t *testing.T, configuration webrtc.Configuration) *webrtc.PeerConnection {
+	t.Helper()
+	peer := newSignalingPeerWithConfiguration(t, configuration)
 	if _, err := peer.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly}); err != nil {
 		t.Fatalf("add receiving transceiver: %v", err)
 	}
@@ -1161,7 +1228,12 @@ func newReceivingPeer(t *testing.T) *webrtc.PeerConnection {
 
 func newSendingPeer(t *testing.T) *webrtc.PeerConnection {
 	t.Helper()
-	peer := newSignalingPeer(t)
+	return newSendingPeerWithConfiguration(t, webrtc.Configuration{})
+}
+
+func newSendingPeerWithConfiguration(t *testing.T, configuration webrtc.Configuration) *webrtc.PeerConnection {
+	t.Helper()
+	peer := newSignalingPeerWithConfiguration(t, configuration)
 	track, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000}, "video", "source")
 	if err != nil {
 		t.Fatalf("create source track: %v", err)
@@ -1179,4 +1251,88 @@ func mustURL(t *testing.T, raw string) *url.URL {
 		t.Fatalf("parse URL: %v", err)
 	}
 	return parsed
+}
+
+func localTURNConfiguration(t *testing.T) webrtc.Configuration {
+	t.Helper()
+	packet, err := net.ListenPacket("udp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = packet.Close() })
+	server, err := turn.NewServer(turn.ServerConfig{
+		Realm: "rstream-test",
+		AuthHandler: func(attributes *turn.RequestAttributes) (string, []byte, bool) {
+			if attributes.Username != "fixture" {
+				return "", nil, false
+			}
+			return "fixture", turn.GenerateAuthKey("fixture", "rstream-test", "fixture-password"), true
+		},
+		PacketConnConfigs: []turn.PacketConnConfig{{PacketConn: packet, RelayAddressGenerator: &turn.RelayAddressGeneratorStatic{RelayAddress: net.ParseIP("127.0.0.1"), Address: "127.0.0.1"}, PermissionHandler: func(_ net.Addr, peer net.IP) bool { return peer.IsLoopback() }}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		deadline := time.Now().Add(time.Second)
+		for server.AllocationCount() != 0 && time.Now().Before(deadline) {
+			time.Sleep(time.Millisecond)
+		}
+		if server.AllocationCount() != 0 {
+			t.Errorf("TURN allocations retained after peers closed: %d", server.AllocationCount())
+		}
+		_ = server.Close()
+	})
+	return webrtc.Configuration{ICETransportPolicy: webrtc.ICETransportPolicyRelay, ICEServers: []webrtc.ICEServer{{URLs: []string{"turn:" + packet.LocalAddr().String() + "?transport=udp"}, Username: "fixture", Credential: "fixture-password"}}}
+}
+
+func startRestartPacketProbe(t *testing.T, serverPeer, clientPeer *webrtc.PeerConnection) func() {
+	t.Helper()
+	var packets atomic.Uint32
+	clientPeer.OnTrack(func(track *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
+		for {
+			if _, _, err := track.ReadRTP(); err != nil {
+				return
+			}
+			packets.Add(1)
+		}
+	})
+	mediaCtx, stopMedia := context.WithCancel(t.Context())
+	writerDone := make(chan struct{})
+	track := serverPeer.GetSenders()[0].Track().(*webrtc.TrackLocalStaticRTP)
+	go func() {
+		defer close(writerDone)
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+		var sequence uint16
+		for {
+			select {
+			case <-mediaCtx.Done():
+				return
+			case <-ticker.C:
+				sequence++
+				if err := track.WriteRTP(&rtp.Packet{Header: rtp.Header{Version: 2, SequenceNumber: sequence, Timestamp: uint32(sequence) * 900, Marker: true}, Payload: []byte{0x65, 0x88, 0x84}}); err != nil {
+					return
+				}
+			}
+		}
+	}()
+	t.Cleanup(func() {
+		stopMedia()
+		select {
+		case <-writerDone:
+		case <-time.After(time.Second):
+			t.Error("media writer did not stop")
+		}
+	})
+	return func() {
+		before := packets.Load()
+		deadline := time.Now().Add(5 * time.Second)
+		for packets.Load() < before+10 && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		if packets.Load() < before+10 {
+			t.Fatalf("media stopped after restart: %d packets before, %d after", before, packets.Load())
+		}
+	}
 }

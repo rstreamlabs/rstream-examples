@@ -1,0 +1,3 @@
+
+# Preserve the reviewed build patch hash on Windows checkouts.
+webrtc-video/ice-patch/*.patch text eol=lf

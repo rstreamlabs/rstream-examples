@@ -1,5 +1,8 @@
 # On-demand WebRTC distribution
 
+Builds use a verified temporary ICE concurrency patch. Applications derived
+from this sample must also adopt its build step; see the [ICE patch guide](../ICE-PATCH.md).
+
 This component adds multi-viewer delivery to the video reference without
 changing the producer. MediaMTX starts one lightweight Go adapter when the first
 viewer requests a device path. The adapter resolves that device through the
@@ -28,7 +31,7 @@ IDs, display names and optional offline inventory history.
 | Profile               | Device uplinks | Producer leg                               | Viewer leg                     | Use it when                                                         |
 | --------------------- | -------------: | ------------------------------------------ | ------------------------------ | ------------------------------------------------------------------- |
 | Direct                | one per viewer | TWCC, NACK/RTX, FlexFEC, bounded pacer     | same end-to-end session        | one viewer needs the shortest path and end-to-end adaptation        |
-| MediaMTX native pull  |     one shared | NACK/RTX and TWCC with fixed source pacing | MediaMTX NACK and TWCC         | a static source accepts the reduced MediaMTX 1.21.1 offer           |
+| MediaMTX native pull  |     one shared | NACK/RTX and TWCC with fixed source pacing | MediaMTX NACK and TWCC         | a static source accepts the reduced MediaMTX 1.21.2 offer           |
 | MediaMTX with adapter |     one shared | TWCC, NACK/RTX, FlexFEC, bounded pacer     | independent MediaMTX NACK/TWCC | a product needs dynamic sources, complete source repair and fan-out |
 
 The native profile is intentionally retained as an interoperability option. It
@@ -36,11 +39,11 @@ removes the adapter when its smaller feature set and static source contract are
 enough. The producer must opt into the bounded MediaMTX-native offer profile;
 strict profiles do not relax their WHEP validation. Draft 04 requires
 `rtcp-mux-only` and one common `msid` on the active media sections; MediaMTX
-1.21.1 emits neither in its source offer and its player does not complete a `406`
+1.21.2 emits neither in its source offer and its player does not complete a `406`
 counter-offer exchange. The opt-in accepts only those two known differences,
 continues to require BUNDLE and RTCP multiplexing, and keeps fixed source
 encoding/pacing for that session. RTX is negotiated when offered (including
-MediaMTX 1.21.1); FlexFEC is absent. The adapter profile keeps the
+MediaMTX 1.21.2); FlexFEC is absent. The adapter profile keeps the
 strict producer contract and is the reference product path.
 
 MediaMTX exposure is independent of these profiles. A public deployment gives
@@ -118,9 +121,9 @@ reorders media for at most 300 ms, retries NACK feedback at a bounded cadence,
 expires missing packets after one second, and stops instead of accumulating an
 unbounded live-stream backlog. PLI and FIR received from MediaMTX cross back to
 the source; viewer NACK and TWCC remain local to the MediaMTX hop. This is not
-end-to-end forwarding of every viewer's key-frame request: MediaMTX 1.21.1
-[consumes reader RTCP without forwarding PLI upstream](https://github.com/bluenviron/mediamtx/blob/v1.21.1/internal/protocols/webrtc/outbound_track.go)
-and [generates its own periodic source PLI every two seconds](https://github.com/bluenviron/mediamtx/blob/v1.21.1/internal/protocols/webrtc/inbound_track.go).
+end-to-end forwarding of every viewer's key-frame request: MediaMTX 1.21.2
+[consumes reader RTCP without forwarding PLI upstream](https://github.com/bluenviron/mediamtx/blob/v1.21.2/internal/protocols/webrtc/outbound_track.go)
+and [generates its own periodic source PLI every two seconds](https://github.com/bluenviron/mediamtx/blob/v1.21.2/internal/protocols/webrtc/inbound_track.go).
 The combined image therefore uses MediaMTX's standard `runOnRead` hook to
 request a source key frame when a reader's media transport connects. A short
 local command sends a fixed notification to that path's adapter through a
@@ -138,6 +141,38 @@ be deleted promptly. Aborting the POST before its response would lose the only
 resource identifier and leave MediaMTX's unfinished peer waiting for its
 handshake timeout. An unreachable response or disappearing page can still
 require that server timeout; the client reports unconfirmed cleanup explicitly.
+
+The shared browser WHEP client reports signaling, response-body and ICE-gathering
+deadlines as `WHEPTimeoutError` (`name: "TimeoutError"`), with `phase` set to
+`request`, `response` or `gathering`. Intentional cancellation retains the
+original abort reason. When cancellation and a deadline compete, the first
+cause wins; response readers are canceled and released without waiting for an
+unresponsive underlying cancellation hook.
+
+ICE restarts retain candidates gathered while the restart HTTP exchange is
+pending, then send them using the accepted generation's ETag. The previous
+Pion gathering callback sequence must complete before a new generation starts;
+failed generations are discarded and all waits remain cancelable. The existing
+64-candidate and 64 KiB per-generation bounds are unchanged. There is no fixed
+playback duration in this mechanism: expiring TURN credentials require renewed
+ICE connectivity, not a new media peer for every renewal.
+
+`make verify` requires `ffmpeg` and includes a local TURN qualification that
+decodes a deterministic H264 GOP across three successful ICE restarts, following
+a rejected and a canceled attempt. It checks relay selection, continued decoded
+frames, peer reuse and zero retained TURN allocations after cleanup. To extend
+this to roughly twelve minutes of actual decoding, run:
+
+```sh
+./ice-patch.sh
+GOFLAGS="-modfile=$PWD/out/ice-patch/go.mod" RSTREAM_RESTART_PHASE_SECONDS=240 go test -race -tags=qualification \
+  -timeout=15m -count=1 -v ./internal/whipwhep \
+  -run '^TestICERestartDecodesH264ThroughTURN$'
+```
+
+The local fixture uses fixed test TURN credentials and explicit restarts; it
+qualifies media continuity and lifecycle behavior, not a deployed credential
+issuer or browser/hardware decoder.
 
 The `host` command creates and removes the private notification directory and
 passes it to MediaMTX and its hooks. Path locks reject a duplicate live adapter
@@ -163,13 +198,51 @@ still needs a measured aggregate admission boundary.
 ## Build the combined image
 
 The official MediaMTX image is distroless and cannot execute `runOnDemand`
-commands. The supplied image copies the pinned MediaMTX 1.21.1 binary and the Go
-adapter into an unprivileged Alpine runtime with a shell and CA roots. Both
-processes still run in one container.
+commands. The supplied image builds MediaMTX 1.21.2 from checksum-pinned sources
+with the bounded H.264 patch described below, then copies it and the Go adapter
+into an unprivileged Alpine runtime with a shell and CA roots. Both processes
+still run in one container.
 
 ```bash
-docker build -t rstream-video-distributor:local .
+make image
 ```
+
+### H.264 access-unit budget
+
+An H.264 image can contain many independently encoded slices. The upstream
+50-NAL-unit limit rejects valid high-slice sources, even when the complete image
+is small. The sample runtime raises that count to **1,024 NAL units per access
+unit** and retains the upstream **8 MiB byte limit**. This applies uniformly to
+all sources; it does not select devices, resolutions or encoder brands. The
+maximum slice-header table is 24 KiB on a 64-bit host, excluding bounded Go
+slice allocation overhead. Media payloads remain subject to the byte limit.
+
+[`mediamtx-build/sources.json`](mediamtx-build/sources.json) pins MediaMTX,
+mediacommon and gortsplib module checksums and source revisions. The builder
+verifies module archive contents, applies one production constant change in a
+fresh temporary directory, and refuses a changed patch context. It does not
+modify the Go module cache. The generated binary identifies itself as
+`v1.21.2-rstream.1`; its adjacent `.build.json` records the source checksums,
+budgets and binary SHA-256. The container retains this manifest at
+`/usr/local/share/mediamtx.build.json` and the three upstream license notices at
+`/usr/local/share/licenses/mediamtx/LICENSES`.
+
+Run `make mediamtx-test` with Python 3, Go and FFmpeg installed. This runs the
+upstream H.264 codec and RTP decoder tests under the race detector, tests single
+NAL, STAP-A and FU-A input at and above the count/byte bounds, and verifies
+recovery after rejection. A real 64-slice video then passes through MediaMTX
+RTSP delivery and fMP4 recording. All received and recorded images must decode
+to the original frame hashes. The recording fixture includes a trailing GOP beyond its 120 qualification
+frames: fMP4 needs the next timestamp, and recorder shutdown can discard queued
+lookahead data. All 120 qualification frames and every recorded tail frame must
+match; missing or altered frames within that interval fail the test.
+The regular distributor integration suite separately checks real WebRTC
+fan-out, recovery and lifecycle against the same patched runtime.
+
+When upgrading MediaMTX, review all three pins and the patch, rerun these tests
+and the platform authorization/recording checks, and remove the patch when the
+upstream budget covers these cases. Never silently fall back to the unpatched
+image. Historical qualification evidence retains its original runtime version.
 
 For a repeatable single-host deployment, copy the reviewed example and start
 the supplied Compose service:
@@ -272,7 +345,7 @@ path, or other query parameters. Static deployments use the same contract:
 place the rstream token in `RSTREAM_SOURCE_URL` and use
 `RSTREAM_SOURCE_AUTHORIZATION` only when the producer itself requires a bearer.
 
-MediaMTX 1.21.1 validates the JWT when it creates a WHEP or WHIP session. In this
+MediaMTX 1.21.2 validates the JWT when it creates a WHEP or WHIP session. In this
 implementation, the returned resource URL then acts as an opaque capability:
 PATCH and DELETE are bound to its random session identifier and do not
 revalidate a later JWT.
@@ -349,7 +422,7 @@ the on-demand source lifecycle. Codec changes and interruptions can split the
 available time spans.
 
 **Retention is not a byte quota.** MediaMTX cleans periodically (half the
-configured retention interval in version 1.21.1), and segments can exceed their
+configured retention interval in version 1.21.2), and segments can exceed their
 minimum duration while waiting for a key frame. Use a dedicated filesystem with
 an enforced quota or a size-limited temporary volume. Size it for the aggregate
 bitrate of simultaneously active devices, cleanup delay and key-frame overhead.
@@ -359,7 +432,7 @@ bitrate/device count. For sustained server use, prefer an appropriately sized
 quota-limited disk volume and monitor recording errors/free space. Keep media
 storage separate from logs and the system filesystem.
 
-**Full storage temporarily disables history.** MediaMTX 1.21.1 can leave incomplete
+**Full storage temporarily disables history.** MediaMTX 1.21.2 can leave incomplete
 fMP4 segments after `ENOSPC`; its playback index rejects the whole requested
 interval if any segment cannot be parsed. Freeing space lets recording resume,
 but history can remain unavailable until those files leave the requested window
@@ -392,14 +465,12 @@ A socket-buffer warning fails the performance-environment gate even if video
 plays correctly. Do not suppress the warning to qualify an undersized host.
 
 ```bash
-go test ./...
-go test -race ./...
-go vet ./...
-go test -race -tags=integration ./internal/bridge
+make test test-race vet
+GOFLAGS="-modfile=$PWD/out/ice-patch/go.mod" go test -race -tags=integration ./internal/bridge
 make qualify-fanout OUT=/tmp/rstream-video-distributor
 ```
 
-The integration suite starts the real MediaMTX 1.21.1 binary. It proves that two
+The integration suite starts the real MediaMTX 1.21.2 binary. It proves that two
 viewers create one source WHEP session, injects and repairs a missing H.264 RTP
 packet with FlexFEC, then repeats with the first FEC packet suppressed and
 requires RTX recovery. Every viewer must receive the complete ordered range.
