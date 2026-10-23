@@ -400,6 +400,11 @@ non-secret identifier to enable association. Missing or invalid IDs leave the
 association unavailable; video continues normally. Neither `Location` resource
 URLs, SDP nor credentials are exported.
 
+An ICE restart renews the transport within the same HTTP session, so its IDs
+and association remain stable. A replacement WHEP or WHIP session belongs to a
+new bridge attempt; consumers must resolve the new association instead of
+carrying the previous one across the replacement.
+
 Entries disappear when an attempt ends or its process heartbeat expires. A host
 restart changes the returned runtime ID. Consumers must also verify the current
 MediaMTX publisher and reader membership, and source validity: the snapshot alone

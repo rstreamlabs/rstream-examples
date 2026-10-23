@@ -21,6 +21,26 @@ import (
 	"github.com/pion/webrtc/v4"
 )
 
+func TestPublicSessionIDOnlyAcceptsBoundedOpaqueIdentifiers(t *testing.T) {
+	for _, test := range []struct {
+		input string
+		want  string
+	}{
+		{"", ""},
+		{"session_A-42", "session_A-42"},
+		{strings.Repeat("a", 128), strings.Repeat("a", 128)},
+		{strings.Repeat("a", 129), ""},
+		{"/session/bearer-secret", ""},
+		{"https://example.test/session?token=secret", ""},
+		{"session\r\nsecret", ""},
+		{"session name", ""},
+	} {
+		if got := publicSessionID(test.input); got != test.want {
+			t.Errorf("publicSessionID(%q) = %q, want %q", test.input, got, test.want)
+		}
+	}
+}
+
 func TestExchangeCreatesAndDeletesSession(t *testing.T) {
 	const authorization = "Bearer source-secret"
 	serverPeer := newSendingPeer(t)
@@ -197,6 +217,7 @@ func TestRestartRenewsCredentialsAndKeepsOneConnectedPeer(t *testing.T) {
 }
 
 func testRestartRenewsCredentialsAndKeepsOneConnectedPeer(t *testing.T, configuration webrtc.Configuration, startMedia func(*testing.T, *webrtc.PeerConnection, *webrtc.PeerConnection) func()) {
+	const sessionID = "stable-session-id"
 	const initialAuthorization = "Bearer source-initial"
 	const refreshedAuthorization = "Bearer source-refreshed"
 	serverPeer := newSendingPeerWithConfiguration(t, configuration)
@@ -244,9 +265,13 @@ func testRestartRenewsCredentialsAndKeepsOneConnectedPeer(t *testing.T, configur
 			w.Header().Set("Content-Type", "application/sdp")
 			w.Header().Set("ETag", `"generation-1"`)
 			w.Header().Set("Location", "/sessions/restartable")
+			w.Header().Set("ID", sessionID)
 			w.WriteHeader(http.StatusCreated)
 			_, _ = io.WriteString(w, serverPeer.LocalDescription().SDP)
 		case http.MethodPatch:
+			// ICE generations do not replace the HTTP session identity. Even an
+			// unsolicited ID on a PATCH response must not change its binding.
+			w.Header().Set("ID", "different-ice-generation")
 			fragment, err := io.ReadAll(request.Body)
 			if err != nil {
 				http.Error(w, "fragment failed", http.StatusBadRequest)
@@ -403,6 +428,9 @@ func testRestartRenewsCredentialsAndKeepsOneConnectedPeer(t *testing.T, configur
 		t.Error("candidates gathered while the restart HTTP request was pending were not delivered with the new ETag")
 	}
 	for cycle := 0; cycle < 3; cycle++ {
+		if session.PublicID() != sessionID {
+			t.Fatalf("restart %d changed public session identity: %q", cycle, session.PublicID())
+		}
 		if configuration.ICETransportPolicy == webrtc.ICETransportPolicyRelay {
 			for _, transport := range []*webrtc.ICETransport{clientPeer.GetReceivers()[0].Transport().ICETransport(), serverPeer.GetSenders()[0].Transport().ICETransport()} {
 				deadline = time.Now().Add(5 * time.Second)
