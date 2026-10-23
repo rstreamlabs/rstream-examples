@@ -54,6 +54,8 @@ fi
 
 docker exec "$container" grep -q '^paths ' /tmp/metrics
 docker exec "$container" grep -q '^rstream_video_distributor_children' /tmp/adapter-metrics
+docker exec "$container" test -r /usr/local/share/mediamtx.build.json
+docker exec "$container" grep -q 'MIT License' /usr/local/share/licenses/mediamtx/LICENSES
 healthcheck=$(docker inspect --format '{{if .Config.Healthcheck}}{{json .Config.Healthcheck.Test}}{{else}}null{{end}}' "$container")
 if [ "$healthcheck" = "null" ] || [ "$healthcheck" = "[]" ]; then
   printf 'container image has no healthcheck\n' >&2

@@ -337,16 +337,15 @@ jobs:
         working-directory: webrtc-video/platform
         shell: bash
         run: npm ci
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: webrtc-video/distributor/go.mod
+          cache-dependency-path: webrtc-video/distributor/go.sum
       - name: Install pinned MediaMTX test binary
         shell: bash
         run: |
           set -euo pipefail
-          container="rstream-mediamtx-platform-${GITHUB_RUN_ID}"
-          trap 'docker rm --force "$container" >/dev/null 2>&1 || true' EXIT
-          docker create --name "$container" \
-            bluenviron/mediamtx:1.21.1@sha256:5ce2a948eb68df06ce2e13870db8df8e30d516ac4dc40e04bfe8aee3bdf7be40
-          docker cp "$container:/mediamtx" "${RUNNER_TEMP}/mediamtx"
-          chmod 0555 "${RUNNER_TEMP}/mediamtx"
+          python3 webrtc-video/distributor/mediamtx-build/build.py --output "${RUNNER_TEMP}/mediamtx"
           printf '%s\n' "$RUNNER_TEMP" >>"$GITHUB_PATH"
       - name: Test WHEP client, reconnect policy, and MediaMTX authorization
         working-directory: webrtc-video/platform
@@ -390,16 +389,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          container="rstream-mediamtx-distributor-${GITHUB_RUN_ID}"
-          trap 'docker rm --force "$container" >/dev/null 2>&1 || true' EXIT
-          docker create --name "$container" \
-            bluenviron/mediamtx:1.21.1@sha256:5ce2a948eb68df06ce2e13870db8df8e30d516ac4dc40e04bfe8aee3bdf7be40
-          docker cp "$container:/mediamtx" "${RUNNER_TEMP}/mediamtx"
-          chmod 0555 "${RUNNER_TEMP}/mediamtx"
+          python3 webrtc-video/distributor/mediamtx-build/build.py --verify --output "${RUNNER_TEMP}/mediamtx"
           printf '%s\n' "$RUNNER_TEMP" >>"$GITHUB_PATH"
-      - name: Install the H264 qualification decoder
+      - name: Qualify high-slice H264 playback and recordings
         shell: bash
-        run: sudo apt-get update && sudo apt-get install --yes ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
+          python3 webrtc-video/distributor/mediamtx-build/integration.py --binary "${RUNNER_TEMP}/mediamtx" --output "${RUNNER_TEMP}/h264-runtime"
+      - name: Retain high-slice H264 diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: h264-runtime-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/h264-runtime
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Verify bounded and concurrent behavior
         working-directory: webrtc-video/distributor
         shell: bash

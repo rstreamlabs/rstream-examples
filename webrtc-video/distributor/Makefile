@@ -3,7 +3,7 @@ IMAGE ?= rstream-video-distributor:local
 OUT ?= out
 BINARY := $(OUT)/rstream-video-distributor
 
-.PHONY: build test test-qualification-tools test-qualification-compile test-decoded-restarts test-race vet format-check verify integration compose-check image image-test qualify-fanout qualify-native qualify-source clean
+.PHONY: build test test-qualification-tools test-qualification-compile test-decoded-restarts test-race vet format-check verify integration compose-check image image-test mediamtx mediamtx-test qualify-fanout qualify-native qualify-source clean
 
 build:
 	mkdir -p $(OUT)
@@ -28,7 +28,7 @@ vet:
 	$(GO) vet ./...
 
 format-check:
-	@test -z "$$($(GO) run mvdan.cc/gofumpt@v0.9.2 -l ./cmd ./internal)"
+	@test -z "$$($(GO) run mvdan.cc/gofumpt@v0.9.2 -l ./cmd ./internal ./mediamtx-build/testdata)"
 
 verify: format-check vet test test-qualification-tools test-qualification-compile test-decoded-restarts test-race build
 
@@ -43,6 +43,12 @@ image:
 
 image-test: image
 	./scripts/image-smoke.sh $(IMAGE)
+
+mediamtx:
+	python3 mediamtx-build/build.py --verify --output $(OUT)/mediamtx
+
+mediamtx-test: mediamtx
+	python3 mediamtx-build/integration.py --binary $(OUT)/mediamtx
 
 qualify-fanout:
 	./qualification/fanout/run.sh $(OUT)/qualification/fanout

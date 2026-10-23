@@ -1,0 +1,17 @@
+{
+  "mediamtx": {
+    "module": "github.com/bluenviron/mediamtx",
+    "version": "v1.21.2",
+    "sum": "h1:3cpZ1dCbyiEC6IrpAhT+wm29BSkk3DZigR1FCe5Vz0c="
+  },
+  "mediacommon": {
+    "module": "github.com/bluenviron/mediacommon/v2",
+    "version": "v2.9.6",
+    "sum": "h1:4DRWZyFZ4Xbkgu85c0UIiny0ohAFDr+ZgtdDK+iq/e8="
+  },
+  "gortsplib": {
+    "module": "github.com/bluenviron/gortsplib/v5",
+    "version": "v5.6.7",
+    "sum": "h1:0o0Ays+oereZwmeOP66t154lmrvXJsON/4iCxDnjgmw="
+  }
+}
