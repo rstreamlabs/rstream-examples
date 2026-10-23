@@ -1,6 +1,6 @@
 module github.com/rstreamlabs/rstream-examples/webrtc-video/distributor
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/pion/interceptor v0.1.47

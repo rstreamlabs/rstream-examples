@@ -1,6 +1,6 @@
 module github.com/rstreamlabs/rstream-examples/webrtc-video/producer
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/go-gst/go-glib v1.4.0
