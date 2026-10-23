@@ -176,6 +176,7 @@ type Session struct {
 	onClose                   func(string)
 	statsMu                   sync.RWMutex
 	stats                     SessionStats
+	selectedICEPair           *webrtc.ICECandidatePair // guarded by statsMu; supplied by Pion
 	signalingMu               sync.Mutex
 	whepRemoteCandidates      int
 	candidateMu               sync.Mutex
@@ -971,34 +972,33 @@ func (s *Session) trackSelectedICEPath() {
 		return
 	}
 	transport.ICETransport().OnSelectedCandidatePairChange(func(pair *webrtc.ICECandidatePair) {
-		s.updateSelectedICEPath(pair)
+		s.statsMu.Lock()
+		s.selectedICEPair = pair
+		s.stats.ICEPath = icePathFromCandidates(pair, nil)
+		s.statsMu.Unlock()
+		// Do not call GetStats in this callback: ICE startup may still hold
+		// transport locks while waiting for the candidate selection to return.
 	})
 }
 
 func (s *Session) ensureSelectedICEPath() {
 	s.statsMu.RLock()
 	path := s.stats.ICEPath
+	pair := s.selectedICEPair
 	complete := path != nil && (path.LocalCandidateType != "relay" || path.LocalRelayProtocol != "")
 	s.statsMu.RUnlock()
-	if complete {
+	if complete || pair == nil {
 		return
 	}
-	if s.sender == nil {
+	state := s.pc.ICEConnectionState()
+	if state != webrtc.ICEConnectionStateConnected && state != webrtc.ICEConnectionStateCompleted {
 		return
 	}
-	transport := s.sender.Transport()
-	if transport == nil || transport.ICETransport() == nil {
-		return
-	}
-	pair, err := transport.ICETransport().GetSelectedCandidatePair()
-	if err != nil || pair == nil {
-		return
-	}
-	s.updateSelectedICEPath(pair)
-}
-
-func (s *Session) updateSelectedICEPath(pair *webrtc.ICECandidatePair) {
-	path := selectedICEPath(s.pc.GetStats(), pair)
+	// The selection callback is registered before negotiation. Reading the
+	// transport's selected pair during Start races with its gatherer assignment
+	// in the pinned Pion version. Enrich the observed pair through GetStats,
+	// which synchronizes access to the transports.
+	path = selectedICEPath(s.pc.GetStats(), pair)
 	if path == nil {
 		return
 	}
@@ -1014,9 +1014,12 @@ func (s *Session) updateSelectedICEPath(pair *webrtc.ICECandidatePair) {
 		path.RemoteCandidateType,
 		path.RemoteCandidateProtocol,
 	)
-	s.updateStats(func(stats *SessionStats) {
-		stats.ICEPath = path
-	})
+	s.statsMu.Lock()
+	// A later candidate selection may have arrived while GetStats was running.
+	if s.selectedICEPair == pair {
+		s.stats.ICEPath = path
+	}
+	s.statsMu.Unlock()
 }
 
 func (s *Session) replaceTURNURLs(urls map[string]string) {
