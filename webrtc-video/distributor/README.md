@@ -139,6 +139,37 @@ resource identifier and leave MediaMTX's unfinished peer waiting for its
 handshake timeout. An unreachable response or disappearing page can still
 require that server timeout; the client reports unconfirmed cleanup explicitly.
 
+The shared browser WHEP client reports signaling, response-body and ICE-gathering
+deadlines as `WHEPTimeoutError` (`name: "TimeoutError"`), with `phase` set to
+`request`, `response` or `gathering`. Intentional cancellation retains the
+original abort reason. When cancellation and a deadline compete, the first
+cause wins; response readers are canceled and released without waiting for an
+unresponsive underlying cancellation hook.
+
+ICE restarts retain candidates gathered while the restart HTTP exchange is
+pending, then send them using the accepted generation's ETag. The previous
+Pion gathering callback sequence must complete before a new generation starts;
+failed generations are discarded and all waits remain cancelable. The existing
+64-candidate and 64 KiB per-generation bounds are unchanged. There is no fixed
+playback duration in this mechanism: expiring TURN credentials require renewed
+ICE connectivity, not a new media peer for every renewal.
+
+`make verify` requires `ffmpeg` and includes a local TURN qualification that
+decodes a deterministic H264 GOP across three successful ICE restarts, following
+a rejected and a canceled attempt. It checks relay selection, continued decoded
+frames, peer reuse and zero retained TURN allocations after cleanup. To extend
+this to roughly twelve minutes of actual decoding, run:
+
+```sh
+RSTREAM_RESTART_PHASE_SECONDS=240 go test -race -tags=qualification \
+  -timeout=15m -count=1 -v ./internal/whipwhep \
+  -run '^TestICERestartDecodesH264ThroughTURN$'
+```
+
+The local fixture uses fixed test TURN credentials and explicit restarts; it
+qualifies media continuity and lifecycle behavior, not a deployed credential
+issuer or browser/hardware decoder.
+
 The `host` command creates and removes the private notification directory and
 passes it to MediaMTX and its hooks. Path locks reject a duplicate live adapter
 and allow a replacement to recover a socket left by a crashed process. Custom

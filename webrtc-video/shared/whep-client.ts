@@ -65,6 +65,22 @@ export type WHEPCloseResult = {
   status?: number;
 };
 
+export class WHEPTimeoutError extends Error {
+  readonly phase: "request" | "response" | "gathering";
+
+  constructor(phase: "request" | "response" | "gathering") {
+    const operation =
+      phase === "response"
+        ? "response read"
+        : phase === "gathering"
+          ? "ICE gathering"
+          : "request";
+    super(`WHEP ${operation} timed out`);
+    this.name = "TimeoutError";
+    this.phase = phase;
+  }
+}
+
 export class WHEPHTTPError extends Error {
   readonly retryAfterMilliseconds: number | null;
   readonly status: number;
@@ -677,11 +693,11 @@ export class WHEPClient {
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => {
         cleanup();
-        reject(new Error("WHEP ICE gathering timed out"));
+        reject(new WHEPTimeoutError("gathering"));
       }, gatherTimeoutMs);
       const onAbort = () => {
         cleanup();
-        reject(new Error("WHEP negotiation was cancelled"));
+        reject(this.abort.signal.reason);
       };
       const onComplete = () => {
         cleanup();
@@ -882,7 +898,6 @@ export class WHEPClient {
   private async request(input: URL, init: RequestInit) {
     const parent = init.signal;
     const controller = new AbortController();
-    let timedOut = false;
     const abort = () => controller.abort(parent?.reason);
     if (parent?.aborted) {
       abort();
@@ -890,15 +905,13 @@ export class WHEPClient {
       parent?.addEventListener("abort", abort, { once: true });
     }
     const timer = setTimeout(() => {
-      timedOut = true;
-      controller.abort(new Error("WHEP request timed out"));
+      controller.abort(new WHEPTimeoutError("request"));
     }, this.requestTimeoutMs);
     try {
+      controller.signal.throwIfAborted();
       return await this.fetch(input, { ...init, signal: controller.signal });
     } catch (error) {
-      if (timedOut) {
-        throw new Error("WHEP request timed out", { cause: error });
-      }
+      controller.signal.throwIfAborted();
       throw error;
     } finally {
       clearTimeout(timer);
@@ -1525,53 +1538,43 @@ async function readBoundedResponse(
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let length = 0;
-  let cancelled = false;
-  let timedOut = false;
+  const controller = new AbortController();
+  const abort = () => controller.abort(signal.reason);
   const cancel = () => {
-    cancelled = true;
-    void reader.cancel(signal.reason).catch(() => {});
+    void reader.cancel(controller.signal.reason).catch(() => {});
   };
+  controller.signal.addEventListener("abort", cancel, { once: true });
   if (signal.aborted) {
-    cancel();
+    abort();
   } else {
-    signal.addEventListener("abort", cancel, { once: true });
+    signal.addEventListener("abort", abort, { once: true });
   }
   const timer = setTimeout(() => {
-    timedOut = true;
-    void reader
-      .cancel(new Error("WHEP response read timed out"))
-      .catch(() => {});
+    controller.abort(new WHEPTimeoutError("response"));
   }, timeoutMs);
   try {
     for (;;) {
+      controller.signal.throwIfAborted();
       const { done, value } = await reader.read();
-      if (timedOut) {
-        throw new Error("WHEP response read timed out");
-      }
-      if (cancelled || signal.aborted) {
-        throw new Error("WHEP response read was cancelled");
-      }
+      controller.signal.throwIfAborted();
       if (done) {
         break;
       }
       length += value.byteLength;
       if (length > maxResponseBytes) {
-        await reader.cancel();
+        void reader.cancel().catch(() => {});
         throw new Error(`WHEP response exceeds ${maxResponseBytes} bytes`);
       }
       chunks.push(value);
     }
   } catch (error) {
-    if (timedOut) {
-      throw new Error("WHEP response read timed out", { cause: error });
-    }
-    if (cancelled || signal.aborted) {
-      throw new Error("WHEP response read was cancelled", { cause: error });
-    }
+    controller.signal.throwIfAborted();
     throw error;
   } finally {
     clearTimeout(timer);
-    signal.removeEventListener("abort", cancel);
+    signal.removeEventListener("abort", abort);
+    controller.signal.removeEventListener("abort", cancel);
+    reader.releaseLock();
   }
   const body = new Uint8Array(length);
   let offset = 0;
