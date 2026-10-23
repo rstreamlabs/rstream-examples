@@ -1,5 +1,8 @@
 # WebRTC Video Producer
 
+Builds use a verified temporary ICE concurrency patch. Applications derived
+from this sample must also adopt its build step; see the [ICE patch guide](../ICE-PATCH.md).
+
 This example streams video from a device to a browser with WebRTC, publishes the viewer through an `rstream` HTTP tunnel, and uses the managed `rstream` STUN/TURN service for ICE connectivity.
 
 The sample includes a complete device-side path: an embedded viewer UI, WHEP on the same origin as the page, TURN credential bootstrap, H.264 and AV1 reference profiles, shared or per-viewer pipeline allocation, optional adaptive bitrate driven by TWCC/GCC, and Linux distribution builds that produce a standalone binary.

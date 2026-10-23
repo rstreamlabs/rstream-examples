@@ -1,7 +1,8 @@
 services:
   distributor:
     build:
-      context: .
+      context: ..
+      dockerfile: distributor/Dockerfile
     image: rstream-video-distributor:local
     init: true
     restart: unless-stopped

@@ -61,6 +61,8 @@ ENV GOMODCACHE=/go/pkg/mod-linux
 
 COPY --from=gstreamer /opt/gstreamer /opt/gstreamer
 
+COPY ice-patch /ice-patch
+
 COPY producer/go.mod producer/go.sum ./
 
 RUN --mount=type=cache,target=/go/pkg/mod-linux \
@@ -72,7 +74,7 @@ COPY producer/internal ./internal
 
 COPY producer/config.h264.yaml ./
 
-COPY producer/build-static-linux.sh ./
+COPY producer/build-static-linux.sh producer/ice-patch.sh ./
 
 COPY --from=web /src/internal/web/generated/app.js ./internal/web/generated/app.js
 
@@ -85,5 +87,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 FROM scratch AS export
 
 COPY --from=builder /out/webrtc-video-producer /webrtc-video-producer
+
+COPY --from=builder /src/out/ice-patch/provenance.json /webrtc-video-producer.ice-patch.json
 
 COPY --from=builder /src/config.h264.yaml /config.h264.yaml

@@ -1,5 +1,8 @@
 # On-demand WebRTC distribution
 
+Builds use a verified temporary ICE concurrency patch. Applications derived
+from this sample must also adopt its build step; see the [ICE patch guide](../ICE-PATCH.md).
+
 This component adds multi-viewer delivery to the video reference without
 changing the producer. MediaMTX starts one lightweight Go adapter when the first
 viewer requests a device path. The adapter resolves that device through the
@@ -161,7 +164,8 @@ frames, peer reuse and zero retained TURN allocations after cleanup. To extend
 this to roughly twelve minutes of actual decoding, run:
 
 ```sh
-RSTREAM_RESTART_PHASE_SECONDS=240 go test -race -tags=qualification \
+./ice-patch.sh
+GOFLAGS="-modfile=$PWD/out/ice-patch/go.mod" RSTREAM_RESTART_PHASE_SECONDS=240 go test -race -tags=qualification \
   -timeout=15m -count=1 -v ./internal/whipwhep \
   -run '^TestICERestartDecodesH264ThroughTURN$'
 ```
@@ -200,7 +204,7 @@ into an unprivileged Alpine runtime with a shell and CA roots. Both processes
 still run in one container.
 
 ```bash
-docker build -t rstream-video-distributor:local .
+make image
 ```
 
 ### H.264 access-unit budget
@@ -439,10 +443,8 @@ A socket-buffer warning fails the performance-environment gate even if video
 plays correctly. Do not suppress the warning to qualify an undersized host.
 
 ```bash
-go test ./...
-go test -race ./...
-go vet ./...
-go test -race -tags=integration ./internal/bridge
+make test test-race vet
+GOFLAGS="-modfile=$PWD/out/ice-patch/go.mod" go test -race -tags=integration ./internal/bridge
 make qualify-fanout OUT=/tmp/rstream-video-distributor
 ```
 

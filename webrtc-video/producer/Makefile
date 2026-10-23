@@ -1,3 +1,12 @@
+.DEFAULT_GOAL := build
+ICE_MODFILE := out/ice-patch/go.mod
+ICE_GOFLAGS = $(filter-out -modfile=%,$(GOFLAGS)) -modfile=$(abspath $(ICE_MODFILE))
+
+.PHONY: ice-patch
+
+ice-patch:
+	./ice-patch.sh
+
 APP := webrtc-video-producer
 CMD := ./cmd/$(APP)
 CONFIG ?= ./config.h264.yaml
@@ -86,37 +95,37 @@ $(WEB_STAMP): $(NPM_STAMP) $(WEB_SOURCES)
 	npm run build
 	touch $(WEB_STAMP)
 
-build: $(BUILD_PREREQS)
-	go build $(GO_BUILD_FLAGS) -o ./$(APP) $(CMD)
+build: $(BUILD_PREREQS) ice-patch
+	go build -modfile=$(ICE_MODFILE) $(GO_BUILD_FLAGS) -o ./$(APP) $(CMD)
 
 build-provisioning:
 	$(MAKE) build EMBEDDED_WEB=0
 
 build-no-web: build-provisioning
 
-run: check-build-tools css
-	go run $(CMD) -config $(CONFIG) $(ARGS)
+run: ice-patch check-build-tools css
+	GOFLAGS="$(ICE_GOFLAGS)" go run $(CMD) -config $(CONFIG) $(ARGS)
 
-run-local: check-build-tools css
+run-local: ice-patch check-build-tools css
 	mkdir -p ./.tmp
 	sed 's/enabled: true/enabled: false/' ./config.h264.yaml > ./.tmp/config.local.yaml
-	go run $(CMD) -config ./.tmp/config.local.yaml
+	GOFLAGS="$(ICE_GOFLAGS)" go run $(CMD) -config ./.tmp/config.local.yaml
 
-test: check-build-tools css
+test: ice-patch check-build-tools css
 	npm run check:ts
-	go test ./...
+	GOFLAGS="$(ICE_GOFLAGS)" go test ./...
 
-test-race: check-build-tools css
-	go test -race ./...
+test-race: ice-patch check-build-tools css
+	GOFLAGS="$(ICE_GOFLAGS)" go test -race ./...
 
-test-gcc-regression: check-go
-	go test -count=1 -race github.com/pion/interceptor/pkg/gcc
+test-gcc-regression: ice-patch check-go
+	GOFLAGS="$(ICE_GOFLAGS)" go test -count=1 -race github.com/pion/interceptor/pkg/gcc
 
-test-provisioning: check-build-tools
-	go test -tags noembeddedweb ./...
+test-provisioning: ice-patch check-build-tools
+	GOFLAGS="$(ICE_GOFLAGS)" go test -tags noembeddedweb ./...
 
-vet: check-build-tools css
-	go vet ./...
+vet: ice-patch check-build-tools css
+	GOFLAGS="$(ICE_GOFLAGS)" go vet ./...
 
 verify: check-format vet test test-race test-gcc-regression test-provisioning build
 
@@ -127,7 +136,7 @@ check-format:
 	npm run format:check
 
 clean:
-	rm -rf ./dist ./.tmp ./internal/web/generated ./$(APP)
+	rm -rf ./out/ice-patch ./dist ./.tmp ./internal/web/generated ./$(APP)
 
 dist: dist-linux-arm64 dist-linux-amd64
 

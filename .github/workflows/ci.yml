@@ -341,6 +341,10 @@ jobs:
         with:
           go-version-file: webrtc-video/distributor/go.mod
           cache-dependency-path: webrtc-video/distributor/go.sum
+      - name: Prepare verified ICE patch
+        working-directory: webrtc-video/distributor
+        shell: bash
+        run: ./ice-patch.sh
       - name: Install pinned MediaMTX test binary
         shell: bash
         run: |
@@ -385,6 +389,10 @@ jobs:
         with:
           go-version-file: webrtc-video/distributor/go.mod
           cache-dependency-path: webrtc-video/distributor/go.sum
+      - name: Prepare verified ICE patch
+        working-directory: webrtc-video/distributor
+        shell: bash
+        run: ./ice-patch.sh
       - name: Install pinned MediaMTX test binary
         shell: bash
         run: |
@@ -432,6 +440,10 @@ jobs:
         with:
           go-version-file: webrtc-video/producer/go.mod
           cache-dependency-path: webrtc-video/producer/go.sum
+      - name: Prepare verified ICE patch
+        working-directory: webrtc-video/producer
+        shell: bash
+        run: ./ice-patch.sh
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -462,7 +474,7 @@ jobs:
       - name: Race test
         working-directory: webrtc-video/producer
         shell: bash
-        run: go test -race ./...
+        run: make test-race
       - name: Run static analysis
         working-directory: webrtc-video/producer
         shell: bash
