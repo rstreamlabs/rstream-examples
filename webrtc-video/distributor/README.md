@@ -122,6 +122,12 @@ source key frame. This preserves the initial H.264 parameter sets that a
 not-yet-connected sender can otherwise discard. Cancellation or connection
 failure closes the newly created session; no extra live buffering is added.
 
+MediaMTX allows two seconds after connection for the first inbound media track.
+This deadline starts before the first RTP packet, so it must accommodate source
+startup even when the transport is already connected. Discovery completes as
+soon as all offered tracks arrive; this is not a fixed delay for every reader.
+A publisher that sends no media is closed when that bounded deadline expires.
+
 The forwarding pipeline has bounded packet, repair, and worker queues. It
 reorders media for at most 300 ms, retries NACK feedback at a bounded cadence,
 expires missing packets after one second, and stops instead of accumulating an
