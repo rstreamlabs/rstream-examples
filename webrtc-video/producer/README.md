@@ -110,6 +110,13 @@ Keep custom encoded caps within the declared limits; the producer does not
 rewrite arbitrary pipelines or infer camera capabilities from pipeline text.
 The reference MediaMTX adapter currently advertises level 3.1 on both legs.
 
+For H.264 packetization mode 1, consecutive small NAL units within an access
+unit share MTU-bounded STAP-A RTP packets, as specified in
+[RFC 6184, section 5.7.1](https://www.rfc-editor.org/rfc/rfc6184#section-5.7.1).
+This reduces per-packet overhead without re-encoding or waiting for another
+frame. Pion still handles parameter sets, large-NAL fragmentation, timestamps
+and marker bits. Other codecs and packetization modes keep their existing path.
+
 ### macOS
 
 ```bash
@@ -654,13 +661,32 @@ split-brain state; the raw loss and delay targets remain exposed in the session
 diagnostics so qualification can distinguish a conservative loss estimate from
 the effective encoder and pacing limits.
 
-The pacer admits a new frame only if its projected service time, including
-queued work and bounded repair priority, fits a 225 ms budget. If
-a source overshoot exceeds that envelope, the sender drops complete encoded
+For H.264, the source must produce Annex B access units and provide IDR pictures
+periodically or on request. A gradual intra-refresh recovery point is not an
+independent key frame: clearing GStreamer's `DELTA_UNIT` flag is insufficient.
+The producer checks for an IDR NAL before declaring a key frame. A source with
+only progressive refresh is unsuitable for browser startup and recovery in
+this WebRTC path; it needs an encoder configuration that supplies IDRs.
+
+Each live subscriber has an independent eight-picture queue. A slow reader
+cannot block capture or another reader. If its queue fills, the producer drops
+that backlog and waits for a new random-access picture before resuming delivery;
+it does not forward dependent pictures after losing one of their references.
+Delivery-drop counters include the discarded backlog. This is a live-viewing
+policy, not a lossless recording queue, and recovery still depends on the source
+providing periodic or requested key frames.
+
+The pacer normally admits a frame when its projected service time, including
+queued work and bounded repair priority, fits a 225 ms budget. An empty queue
+also admits one larger key frame so recovery cannot reject every key even when
+the complete GOP fits the link. Subsequent frames must drain that burst back
+toward the normal budget; it does not increase the pacing rate or packet-count
+limit. A large key can still add serialization latency and requires measurement.
+If sustained source overshoot exceeds that envelope, the sender drops complete encoded
 access units before RTP packetization and waits for a key frame before
 resuming. The request is deferred until the queue has room for the most recent
 key-frame size plus 25% headroom; this avoids generating a recovery frame only
-to reject it at the same admission boundary. The pacer neither deletes already
+to reject it at the same admission boundary. The pacer does not delete already
 packetized RTP. This avoids artificial RTP gaps, partial-frame corruption, and
 key-frame storms while keeping hard RTP queue exhaustion actionable. Complete
 frame drops, actual packet residence time, projected service backlog,
@@ -735,19 +761,19 @@ level 3.1 while producing level 4. Current browser examples use 720p30 and requi
 fresh network qualification; the historical measurements below are retained
 without relabeling them as results for the new profile.
 
-| Setting                |                                                          Reference value | Reason and trade-off                                                                                                                                                                                                                                                                                                                                                                     |
-| ---------------------- | -----------------------------------------------------------------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frame size and cadence |                                                      1920x1080 at 30 fps | Exercises a real live-video workload while remaining reproducible. If the link cannot sustain the quality floor, add a measured resolution/frame-rate ladder instead of compressing this fixed profile indefinitely.                                                                                                                                                                     |
-| x264 latency controls  |                                   `zerolatency`, `veryfast`, `bframes=0` | Avoids frame reordering and deep encoder buffering. The `zerolatency` tune owns its internally coherent lookahead and threading choices; duplicating those private tune settings in the pipeline made the profile harder to reason about without establishing a measured benefit. A slower preset may improve compression, but it spends CPU and can add latency on constrained devices. |
-| Key-frame policy       |                                           `key-int-max=60`, `scenecut=0` | Gives the qualification source a deterministic maximum two-second GOP at 30 fps, so recovery runs are comparable. Content-driven production encoders may re-enable scene cuts after measuring their key-frame bursts.                                                                                                                                                                    |
-| Encoder VBV            |                                                                   100 ms | Bounds the encoder-side rate reservoir while retaining enough room for normal frame-size variation. It is one component of latency, not a promise that end-to-end delay is 100 ms.                                                                                                                                                                                                       |
-| Initial encoder target |                                                                 5 Mbit/s | Starts 1080p with useful quality before TWCC has accumulated enough feedback. A high startup target can briefly overshoot a smaller access link, which is why the pacer still enforces the current wire budget.                                                                                                                                                                          |
-| Adaptive range         |                                                               2–8 Mbit/s | The 2 Mbit/s floor protects fixed 1080p quality observed through x264 QP; the ceiling bounds CPU and link demand. Operating below the floor calls for a source ladder, not a hidden quality collapse.                                                                                                                                                                                    |
-| Update hysteresis      |                                  2 s, 10% increases, immediate decreases | Filters optimistic estimator noise while keeping the encoder aligned with the protected-wire pacing budget. Decreases bypass the periodic increase gate.                                                                                                                                                                                                                                 |
-| Recovery gate          |                                  At most 1% loss, followed by a 5 s hold | Prevents a delayed optimistic estimate from raising the encoder while loss is still active. After the hold, the encoder follows GCC's current bounded target rather than applying a second application-side ramp that would starve the estimator of probe traffic.                                                                                                                       |
-| Pacing and admission   | 1.5x scheduling rate over the protected target, 225 ms admission ceiling | Media, proactive repair, and retransmissions share the same scheduling ceiling. The multiplier drains encoded access units and timely repair; it does not add a second long-term limiter at the lower target. Over-budget access units are rejected whole before RTP packetization.                                                                                                      |
-| Repair scheduling      |                    One repair packet per scheduling burst; 225 ms expiry | Gives a retransmission a prompt opportunity without starving current media, and discards a repair packet once its playback value is lower than the latency it would add.                                                                                                                                                                                                                 |
-| FlexFEC                |                                 One repair packet per five media packets | Adds moderate proactive protection for lossy, higher-RTT paths where reactive RTX can arrive after the playout window. Stronger ratios remain explicit stress profiles; leave FlexFEC disabled when measured NACK/RTX recovery is sufficient or the link cannot afford the overhead.                                                                                                     |
+| Setting                |                                                                   Reference value | Reason and trade-off                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------- | --------------------------------------------------------------------------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frame size and cadence |                                                               1920x1080 at 30 fps | Exercises a real live-video workload while remaining reproducible. If the link cannot sustain the quality floor, add a measured resolution/frame-rate ladder instead of compressing this fixed profile indefinitely.                                                                                                                                                                     |
+| x264 latency controls  |                                            `zerolatency`, `veryfast`, `bframes=0` | Avoids frame reordering and deep encoder buffering. The `zerolatency` tune owns its internally coherent lookahead and threading choices; duplicating those private tune settings in the pipeline made the profile harder to reason about without establishing a measured benefit. A slower preset may improve compression, but it spends CPU and can add latency on constrained devices. |
+| Key-frame policy       |                                                    `key-int-max=60`, `scenecut=0` | Gives the qualification source a deterministic maximum two-second GOP at 30 fps, so recovery runs are comparable. Content-driven production encoders may re-enable scene cuts after measuring their key-frame bursts.                                                                                                                                                                    |
+| Encoder VBV            |                                                                            100 ms | Bounds the encoder-side rate reservoir while retaining enough room for normal frame-size variation. It is one component of latency, not a promise that end-to-end delay is 100 ms.                                                                                                                                                                                                       |
+| Initial encoder target |                                                                          5 Mbit/s | Starts 1080p with useful quality before TWCC has accumulated enough feedback. A high startup target can briefly overshoot a smaller access link, which is why the pacer still enforces the current wire budget.                                                                                                                                                                          |
+| Adaptive range         |                                                                        2–8 Mbit/s | The 2 Mbit/s floor protects fixed 1080p quality observed through x264 QP; the ceiling bounds CPU and link demand. Operating below the floor calls for a source ladder, not a hidden quality collapse.                                                                                                                                                                                    |
+| Update hysteresis      |                                           2 s, 10% increases, immediate decreases | Filters optimistic estimator noise while keeping the encoder aligned with the protected-wire pacing budget. Decreases bypass the periodic increase gate.                                                                                                                                                                                                                                 |
+| Recovery gate          |                                           At most 1% loss, followed by a 5 s hold | Prevents a delayed optimistic estimate from raising the encoder while loss is still active. After the hold, the encoder follows GCC's current bounded target rather than applying a second application-side ramp that would starve the estimator of probe traffic.                                                                                                                       |
+| Pacing and admission   | 1.5x scheduling rate over the protected target, 225 ms sustained admission budget | Media, proactive repair, and retransmissions share the same scheduling ceiling. The multiplier drains encoded access units and timely repair; it does not add a second long-term limiter at the lower target. Over-budget access units are rejected whole before RTP packetization.                                                                                                      |
+| Repair scheduling      |                             One repair packet per scheduling burst; 225 ms expiry | Gives a retransmission a prompt opportunity without starving current media, and discards a repair packet once its playback value is lower than the latency it would add.                                                                                                                                                                                                                 |
+| FlexFEC                |                                          One repair packet per five media packets | Adds moderate proactive protection for lossy, higher-RTT paths where reactive RTX can arrive after the playout window. Stronger ratios remain explicit stress profiles; leave FlexFEC disabled when measured NACK/RTX recovery is sufficient or the link cannot afford the overhead.                                                                                                     |
 
 With the 1080p30 H.264 reference settings, the sender starts at `5 Mbps` and may
 adapt within the `2–8 Mbps` range. Qualification showed that allowing the fixed

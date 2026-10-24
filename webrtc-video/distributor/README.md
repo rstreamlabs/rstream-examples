@@ -87,6 +87,12 @@ leg; MediaMTX and each browser establish their own feedback and retransmission
 state. This separation prevents feedback from one viewer from controlling the
 device uplink used by every viewer.
 
+The adapter offers Constrained Baseline, Baseline, Main and High H.264 profiles
+through level 4.2 in packetization mode 1. It preserves the negotiated source
+profile and level in the MediaMTX offer; it does not decode or transcode the
+stream. Sources outside this envelope need an explicitly qualified profile,
+and downstream viewers must support the selected rendition.
+
 The current distributor carries one H.264 rendition. Downstream TWCC describes
 each viewer leg, but MediaMTX does not transcode that rendition or propagate a
 viewer estimate back to the shared producer encoder. Fan-out is therefore

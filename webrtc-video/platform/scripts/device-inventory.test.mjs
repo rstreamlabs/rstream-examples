@@ -69,6 +69,8 @@ test("stable identity survives a renamed source and a new tunnel session", () =>
 
 test("unrelated, unauthenticated and foreign-project tunnels cannot become video devices", () => {
   for (const changes of [
+    { id: undefined },
+    { id: "" },
     { project_id: "other" },
     { project_id: undefined },
     { status: "offline" },

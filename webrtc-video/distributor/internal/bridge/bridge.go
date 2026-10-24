@@ -137,7 +137,7 @@ func run(ctx context.Context, configuration config.Config, options runOptions) (
 	if err != nil {
 		return Result{}, err
 	}
-	destination, sender, output, destinationSession, err := openDestination(ctx, configuration, endpoint.DestinationAuthorization, client)
+	destination, sender, output, destinationSession, err := openDestination(ctx, configuration, endpoint.DestinationAuthorization, client, incoming.track.Codec().RTPCodecCapability)
 	if err != nil {
 		return Result{}, err
 	}
@@ -428,12 +428,14 @@ func openDestination(
 	configuration config.Config,
 	authorization string,
 	client *http.Client,
+	sourceCodec webrtc.RTPCodecCapability,
 ) (*webrtc.PeerConnection, *webrtc.RTPSender, *webrtc.TrackLocalStaticRTP, *whipwhep.Session, error) {
-	peer, err := media.NewDestinationPeer(webrtc.Configuration{BundlePolicy: webrtc.BundlePolicyMaxBundle})
+	codec := media.ForwardCapability(sourceCodec)
+	peer, err := media.NewDestinationPeer(webrtc.Configuration{BundlePolicy: webrtc.BundlePolicyMaxBundle}, codec)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	output, err := webrtc.NewTrackLocalStaticRTP(media.H264Capability(), "video", "rstream-distributor")
+	output, err := webrtc.NewTrackLocalStaticRTP(codec, "video", "rstream-distributor")
 	if err != nil {
 		_ = peer.Close()
 		return nil, nil, nil, nil, fmt.Errorf("create destination track: %w", err)
