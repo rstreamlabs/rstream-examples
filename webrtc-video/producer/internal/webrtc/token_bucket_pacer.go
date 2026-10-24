@@ -164,6 +164,7 @@ type tokenBucketPacer struct {
 	retransmissionPacketsTrimmed             atomic.Uint64
 	forwardErrorCorrectionPacketsTrimmed     atomic.Uint64
 	droppingUntilKeyFrame                    bool
+	mediaBurstAdmissionDelay                 time.Duration
 	packetizationMu                          sync.Mutex
 	packetizationBitrate                     atomic.Int64
 	rateDecreasePending                      atomic.Bool
@@ -406,12 +407,20 @@ func (p *tokenBucketPacer) AdmitMediaFrame(size int, keyFrame bool) (decision me
 		return mediaFrameAdmission{admitted: true}
 	}
 	p.packetizationMu.Lock()
+	startsKeyFrameBurst := false
 	defer func() {
 		if decision.admitted {
 			p.packetizationBitrate.Store(int64(p.targetBitrateValue()))
 			var complete sync.Once
 			decision.complete = func() {
 				complete.Do(func() {
+					if startsKeyFrameBurst {
+						p.admissionMu.Lock()
+						// Include the actual RTP/repair packetization overhead in
+						// this one burst, without changing the packet pacing rate.
+						p.mediaBurstAdmissionDelay = max(p.mediaBurstAdmissionDelay, p.admissionQueueDelay(0))
+						p.admissionMu.Unlock()
+					}
 					p.packetizationBitrate.Store(0)
 					p.packetizationMu.Unlock()
 				})
@@ -423,8 +432,22 @@ func (p *tokenBucketPacer) AdmitMediaFrame(size int, keyFrame bool) (decision me
 	p.admissionMu.Lock()
 	defer p.admissionMu.Unlock()
 	projectedDelay := p.admissionQueueDelay(size)
+	// An empty queue must be able to admit one independently decodable image.
+	// A key picture can cost more than the sustained queue budget even when its
+	// GOP fits the link. Refusing every such picture deadlocks recovery.
+	// Permit only that single burst: dependent pictures must shrink it back to
+	// the regular budget. Never stack a new oversized key onto pending work or
+	// accelerate packet delivery beyond the congestion-controlled pacing rate.
+	if keyFrame && p.admissionQueueDelay(0) == 0 && projectedDelay > maximumMediaAdmissionDelay {
+		p.mediaBurstAdmissionDelay = projectedDelay
+		startsKeyFrameBurst = true
+	}
+	withinBudget := projectedDelay <= max(maximumMediaAdmissionDelay, p.mediaBurstAdmissionDelay)
+	if withinBudget {
+		p.mediaBurstAdmissionDelay = max(maximumMediaAdmissionDelay, projectedDelay)
+	}
 	if p.droppingUntilKeyFrame {
-		if keyFrame && projectedDelay <= maximumMediaAdmissionDelay {
+		if keyFrame && withinBudget {
 			p.droppingUntilKeyFrame = false
 			p.keyFrameReserveBytes.Store(int64(size))
 			recordMaximum(&p.maximumAdmittedSustainedNs, projectedDelay.Nanoseconds())
@@ -439,7 +462,7 @@ func (p *tokenBucketPacer) AdmitMediaFrame(size int, keyFrame bool) (decision me
 		}
 		return mediaFrameAdmission{}
 	}
-	if projectedDelay <= maximumMediaAdmissionDelay {
+	if withinBudget {
 		if keyFrame {
 			p.keyFrameReserveBytes.Store(int64(size))
 		}

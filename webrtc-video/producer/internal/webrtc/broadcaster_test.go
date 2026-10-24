@@ -497,12 +497,45 @@ func TestWHEPTrickleICEAndRestartKeepOnePeerConnection(t *testing.T) {
 		t.Fatalf("create broadcaster: %v", err)
 	}
 	defer func() { _ = broadcaster.Close() }()
+	settings := localPeerSettings()
+	broadcaster.peerFactory.settings = &settings
 	session, err := broadcaster.OpenSession(context.Background())
 	if err != nil {
 		t.Fatalf("open WHEP session: %v", err)
 	}
 	defer session.Close("test complete")
-	client, err := webrtc.NewPeerConnection(webrtc.Configuration{BundlePolicy: webrtc.BundlePolicyMaxBundle})
+	// Diagnostics run while negotiation initializes the transport. They must
+	// not race the gatherer or re-enter transport locks from an ICE callback.
+	stopStats, statsDone := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(statsDone)
+		ticker := time.NewTicker(time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stopStats:
+				return
+			case <-ticker.C:
+				session.StatsSnapshot()
+			}
+		}
+	}()
+	defer func() { close(stopStats); <-statsDone }()
+	waitICEPath := func() {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			path := session.StatsSnapshot().ICEPath
+			if path != nil && path.LocalCandidateType != "" && path.RemoteCandidateType != "" {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("connected WHEP session did not report its selected ICE path")
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	client, err := webrtc.NewAPI(webrtc.WithSettingEngine(localPeerSettings())).NewPeerConnection(webrtc.Configuration{BundlePolicy: webrtc.BundlePolicyMaxBundle})
 	if err != nil {
 		t.Fatalf("create WHEP client: %v", err)
 	}
@@ -560,6 +593,7 @@ func TestWHEPTrickleICEAndRestartKeepOnePeerConnection(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("WHEP peer connection did not connect")
 	}
+	waitICEPath()
 	initialRemote := client.RemoteDescription().SDP
 	restartOffer, err := client.CreateOffer(&webrtc.OfferOptions{ICERestart: true})
 	if err != nil {
@@ -625,6 +659,7 @@ func TestWHEPTrickleICEAndRestartKeepOnePeerConnection(t *testing.T) {
 	if session.isClosed() {
 		t.Fatal("WHEP ICE restart replaced or closed the producer session")
 	}
+	waitICEPath()
 }
 
 func TestRefreshWHEPICERenewsConfigurationWithoutHoldingSessionLocks(t *testing.T) {

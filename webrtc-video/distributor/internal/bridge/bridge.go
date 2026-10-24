@@ -130,7 +130,7 @@ func run(ctx context.Context, configuration config.Config, options runOptions) (
 	if err != nil {
 		return Result{}, err
 	}
-	destination, sender, output, destinationSession, err := openDestination(ctx, configuration, endpoint.DestinationAuthorization, client)
+	destination, sender, output, destinationSession, err := openDestination(ctx, configuration, endpoint.DestinationAuthorization, client, incoming.track.Codec().RTPCodecCapability)
 	if err != nil {
 		return Result{}, err
 	}
@@ -416,12 +416,14 @@ func openDestination(
 	configuration config.Config,
 	authorization string,
 	client *http.Client,
+	sourceCodec webrtc.RTPCodecCapability,
 ) (*webrtc.PeerConnection, *webrtc.RTPSender, *webrtc.TrackLocalStaticRTP, *whipwhep.Session, error) {
-	peer, err := media.NewDestinationPeer(webrtc.Configuration{BundlePolicy: webrtc.BundlePolicyMaxBundle})
+	codec := media.ForwardCapability(sourceCodec)
+	peer, err := media.NewDestinationPeer(webrtc.Configuration{BundlePolicy: webrtc.BundlePolicyMaxBundle}, codec)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	output, err := webrtc.NewTrackLocalStaticRTP(media.H264Capability(), "video", "rstream-distributor")
+	output, err := webrtc.NewTrackLocalStaticRTP(codec, "video", "rstream-distributor")
 	if err != nil {
 		_ = peer.Close()
 		return nil, nil, nil, nil, fmt.Errorf("create destination track: %w", err)
@@ -580,7 +582,14 @@ func forward(
 		return readSourceMedia(workerCtx, incoming.track, events)
 	})
 	startWorker(results, "source RTCP reader", func() error {
-		return readSourceRTCP(workerCtx, incoming.receiver)
+		err := readSourceRTCP(workerCtx, incoming.receiver)
+		if workerCtx.Err() == nil {
+			// Capture transport state before supervision closes either peer.
+			return fmt.Errorf("%w (peer=%s, ice=%s, dtls=%s, ssrc=%d)", err,
+				sourcePeer.ConnectionState(), sourcePeer.ICEConnectionState(),
+				incoming.receiver.Transport().State(), incoming.track.SSRC())
+		}
+		return err
 	})
 	if decoder != nil {
 		startWorker(results, "source FlexFEC reader", func() error {
@@ -615,17 +624,17 @@ func forward(
 			repair.DefaultConfig(),
 			packets,
 			func(packet *rtp.Packet) error {
-				forward, damaged := continuity.accept(packet)
-				if damaged {
-					damagedSourceFramesDropped.Add(1)
+				batch := continuity.accept(packet, time.Now())
+				damagedSourceFramesDropped.Add(batch.droppedFrames)
+				damagedSourcePacketsDropped.Add(batch.droppedPackets)
+				for _, complete := range batch.packets {
+					sequenceRewriter.rewrite(complete)
+					stripSourceExtensions(complete)
+					if err := output.WriteRTP(complete); err != nil {
+						return err
+					}
 				}
-				if !forward {
-					damagedSourcePacketsDropped.Add(1)
-					return nil
-				}
-				sequenceRewriter.rewrite(packet)
-				stripSourceExtensions(packet)
-				return output.WriteRTP(packet)
+				return nil
 			},
 			func(event repair.FeedbackEvent) error {
 				if event.RequestKeyFrame {

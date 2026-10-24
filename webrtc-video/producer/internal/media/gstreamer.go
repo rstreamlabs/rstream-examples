@@ -43,7 +43,7 @@ type GStreamerSource struct {
 	stats         *sourceStats
 	lifecycleMu   sync.Mutex
 	mu            sync.RWMutex
-	subs          map[chan AccessUnit]struct{}
+	subs          map[*LiveQueue]struct{}
 	started       bool
 	closed        bool
 	failed        error
@@ -150,7 +150,7 @@ func newGStreamerSource(
 		sink:     sink,
 		encoder:  encoderController,
 		busDone:  make(chan struct{}),
-		subs:     make(map[chan AccessUnit]struct{}),
+		subs:     make(map[*LiveQueue]struct{}),
 		stats:    stats,
 	}
 	source.startPipeline = source.startPipelineTransition
@@ -177,7 +177,7 @@ func newGStreamerSource(
 				stats.sampleExtractionErrors.Add(1)
 				return gst.FlowError
 			}
-			keyFrame := sampleIsKeyFrame(sample)
+			keyFrame := sampleIsKeyFrame(sample, data)
 			if keyFrame && source.format != nil {
 				source.format.observe(sample)
 			}
@@ -281,20 +281,20 @@ func (s *GStreamerSource) Stop() error {
 }
 
 func (s *GStreamerSource) Subscribe() (<-chan AccessUnit, func()) {
-	ch := make(chan AccessUnit, 8)
+	queue := NewLiveQueue(8)
 	s.mu.Lock()
 	if s.closed || s.failed != nil {
-		close(ch)
+		queue.Close()
 		s.mu.Unlock()
-		return ch, func() {}
+		return queue.Units(), func() {}
 	}
-	s.subs[ch] = struct{}{}
+	s.subs[queue] = struct{}{}
 	s.mu.Unlock()
-	return ch, func() {
+	return queue.Units(), func() {
 		s.mu.Lock()
-		if _, ok := s.subs[ch]; ok {
-			delete(s.subs, ch)
-			close(ch)
+		if _, ok := s.subs[queue]; ok {
+			delete(s.subs, queue)
+			queue.Close()
 		}
 		s.mu.Unlock()
 	}
@@ -335,9 +335,9 @@ func (s *GStreamerSource) Close() error {
 		s.sink.SetCallbacks(&app.SinkCallbacks{})
 	}
 	s.mu.Lock()
-	for ch := range s.subs {
-		close(ch)
-		delete(s.subs, ch)
+	for queue := range s.subs {
+		queue.Close()
+		delete(s.subs, queue)
 	}
 	s.mu.Unlock()
 	s.stats.sources.Add(-1)
@@ -397,13 +397,10 @@ func (s *GStreamerSource) publish(unit AccessUnit) {
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	for ch := range s.subs {
-		select {
-		case ch <- unit:
-		default:
-			s.stats.deliveryDroppedBytes.Add(uint64(len(unit.Data)))
-			s.stats.deliveryDroppedFrames.Add(1)
-		}
+	for queue := range s.subs {
+		frames, bytes := queue.Publish(unit)
+		s.stats.deliveryDroppedBytes.Add(bytes)
+		s.stats.deliveryDroppedFrames.Add(frames)
 	}
 }
 
@@ -467,10 +464,10 @@ func (s *GStreamerSource) fail(err error) {
 		s.started = false
 		s.failed = err
 		s.stats.pipelineErrors.Add(1)
-		subs := make([]chan AccessUnit, 0, len(s.subs))
-		for ch := range s.subs {
-			subs = append(subs, ch)
-			delete(s.subs, ch)
+		subs := make([]*LiveQueue, 0, len(s.subs))
+		for queue := range s.subs {
+			subs = append(subs, queue)
+			delete(s.subs, queue)
 		}
 		s.mu.Unlock()
 		if s.format != nil {
@@ -482,8 +479,8 @@ func (s *GStreamerSource) fail(err error) {
 				s.logger.Warn("GStreamer pipeline stop failed after error: %v", stopErr)
 			}
 		})
-		for _, ch := range subs {
-			close(ch)
+		for _, queue := range subs {
+			queue.Close()
 		}
 	})
 }
@@ -552,7 +549,18 @@ func bufferDuration(buffer *gst.Buffer) time.Duration {
 	return duration
 }
 
-func sampleIsKeyFrame(sample *gst.Sample) bool {
+func sampleIsKeyFrame(sample *gst.Sample, data []byte) bool {
+	if caps := sample.GetCaps(); caps != nil && caps.GetSize() > 0 {
+		structure := caps.GetStructureAt(0)
+		if structure.Name() == "video/x-h264" {
+			// h264parse also clears DELTA_UNIT at a gradual recovery point.
+			// WebRTC requires an IDR; the first picture of an intra-refresh
+			// sweep is not independently decodable. The RTP payloader consumes
+			// Annex B, not AVC length-prefixed samples.
+			format, _ := structure.GetValue("stream-format")
+			return format == "byte-stream" && h264ContainsIDR(data)
+		}
+	}
 	if buffer := sample.GetBuffer(); buffer != nil {
 		return !buffer.HasFlags(gst.BufferFlagDeltaUnit)
 	}

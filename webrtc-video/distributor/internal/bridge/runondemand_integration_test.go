@@ -208,6 +208,49 @@ func TestMediaMTXRunOnDemandWaitsForDelayedSourceBeforePublishing(t *testing.T) 
 	waitSignal(t, source.deleted, "delayed source WHEP DELETE after the viewer")
 }
 
+func TestMediaMTXAcceptsDelayedFirstPacketAfterWHIPConnect(t *testing.T) {
+	mediaMTX := mediaMTXExecutable(t)
+	process, logs := startMediaMTXWithRunCommand(t, mediaMTX, "", "", false)
+	defer stopMediaMTX(t, process, logs)
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("MediaMTX logs:\n%s", logs.String())
+		}
+	})
+	endpoint, err := url.Parse("http://" + mediaMTXHTTPAddress)
+	requireNoError(t, err, "parse MediaMTX endpoint")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	peer, _, output, session, err := openDestination(ctx, config.Config{
+		MediaMTXURL: endpoint,
+		Path:        "camera",
+	}, "", &http.Client{Timeout: 5 * time.Second}, media.H264Capability())
+	requireNoError(t, err, "connect WHIP publisher")
+	defer func() { _ = closeSession(session) }()
+
+	// A connected transport does not imply that the first complete source
+	// picture is available. Track discovery must allow that bounded delay.
+	writer := &sourceHarness{
+		peer:        peer,
+		track:       output,
+		warmupStop:  make(chan struct{}),
+		warmupDone:  make(chan struct{}),
+		warmupDelay: 750 * time.Millisecond,
+	}
+	writer.nextSequence.Store(1)
+	go writer.writeWarmup()
+	defer func() {
+		writer.stopWarmup()
+		<-writer.warmupDone
+	}()
+	waitLogContains(t, logs, "is publishing")
+	viewer := newViewer(t)
+	defer viewer.close()
+	if writer.warmupWrites.Load() == 0 {
+		t.Fatal("viewer received no media from the delayed publisher")
+	}
+}
+
 func TestMediaMTXNativeWHEPSourceSharesOneOnDemandSession(t *testing.T) {
 	mediaMTX := mediaMTXExecutable(t)
 	loss := &sourcePacketLoss{}
@@ -801,7 +844,7 @@ webrtcLocalTCPAddress: ""
 webrtcIPsFromInterfaces: false
 webrtcAdditionalHosts: [127.0.0.1]
 webrtcICEServers2: []
-webrtcTrackGatherTimeout: 250ms
+webrtcTrackGatherTimeout: 2s
 pathDefaults:
   maxReaders: %d
   runOnDemand: %q
@@ -954,8 +997,8 @@ func openViewer() (*viewerHarness, error) {
 				if readErr != nil {
 					return
 				}
-				if len(packet.Payload) >= 3 {
-					markers <- uint16(packet.Payload[1])<<8 | uint16(packet.Payload[2])
+				if len(packet.Payload) >= 4 {
+					markers <- uint16(packet.Payload[2])<<8 | uint16(packet.Payload[3])
 					mediaReadyOnce.Do(func() { close(mediaReady) })
 				}
 			}
@@ -1045,7 +1088,10 @@ func writeSourcePackets(t *testing.T, source *sourceHarness, count int) (uint16,
 }
 
 func sourcePacket(sequence uint16) *rtp.Packet {
-	return &rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: media.PrimaryPayloadType, SequenceNumber: sequence, Timestamp: uint32(sequence) * 3000, Marker: true}, Payload: []byte{0x65, byte(sequence >> 8), byte(sequence)}}
+	// The transport fixture starts an IDR slice at macroblock zero. Keep its
+	// test sequence after that field; sequence bytes are not a slice header.
+	// Decodability is covered separately with generated multi-slice pictures.
+	return &rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: media.PrimaryPayloadType, SequenceNumber: sequence, Timestamp: uint32(sequence) * 3000, Marker: true}, Payload: []byte{0x65, 0x80, byte(sequence >> 8), byte(sequence)}}
 }
 
 func assertMarkers(t *testing.T, markers <-chan uint16, first, last uint16) {

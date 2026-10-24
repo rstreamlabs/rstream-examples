@@ -31,7 +31,7 @@ func H264Capability() webrtc.RTPCodecCapability {
 
 func NewSourcePeer(configuration webrtc.Configuration) (*webrtc.PeerConnection, error) {
 	mediaEngine := &webrtc.MediaEngine{}
-	if err := registerCodecs(mediaEngine, true); err != nil {
+	if err := registerCodecs(mediaEngine, sourceCapabilities(), true); err != nil {
 		return nil, err
 	}
 	interceptors := &interceptor.Registry{}
@@ -52,9 +52,9 @@ func NewSourcePeer(configuration webrtc.Configuration) (*webrtc.PeerConnection, 
 	return peer, nil
 }
 
-func NewDestinationPeer(configuration webrtc.Configuration) (*webrtc.PeerConnection, error) {
+func NewDestinationPeer(configuration webrtc.Configuration, codec webrtc.RTPCodecCapability) (*webrtc.PeerConnection, error) {
 	mediaEngine := &webrtc.MediaEngine{}
-	if err := registerCodecs(mediaEngine, false); err != nil {
+	if err := registerCodecs(mediaEngine, []webrtc.RTPCodecCapability{codec}, false); err != nil {
 		return nil, err
 	}
 	interceptors := &interceptor.Registry{}
@@ -78,18 +78,49 @@ func NewDestinationPeer(configuration webrtc.Configuration) (*webrtc.PeerConnect
 	return peer, nil
 }
 
-func registerCodecs(mediaEngine *webrtc.MediaEngine, repair bool) error {
-	if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{RTPCodecCapability: H264Capability(), PayloadType: webrtc.PayloadType(PrimaryPayloadType)}, webrtc.RTPCodecTypeVideo); err != nil {
-		return fmt.Errorf("register H264 codec: %w", err)
+// Receive compressed media without decoding or transcoding. Offer the common
+// WebRTC H264 profiles through level 4.2; the negotiated source capability is
+// then preserved on the destination leg instead of relabeling every source as
+// constrained baseline. Each profile has its own RTX association.
+func sourceCapabilities() []webrtc.RTPCodecCapability {
+	profiles := []string{"42e02a", "42002a", "4d002a", "64002a"}
+	codecs := make([]webrtc.RTPCodecCapability, 0, len(profiles))
+	for _, profile := range profiles {
+		codec := H264Capability()
+		codec.SDPFmtpLine = "packetization-mode=1;profile-level-id=" + profile + ";level-asymmetry-allowed=1"
+		codecs = append(codecs, codec)
+	}
+	return codecs
+}
+
+// ForwardCapability keeps the negotiated codec parameters. Feedback belongs
+// to the new transport and is not copied from the upstream peer.
+func ForwardCapability(source webrtc.RTPCodecCapability) webrtc.RTPCodecCapability {
+	codec := source
+	codec.RTCPFeedback = H264Capability().RTCPFeedback
+	return codec
+}
+
+func registerCodecs(mediaEngine *webrtc.MediaEngine, codecs []webrtc.RTPCodecCapability, repair bool) error {
+	for index, codec := range codecs {
+		if codec.MimeType != webrtc.MimeTypeH264 || codec.ClockRate != 90000 || codec.Channels != 0 {
+			return fmt.Errorf("unsupported forwarded video codec")
+		}
+		primary := webrtc.PayloadType(PrimaryPayloadType + uint8(2*index))
+		if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{RTPCodecCapability: codec, PayloadType: primary}, webrtc.RTPCodecTypeVideo); err != nil {
+			return fmt.Errorf("register H264 codec: %w", err)
+		}
+		if repair {
+			if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
+				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeRTX, ClockRate: 90000, SDPFmtpLine: fmt.Sprintf("apt=%d", primary)},
+				PayloadType:        primary + 1,
+			}, webrtc.RTPCodecTypeVideo); err != nil {
+				return fmt.Errorf("register RTX codec: %w", err)
+			}
+		}
 	}
 	if !repair {
 		return nil
-	}
-	if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
-		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeRTX, ClockRate: 90000, SDPFmtpLine: fmt.Sprintf("apt=%d", PrimaryPayloadType)},
-		PayloadType:        webrtc.PayloadType(RTXPayloadType),
-	}, webrtc.RTPCodecTypeVideo); err != nil {
-		return fmt.Errorf("register RTX codec: %w", err)
 	}
 	if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
 		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeFlexFEC03, ClockRate: 90000, SDPFmtpLine: "repair-window=10000000"},
