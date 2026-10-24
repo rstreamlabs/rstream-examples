@@ -594,7 +594,14 @@ func forward(
 		return readSourceMedia(workerCtx, incoming.track, events)
 	})
 	startWorker(results, "source RTCP reader", func() error {
-		return readSourceRTCP(workerCtx, incoming.receiver)
+		err := readSourceRTCP(workerCtx, incoming.receiver)
+		if err != nil && workerCtx.Err() == nil {
+			// Capture transport state before supervision closes either peer.
+			return fmt.Errorf("%w (peer=%s, ice=%s, dtls=%s, ssrc=%d)", err,
+				sourcePeer.ConnectionState(), sourcePeer.ICEConnectionState(),
+				incoming.receiver.Transport().State(), incoming.track.SSRC())
+		}
+		return err
 	})
 	if decoder != nil {
 		startWorker(results, "source FlexFEC reader", func() error {
