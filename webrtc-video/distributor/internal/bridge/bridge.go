@@ -77,6 +77,7 @@ type runOptions struct {
 	dropMediaSequence   *uint16
 	dropFirstFEC        bool
 	observe             func(Result)
+	bind                func(sourceID, destinationID string) error
 }
 
 type peerConnectionStateSource interface {
@@ -98,6 +99,12 @@ func Run(ctx context.Context, configuration config.Config) (Result, error) {
 
 func RunObserved(ctx context.Context, configuration config.Config, observe func(Result)) (Result, error) {
 	return run(ctx, configuration, runOptions{observe: observe})
+}
+
+// RunBound reports the optional non-secret session IDs before media forwarding.
+// Missing IDs leave binding unavailable; they never cause an invented identity.
+func RunBound(ctx context.Context, configuration config.Config, observe func(Result), bind func(string, string) error) (Result, error) {
+	return run(ctx, configuration, runOptions{observe: observe, bind: bind})
 }
 
 func run(ctx context.Context, configuration config.Config, options runOptions) (result Result, err error) {
@@ -139,6 +146,11 @@ func run(ctx context.Context, configuration config.Config, options runOptions) (
 			err = errors.Join(err, closeSession(destinationSession))
 		}
 	}()
+	if options.bind != nil && sourceSession.PublicID() != "" && destinationSession.PublicID() != "" {
+		if err := options.bind(sourceSession.PublicID(), destinationSession.PublicID()); err != nil {
+			return Result{}, err
+		}
+	}
 	if err := requestSourceKeyFrame(sourcePeer, uint32(incoming.track.SSRC())); err != nil {
 		return Result{}, fmt.Errorf("request initial source key frame: %w", err)
 	}

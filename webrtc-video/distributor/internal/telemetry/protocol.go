@@ -57,6 +57,7 @@ type message struct {
 	Completed              bool     `json:"completed,omitempty"`
 	RetryAfterMilliseconds int64    `json:"retryAfterMilliseconds,omitempty"`
 	DroppedSnapshots       uint64   `json:"droppedSnapshots"`
+	Binding                *Binding `json:"binding,omitempty"`
 	Counters               Counters `json:"counters"`
 }
 
