@@ -954,8 +954,8 @@ func openViewer() (*viewerHarness, error) {
 				if readErr != nil {
 					return
 				}
-				if len(packet.Payload) >= 3 {
-					markers <- uint16(packet.Payload[1])<<8 | uint16(packet.Payload[2])
+				if len(packet.Payload) >= 4 {
+					markers <- uint16(packet.Payload[2])<<8 | uint16(packet.Payload[3])
 					mediaReadyOnce.Do(func() { close(mediaReady) })
 				}
 			}
@@ -1045,7 +1045,10 @@ func writeSourcePackets(t *testing.T, source *sourceHarness, count int) (uint16,
 }
 
 func sourcePacket(sequence uint16) *rtp.Packet {
-	return &rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: media.PrimaryPayloadType, SequenceNumber: sequence, Timestamp: uint32(sequence) * 3000, Marker: true}, Payload: []byte{0x65, byte(sequence >> 8), byte(sequence)}}
+	// The transport fixture starts an IDR slice at macroblock zero. Keep its
+	// test sequence after that field; sequence bytes are not a slice header.
+	// Decodability is covered separately with generated multi-slice pictures.
+	return &rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: media.PrimaryPayloadType, SequenceNumber: sequence, Timestamp: uint32(sequence) * 3000, Marker: true}, Payload: []byte{0x65, 0x80, byte(sequence >> 8), byte(sequence)}}
 }
 
 func assertMarkers(t *testing.T, markers <-chan uint16, first, last uint16) {
