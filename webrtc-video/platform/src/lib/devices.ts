@@ -21,7 +21,7 @@ import { type Device } from "@/prisma/generated/client"
 import { type DeviceView } from "@/lib/validations/device"
 import { type ViewerDistributionPreference } from "@/lib/validations/device"
 import { type MediaMTXSourcePurpose } from "@/lib/validations/video-distributor"
-import { type Tunnel } from "@rstreamlabs/rstream/tunnel"
+import { type ListedTunnel } from "@rstreamlabs/tunnels"
 import {
   deviceOwner,
   deviceOwnerLabels,
@@ -216,7 +216,7 @@ export async function requireDevice(request: Request) {
   return device
 }
 
-function tunnelEntry(tunnel: Tunnel): [string, Tunnel][] {
+function tunnelEntry(tunnel: ListedTunnel): [string, ListedTunnel][] {
   const deviceId = tunnel.labels?.[DEVICE_LABEL]
   return deviceId ? [[deviceId, tunnel]] : []
 }
@@ -286,7 +286,7 @@ export async function createTunnelToken(device: SourceDevice) {
 // Viewer tokens can only connect to the selected online tunnel WebRTC path.
 export async function createViewerToken(
   device: SourceIdentity,
-  tunnel: Tunnel,
+  tunnel: ListedTunnel,
   signal?: AbortSignal,
 ) {
   return createDeviceConnectToken(
@@ -299,7 +299,7 @@ export async function createViewerToken(
 
 export async function createWHEPSourceToken(
   device: SourceIdentity,
-  tunnel: Tunnel,
+  tunnel: ListedTunnel,
   signal?: AbortSignal,
 ) {
   return createDeviceConnectToken(
@@ -312,10 +312,12 @@ export async function createWHEPSourceToken(
 
 async function createDeviceConnectToken(
   device: SourceIdentity,
-  tunnel: Tunnel,
+  tunnel: ListedTunnel,
   pathRegex: string,
   signal?: AbortSignal,
 ) {
+  if (!tunnel.id)
+    throw new HTTPError(503, "Tunnel inventory does not include an ID.")
   const env = requireRstreamEnv()
   const rstream = await getRstreamClient(signal)
   const issuedAt = new Date()
@@ -350,10 +352,12 @@ async function createDeviceConnectToken(
 }
 
 async function createMediaMTXConnectToken(
-  tunnel: Tunnel,
+  tunnel: ListedTunnel,
   path: string,
   signal?: AbortSignal,
 ) {
+  if (!tunnel.id)
+    throw new HTTPError(503, "Tunnel inventory does not include an ID.")
   const env = requireRstreamEnv()
   const rstream = await getRstreamClient(signal)
   const escapedPath = escapeRegex(path)
@@ -509,7 +513,7 @@ export async function onlineMediaMTXTunnel(signal?: AbortSignal) {
   return newestTunnel(activeTunnels)
 }
 
-function newestTunnel(tunnels: Tunnel[]) {
+function newestTunnel(tunnels: ListedTunnel[]) {
   return (
     [...tunnels].sort((left, right) => {
       return tunnelTimestamp(right) - tunnelTimestamp(left)
@@ -517,7 +521,7 @@ function newestTunnel(tunnels: Tunnel[]) {
   )
 }
 
-function tunnelTimestamp(tunnel: Tunnel) {
+function tunnelTimestamp(tunnel: ListedTunnel) {
   const value = tunnel.creation_date
   if (!value) {
     return 0
@@ -585,7 +589,7 @@ function requireRstreamEnv() {
 
 async function onlineTunnelEntries(
   access: DeviceAccess,
-): Promise<[string, Tunnel][]> {
+): Promise<[string, ListedTunnel][]> {
   if (!rstreamEnvResult().success) {
     return []
   }
@@ -596,7 +600,7 @@ async function onlineTunnelEntries(
   }
 }
 
-function publicUrl(tunnel: Tunnel) {
+function publicUrl(tunnel: ListedTunnel) {
   const host = tunnel.host ?? tunnel.hostname
   if (host) {
     return `https://${host}`

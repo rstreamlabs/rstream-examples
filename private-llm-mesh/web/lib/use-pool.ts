@@ -3,18 +3,9 @@
 import { useRstream, type UseRstreamOptions } from "@rstreamlabs/react/hooks";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
+import { livePoolWorkers, type PoolWorker } from "./pool-workers";
 
-export interface PoolWorker {
-  id: string;
-  name: string;
-  machine: string;
-  models: string[];
-  accelerator: string;
-  engine: string;
-  load: number | null;
-  rtt: number | null;
-  reachable: boolean;
-}
+export type { PoolWorker } from "./pool-workers";
 
 interface PoolState {
   workers: PoolWorker[];
@@ -95,28 +86,7 @@ export function usePool(): PoolState {
   }, []);
   const workers = useMemo<PoolWorker[]>(() => {
     if (rstream.state !== "connected") return probed;
-    const live = rstream.tunnels.filter(
-      (tunnel): tunnel is typeof tunnel & { name: string } =>
-        tunnel.status === "online" && Boolean(tunnel.name),
-    );
-    const metrics = new Map(probed.map((w) => [w.id, w]));
-    return live.map((tunnel) => {
-      const labels = tunnel.labels ?? {};
-      const m = metrics.get(tunnel.id);
-      return {
-        id: tunnel.id,
-        name: tunnel.name,
-        machine: labels.host ?? "",
-        // Prefer the models probed from the worker's own /v1/models; the label is
-        // only a fallback until the first probe lands.
-        models: m?.models ?? (labels.models ?? "").split(",").filter(Boolean),
-        accelerator: labels.accelerator ?? "unknown",
-        engine: labels.engine ?? "unknown",
-        load: m?.load ?? null,
-        rtt: m?.rtt ?? null,
-        reachable: m?.reachable ?? true,
-      };
-    });
+    return livePoolWorkers(rstream.tunnels, probed);
   }, [rstream.tunnels, rstream.state, probed]);
   const models = useMemo(
     () => [...new Set(workers.flatMap((w) => w.models))].sort(),
