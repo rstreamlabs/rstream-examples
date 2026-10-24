@@ -110,6 +110,13 @@ Keep custom encoded caps within the declared limits; the producer does not
 rewrite arbitrary pipelines or infer camera capabilities from pipeline text.
 The reference MediaMTX adapter currently advertises level 3.1 on both legs.
 
+For H.264 packetization mode 1, consecutive small NAL units within an access
+unit share MTU-bounded STAP-A RTP packets, as specified in
+[RFC 6184, section 5.7.1](https://www.rfc-editor.org/rfc/rfc6184#section-5.7.1).
+This reduces per-packet overhead without re-encoding or waiting for another
+frame. Pion still handles parameter sets, large-NAL fragmentation, timestamps
+and marker bits. Other codecs and packetization modes keep their existing path.
+
 ### macOS
 
 ```bash

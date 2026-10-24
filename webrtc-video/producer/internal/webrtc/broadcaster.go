@@ -312,7 +312,7 @@ func (b *Broadcaster) OpenSession(ctx context.Context) (*Session, error) {
 		_ = peerConnection.Close()
 		return nil, err
 	}
-	track, err := webrtc.NewTrackLocalStaticSample(b.codec, b.trackID, b.streamID)
+	track, err := newVideoTrack(b.codec, b.trackID, b.streamID)
 	if err != nil {
 		_ = peerConnection.Close()
 		return nil, fmt.Errorf("failed to create the video track: %w", err)
