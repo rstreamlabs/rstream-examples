@@ -629,17 +629,17 @@ func forward(
 			repair.DefaultConfig(),
 			packets,
 			func(packet *rtp.Packet) error {
-				forward, damaged := continuity.accept(packet)
-				if damaged {
-					damagedSourceFramesDropped.Add(1)
+				batch := continuity.accept(packet, time.Now())
+				damagedSourceFramesDropped.Add(batch.droppedFrames)
+				damagedSourcePacketsDropped.Add(batch.droppedPackets)
+				for _, complete := range batch.packets {
+					sequenceRewriter.rewrite(complete)
+					stripSourceExtensions(complete)
+					if err := output.WriteRTP(complete); err != nil {
+						return err
+					}
 				}
-				if !forward {
-					damagedSourcePacketsDropped.Add(1)
-					return nil
-				}
-				sequenceRewriter.rewrite(packet)
-				stripSourceExtensions(packet)
-				return output.WriteRTP(packet)
+				return nil
 			},
 			func(event repair.FeedbackEvent) error {
 				if event.RequestKeyFrame {
