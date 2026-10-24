@@ -583,7 +583,7 @@ func forward(
 	})
 	startWorker(results, "source RTCP reader", func() error {
 		err := readSourceRTCP(workerCtx, incoming.receiver)
-		if err != nil && workerCtx.Err() == nil {
+		if workerCtx.Err() == nil {
 			// Capture transport state before supervision closes either peer.
 			return fmt.Errorf("%w (peer=%s, ice=%s, dtls=%s, ssrc=%d)", err,
 				sourcePeer.ConnectionState(), sourcePeer.ICEConnectionState(),
