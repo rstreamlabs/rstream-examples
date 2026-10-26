@@ -148,9 +148,69 @@ export async function recordingFixture(page) {
       await page.setViewportSize({ width: 1440, height: 900 })
       await capture("inline-recording-desktop")
       await page.getByRole("button", { name: "Full page", exact: true }).click()
+      const preview = page.getByRole("button", {
+        name: "Return to live video",
+        exact: true,
+      })
+      await preview.waitFor()
+      await page.waitForFunction(() => {
+        const live = document.querySelector('video[aria-label="Live video"]')
+        return live && !live.paused && live.readyState >= 2
+      })
+      const liveTime = await video.evaluate((element) => element.currentTime)
+      await page.waitForFunction((before) => {
+        return (
+          document.querySelector('video[aria-label="Live video"]').currentTime >
+          before + 0.2
+        )
+      }, liveTime)
+      assert.equal(
+        await recorded().evaluate((element) => element.paused),
+        true,
+        "The live preview continues while replay is paused",
+      )
+      assert.equal(
+        await video.evaluate(
+          (element, stream) => element.srcObject === stream,
+          source,
+        ),
+        true,
+      )
       await capture("full-page-recording-desktop")
+      await preview.press("Enter")
+      await page
+        .getByRole("button", { name: "Recent recordings", exact: true })
+        .waitFor()
+      assert.equal(await recorded().count(), 0)
+      assert.equal(
+        await video.evaluate(
+          (element, stream) => element.srcObject === stream,
+          source,
+        ),
+        true,
+        "Returning from the preview reuses the live MediaStream",
+      )
+      assert.equal(
+        await page
+          .getByRole("button", { name: "Recent recordings", exact: true })
+          .evaluate((element) => document.activeElement === element),
+        true,
+      )
+      await page
+        .getByRole("button", { name: "Recent recordings", exact: true })
+        .click()
+      await playing()
+      await page
+        .getByRole("button", { name: "Pause recording", exact: true })
+        .click()
       await page.keyboard.press("Escape")
       await page.setViewportSize({ width: 390, height: 844 })
+      assert.equal(
+        await preview.count(),
+        0,
+        "Inline replay has no live preview",
+      )
+      assert.equal(await video.evaluate((element) => element.paused), true)
       await capture("inline-recording-mobile")
       await page.getByRole("button", { name: "Full page", exact: true }).click()
       await capture("full-page-recording-mobile")
@@ -165,6 +225,12 @@ export async function recordingFixture(page) {
         const live = await page
           .getByRole("button", { name: "Return to live", exact: true })
           .boundingBox()
+        const previewBox = await preview.boundingBox()
+        assert.ok(previewBox.width >= 100 && previewBox.height >= 44)
+        assert.ok(
+          previewBox.y + previewBox.height <= play.y,
+          "The preview never covers the replay controls",
+        )
         assert.ok(
           Math.abs(play.y - live.y) < 1,
           "Mobile replay controls stay on one line",

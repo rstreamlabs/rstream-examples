@@ -524,7 +524,12 @@ Controls stay below the picture in both normal and full-page views.
 
 Replay uses a separate MP4 video element and bounded clips, not a seek on the
 WebRTC stream. The live connection stays established so returning to live does
-not reconnect the source. Contiguous clips load in sequence; gaps stop replay
+not reconnect the source. In full-page replay, the same live video continues in
+a small preview above the controls. Click it or focus it and press Enter to
+return to live. The preview remains live while the recording is paused; leaving
+full-page mode hides it and pauses the hidden live video again. Inline replay
+keeps its existing layout and **Live** control. The preview adds no second
+WebRTC session; replay still uses a separate MP4 decoder. Contiguous clips load in sequence; gaps stop replay
 instead of silently jumping forward. Clip changes can introduce a short pause;
 this is not a seamless DVR. Hiding the page cancels the replay media load and
 index polling; returning restores the position paused, subject to retention.

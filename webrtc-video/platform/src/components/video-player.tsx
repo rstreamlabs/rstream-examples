@@ -56,15 +56,19 @@ export function VideoPlayer({
   const [error, setError] = useState<string | null>(null)
   const [retryKey, setRetryKey] = useState(0)
   const recording = useRecentRecordings(deviceId)
-  const replaying = useRef(false)
+  const showLivePreview = expanded && recording.active
+  const pauseLive = recording.active && !expanded
+  // Layout changes only affect playback/visibility, never the WHEP session.
+  const livePaused = useRef(false)
+  const returnLiveRef = useRef<HTMLButtonElement>(null)
   useLayoutEffect(() => {
-    replaying.current = recording.active
-  }, [recording.active])
+    livePaused.current = pauseLive
+  }, [pauseLive])
   useEffect(() => {
     const video = videoRef.current
     if (!video?.srcObject) return
     let disposed = false
-    if (recording.active) video.pause()
+    if (pauseLive) video.pause()
     else if (phase === "playing")
       void video.play().catch(() => {
         if (!disposed) setPhase("blocked")
@@ -72,7 +76,7 @@ export function VideoPlayer({
     return () => {
       disposed = true
     }
-  }, [recording.active, phase])
+  }, [pauseLive, phase])
   useLayoutEffect(() => {
     if (!expanded || !playerRef.current || !expandRef.current) return
     return containExpandedPlayer(
@@ -140,7 +144,7 @@ export function VideoPlayer({
           videoRef,
           isCurrent,
           setCurrentPhase,
-          () => !replaying.current,
+          () => !livePaused.current,
         )
         if (viewer.distributor.kind === "mediamtx" && videoRef.current) {
           playbackMonitor = monitorPlayback(
@@ -152,7 +156,7 @@ export function VideoPlayer({
               )
               controller.recoverCurrentBackend(cause)
             },
-            () => replaying.current,
+            () => livePaused.current,
           )
         }
       },
@@ -207,36 +211,60 @@ export function VideoPlayer({
       className="video-player"
       data-expanded={expanded}
       data-replaying={recording.active}
+      data-live-preview={showLivePreview}
       role={expanded ? "dialog" : undefined}
       aria-modal={expanded ? true : undefined}
       aria-label={expanded ? `${deviceName} — full page video` : undefined}
     >
       <div className="video-player-picture">
-        <video
-          ref={videoRef}
-          className="h-full w-full object-contain"
-          playsInline
-          muted
-          autoPlay={!recording.active}
-          aria-label="Live video"
-        />
-        {phase === "playing" || recording.active ? null : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background">
-            {phase === "blocked" ? (
-              <Button type="button" size="sm" onClick={playCurrentStream}>
-                Play stream
-              </Button>
-            ) : phase === "error" ? (
-              <span className="text-sm text-muted-foreground">
-                Unable to start stream
+        <div className="video-player-live">
+          <video
+            ref={videoRef}
+            className="h-full w-full object-contain"
+            playsInline
+            muted
+            autoPlay={!pauseLive}
+            aria-label="Live video"
+          />
+          {phase === "playing" || (recording.active && !expanded) ? null : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background">
+              {phase === "blocked" && !showLivePreview ? (
+                <Button type="button" size="sm" onClick={playCurrentStream}>
+                  Play stream
+                </Button>
+              ) : phase === "error" ? (
+                <span className="text-sm text-muted-foreground">
+                  {showLivePreview
+                    ? "Live unavailable"
+                    : "Unable to start stream"}
+                </span>
+              ) : (
+                <span className="text-sm text-muted-foreground" role="status">
+                  {phase === "blocked" ? "Live paused" : phaseLabel(phase)}
+                </span>
+              )}
+            </div>
+          )}
+          {showLivePreview ? (
+            <button
+              type="button"
+              className="video-player-live-preview"
+              aria-label="Return to live video"
+              title="Return to live"
+              onClick={() => {
+                recording.toggle()
+                // The thumbnail disappears on return; retain keyboard focus
+                // on the persistent history/live control in the toolbar.
+                returnLiveRef.current?.focus({ preventScroll: true })
+              }}
+            >
+              <span className="video-player-live-label">
+                <Radio size={14} aria-hidden />
+                {phase === "playing" ? "Live" : "Return to live"}
               </span>
-            ) : (
-              <span className="text-sm text-muted-foreground">
-                {phaseLabel(phase)}
-              </span>
-            )}
-          </div>
-        )}
+            </button>
+          ) : null}
+        </div>
         <RecordingPicture playback={recording} />
       </div>
       <div className="video-player-toolbar">
@@ -244,7 +272,7 @@ export function VideoPlayer({
           {deviceName}
         </p>
         <QualitySelector
-          key={deviceId}
+          key={`quality:${deviceId}`}
           deviceId={deviceId}
           compact={expanded}
         />
@@ -252,6 +280,7 @@ export function VideoPlayer({
         <div className="video-player-actions flex items-center gap-2">
           {recording.available ? (
             <Button
+              ref={returnLiveRef}
               type="button"
               variant="outline"
               size={recording.active ? "default" : "icon"}
@@ -296,7 +325,10 @@ export function VideoPlayer({
           </Button>
         </div>
         {recording.active ? (
-          <RecordingTimeline key={deviceId} playback={recording} />
+          <RecordingTimeline
+            key={`recording:${deviceId}`}
+            playback={recording}
+          />
         ) : null}
       </div>
       {error ? (
