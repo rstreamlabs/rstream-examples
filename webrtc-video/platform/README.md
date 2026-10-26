@@ -557,7 +557,11 @@ upstream URL or recording filename reaches the browser. Media responses stream
 with backpressure, a 30-second request deadline and a 64 MiB bound. Disconnects
 cancel upstream reads, including an unconsumed body. MediaMTX's MP4 endpoint
 does not support byte ranges; a Range request receives the bounded whole clip
-with status 200 and `Accept-Ranges: none`. No media body is cached by Next.js.
+with status 200 and `Accept-Ranges: none`. The browser buffers one bounded clip
+as a Blob before playback so Safari can seek without HTTP range support. The
+load has a 35-second deadline and a 64 MiB limit; changing clips or leaving
+replay cancels the load and releases the previous object URL. This adds initial
+loading time and up to one clip of browser memory. No media body is cached by Next.js.
 Each application process admits four concurrent clips and four index reads;
 index requests coalesce for two seconds, with at most 128 cached devices and
 32 waiters per read. Capacity must account for the number of application

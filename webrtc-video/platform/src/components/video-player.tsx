@@ -13,10 +13,13 @@ import { useEffect } from "react"
 import { useLayoutEffect } from "react"
 import { useRef } from "react"
 import { useState } from "react"
-import { History, Maximize2, Minimize2, Radio } from "lucide-react"
+import { History, Loader2, Maximize2, Minimize2, Radio } from "lucide-react"
 
 import { apiErrorSchema } from "@/lib/validations/device"
 import { Button } from "@/components/ui/button"
+import { Callout } from "@/components/callout"
+import { CalloutBody } from "@/components/callout"
+import { calloutActionButtonClassName } from "@/components/callout"
 import { type ViewerPayload } from "@/lib/validations/device"
 import { viewerPayloadSchema } from "@/lib/validations/device"
 import { PlaybackHealthTracker } from "@/lib/video-playback-health"
@@ -55,6 +58,7 @@ export function VideoPlayer({
   const [mediaMTXFallback, setMediaMTXFallback] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [retryKey, setRetryKey] = useState(0)
+  const [retrying, setRetrying] = useState(false)
   const recording = useRecentRecordings(deviceId)
   const showLivePreview = expanded && recording.active
   const pauseLive = recording.active && !expanded
@@ -95,6 +99,8 @@ export function VideoPlayer({
     const setCurrentPhase = (nextPhase: ViewerPhase) => {
       if (isCurrent()) {
         setPhase(nextPhase)
+        if (nextPhase === "playing" || nextPhase === "blocked")
+          setRetrying(false)
       }
     }
     const fail = (err: unknown) => {
@@ -102,6 +108,7 @@ export function VideoPlayer({
         return
       }
       setPhase("error")
+      setRetrying(false)
       setError(errorMessage(err))
     }
     setError(null)
@@ -216,6 +223,53 @@ export function VideoPlayer({
       aria-modal={expanded ? true : undefined}
       aria-label={expanded ? `${deviceName} — full page video` : undefined}
     >
+      {error || retrying ? (
+        <Callout type="warning" className="video-player-notice">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="min-w-0 flex-1" role="status" aria-live="polite">
+              <CalloutBody
+                title={
+                  retrying
+                    ? "Reconnecting to live video"
+                    : "Live video unavailable"
+                }
+              >
+                {retrying
+                  ? "Waiting for the live stream to resume."
+                  : error === "Viewer reconnect limit reached."
+                    ? "Reconnection failed. Try opening the live stream again."
+                    : error}
+              </CalloutBody>
+              {recording.active ? (
+                <p className="mt-2 text-sm text-current/75">
+                  This affects the live stream only. You can continue browsing
+                  recordings.
+                </p>
+              ) : null}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className={
+                calloutActionButtonClassName("warning") +
+                " shrink-0 self-start sm:self-center"
+              }
+              disabled={retrying}
+              onClick={() => {
+                setError(null)
+                setRetrying(true)
+                setPhase("connecting")
+                setRetryKey((current) => current + 1)
+              }}
+            >
+              {retrying ? (
+                <Loader2 className="animate-spin" aria-hidden />
+              ) : null}
+              {retrying ? "Reconnecting" : "Retry live video"}
+            </Button>
+          </div>
+        </Callout>
+      ) : null}
       <div className="video-player-picture">
         <div className="video-player-live">
           <video
@@ -331,23 +385,6 @@ export function VideoPlayer({
           />
         ) : null}
       </div>
-      {error ? (
-        <div className="video-player-error flex flex-wrap items-center gap-x-3 gap-y-2">
-          <p className="text-sm text-destructive">{error}</p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setError(null)
-              setPhase("connecting")
-              setRetryKey((current) => current + 1)
-            }}
-          >
-            Retry
-          </Button>
-        </div>
-      ) : null}
       {distributor && !expanded ? (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground" aria-live="polite">

@@ -12,6 +12,8 @@ import {
   type RecordingWindow,
 } from "@/lib/recording-timeline"
 
+import { readRecordingMedia } from "@/lib/recording-media"
+
 type Selection = RecordingClip & { sequence: number }
 type Continuation = { at: number; since: number }
 
@@ -221,9 +223,17 @@ export function useRecentRecordings(deviceId: string) {
     let disposed = false,
       failed = false
     let timer: ReturnType<typeof setTimeout> | undefined
+    const controller = new AbortController()
+    let mediaURL: string | undefined
+    const releaseMedia = () => {
+      controller.abort()
+      if (mediaURL) URL.revokeObjectURL(mediaURL)
+      mediaURL = undefined
+    }
     const fail = () => {
       if (disposed || failed) return
       failed = true
+      releaseMedia()
       clearTimeout(timer)
       intent.current = false
       continuation.current = null
@@ -323,9 +333,23 @@ export function useRecentRecordings(deviceId: string) {
     }
     for (const [event, handler] of Object.entries(handlers))
       element.addEventListener(event, handler)
-    element.src = recordingClipURL(deviceId, selection)
-    element.load()
     waiting()
+    void (async () => {
+      try {
+        const response = await fetch(recordingClipURL(deviceId, selection), {
+          signal: controller.signal,
+          cache: "no-store",
+          redirect: "error",
+        })
+        const blob = await readRecordingMedia(response, controller.signal)
+        if (disposed || failed) return
+        mediaURL = URL.createObjectURL(blob)
+        element.src = mediaURL
+        element.load()
+      } catch {
+        fail()
+      }
+    })()
     return () => {
       disposed = true
       if (playRef.current === togglePlay) playRef.current = () => {}
@@ -334,7 +358,8 @@ export function useRecentRecordings(deviceId: string) {
         element.removeEventListener(event, handler)
       element.pause()
       element.removeAttribute("src")
-      element.load() // Abort the previous HTTP media body on seek/close/unmount.
+      element.load()
+      releaseMedia() // Cancel a pending download and release the previous clip.
     }
   }, [deviceId, selection, active, visible, advance, seek])
 

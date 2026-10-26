@@ -202,9 +202,13 @@ input {
   background: #000;
 }
 
-.video-player[data-expanded="true"] .video-player-error {
+.video-player[data-expanded="true"] .video-player-notice {
   flex: none;
-  padding: 0.5rem 1rem max(0.5rem, env(safe-area-inset-bottom));
+  max-height: 35dvh;
+  overflow-y: auto;
+  margin: max(1rem, env(safe-area-inset-top))
+    max(1rem, env(safe-area-inset-right)) 1rem
+    max(1rem, env(safe-area-inset-left));
 }
 
 @media (max-width: 639px) {
