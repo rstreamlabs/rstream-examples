@@ -567,6 +567,13 @@ index requests coalesce for two seconds, with at most 128 cached devices and
 32 waiters per read. Capacity must account for the number of application
 processes and for replay traffic passing through Next.js.
 
+Playback health uses presented-frame callbacks when available. Safari may report
+zero `totalVideoFrames` for an actively playing MediaStream; treating that value
+as a stalled decoder can incorrectly switch a healthy MediaMTX session to the
+direct fallback. The monitor releases its callback when the reader closes and
+continues to detect a frame counter that stops advancing. Older browsers use
+the available playback counters.
+
 The native MediaMTX integration check requires the distributor's patched
 `mediamtx` 1.21.2 runtime (`make mediamtx` in `../distributor`), FFmpeg,
 FFprobe and the Playwright Chromium/Firefox/WebKit runtimes:

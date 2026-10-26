@@ -32,6 +32,7 @@ import {
 } from "@/lib/viewer-session"
 import { WHEPClient, type WHEPCloseResult } from "@/lib/whep-client"
 import { containExpandedPlayer } from "@/lib/player-expansion"
+import { createVideoFrameCounter } from "@/lib/video-frame-counter"
 
 type VideoDistributor = {
   allowLegacyWildcardETag: boolean
@@ -560,11 +561,12 @@ function monitorPlayback(
     ),
   })
   let stopped = false
+  const frames = createVideoFrameCounter(video)
   const sample = () => {
     if (stopped) {
       return
     }
-    const decodedFrames = decodedVideoFrames(video)
+    const decodedFrames = frames.read()
     if (decodedFrames === null) {
       tracker.reset()
       return
@@ -587,6 +589,7 @@ function monitorPlayback(
     }
     if (unhealthy) {
       stopped = true
+      frames.stop()
       window.clearInterval(timer)
       onUnhealthy()
     }
@@ -599,27 +602,10 @@ function monitorPlayback(
         return
       }
       stopped = true
+      frames.stop()
       window.clearInterval(timer)
     },
   }
-}
-
-function decodedVideoFrames(video: HTMLVideoElement) {
-  let quality: VideoPlaybackQuality | undefined
-  try {
-    quality = video.getVideoPlaybackQuality?.()
-  } catch {
-    return null
-  }
-  if (quality && Number.isFinite(quality.totalVideoFrames)) {
-    return quality.totalVideoFrames
-  }
-  const legacy = video as HTMLVideoElement & {
-    webkitDecodedFrameCount?: number
-  }
-  return Number.isFinite(legacy.webkitDecodedFrameCount)
-    ? Number(legacy.webkitDecodedFrameCount)
-    : null
 }
 
 async function responseJSON(response: Response): Promise<unknown> {
