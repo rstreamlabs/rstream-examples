@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pion/ice/v4"
@@ -224,6 +225,18 @@ func (s *Session) HandleWHEPICE(ctx context.Context, raw string, restart bool) (
 	if err != nil {
 		return "", fmt.Errorf("prepare ICE restart offer: %w", err)
 	}
+	// SetRemoteDescription starts gathering for the new ICE generation. Install
+	// its observer first: a later GatheringCompletePromise can miss a completion
+	// whose callback the gatherer already captured. Checking the previous
+	// generation's Complete state before restarting would also return too early.
+	complete := make(chan struct{})
+	var completeOnce sync.Once
+	s.pc.OnICEGatheringStateChange(func(state webrtc.ICEGatheringState) {
+		if state == webrtc.ICEGatheringStateComplete {
+			completeOnce.Do(func() { close(complete) })
+		}
+	})
+	defer s.pc.OnICEGatheringStateChange(func(webrtc.ICEGatheringState) {})
 	if err := s.pc.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: offer}); err != nil {
 		return "", fmt.Errorf("apply ICE restart offer: %w", err)
 	}
@@ -235,7 +248,6 @@ func (s *Session) HandleWHEPICE(ctx context.Context, raw string, restart bool) (
 	if err != nil {
 		return "", fmt.Errorf("create ICE restart answer: %w", err)
 	}
-	complete := webrtc.GatheringCompletePromise(s.pc)
 	if err := s.pc.SetLocalDescription(answer); err != nil {
 		return "", fmt.Errorf("set ICE restart answer: %w", err)
 	}
