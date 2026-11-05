@@ -2,8 +2,8 @@
   "name": "webrtc-video-platform",
   "private": true,
   "allowScripts": {
-    "@prisma/engines@7.10.0": true,
-    "prisma@7.10.0": true
+    "@prisma/engines@7.10.1": true,
+    "prisma@7.10.1": true
   },
   "scripts": {
     "build": "npm run prisma:generate && next build",
@@ -43,7 +43,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.33.0",
-    "next": "16.4.2",
+    "next": "16.4.5",
     "next-auth": "^4.24.15",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
