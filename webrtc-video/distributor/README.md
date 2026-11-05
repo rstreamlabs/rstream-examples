@@ -87,6 +87,12 @@ leg; MediaMTX and each browser establish their own feedback and retransmission
 state. This separation prevents feedback from one viewer from controlling the
 device uplink used by every viewer.
 
+The adapter offers Constrained Baseline, Baseline, Main and High H.264 profiles
+through level 4.2 in packetization mode 1. It preserves the negotiated source
+profile and level in the MediaMTX offer; it does not decode or transcode the
+stream. Sources outside this envelope need an explicitly qualified profile,
+and downstream viewers must support the selected rendition.
+
 The current distributor carries one H.264 rendition. Downstream TWCC describes
 each viewer leg, but MediaMTX does not transcode that rendition or propagate a
 viewer estimate back to the shared producer encoder. Fan-out is therefore
@@ -116,10 +122,25 @@ source key frame. This preserves the initial H.264 parameter sets that a
 not-yet-connected sender can otherwise discard. Cancellation or connection
 failure closes the newly created session; no extra live buffering is added.
 
+MediaMTX allows two seconds after connection for the first inbound media track.
+This deadline starts before the first RTP packet, so it must accommodate source
+startup even when the transport is already connected. Discovery completes as
+soon as all offered tracks arrive; this is not a fixed delay for every reader.
+A publisher that sends no media is closed when that bounded deadline expires.
+
 The forwarding pipeline has bounded packet, repair, and worker queues. It
 reorders media for at most 300 ms, retries NACK feedback at a bounded cadence,
 expires missing packets after one second, and stops instead of accumulating an
-unbounded live-stream backlog. PLI and FIR received from MediaMTX cross back to
+unbounded live-stream backlog. After repair, H.264 packets are held until the
+access unit's RTP marker, with limits of one picture, 8 MiB, 8192 packets and
+500 ms of assembly time. This waits for the current picture to finish arriving,
+without adding a playout delay or transcoding. An incomplete or expired picture
+is discarded in full; dependent pictures are discarded until a complete IDR
+starting at its first slice arrives. A slice whose NALU type is IDR is not by
+itself a complete recovery point. Sources must mark access-unit boundaries;
+markerless camera profiles are not supported by this distribution path.
+Transport integrity remains distinct from codec validity and downstream loss.
+PLI and FIR received from MediaMTX cross back to
 the source; viewer NACK and TWCC remain local to the MediaMTX hop. This is not
 end-to-end forwarding of every viewer's key-frame request: MediaMTX 1.21.2
 [consumes reader RTCP without forwarding PLI upstream](https://github.com/bluenviron/mediamtx/blob/v1.21.2/internal/protocols/webrtc/outbound_track.go)
