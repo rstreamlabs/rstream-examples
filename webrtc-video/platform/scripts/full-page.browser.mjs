@@ -79,8 +79,8 @@ export async function qualifyFullPage({
           expiresAt: new Date(Date.now() + 300000).toISOString(),
         },
         turn: {
-          username: "",
-          credential: "",
+          username: "local-synthetic-source",
+          credential: "local-synthetic-source",
           urls: [stunURL],
           ttl: 300,
           expiresAt: new Date(Date.now() + 300000).toISOString(),

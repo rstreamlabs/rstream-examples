@@ -13,10 +13,13 @@ import { useEffect } from "react"
 import { useLayoutEffect } from "react"
 import { useRef } from "react"
 import { useState } from "react"
-import { History, Maximize2, Minimize2, Radio } from "lucide-react"
+import { History, Loader2, Maximize2, Minimize2, Radio } from "lucide-react"
 
 import { apiErrorSchema } from "@/lib/validations/device"
 import { Button } from "@/components/ui/button"
+import { Callout } from "@/components/callout"
+import { CalloutBody } from "@/components/callout"
+import { calloutActionButtonClassName } from "@/components/callout"
 import { type ViewerPayload } from "@/lib/validations/device"
 import { viewerPayloadSchema } from "@/lib/validations/device"
 import { PlaybackHealthTracker } from "@/lib/video-playback-health"
@@ -29,6 +32,7 @@ import {
 } from "@/lib/viewer-session"
 import { WHEPClient, type WHEPCloseResult } from "@/lib/whep-client"
 import { containExpandedPlayer } from "@/lib/player-expansion"
+import { createVideoFrameCounter } from "@/lib/video-frame-counter"
 
 type VideoDistributor = {
   allowLegacyWildcardETag: boolean
@@ -55,16 +59,21 @@ export function VideoPlayer({
   const [mediaMTXFallback, setMediaMTXFallback] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [retryKey, setRetryKey] = useState(0)
+  const [retrying, setRetrying] = useState(false)
   const recording = useRecentRecordings(deviceId)
-  const replaying = useRef(false)
+  const showLivePreview = expanded && recording.active
+  const pauseLive = recording.active && !expanded
+  // Layout changes only affect playback/visibility, never the WHEP session.
+  const livePaused = useRef(false)
+  const returnLiveRef = useRef<HTMLButtonElement>(null)
   useLayoutEffect(() => {
-    replaying.current = recording.active
-  }, [recording.active])
+    livePaused.current = pauseLive
+  }, [pauseLive])
   useEffect(() => {
     const video = videoRef.current
     if (!video?.srcObject) return
     let disposed = false
-    if (recording.active) video.pause()
+    if (pauseLive) video.pause()
     else if (phase === "playing")
       void video.play().catch(() => {
         if (!disposed) setPhase("blocked")
@@ -72,7 +81,7 @@ export function VideoPlayer({
     return () => {
       disposed = true
     }
-  }, [recording.active, phase])
+  }, [pauseLive, phase])
   useLayoutEffect(() => {
     if (!expanded || !playerRef.current || !expandRef.current) return
     return containExpandedPlayer(
@@ -91,6 +100,8 @@ export function VideoPlayer({
     const setCurrentPhase = (nextPhase: ViewerPhase) => {
       if (isCurrent()) {
         setPhase(nextPhase)
+        if (nextPhase === "playing" || nextPhase === "blocked")
+          setRetrying(false)
       }
     }
     const fail = (err: unknown) => {
@@ -98,6 +109,7 @@ export function VideoPlayer({
         return
       }
       setPhase("error")
+      setRetrying(false)
       setError(errorMessage(err))
     }
     setError(null)
@@ -140,7 +152,7 @@ export function VideoPlayer({
           videoRef,
           isCurrent,
           setCurrentPhase,
-          () => !replaying.current,
+          () => !livePaused.current,
         )
         if (viewer.distributor.kind === "mediamtx" && videoRef.current) {
           playbackMonitor = monitorPlayback(
@@ -152,7 +164,7 @@ export function VideoPlayer({
               )
               controller.recoverCurrentBackend(cause)
             },
-            () => replaying.current,
+            () => livePaused.current,
           )
         }
       },
@@ -207,36 +219,107 @@ export function VideoPlayer({
       className="video-player"
       data-expanded={expanded}
       data-replaying={recording.active}
+      data-live-preview={showLivePreview}
       role={expanded ? "dialog" : undefined}
       aria-modal={expanded ? true : undefined}
       aria-label={expanded ? `${deviceName} — full page video` : undefined}
     >
-      <div className="video-player-picture">
-        <video
-          ref={videoRef}
-          className="h-full w-full object-contain"
-          playsInline
-          muted
-          autoPlay={!recording.active}
-          aria-label="Live video"
-        />
-        {phase === "playing" || recording.active ? null : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background">
-            {phase === "blocked" ? (
-              <Button type="button" size="sm" onClick={playCurrentStream}>
-                Play stream
-              </Button>
-            ) : phase === "error" ? (
-              <span className="text-sm text-muted-foreground">
-                Unable to start stream
-              </span>
-            ) : (
-              <span className="text-sm text-muted-foreground">
-                {phaseLabel(phase)}
-              </span>
-            )}
+      {error || retrying ? (
+        <Callout type="warning" className="video-player-notice">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="min-w-0 flex-1" role="status" aria-live="polite">
+              <CalloutBody
+                title={
+                  retrying
+                    ? "Reconnecting to live video"
+                    : "Live video unavailable"
+                }
+              >
+                {retrying
+                  ? "Waiting for the live stream to resume."
+                  : error === "Viewer reconnect limit reached."
+                    ? "Reconnection failed. Try opening the live stream again."
+                    : error}
+              </CalloutBody>
+              {recording.active ? (
+                <p className="mt-2 text-sm text-current/75">
+                  This affects the live stream only. You can continue browsing
+                  recordings.
+                </p>
+              ) : null}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className={
+                calloutActionButtonClassName("warning") +
+                " shrink-0 self-start sm:self-center"
+              }
+              disabled={retrying}
+              onClick={() => {
+                setError(null)
+                setRetrying(true)
+                setPhase("connecting")
+                setRetryKey((current) => current + 1)
+              }}
+            >
+              {retrying ? (
+                <Loader2 className="animate-spin" aria-hidden />
+              ) : null}
+              {retrying ? "Reconnecting" : "Retry live video"}
+            </Button>
           </div>
-        )}
+        </Callout>
+      ) : null}
+      <div className="video-player-picture">
+        <div className="video-player-live">
+          <video
+            ref={videoRef}
+            className="h-full w-full object-contain"
+            playsInline
+            muted
+            autoPlay={!pauseLive}
+            aria-label="Live video"
+          />
+          {phase === "playing" || (recording.active && !expanded) ? null : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background">
+              {phase === "blocked" && !showLivePreview ? (
+                <Button type="button" size="sm" onClick={playCurrentStream}>
+                  Play stream
+                </Button>
+              ) : phase === "error" ? (
+                <span className="text-sm text-muted-foreground">
+                  {showLivePreview
+                    ? "Live unavailable"
+                    : "Unable to start stream"}
+                </span>
+              ) : (
+                <span className="text-sm text-muted-foreground" role="status">
+                  {phase === "blocked" ? "Live paused" : phaseLabel(phase)}
+                </span>
+              )}
+            </div>
+          )}
+          {showLivePreview ? (
+            <button
+              type="button"
+              className="video-player-live-preview"
+              aria-label="Return to live video"
+              title="Return to live"
+              onClick={() => {
+                recording.toggle()
+                // The thumbnail disappears on return; retain keyboard focus
+                // on the persistent history/live control in the toolbar.
+                returnLiveRef.current?.focus({ preventScroll: true })
+              }}
+            >
+              <span className="video-player-live-label">
+                <Radio size={14} aria-hidden />
+                {phase === "playing" ? "Live" : "Return to live"}
+              </span>
+            </button>
+          ) : null}
+        </div>
         <RecordingPicture playback={recording} />
       </div>
       <div className="video-player-toolbar">
@@ -244,7 +327,7 @@ export function VideoPlayer({
           {deviceName}
         </p>
         <QualitySelector
-          key={deviceId}
+          key={`quality:${deviceId}`}
           deviceId={deviceId}
           compact={expanded}
         />
@@ -252,6 +335,7 @@ export function VideoPlayer({
         <div className="video-player-actions flex items-center gap-2">
           {recording.available ? (
             <Button
+              ref={returnLiveRef}
               type="button"
               variant="outline"
               size={recording.active ? "default" : "icon"}
@@ -296,26 +380,12 @@ export function VideoPlayer({
           </Button>
         </div>
         {recording.active ? (
-          <RecordingTimeline key={deviceId} playback={recording} />
+          <RecordingTimeline
+            key={`recording:${deviceId}`}
+            playback={recording}
+          />
         ) : null}
       </div>
-      {error ? (
-        <div className="video-player-error flex flex-wrap items-center gap-x-3 gap-y-2">
-          <p className="text-sm text-destructive">{error}</p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setError(null)
-              setPhase("connecting")
-              setRetryKey((current) => current + 1)
-            }}
-          >
-            Retry
-          </Button>
-        </div>
-      ) : null}
       {distributor && !expanded ? (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground" aria-live="polite">
@@ -491,11 +561,12 @@ function monitorPlayback(
     ),
   })
   let stopped = false
+  const frames = createVideoFrameCounter(video)
   const sample = () => {
     if (stopped) {
       return
     }
-    const decodedFrames = decodedVideoFrames(video)
+    const decodedFrames = frames.read()
     if (decodedFrames === null) {
       tracker.reset()
       return
@@ -518,6 +589,7 @@ function monitorPlayback(
     }
     if (unhealthy) {
       stopped = true
+      frames.stop()
       window.clearInterval(timer)
       onUnhealthy()
     }
@@ -530,27 +602,10 @@ function monitorPlayback(
         return
       }
       stopped = true
+      frames.stop()
       window.clearInterval(timer)
     },
   }
-}
-
-function decodedVideoFrames(video: HTMLVideoElement) {
-  let quality: VideoPlaybackQuality | undefined
-  try {
-    quality = video.getVideoPlaybackQuality?.()
-  } catch {
-    return null
-  }
-  if (quality && Number.isFinite(quality.totalVideoFrames)) {
-    return quality.totalVideoFrames
-  }
-  const legacy = video as HTMLVideoElement & {
-    webkitDecodedFrameCount?: number
-  }
-  return Number.isFinite(legacy.webkitDecodedFrameCount)
-    ? Number(legacy.webkitDecodedFrameCount)
-    : null
 }
 
 async function responseJSON(response: Response): Promise<unknown> {
