@@ -32,6 +32,7 @@ test-qualification-compile: ice-patch
 
 test-decoded-restarts: ice-patch
 	GOFLAGS="$(ICE_GOFLAGS)" $(GO) test -race -tags=qualification -timeout=90s -count=1 ./internal/whipwhep -run '^TestICERestartDecodesH264ThroughTURN$$'
+	GOFLAGS="$(ICE_GOFLAGS)" $(GO) test -race -tags=qualification -timeout=30s -count=1 ./internal/bridge -run '^TestH264ContinuityDecodesAfterLosingASlice$$'
 
 test-race: ice-patch
 	GOFLAGS="$(ICE_GOFLAGS)" $(GO) test -race ./...

@@ -55,6 +55,7 @@ type Attempt struct {
 	reporter *Reporter
 	id       string
 	done     atomic.Bool
+	binding  atomic.Pointer[Binding]
 }
 
 func NewReporter(socketPath string) (*Reporter, error) {
@@ -172,7 +173,22 @@ func (a *Attempt) Observe(counters Counters) {
 	if a == nil || a.done.Load() {
 		return
 	}
-	a.reporter.publish(message{AttemptID: a.id, State: StateActive, Counters: counters})
+	a.reporter.publish(message{AttemptID: a.id, State: StateActive, Counters: counters, Binding: a.binding.Load()})
+}
+
+// SetBinding attaches session identity to subsequent snapshots and heartbeats.
+// It is immutable during an attempt; a new session requires a new attempt.
+func (a *Attempt) SetBinding(binding Binding) error {
+	if a == nil {
+		return nil
+	}
+	if !validBinding(&binding) {
+		return errors.New("invalid video session binding")
+	}
+	if a.done.Load() || !a.binding.CompareAndSwap(nil, &binding) {
+		return errors.New("video attempt already bound or completed")
+	}
+	return nil
 }
 
 func (a *Attempt) Complete(ctx context.Context, counters Counters, outcome string) error {

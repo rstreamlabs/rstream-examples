@@ -36,9 +36,9 @@ webrtcAdditionalHosts: []
 webrtcICEServers2: []
 webrtcSTUNGatherTimeout: 5s
 webrtcHandshakeTimeout: 10s
-# The distributor publishes one known video track, so MediaMTX does not need
-# its multi-track discovery window after receiving the first RTP packet.
-webrtcTrackGatherTimeout: 250ms
+# Track discovery starts before the first RTP packet. Allow bounded source
+# startup after transport connection; a single offered track completes early.
+webrtcTrackGatherTimeout: 2s
 
 pathDefaults:
   # Optional recent history. Supply a bounded writable /recordings volume and

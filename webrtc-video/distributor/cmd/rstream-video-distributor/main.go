@@ -58,6 +58,7 @@ func runHost(ctx context.Context, command []string) error {
 		Command:         command,
 		Environment:     os.Environ(),
 		MetricsAddress:  metricsAddress,
+		BindingsSocket:  os.Getenv(telemetry.BindingsSocketEnvironmentVariable),
 		SocketPath:      socketPath,
 		ShutdownTimeout: defaultHostShutdown,
 		Stdin:           os.Stdin,
@@ -89,8 +90,10 @@ func runDistributor(ctx context.Context, logger *slog.Logger) (runErr error) {
 		if telemetryErr != nil {
 			logger.Warn("adapter attempt telemetry did not start", "error", telemetryErr)
 		}
-		result, attemptErr := bridge.RunObserved(attemptCtx, configuration, func(result bridge.Result) {
+		result, attemptErr := bridge.RunBound(attemptCtx, configuration, func(result bridge.Result) {
 			attempt.Observe(telemetryCounters(result))
+		}, func(sourceID, destinationID string) error {
+			return attempt.SetBinding(telemetry.Binding{Path: configuration.Path, SourceSessionID: sourceID, DestinationSessionID: destinationID})
 		})
 		if telemetryErr := attempt.Complete(context.Background(), telemetryCounters(result), telemetryOutcome(attemptErr)); telemetryErr != nil {
 			logger.Warn("adapter attempt telemetry did not complete", "error", telemetryErr)
@@ -98,6 +101,7 @@ func runDistributor(ctx context.Context, logger *slog.Logger) (runErr error) {
 		logger.Info(
 			"video distributor attempt stopped",
 			"path", configuration.Path,
+			"error", attemptErr,
 			"received", result.Repair.Received,
 			"rtx_received", result.Repair.RTXReceived,
 			"fec_received", result.SourceFECPackets,

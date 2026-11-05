@@ -771,7 +771,7 @@ if [[ "${distribution_mode}" == mediamtx-native ]]; then
     webrtcIPsFromInterfacesList: [],
     webrtcAdditionalHosts: [],
     webrtcICEServers2: [],
-    webrtcTrackGatherTimeout: "250ms",
+    webrtcTrackGatherTimeout: "2s",
     pathDefaults: {
       source: "publisher",
       maxReaders: 8
@@ -780,7 +780,7 @@ if [[ "${distribution_mode}" == mediamtx-native ]]; then
       camera: {
         source: $source,
         whepBearerToken: $bearer,
-        whepTrackGatherTimeout: "250ms",
+        whepTrackGatherTimeout: "2s",
         sourceOnDemand: true,
         sourceOnDemandStartTimeout: "15s",
         sourceOnDemandCloseAfter: "1s"

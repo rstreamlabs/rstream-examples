@@ -85,7 +85,7 @@ func TestConcurrentStartWaitsForTheActualPipelineTransition(t *testing.T) {
 	var transitions atomic.Int32
 	source := &GStreamerSource{
 		logger: logs.NewLogger(logs.NewHub(8), false),
-		subs:   make(map[chan AccessUnit]struct{}),
+		subs:   make(map[*LiveQueue]struct{}),
 		stats:  &sourceStats{},
 	}
 	source.startPipeline = func(context.Context) error {
@@ -127,7 +127,7 @@ func TestConcurrentStartWaitsForTheActualPipelineTransition(t *testing.T) {
 func TestGStreamerStartPropagatesCancellation(t *testing.T) {
 	source := &GStreamerSource{
 		logger: logs.NewLogger(logs.NewHub(8), false),
-		subs:   make(map[chan AccessUnit]struct{}),
+		subs:   make(map[*LiveQueue]struct{}),
 		stats:  &sourceStats{},
 	}
 	source.startPipeline = func(ctx context.Context) error {
