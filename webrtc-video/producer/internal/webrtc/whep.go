@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pion/ice/v4"
@@ -224,7 +226,9 @@ func (s *Session) HandleWHEPICE(ctx context.Context, raw string, restart bool) (
 	if err != nil {
 		return "", fmt.Errorf("prepare ICE restart offer: %w", err)
 	}
-	if err := s.pc.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: offer}); err != nil {
+	complete, stopObserving, err := applyWHEPRestartOffer(s.pc, offer)
+	defer stopObserving()
+	if err != nil {
 		return "", fmt.Errorf("apply ICE restart offer: %w", err)
 	}
 	restartApplied = true
@@ -235,7 +239,6 @@ func (s *Session) HandleWHEPICE(ctx context.Context, raw string, restart bool) (
 	if err != nil {
 		return "", fmt.Errorf("create ICE restart answer: %w", err)
 	}
-	complete := webrtc.GatheringCompletePromise(s.pc)
 	if err := s.pc.SetLocalDescription(answer); err != nil {
 		return "", fmt.Errorf("set ICE restart answer: %w", err)
 	}
@@ -261,6 +264,32 @@ func (s *Session) HandleWHEPICE(ctx context.Context, raw string, restart bool) (
 	s.whepRemoteCandidates = len(fragment.candidates)
 	s.recordTransportNegotiation()
 	return response, nil
+}
+
+type whepRestartPeer interface {
+	OnICEGatheringStateChange(func(webrtc.ICEGatheringState))
+	SetRemoteDescription(webrtc.SessionDescription) error
+}
+
+// The caller serializes signaling and owns the gathering observer until cleanup.
+// Install it before SetRemoteDescription, which can finish gathering before it
+// returns. A prior Complete state is not completion of this new generation.
+func applyWHEPRestartOffer(pc whepRestartPeer, offer string) (<-chan struct{}, func(), error) {
+	complete := make(chan struct{})
+	var gathering atomic.Bool
+	var once sync.Once
+	pc.OnICEGatheringStateChange(func(state webrtc.ICEGatheringState) {
+		switch state {
+		case webrtc.ICEGatheringStateGathering:
+			gathering.Store(true)
+		case webrtc.ICEGatheringStateComplete:
+			if gathering.Load() {
+				once.Do(func() { close(complete) })
+			}
+		}
+	})
+	err := pc.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: offer})
+	return complete, func() { pc.OnICEGatheringStateChange(func(webrtc.ICEGatheringState) {}) }, err
 }
 
 func (s *Session) RefreshWHEPICE(ctx context.Context) error {

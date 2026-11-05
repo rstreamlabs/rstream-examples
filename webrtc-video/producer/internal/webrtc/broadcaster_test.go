@@ -560,70 +560,81 @@ func TestWHEPTrickleICEAndRestartKeepOnePeerConnection(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("WHEP peer connection did not connect")
 	}
-	initialRemote := client.RemoteDescription().SDP
-	restartOffer, err := client.CreateOffer(&webrtc.OfferOptions{ICERestart: true})
-	if err != nil {
-		t.Fatalf("create WHEP ICE restart offer: %v", err)
-	}
-	restartGathered := webrtc.GatheringCompletePromise(client)
-	if err := client.SetLocalDescription(restartOffer); err != nil {
-		t.Fatalf("set WHEP ICE restart offer: %v", err)
-	}
-	select {
-	case <-restartGathered:
-	case <-time.After(5 * time.Second):
-		t.Fatal("WHEP ICE restart candidate gathering timed out")
-	}
-	restartRequest, err := iceFragmentFromAnswer(client.LocalDescription().SDP)
-	if err != nil {
-		t.Fatalf("encode WHEP ICE restart request: %v", err)
-	}
-	serverRemoteBefore := session.pc.RemoteDescription().SDP
-	cancelledCtx, cancelRestart := context.WithCancel(context.Background())
-	cancelRestart()
-	if _, err := session.HandleWHEPICE(cancelledCtx, restartRequest, true); !errors.Is(err, context.Canceled) {
-		t.Fatalf("cancelled ICE restart error = %v, want context cancellation", err)
-	}
-	if session.isClosed() {
-		t.Fatal("cancelled WHEP ICE restart closed the producer session")
-	}
-	if got := session.pc.RemoteDescription().SDP; got != serverRemoteBefore {
-		t.Fatal("cancelled WHEP ICE restart mutated the existing ICE session")
-	}
-	restartCtx, cancelFinalRestart := context.WithTimeout(context.Background(), 15*time.Second)
-	restartAnswer, err := session.HandleWHEPICE(restartCtx, restartRequest, true)
-	cancelFinalRestart()
-	if err != nil {
-		t.Fatalf("handle WHEP ICE restart: %v", err)
-	}
-	if strings.TrimSpace(restartAnswer) == "" {
-		t.Fatal("WHEP ICE restart returned no answer fragment")
-	}
-	answerFragment, err := parseWHEPICEFragment(restartAnswer)
-	if err != nil {
-		t.Fatalf("parse WHEP ICE restart answer: %v", err)
-	}
-	updatedAnswer, err := replaceICECredentials(initialRemote, answerFragment.ufrag, answerFragment.pwd)
-	if err != nil {
-		t.Fatalf("apply WHEP ICE restart answer credentials: %v", err)
-	}
-	if err := client.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: updatedAnswer}); err != nil {
-		t.Fatalf("set WHEP ICE restart answer: %v", err)
-	}
-	for _, candidate := range answerFragment.candidates {
-		if err := client.AddICECandidate(candidate); err != nil {
-			t.Fatalf("apply WHEP ICE restart answer candidate: %v", err)
+	// Repeated restarts must each wait for their own gathering completion.
+	for range 3 {
+		initialRemote := client.RemoteDescription().SDP
+		// CreateOffer starts gathering immediately on restart. Observe this
+		// generation before triggering it, rather than checking the prior state.
+		restartGathered := make(chan struct{})
+		var restartGatheredOnce sync.Once
+		client.OnICEGatheringStateChange(func(state webrtc.ICEGatheringState) {
+			if state == webrtc.ICEGatheringStateComplete {
+				restartGatheredOnce.Do(func() { close(restartGathered) })
+			}
+		})
+		restartOffer, err := client.CreateOffer(&webrtc.OfferOptions{ICERestart: true})
+		if err != nil {
+			t.Fatalf("create WHEP ICE restart offer: %v", err)
 		}
-	}
-	deadline := time.Now().Add(5 * time.Second)
-	for client.ConnectionState() != webrtc.PeerConnectionStateConnected {
-		if time.Now().After(deadline) {
-			t.Fatalf("WHEP peer did not recover after ICE restart: %s", client.ConnectionState())
+		if err := client.SetLocalDescription(restartOffer); err != nil {
+			t.Fatalf("set WHEP ICE restart offer: %v", err)
 		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if session.isClosed() {
-		t.Fatal("WHEP ICE restart replaced or closed the producer session")
+		select {
+		case <-restartGathered:
+		case <-time.After(5 * time.Second):
+			t.Fatal("WHEP ICE restart candidate gathering timed out")
+		}
+		restartRequest, err := iceFragmentFromAnswer(client.LocalDescription().SDP)
+		if err != nil {
+			t.Fatalf("encode WHEP ICE restart request: %v", err)
+		}
+		serverRemoteBefore := session.pc.RemoteDescription().SDP
+		cancelledCtx, cancelRestart := context.WithCancel(context.Background())
+		cancelRestart()
+		if _, err := session.HandleWHEPICE(cancelledCtx, restartRequest, true); !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancelled ICE restart error = %v, want context cancellation", err)
+		}
+		if session.isClosed() {
+			t.Fatal("cancelled WHEP ICE restart closed the producer session")
+		}
+		if got := session.pc.RemoteDescription().SDP; got != serverRemoteBefore {
+			t.Fatal("cancelled WHEP ICE restart mutated the existing ICE session")
+		}
+		restartCtx, cancelFinalRestart := context.WithTimeout(context.Background(), 15*time.Second)
+		restartAnswer, err := session.HandleWHEPICE(restartCtx, restartRequest, true)
+		cancelFinalRestart()
+		if err != nil {
+			t.Fatalf("handle WHEP ICE restart: %v", err)
+		}
+		if strings.TrimSpace(restartAnswer) == "" {
+			t.Fatal("WHEP ICE restart returned no answer fragment")
+		}
+		answerFragment, err := parseWHEPICEFragment(restartAnswer)
+		if err != nil {
+			t.Fatalf("parse WHEP ICE restart answer: %v", err)
+		}
+		updatedAnswer, err := replaceICECredentials(initialRemote, answerFragment.ufrag, answerFragment.pwd)
+		if err != nil {
+			t.Fatalf("apply WHEP ICE restart answer credentials: %v", err)
+		}
+		if err := client.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: updatedAnswer}); err != nil {
+			t.Fatalf("set WHEP ICE restart answer: %v", err)
+		}
+		for _, candidate := range answerFragment.candidates {
+			if err := client.AddICECandidate(candidate); err != nil {
+				t.Fatalf("apply WHEP ICE restart answer candidate: %v", err)
+			}
+		}
+		deadline := time.Now().Add(5 * time.Second)
+		for client.ConnectionState() != webrtc.PeerConnectionStateConnected {
+			if time.Now().After(deadline) {
+				t.Fatalf("WHEP peer did not recover after ICE restart: %s", client.ConnectionState())
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		if session.isClosed() {
+			t.Fatal("WHEP ICE restart replaced or closed the producer session")
+		}
 	}
 }
 
