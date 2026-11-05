@@ -6,6 +6,7 @@ on:
       - main
   workflow_dispatch:
 permissions:
+  actions: read
   contents: read
 jobs:
   repository-scripts:
@@ -111,6 +112,8 @@ jobs:
             private-llm-mesh/qualification/test_render_report.py
           PYTHONPATH=private-postgres-access/qualification python3 -m unittest \
             private-postgres-access/qualification/test_run.py
+      - name: Test SDK candidate integrity
+        run: node --test .github/scripts/sdk-candidate.test.mjs
       - name: Check Node scripts
         shell: bash
         run: |
@@ -209,6 +212,10 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: nextjs-rstream-preview/package-lock.json
+      - name: Prepare original SDK archives
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/sdk-candidate.mjs nextjs-rstream-preview
       - name: Install dependencies
         working-directory: nextjs-rstream-preview
         shell: bash
@@ -333,6 +340,10 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: webrtc-video/platform/package-lock.json
+      - name: Prepare original SDK archives
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/sdk-candidate.mjs webrtc-video/platform
       - name: Install dependencies
         working-directory: webrtc-video/platform
         shell: bash
@@ -539,6 +550,10 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: private-llm-mesh/web/package-lock.json
+      - name: Prepare original SDK archives
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/sdk-candidate.mjs private-llm-mesh/web
       - name: Install dependencies
         working-directory: private-llm-mesh/web
         shell: bash
