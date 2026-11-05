@@ -1,9 +1,97 @@
 package webrtc
 
 import (
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/pion/webrtc/v4"
 )
+
+type restartGatheringPeer struct {
+	observer func(webrtc.ICEGatheringState)
+	apply    func(webrtc.SessionDescription) error
+}
+
+func (p *restartGatheringPeer) OnICEGatheringStateChange(observer func(webrtc.ICEGatheringState)) {
+	p.observer = observer
+}
+
+func (p *restartGatheringPeer) SetRemoteDescription(description webrtc.SessionDescription) error {
+	return p.apply(description)
+}
+
+func (p *restartGatheringPeer) emit(state webrtc.ICEGatheringState) {
+	if p.observer != nil {
+		p.observer(state)
+	}
+}
+
+func TestWHEPRestartObservesCompletionBeforeRemoteDescriptionReturns(t *testing.T) {
+	peer := &restartGatheringPeer{}
+	peer.apply = func(description webrtc.SessionDescription) error {
+		if description.Type != webrtc.SDPTypeOffer || description.SDP != "new ICE generation" {
+			t.Fatalf("restart offer: %+v", description)
+		}
+		// Exercise the fast gatherer schedule deterministically, without sleeps.
+		peer.emit(webrtc.ICEGatheringStateGathering)
+		peer.emit(webrtc.ICEGatheringStateComplete)
+		peer.emit(webrtc.ICEGatheringStateComplete)
+		return nil
+	}
+	complete, cleanup, err := applyWHEPRestartOffer(peer, "new ICE generation")
+	defer cleanup()
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-complete:
+	default:
+		t.Fatal("restart missed completion delivered while applying the offer")
+	}
+}
+
+func TestWHEPRestartWaitsForNewGeneration(t *testing.T) {
+	peer := &restartGatheringPeer{}
+	peer.apply = func(webrtc.SessionDescription) error {
+		peer.emit(webrtc.ICEGatheringStateComplete)
+		return nil
+	}
+	complete, cleanup, err := applyWHEPRestartOffer(peer, "offer")
+	defer cleanup()
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-complete:
+		t.Fatal("previous generation completed the restart")
+	default:
+	}
+	peer.emit(webrtc.ICEGatheringStateGathering)
+	peer.emit(webrtc.ICEGatheringStateComplete)
+	select {
+	case <-complete:
+	default:
+		t.Fatal("new generation did not complete the restart")
+	}
+}
+
+func TestWHEPRestartObserverCleanupAfterRejectedOffer(t *testing.T) {
+	want := errors.New("offer rejected")
+	peer := &restartGatheringPeer{apply: func(webrtc.SessionDescription) error { return want }}
+	complete, cleanup, err := applyWHEPRestartOffer(peer, "offer")
+	cleanup()
+	if !errors.Is(err, want) {
+		t.Fatalf("offer error: %v", err)
+	}
+	peer.emit(webrtc.ICEGatheringStateGathering)
+	peer.emit(webrtc.ICEGatheringStateComplete)
+	select {
+	case <-complete:
+		t.Fatal("removed observer consumed a later generation")
+	default:
+	}
+}
 
 func addRTCPMuxOnly(raw string) string {
 	return strings.ReplaceAll(raw, "a=rtcp-mux\r\n", "a=rtcp-mux\r\na=rtcp-mux-only\r\na=msid:rstream-whep rstream-video\r\n")
