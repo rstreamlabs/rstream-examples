@@ -1,0 +1,14 @@
+{
+  "repository": "rstreamlabs/rstream-js",
+  "source": "8515431a988cef96f9d54b5c104ce45ed023aba0",
+  "runId": 42070733585,
+  "artifactId": 13436296525,
+  "artifactDigest": "sha256:b17ca54b99693b3dce2aef9e1d84676f8362d92fdde43f1e0be5c84be84ce60e",
+  "packages": {
+    "@rstreamlabs/react": "2.1.1",
+    "@rstreamlabs/runtime": "0.10.4",
+    "@rstreamlabs/terminal-ui": "0.1.1",
+    "@rstreamlabs/tunnels": "4.0.3",
+    "@rstreamlabs/webtty": "1.12.1"
+  }
+}

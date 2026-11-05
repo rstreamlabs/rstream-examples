@@ -24,6 +24,27 @@ The repository currently includes the following examples:
 
 Each example directory contains its own README with the platform-specific setup, configuration profiles, build commands, and operational notes required by that example.
 
+## Coordinated SDK qualification
+
+The JavaScript examples pin exact SDK versions and npm archive integrity. During
+coordinated releases, CI can install original, reviewed SDK candidates before
+those versions are published. `.github/sdk-candidate.json` records the upstream
+commit, workflow, immutable artifact and checksum. The preparation helper uses
+published archives when available, or verifies the original GitHub artifact and
+fills the npm cache without changing the lockfile.
+
+To test locally with a retained candidate archive, run from this repository root:
+
+```sh
+node .github/scripts/sdk-candidate.mjs webrtc-video/platform /path/to/original-artifact.zip
+cd webrtc-video/platform
+npm ci
+```
+
+The same helper supports `nextjs-rstream-preview` and `private-llm-mesh/web`.
+Never rebuild an unpublished candidate to satisfy a lockfile. Once the exact
+archives are published, ordinary `npm ci` needs no candidate preparation.
+
 ## Examples and qualification packs
 
 Every example has two deliberately separate layers:
