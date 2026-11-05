@@ -3,6 +3,7 @@ package telemetry
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -39,6 +40,7 @@ type Collector struct {
 
 type aggregator struct {
 	mu                sync.Mutex
+	runtimeID         string
 	processes         map[string]processRecord
 	attempts          map[string]attemptRecord
 	completedAttempts map[string]time.Time
@@ -62,6 +64,7 @@ type processRecord struct {
 type attemptRecord struct {
 	processID string
 	counters  Counters
+	binding   *Binding
 }
 
 func NewCollector(socketPath string) (*Collector, error) {
@@ -150,6 +153,7 @@ func (c *Collector) Close() error {
 
 func newAggregator() *aggregator {
 	return &aggregator{
+		runtimeID:         rand.Text(),
 		processes:         make(map[string]processRecord),
 		attempts:          make(map[string]attemptRecord),
 		completedAttempts: make(map[string]time.Time),
@@ -211,6 +215,9 @@ func (a *aggregator) apply(value message, now time.Time) error {
 			return errors.New("telemetry process has overlapping attempts")
 		}
 		attempt := a.attempts[value.AttemptID]
+		if attempt.binding != nil && (value.Binding == nil && !value.Completed || value.Binding != nil && *attempt.binding != *value.Binding) {
+			return errors.New("session binding changed within an attempt")
+		}
 		if attempt.processID != "" && attempt.processID != value.ProcessID {
 			return errors.New("telemetry attempt changed process")
 		}
@@ -235,7 +242,7 @@ func (a *aggregator) apply(value message, now time.Time) error {
 			delete(a.attempts, value.AttemptID)
 			process.attemptID = ""
 		} else {
-			a.attempts[value.AttemptID] = attemptRecord{processID: value.ProcessID, counters: value.Counters}
+			a.attempts[value.AttemptID] = attemptRecord{processID: value.ProcessID, counters: value.Counters, binding: cloneBinding(value.Binding)}
 			process.attemptID = value.AttemptID
 		}
 	}
@@ -340,6 +347,9 @@ func (a *aggregator) pruneCompleted(now time.Time) {
 }
 
 func validateMessage(value message) error {
+	if value.Binding != nil && (value.State != StateActive || !validBinding(value.Binding)) {
+		return errors.New("invalid video session binding")
+	}
 	if value.Version != protocolVersion || !validID(value.ProcessID) || value.Sequence == 0 || !validState(value.State) || !validRetryAfter(value.RetryAfterMilliseconds) {
 		return errors.New("telemetry envelope is invalid")
 	}
