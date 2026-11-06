@@ -199,12 +199,8 @@ jobs:
         shell: bash
         run: make test
   nextjs-rstream-preview:
-    name: Next.js rstream preview${{ matrix.candidate && ' (SDK candidate)' || '' }}
+    name: Next.js rstream preview
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        candidate: [false, true]
     env:
       GITHUB_WEBHOOK_SECRET: ci-webhook-secret
     steps:
@@ -215,14 +211,6 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - name: Prepare original SDK archives
-        if: matrix.candidate
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          NPM_CONFIG_CACHE: ${{ runner.temp }}/example-npm-cache
-        run: |
-          git apply --include='nextjs-rstream-preview/package*.json' .github/sdk-candidate.patch
-          node .github/scripts/sdk-candidate.mjs nextjs-rstream-preview
       - name: Install dependencies
         working-directory: nextjs-rstream-preview
         shell: bash
@@ -322,12 +310,8 @@ jobs:
           trap 'make clean' EXIT
           make test
   webrtc-video-platform:
-    name: WebRTC video platform${{ matrix.candidate && ' (SDK candidate)' || '' }}
+    name: WebRTC video platform
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        candidate: [false, true]
     env:
       POSTGRES_PRISMA_POOL_URL: postgresql://postgres:postgres@localhost:5432/webrtc_video_platform?schema=public
       POSTGRES_PRISMA_DIRECT_URL: postgresql://postgres:postgres@localhost:5432/webrtc_video_platform?schema=public
@@ -350,14 +334,6 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - name: Prepare original SDK archives
-        if: matrix.candidate
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          NPM_CONFIG_CACHE: ${{ runner.temp }}/example-npm-cache
-        run: |
-          git apply --include='webrtc-video/platform/package*.json' .github/sdk-candidate.patch
-          node .github/scripts/sdk-candidate.mjs webrtc-video/platform
       - name: Install dependencies
         working-directory: webrtc-video/platform
         shell: bash
@@ -546,12 +522,8 @@ jobs:
         shell: bash
         run: make build
   private-llm-mesh-web:
-    name: Private LLM mesh web app${{ matrix.candidate && ' (SDK candidate)' || '' }}
+    name: Private LLM mesh web app
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        candidate: [false, true]
     env:
       AUTH_DISABLED: "true"
       NEXTAUTH_SECRET: ci-nextauth-secret
@@ -567,14 +539,6 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - name: Prepare original SDK archives
-        if: matrix.candidate
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          NPM_CONFIG_CACHE: ${{ runner.temp }}/example-npm-cache
-        run: |
-          git apply --include='private-llm-mesh/web/package*.json' .github/sdk-candidate.patch
-          node .github/scripts/sdk-candidate.mjs private-llm-mesh/web
       - name: Install dependencies
         working-directory: private-llm-mesh/web
         shell: bash

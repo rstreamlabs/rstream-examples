@@ -26,26 +26,21 @@ Each example directory contains its own README with the platform-specific setup,
 
 ## Coordinated SDK qualification
 
-The JavaScript examples install published SDKs with `npm ci`. CI runs each
-affected example twice. One job installs the checked-in lockfile from npm in
-an empty cache. The other applies `.github/sdk-candidate.patch` in the runner
-workspace and tests the same example with the reviewed SDK archives.
+The video platform, Next.js preview and mesh web app install published SDKs
+with `npm ci`. CI runs their tests from the checked-in lockfiles with a fresh
+npm cache.
 
-To reproduce the candidate job, start in a disposable checkout and run from
-the repository root:
+To verify a retained SDK release archive against the video platform lockfile,
+run this command from the repository root. Use `nextjs-rstream-preview` or
+`private-llm-mesh/web` to check the other examples.
 
 ```sh
-git apply --include='webrtc-video/platform/package*.json' .github/sdk-candidate.patch
 node .github/scripts/sdk-candidate.mjs webrtc-video/platform /path/to/original-artifact.zip
-cd webrtc-video/platform
-npm ci
 ```
 
-The same procedure applies to `nextjs-rstream-preview` and
-`private-llm-mesh/web`. The helper checks the original GitHub artifact against
-the source and checksum in `.github/sdk-candidate.json`, then verifies each
-package against its lockfile integrity. Once the matching archives are available on npm, apply the patch to the
-example manifests and remove it and its CI application steps in the same change.
+The helper checks the archive against the source and checksum in
+`.github/sdk-candidate.json` and verifies each SDK package against the
+example's lockfile.
 
 ## Examples and qualification packs
 
