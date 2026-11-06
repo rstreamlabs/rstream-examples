@@ -64,7 +64,7 @@
   "overrides": {
     "@hono/node-server": "1.19.13",
     "deepmerge-ts": "8.0.1",
-    "fast-uri": "4.2.1",
+    "fast-uri": "4.2.3",
     "find-my-way": "9.7.0",
     "hono": "4.12.27",
     "postcss": "8.5.23",
