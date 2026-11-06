@@ -82,6 +82,7 @@ try {
   )
   const createCredential = await client.auth.createAuthToken({
     expires_in: 300,
+    permissions: ["tunnels.tunnels.create-delete"],
     resources: {
       tunnels: {
         scopes: {
@@ -194,6 +195,18 @@ try {
     method: "DELETE",
   })
   assert.equal(refreshedDelete.status, 200)
+  for (const credential of [createCredential.token, refreshedCredential]) {
+    const inventory = await fetch(
+      `https://${canonicalEngine(engine)}/api/clients`,
+      {
+        headers: { Authorization: `Bearer ${credential}` },
+        redirect: "error",
+        signal: AbortSignal.timeout(requestTimeoutMilliseconds),
+      },
+    )
+    await inventory.body?.cancel()
+    assert.equal(inventory.status, 403)
+  }
   assert.deepEqual(upstreamRequests.slice(-2), [
     {
       authorization: "Bearer application-token",
@@ -218,6 +231,7 @@ try {
 async function connectCredential(client, tunnel, ttlSeconds) {
   const credential = await client.auth.createAuthToken({
     expires_in: ttlSeconds,
+    permissions: ["tunnels.streams.create-delete"],
     resources: {
       tunnels: {
         scopes: {

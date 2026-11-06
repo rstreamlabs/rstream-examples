@@ -249,9 +249,9 @@ export function toView(device: Device, online = false): DeviceView {
   }
 }
 
-export async function engine() {
+export async function engine(signal?: AbortSignal) {
   const env = requireRstreamEnv()
-  const rstream = await getRstreamClient()
+  const rstream = await getRstreamClient(signal)
   // Reuse the SDK engine resolver so device agents receive the project engine URL.
   return env.RSTREAM_ENGINE ?? rstream.getEngine()
 }
@@ -262,6 +262,7 @@ export async function createTunnelToken(device: SourceDevice) {
   const rstream = await getRstreamClient()
   const token = await rstream.auth.createAuthToken({
     expires_in: env.DEVICE_TOKEN_TTL_SECONDS,
+    permissions: ["tunnels.tunnels.create-delete"],
     resources: {
       tunnels: {
         scopes: {
@@ -323,6 +324,7 @@ async function createDeviceConnectToken(
   const issuedAt = new Date()
   const token = await rstream.auth.createAuthToken({
     expires_in: env.VIEWER_TOKEN_TTL_SECONDS,
+    permissions: ["tunnels.streams.create-delete"],
     resources: {
       tunnels: {
         scopes: {
@@ -364,6 +366,7 @@ async function createMediaMTXConnectToken(
   const issuedAt = new Date()
   const token = await rstream.auth.createAuthToken({
     expires_in: env.VIEWER_TOKEN_TTL_SECONDS,
+    permissions: ["tunnels.streams.create-delete"],
     resources: {
       tunnels: {
         scopes: {
@@ -393,9 +396,12 @@ async function createMediaMTXConnectToken(
   } satisfies ExpiringConnectToken
 }
 
-export async function createWatchToken(access: DeviceAccess) {
+export async function createWatchToken(
+  access: DeviceAccess,
+  signal?: AbortSignal,
+) {
   const env = requireRstreamEnv()
-  const rstream = await getRstreamClient()
+  const rstream = await getRstreamClient(signal)
   // Watch tokens are short-lived because the browser sends them as query tokens.
   const token = await rstream.auth.createAuthToken({
     expires_in: env.WATCH_TOKEN_TTL_SECONDS,
@@ -403,6 +409,7 @@ export async function createWatchToken(access: DeviceAccess) {
     resources: {
       tunnels: {
         scopes: {
+          clients: { list: false },
           tunnels: {
             list: {
               filters: {

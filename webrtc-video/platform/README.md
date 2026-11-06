@@ -62,7 +62,7 @@ MediaMTX JWT for distributed viewers. The player uses the same response shape
 for both paths and keeps the two trust boundaries separate during credential
 refresh.
 
-The dashboard uses `@rstreamlabs/react` to watch tunnel state in real time. With managed inventory, registered devices are stored in PostgreSQL; online/offline state is read from rstream tunnel state.
+With managed inventory, the dashboard stores registered devices in PostgreSQL and reads their online status from rstream. It uses `@rstreamlabs/react` for live updates when the Engine enforces `scopes.clients.list: false`. The watch token can list only the owner's matching tunnels. On an older Engine the browser polls the authenticated device API every five seconds. Producer tokens grant tunnel creation and viewer tokens grant stream access to the selected path.
 
 The app also exposes `POST /api/rstream/webhook`. rstream signs lifecycle events for this endpoint, the app verifies them with the JavaScript SDK, and tunnel lifecycle events update the device presence timestamps from the labels attached to the short-lived producer token. `tunnel.created` records when the device came online, and `tunnel.deleted` records when it was last seen before going offline.
 

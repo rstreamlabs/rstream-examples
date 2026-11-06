@@ -59,10 +59,14 @@ export function DeviceDashboard({
   )
   const [devices, setDevices] = useState(initialDevices)
   const [manualActiveId, setManualActiveId] = useState<string | null>(null)
-  const [watch, setWatch] = useState<WatchPayload | null>(null)
+  const [watch, setWatch] = useState<WatchPayload | null>()
+  const pollInventory = discovered || watch === null
   const [error, setError] = useState<string | null>(initialInventoryError)
   const apiUrl = useAppOrigin()
-  const watchOptions = useMemo(() => rstreamWatchOptions(watch), [watch])
+  const watchOptions = useMemo(
+    () => rstreamWatchOptions(watch, () => setWatch(null)),
+    [watch],
+  )
   const rstream = useRstream(watchOptions)
   const liveOnlineIds = useMemo(
     () => onlineDeviceIds(rstream.tunnels),
@@ -74,10 +78,10 @@ export function DeviceDashboard({
       ...device,
       online:
         !inventoryUnavailable &&
-        (discovered ? device.online : onlineIds.has(device.id)),
+        (discovered || !watch ? device.online : onlineIds.has(device.id)),
     }))
     return sortDevices(withStatus)
-  }, [devices, onlineIds, discovered, inventoryUnavailable])
+  }, [devices, onlineIds, discovered, watch, inventoryUnavailable])
   const manualActive = manualActiveId
     ? visibleDevices.find((device) => device.id === manualActiveId)
     : null
@@ -92,14 +96,17 @@ export function DeviceDashboard({
         setError(null)
       })
       .catch((err) => {
-        if (!stopped) setError(errorMessage(err))
+        if (!stopped) {
+          setWatch(null)
+          setError(errorMessage(err))
+        }
       })
     return () => {
       stopped = true
     }
   }, [discovered])
   useEffect(() => {
-    if (!discovered) return
+    if (!pollInventory) return
     const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout> | undefined
     const refresh = async () => {
@@ -133,7 +140,7 @@ export function DeviceDashboard({
       controller.abort()
       clearTimeout(timer)
     }
-  }, [discovered])
+  }, [pollInventory])
   async function removeDevice(deviceId: string) {
     try {
       const response = await fetch(`/api/devices/${deviceId}`, {
@@ -598,11 +605,17 @@ function useAppOrigin() {
 }
 
 function rstreamWatchOptions(
-  watch: WatchPayload | null,
+  watch: WatchPayload | null | undefined,
+  onUnavailable: () => void,
 ): UseRstreamOptions | undefined {
   return watch
     ? {
-        auth: async () => (await fetchWatch()).auth.token,
+        auth: async () => {
+          const refreshed = await fetchWatch()
+          if (refreshed) return refreshed.auth.token
+          onUnavailable()
+          throw new Error("Live updates require server-side inventory.")
+        },
         engine: watch.engine,
         transport: "websocket",
       }
@@ -744,6 +757,7 @@ function shellQuote(value: string) {
 
 async function fetchWatch() {
   const response = await fetch("/api/rstream/watch")
+  if (response.status === 204) return null
   const body = await responseJSON(response)
   if (!response.ok) {
     throw new Error(apiErrorSchema.parse(body).error)

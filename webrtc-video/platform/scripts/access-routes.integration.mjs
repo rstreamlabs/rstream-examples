@@ -216,6 +216,10 @@ try {
   )
   const inventoryPath = join(runtime, "inventory.json")
   const callsPath = join(runtime, "upstream-calls.log")
+  const clientListStatusPath = join(runtime, "client-list-status")
+  const setClientListStatus = (status) =>
+    writeFileSync(clientListStatusPath, String(status))
+  setClientListStatus(403)
   const resetCalls = () => writeFileSync(callsPath, "")
   const upstreamCalls = () =>
     readFileSync(callsPath, "utf8").trim().split("\n").filter(Boolean).sort()
@@ -236,6 +240,13 @@ try {
   return Response.json({state:actor==='outsider'?'pending':'active',organization:{id:42,login:'acme'},user:{id:actor==='alice'?7:actor==='bob'?8:9}});
  }
  if(url.hostname==='engine.qualification.invalid'){
+  if(url.pathname==='/api/clients'){
+   const token=request.headers.get('authorization')?.replace(/^Bearer /,'');
+   const claims=JSON.parse(Buffer.from(token.split('.')[1],'base64url').toString());
+   if(claims.resources?.tunnels?.scopes?.clients?.list!==false ||
+      JSON.stringify(claims.permissions)!=='["tunnels.resources.read-only"]')return Response.json([{id:'unrelated-client'}]);
+   return new Response(null,{status:Number(readFileSync(${JSON.stringify(clientListStatusPath)},'utf8'))});
+  }
   const filters=JSON.parse(url.searchParams.get('params')??'{}').filters;
   const distributor=filters?.name==='qualification-media';
   count(distributor?'distribution':'inventory');
@@ -380,7 +391,70 @@ try {
   assert.equal(personalWatch.status, 200)
   const decode = (token) =>
     JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString())
-  const personalClaims = JSON.stringify(decode(personalWatch.body.auth.token))
+  const watchClaims = decode(personalWatch.body.auth.token)
+  assert.deepEqual(watchClaims.permissions, ["tunnels.resources.read-only"])
+  assert.deepEqual(watchClaims.resources.tunnels.scopes.clients, {
+    list: false,
+  })
+  for (const status of [200, 401, 500]) {
+    setClientListStatus(status)
+    const fallback = await request(origin, "alice", "/api/rstream/watch")
+    assert.equal(fallback.status, 204)
+    assert.equal(fallback.body, null)
+    assert.deepEqual(
+      (await request(origin, "alice", "/api/devices")).body.devices.map(
+        (d) => d.id,
+      ),
+      [personal.body.device.id],
+    )
+    assert.deepEqual(
+      (await request(origin, "bob", "/api/devices")).body.devices,
+      [],
+    )
+  }
+  if (process.env.RSTREAM_DISCOVERY_BROWSER) {
+    setClientListStatus(401)
+    const { chromium } = await import("playwright-core")
+    const browser = await chromium.launch({
+      executablePath: process.env.RSTREAM_DISCOVERY_BROWSER,
+      headless: true,
+    })
+    try {
+      const context = await browser.newContext()
+      await context.addCookies([
+        { name: "next-auth.session-token", value: sessions.alice, url: origin },
+      ])
+      const page = await context.newPage()
+      const watchResponse = page.waitForResponse(
+        (res) => new URL(res.url()).pathname === "/api/rstream/watch",
+      )
+      await page.goto(origin)
+      assert.equal((await watchResponse).status(), 204)
+      await page.getByText("Offline", { exact: true }).first().waitFor()
+      setInventory([
+        {
+          id: "personal-tunnel",
+          status: "online",
+          protocol: "http",
+          publish: true,
+          labels: {
+            app: "webrtc-video-platform",
+            user: "alice",
+            device: personal.body.device.id,
+          },
+        },
+      ])
+      await page
+        .getByText("Online", { exact: true })
+        .first()
+        .waitFor({ timeout: 15000 })
+    } finally {
+      await browser.close()
+      setInventory([])
+    }
+  }
+  setClientListStatus(403)
+  const personalClaims = JSON.stringify(watchClaims)
   assert.match(personalClaims, /"user":"alice"/)
   assert.doesNotMatch(personalClaims, /"organization"/)
   origin = await start("organization")
@@ -424,6 +498,9 @@ try {
   const producerPayload = await provisioning.json()
   assert.equal(producerPayload.labels.organization, "42")
   assert.equal(producerPayload.labels.user, undefined)
+  assert.deepEqual(decode(producerPayload.token).permissions, [
+    "tunnels.tunnels.create-delete",
+  ])
   const producerClaims = JSON.stringify(decode(producerPayload.token))
   assert.match(producerClaims, /"organization":"42"/)
   assert.doesNotMatch(producerClaims, /"user"/)
@@ -816,6 +893,10 @@ try {
   assert.equal(sourceURL.pathname, "/whep")
   const sourceClaims = JSON.stringify(
     decode(sourceURL.searchParams.get("rstream.token")),
+  )
+  assert.deepEqual(
+    decode(sourceURL.searchParams.get("rstream.token")).permissions,
+    ["tunnels.streams.create-delete"],
   )
   assert.match(sourceClaims, /"inventory":"discovered"/)
   assert.match(sourceClaims, /discovery-tunnel-1/)
