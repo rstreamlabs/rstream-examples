@@ -26,24 +26,26 @@ Each example directory contains its own README with the platform-specific setup,
 
 ## Coordinated SDK qualification
 
-The JavaScript examples pin exact SDK versions and npm archive integrity. During
-coordinated releases, CI can install original, reviewed SDK candidates before
-those versions are published. `.github/sdk-candidate.json` records the upstream
-commit, workflow, immutable artifact and checksum. The preparation helper uses
-published archives when available, or verifies the original GitHub artifact and
-fills the npm cache without changing the lockfile.
+The JavaScript examples install published SDKs with `npm ci`. CI runs each
+affected example twice. One job installs the checked-in lockfile from npm in
+an empty cache. The other applies `.github/sdk-candidate.patch` in the runner
+workspace and tests the same example with the reviewed SDK archives.
 
-To test locally with a retained candidate archive, run from this repository root:
+To reproduce the candidate job, start in a disposable checkout and run from
+the repository root:
 
 ```sh
+git apply --include='webrtc-video/platform/package*.json' .github/sdk-candidate.patch
 node .github/scripts/sdk-candidate.mjs webrtc-video/platform /path/to/original-artifact.zip
 cd webrtc-video/platform
 npm ci
 ```
 
-The same helper supports `nextjs-rstream-preview` and `private-llm-mesh/web`.
-Never rebuild an unpublished candidate to satisfy a lockfile. Once the exact
-archives are published, ordinary `npm ci` needs no candidate preparation.
+The same procedure applies to `nextjs-rstream-preview` and
+`private-llm-mesh/web`. The helper checks the original GitHub artifact against
+the source and checksum in `.github/sdk-candidate.json`, then verifies each
+package against its lockfile integrity. Once the matching archives are available on npm, apply the patch to the
+example manifests and remove it and its CI application steps in the same change.
 
 ## Examples and qualification packs
 
