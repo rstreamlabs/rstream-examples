@@ -23,7 +23,7 @@ webrtcIPsFromInterfaces: true
 webrtcIPsFromInterfacesList: []
 webrtcAdditionalHosts: []
 webrtcICEServers2: []
-webrtcTrackGatherTimeout: 250ms
+webrtcTrackGatherTimeout: 2s
 
 pathDefaults:
   source: publisher

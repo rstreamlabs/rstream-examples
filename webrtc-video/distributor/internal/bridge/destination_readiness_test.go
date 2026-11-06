@@ -13,6 +13,7 @@ import (
 
 	"github.com/pion/webrtc/v4"
 	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/config"
+	"github.com/rstreamlabs/rstream-examples/webrtc-video/distributor/internal/media"
 )
 
 func TestOpenDestinationDoesNotPublishBeforeTransportConnects(t *testing.T) {
@@ -77,7 +78,7 @@ func TestOpenDestinationDoesNotPublishBeforeTransportConnects(t *testing.T) {
 	defer cancel()
 	finished := make(chan error, 1)
 	go func() {
-		peer, _, _, session, openErr := openDestination(ctx, config.Config{Path: "camera", MediaMTXURL: endpoint}, "", server.Client())
+		peer, _, _, session, openErr := openDestination(ctx, config.Config{Path: "camera", MediaMTXURL: endpoint}, "", server.Client(), media.H264Capability())
 		if session != nil {
 			_ = closeSession(session)
 		} else if peer != nil {

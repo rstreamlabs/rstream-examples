@@ -8,10 +8,11 @@ import (
 
 func TestSourceStatsAccountForConcurrentEncodingAndBackpressure(t *testing.T) {
 	stats := &sourceStats{}
-	subscriber := make(chan AccessUnit)
+	subscriber := NewLiveQueue(1)
+	defer subscriber.Close()
 	source := &GStreamerSource{
 		stats: stats,
-		subs:  map[chan AccessUnit]struct{}{subscriber: {}},
+		subs:  map[*LiveQueue]struct{}{subscriber: {}},
 	}
 	const publishers = 16
 	const framesPerPublisher = 250
@@ -48,10 +49,10 @@ func TestSourceStatsAccountForConcurrentEncodingAndBackpressure(t *testing.T) {
 	if snapshot.LastEncodedFrameUnixNano <= 0 {
 		t.Fatal("last encoded frame timestamp was not recorded")
 	}
-	if snapshot.DeliveryDroppedFrames != wantFrames {
+	if snapshot.DeliveryDroppedFrames+uint64(len(subscriber.units)) != wantFrames {
 		t.Fatalf("dropped delivery frames = %d, want %d", snapshot.DeliveryDroppedFrames, wantFrames)
 	}
-	if snapshot.DeliveryDroppedBytes != wantFrames*4 {
+	if snapshot.DeliveryDroppedBytes+uint64(len(subscriber.units))*4 != wantFrames*4 {
 		t.Fatalf("dropped delivery bytes = %d, want %d", snapshot.DeliveryDroppedBytes, wantFrames*4)
 	}
 }
@@ -64,7 +65,7 @@ func TestSourceInstanceGaugeIsReleasedExactlyOnce(t *testing.T) {
 	source := &GStreamerSource{
 		stats:   stats,
 		busDone: busDone,
-		subs:    make(map[chan AccessUnit]struct{}),
+		subs:    make(map[*LiveQueue]struct{}),
 	}
 	if err := source.Close(); err != nil {
 		t.Fatalf("first close: %v", err)
@@ -80,7 +81,7 @@ func TestSourceInstanceGaugeIsReleasedExactlyOnce(t *testing.T) {
 func TestSourceMetricsDoNotAllocateOnTheFramePath(t *testing.T) {
 	source := &GStreamerSource{
 		stats: &sourceStats{},
-		subs:  make(map[chan AccessUnit]struct{}),
+		subs:  make(map[*LiveQueue]struct{}),
 	}
 	unit := AccessUnit{
 		Data:     make([]byte, 4096),

@@ -22,8 +22,9 @@ type bandwidthEstimator interface {
 }
 
 type peerConnectionFactory struct {
-	cfg   config.Config
-	codec webrtc.RTPCodecCapability
+	cfg      config.Config
+	codec    webrtc.RTPCodecCapability
+	settings *webrtc.SettingEngine
 }
 
 const transportCCHeaderExtensionURI = "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
@@ -156,10 +157,14 @@ func (f *peerConnectionFactory) NewPeerConnection(
 			return nil, nil, fmt.Errorf("failed to enable TWCC feedback: %w", err)
 		}
 	}
-	api := webrtc.NewAPI(
+	options := []func(*webrtc.API){
 		webrtc.WithMediaEngine(mediaEngine),
 		webrtc.WithInterceptorRegistry(interceptors),
-	)
+	}
+	if f.settings != nil {
+		options = append(options, webrtc.WithSettingEngine(*f.settings))
+	}
+	api := webrtc.NewAPI(options...)
 	peerConnection, err := api.NewPeerConnection(configuration)
 	if err != nil {
 		return nil, nil, err

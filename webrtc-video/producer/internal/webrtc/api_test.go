@@ -1,6 +1,7 @@
 package webrtc
 
 import (
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -178,6 +179,8 @@ func TestFlexFECRepairPacketsArePacedOutsideTWCCAccounting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create peer connection factory: %v", err)
 	}
+	settings := localPeerSettings()
+	factory.settings = &settings
 	producer, estimator, err := factory.NewPeerConnection(5_000_000, webrtc.Configuration{})
 	if err != nil {
 		t.Fatalf("create producer peer connection: %v", err)
@@ -230,6 +233,7 @@ func TestFlexFECRepairPacketsArePacedOutsideTWCCAccounting(t *testing.T) {
 	viewerAPI := webrtc.NewAPI(
 		webrtc.WithMediaEngine(viewerMediaEngine),
 		webrtc.WithInterceptorRegistry(viewerInterceptors),
+		webrtc.WithSettingEngine(localPeerSettings()),
 	)
 	viewer, err := viewerAPI.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
@@ -434,4 +438,12 @@ func TestAssociatedEstimatorSupersedesOutOfOrderBitrateCallback(t *testing.T) {
 	if stale := estimator.staleBitrateCallbacks.Load(); stale != 1 {
 		t.Fatalf("stale callback count = %d, want 1", stale)
 	}
+}
+
+// Local peer tests must not depend on LAN, VPN or virtual network interfaces.
+func localPeerSettings() webrtc.SettingEngine {
+	settings := webrtc.SettingEngine{}
+	settings.SetIncludeLoopbackCandidate(true)
+	settings.SetIPFilter(func(ip net.IP) bool { return ip.IsLoopback() })
+	return settings
 }

@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 distributor_directory="$(cd "${script_directory}/../.." && pwd -P)"
-expected_track_gather_timeout=250ms
+expected_track_gather_timeout=2s
 
 configured_track_gather_timeout="$({
   awk '$1 == "webrtcTrackGatherTimeout:" {print $2}' \
