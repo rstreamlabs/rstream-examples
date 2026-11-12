@@ -1,6 +1,6 @@
 module github.com/rstreamlabs/rstream-examples/webrtc-video/producer
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/go-gst/go-glib v1.4.0
@@ -61,4 +61,4 @@ require (
 
 replace github.com/pion/interceptor => github.com/rstreamlabs/pion-interceptor v0.1.48-0.20261004062019-94d47092806b
 
-replace github.com/pion/webrtc/v4 => github.com/rstreamlabs/pion-webrtc/v4 v4.2.19-0.20261112224127-f980978ad9e2
+replace github.com/pion/webrtc/v4 => github.com/rstreamlabs/pion-webrtc/v4 v4.2.19-0.20261112225417-baefa1001540
