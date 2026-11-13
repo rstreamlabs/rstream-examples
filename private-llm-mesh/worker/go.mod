@@ -2,7 +2,7 @@ module github.com/rstreamlabs/rstream-examples/private-llm-mesh/worker
 
 go 1.27.4
 
-require github.com/rstreamlabs/rstream-go v1.37.0
+require github.com/rstreamlabs/rstream-go v1.37.1-0.20261113154359-6edb3c31987b
 
 require (
 	github.com/dunglas/httpsfv v1.1.1 // indirect
@@ -20,10 +20,10 @@ require (
 	github.com/quic-go/webtransport-go v0.11.1 // indirect
 	github.com/thales-e-security/pool v0.0.2 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
-	golang.org/x/crypto v0.58.0 // indirect
+	golang.org/x/crypto v0.59.0 // indirect
 	golang.org/x/net v0.62.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
+	golang.org/x/sys v0.50.0 // indirect
+	golang.org/x/text v0.44.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
