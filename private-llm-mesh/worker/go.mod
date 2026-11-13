@@ -2,7 +2,7 @@ module github.com/rstreamlabs/rstream-examples/private-llm-mesh/worker
 
 go 1.27.4
 
-require github.com/rstreamlabs/rstream-go v1.37.1-0.20261113181455-86f80e042235
+require github.com/rstreamlabs/rstream-go v1.37.1-0.20261113210448-d06ae1324127
 
 require (
 	github.com/dunglas/httpsfv v1.1.1 // indirect
@@ -13,7 +13,7 @@ require (
 	github.com/miekg/pkcs11 v1.1.2 // indirect
 	github.com/pion/dtls/v3 v3.1.15 // indirect
 	github.com/pion/logging v0.2.4 // indirect
-	github.com/pion/transport/v5 v5.1.4 // indirect
+	github.com/pion/transport/v5 v5.1.5 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.60.0 // indirect
