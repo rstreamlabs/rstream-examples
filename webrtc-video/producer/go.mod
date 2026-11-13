@@ -15,7 +15,7 @@ require (
 	github.com/pion/webrtc/v4 v4.2.26
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/client_model v0.6.3
-	github.com/rstreamlabs/rstream-go v1.37.1-0.20261113134842-6515d78d7976
+	github.com/rstreamlabs/rstream-go v1.37.1-0.20261113181455-86f80e042235
 	gopkg.in/yaml.v3 v3.0.1
 )
 
