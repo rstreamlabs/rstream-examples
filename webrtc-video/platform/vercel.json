@@ -2,7 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "git": {
     "deploymentEnabled": {
-      "codex/video-organization-quality": false
+      "codex/video-organization-quality": false,
+      "codex/lot2-quic-064": false
     }
   },
   "crons": [

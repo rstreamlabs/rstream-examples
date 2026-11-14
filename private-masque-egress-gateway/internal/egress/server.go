@@ -199,7 +199,7 @@ func (s *Server) handleConnectIP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	req, err := connectip.ParseRequest(r, template)
+	req, err := connectip.ParseProxyRequest(r, template)
 	if err != nil {
 		writeParseError(w, err)
 		s.Metrics.Inc("rstream_private_masque_requests_total", map[string]string{"protocol": "connect_ip", "outcome": "parse_error"})
@@ -244,7 +244,7 @@ func writeParseError(w http.ResponseWriter, err error) {
 		http.Error(w, udpErr.Error(), udpErr.HTTPStatus)
 		return
 	}
-	var ipErr *connectip.RequestParseError
+	var ipErr *connectip.ProxyRequestParseError
 	if errors.As(err, &ipErr) {
 		http.Error(w, ipErr.Error(), ipErr.HTTPStatus)
 		return
@@ -374,6 +374,8 @@ type DiagnosticIPBackend struct {
 }
 
 func (b DiagnosticIPBackend) ServeIP(ctx context.Context, conn *connectip.Conn) error {
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
 	clientPrefix := b.ClientPrefix
 	if !clientPrefix.IsValid() {
 		clientPrefix = netip.MustParsePrefix("10.77.0.2/32")
@@ -382,10 +384,10 @@ func (b DiagnosticIPBackend) ServeIP(ctx context.Context, conn *connectip.Conn) 
 	if !serverIP.IsValid() {
 		serverIP = netip.MustParseAddr("10.77.0.1")
 	}
-	if err := conn.AssignAddresses(ctx, []netip.Prefix{clientPrefix}); err != nil {
+	if err := conn.AssignAddresses([]netip.Prefix{clientPrefix}); err != nil {
 		return fmt.Errorf("assign CONNECT-IP address: %w", err)
 	}
-	if err := conn.AdvertiseRoute(ctx, []connectip.IPRoute{{StartIP: serverIP, EndIP: serverIP, IPProtocol: 1}}); err != nil {
+	if err := conn.AdvertiseRoute([]connectip.IPRoute{{StartIP: serverIP, EndIP: serverIP, IPProtocol: 1}}); err != nil {
 		return fmt.Errorf("advertise CONNECT-IP diagnostic route: %w", err)
 	}
 	buf := make([]byte, 1500)

@@ -1,7 +1,7 @@
 # Adopt the ICE concurrency fix
 
 The producer and distributor can update STUN/TURN configuration while Pion
-is still gathering connection candidates. Official Pion ICE v4.4.2 reads the
+is still gathering connection candidates. Official Pion ICE v4.4.9 reads the
 URL list concurrently with those updates. The samples apply a small verified
 patch at build time, pending [the upstream fix](https://github.com/pion/ice/pull/1049).
 There is no public API change or Engine deployment for this fix.
@@ -51,7 +51,7 @@ inherit replacement directives from dependencies. A direct `go build` that
 omits the generated module file still uses unpatched ICE. No change to the
 application's session API or additional timeout is required.
 
-The tool accepts exactly official ICE v4.4.2 and validates archive, patch and
+The tool accepts exactly official ICE v4.4.9 and validates archive, patch and
 source hashes. It creates a private local copy, leaves the shared module
 cache and source `go.mod`/`go.sum` intact, and records
 `out/ice-patch/provenance.json`. It fails on unsupported versions or changed

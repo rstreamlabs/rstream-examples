@@ -1,13 +1,13 @@
 #!/usr/bin/env sh
 set -eu
 
-GST_VERSION="${GST_VERSION:-1.28.7}"
+GST_VERSION="${GST_VERSION:-1.28.9}"
 GST_ROOT="${GST_ROOT:-/opt/gstreamer}"
 GST_FULL_LIBRARIES="${GST_FULL_LIBRARIES:-gstreamer-app-1.0,gstreamer-video-1.0}"
 GST_FULL_ELEMENTS="${GST_FULL_ELEMENTS:-coreelements:capsfilter;videoconvertscale:videoconvert;videotestsrc:videotestsrc;videoparsersbad:h264parse;videoparsersbad:av1parse;x264:x264enc;aom:av1enc}"
 GST_FULL_ARCHIVE="${GST_ROOT}/lib/libgstreamer-full-1.0.a"
 X264_GIT_REF="${X264_GIT_REF:-b35605ace3ddf7c1a5d67a2eb553f034aef41d55}"
-AOM_VERSION="${AOM_VERSION:-3.15.1}"
+AOM_VERSION="${AOM_VERSION:-3.15.3}"
 PKG_CONFIG_PATH_PREFIX="${GST_ROOT}/lib/pkgconfig:${GST_ROOT}/lib/gstreamer-1.0/pkgconfig"
 
 fail() {
@@ -20,11 +20,11 @@ for version in "${GST_VERSION}" "${AOM_VERSION}"; do
   printf '%s\n' "${version}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || fail "invalid source version: ${version}"
 done
 case "${GST_VERSION}" in
-  1.28.7) GST_SHA256="${GST_SHA256:-58dd845a6473355edd71f67227219ec04e039cee5c000265d3fbbd2e7920a3a8}" ;;
+  1.28.9) GST_SHA256="${GST_SHA256:-0fdecabb02f170b78251f7b9f1b5092073f52e70ba06c92df53fe36745041db6}" ;;
   *) : "${GST_SHA256:?provide GST_SHA256 when overriding GST_VERSION}" ;;
 esac
 case "${AOM_VERSION}" in
-  3.15.1) AOM_SHA256="${AOM_SHA256:-8ca0c52746174603500f0adb6f2a215d69c9ca2aab2acb3caa06fb791d8d01bf}" ;;
+  3.15.3) AOM_SHA256="${AOM_SHA256:-12c01dc731ed7b5a999e28120b45bf58a002ba3435a4ba2cfbc1e084a27c9c04}" ;;
   *) : "${AOM_SHA256:?provide AOM_SHA256 when overriding AOM_VERSION}" ;;
 esac
 for checksum in "${GST_SHA256}" "${AOM_SHA256}"; do
