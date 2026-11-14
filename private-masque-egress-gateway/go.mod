@@ -8,16 +8,17 @@ require (
 	github.com/quic-go/masque-go v0.6.0
 	github.com/quic-go/quic-go v0.64.1
 	github.com/quic-go/webtransport-go v0.13.0
-	github.com/rstreamlabs/rstream-go v1.37.1-0.20261114105447-f5dd9dbfcf71
+	github.com/rstreamlabs/rstream-go v1.37.1-0.20261114141308-06bc287010aa
 	github.com/yosida95/uritemplate/v3 v3.0.2
 	golang.org/x/net v0.62.0
 )
 
 require (
-	github.com/dunglas/httpsfv v1.1.1 // indirect
+	github.com/dunglas/httpsfv v1.1.2 // indirect
 	github.com/eclipse-keypont/crypto11 v1.6.8 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/johnstarich/go/dns v0.2.5 // indirect
+	github.com/kr/pretty v0.3.1 // indirect
 	github.com/miekg/dns v1.1.73 // indirect
 	github.com/miekg/pkcs11 v1.1.2 // indirect
 	github.com/pion/logging v0.2.4 // indirect
@@ -29,5 +30,6 @@ require (
 	golang.org/x/sys v0.50.0 // indirect
 	golang.org/x/text v0.44.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

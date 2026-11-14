@@ -73,9 +73,10 @@ overlay simply disappears.
 
 ## Install
 
-Both roles need Python 3.10+. Each role owns its own dependencies and Makefile:
-`worker/` installs the YOLO inference stack, while `device/` installs the
-viewer, capture, registry, and tracking stack.
+Both roles need Python 3.11+ for the corrected Pillow image decoder; the worker
+also requires the corrected `filelock`. Each role owns its own dependencies
+and Makefile: `worker/` installs the YOLO inference stack, while `device/`
+installs the viewer, capture, registry, and tracking stack.
 
 ```bash
 make build

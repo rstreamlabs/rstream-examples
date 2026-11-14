@@ -31,7 +31,7 @@ IDs, display names and optional offline inventory history.
 | Profile               | Device uplinks | Producer leg                               | Viewer leg                     | Use it when                                                         |
 | --------------------- | -------------: | ------------------------------------------ | ------------------------------ | ------------------------------------------------------------------- |
 | Direct                | one per viewer | TWCC, NACK/RTX, FlexFEC, bounded pacer     | same end-to-end session        | one viewer needs the shortest path and end-to-end adaptation        |
-| MediaMTX native pull  |     one shared | NACK/RTX and TWCC with fixed source pacing | MediaMTX NACK and TWCC         | a static source accepts the reduced MediaMTX 1.21.2 offer           |
+| MediaMTX native pull  |     one shared | NACK/RTX and TWCC with fixed source pacing | MediaMTX NACK and TWCC         | a static source accepts the reduced MediaMTX 1.21.3 offer           |
 | MediaMTX with adapter |     one shared | TWCC, NACK/RTX, FlexFEC, bounded pacer     | independent MediaMTX NACK/TWCC | a product needs dynamic sources, complete source repair and fan-out |
 
 The native profile is intentionally retained as an interoperability option. It
@@ -39,11 +39,11 @@ removes the adapter when its smaller feature set and static source contract are
 enough. The producer must opt into the bounded MediaMTX-native offer profile;
 strict profiles do not relax their WHEP validation. Draft 04 requires
 `rtcp-mux-only` and one common `msid` on the active media sections; MediaMTX
-1.21.2 emits neither in its source offer and its player does not complete a `406`
+1.21.3 emits neither in its source offer and its player does not complete a `406`
 counter-offer exchange. The opt-in accepts only those two known differences,
 continues to require BUNDLE and RTCP multiplexing, and keeps fixed source
 encoding/pacing for that session. RTX is negotiated when offered (including
-MediaMTX 1.21.2); FlexFEC is absent. The adapter profile keeps the
+MediaMTX 1.21.3); FlexFEC is absent. The adapter profile keeps the
 strict producer contract and is the reference product path.
 
 MediaMTX exposure is independent of these profiles. A public deployment gives
@@ -142,9 +142,9 @@ markerless camera profiles are not supported by this distribution path.
 Transport integrity remains distinct from codec validity and downstream loss.
 PLI and FIR received from MediaMTX cross back to
 the source; viewer NACK and TWCC remain local to the MediaMTX hop. This is not
-end-to-end forwarding of every viewer's key-frame request: MediaMTX 1.21.2
-[consumes reader RTCP without forwarding PLI upstream](https://github.com/bluenviron/mediamtx/blob/v1.21.2/internal/protocols/webrtc/outbound_track.go)
-and [generates its own periodic source PLI every two seconds](https://github.com/bluenviron/mediamtx/blob/v1.21.2/internal/protocols/webrtc/inbound_track.go).
+end-to-end forwarding of every viewer's key-frame request: MediaMTX 1.21.3
+[consumes reader RTCP without forwarding PLI upstream](https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/outbound_track.go)
+and [generates its own periodic source PLI every two seconds](https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/inbound_track.go).
 The combined image therefore uses MediaMTX's standard `runOnRead` hook to
 request a source key frame when a reader's media transport connects. A short
 local command sends a fixed notification to that path's adapter through a
@@ -219,7 +219,7 @@ still needs a measured aggregate admission boundary.
 ## Build the combined image
 
 The official MediaMTX image is distroless and cannot execute `runOnDemand`
-commands. The supplied image builds MediaMTX 1.21.2 from checksum-pinned sources
+commands. The supplied image builds MediaMTX 1.21.3 from checksum-pinned sources
 with the bounded H.264 patch described below, then copies it and the Go adapter
 into an unprivileged Alpine runtime with a shell and CA roots. Both processes
 still run in one container.
@@ -243,7 +243,7 @@ mediacommon and gortsplib module checksums and source revisions. The builder
 verifies module archive contents, applies one production constant change in a
 fresh temporary directory, and refuses a changed patch context. It does not
 modify the Go module cache. The generated binary identifies itself as
-`v1.21.2-rstream.1`; its adjacent `.build.json` records the source checksums,
+`v1.21.3-rstream.1`; its adjacent `.build.json` records the source checksums,
 budgets and binary SHA-256. The container retains this manifest at
 `/usr/local/share/mediamtx.build.json` and the three upstream license notices at
 `/usr/local/share/licenses/mediamtx/LICENSES`.
@@ -366,7 +366,7 @@ path, or other query parameters. Static deployments use the same contract:
 place the rstream token in `RSTREAM_SOURCE_URL` and use
 `RSTREAM_SOURCE_AUTHORIZATION` only when the producer itself requires a bearer.
 
-MediaMTX 1.21.2 validates the JWT when it creates a WHEP or WHIP session. In this
+MediaMTX 1.21.3 validates the JWT when it creates a WHEP or WHIP session. In this
 implementation, the returned resource URL then acts as an opaque capability:
 PATCH and DELETE are bound to its random session identifier and do not
 revalidate a later JWT.
@@ -450,7 +450,7 @@ the on-demand source lifecycle. Codec changes and interruptions can split the
 available time spans.
 
 **Retention is not a byte quota.** MediaMTX cleans periodically (half the
-configured retention interval in version 1.21.2), and segments can exceed their
+configured retention interval in version 1.21.3), and segments can exceed their
 minimum duration while waiting for a key frame. Use a dedicated filesystem with
 an enforced quota or a size-limited temporary volume. Size it for the aggregate
 bitrate of simultaneously active devices, cleanup delay and key-frame overhead.
@@ -460,7 +460,7 @@ bitrate/device count. For sustained server use, prefer an appropriately sized
 quota-limited disk volume and monitor recording errors/free space. Keep media
 storage separate from logs and the system filesystem.
 
-**Full storage temporarily disables history.** MediaMTX 1.21.2 can leave incomplete
+**Full storage temporarily disables history.** MediaMTX 1.21.3 can leave incomplete
 fMP4 segments after `ENOSPC`; its playback index rejects the whole requested
 interval if any segment cannot be parsed. Freeing space lets recording resume,
 but history can remain unavailable until those files leave the requested window
@@ -498,7 +498,7 @@ GOFLAGS="-modfile=$PWD/out/ice-patch/go.mod" go test -race -tags=integration ./i
 make qualify-fanout OUT=/tmp/rstream-video-distributor
 ```
 
-The integration suite starts the real MediaMTX 1.21.2 binary. It proves that two
+The integration suite starts the real MediaMTX 1.21.3 binary. It proves that two
 viewers create one source WHEP session, injects and repairs a missing H.264 RTP
 packet with FlexFEC, then repeats with the first FEC packet suppressed and
 requires RTX recovery. Every viewer must receive the complete ordered range.

@@ -17,7 +17,7 @@ WORKDIR /build
 COPY distributor/mediamtx-build ./mediamtx-build
 RUN python3 mediamtx-build/build.py --output /mediamtx
 
-FROM alpine:3.22.1@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1
+FROM alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
 
 RUN apk add --no-cache ca-certificates \
     && addgroup -S -g 10001 rstream \
