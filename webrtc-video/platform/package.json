@@ -62,16 +62,14 @@
     "typescript": "6.0.3"
   },
   "overrides": {
-    "@hono/node-server": "1.19.13",
-    "deepmerge-ts": "8.0.1",
+    "deepmerge-ts": "8.0.2",
     "fast-uri": "4.2.3",
-    "find-my-way": "9.7.0",
-    "hono": "4.12.27",
-    "postcss": "8.5.23",
-    "protobufjs": "8.7.1",
+    "find-my-way": "9.10.0",
+    "postcss": "8.5.33",
+    "protobufjs": "8.8.1",
     "sharp": "0.35.5",
     "uuid": "11.1.1",
-    "valibot": "1.4.2",
-    "mysql2": "3.24.5"
+    "valibot": "1.5.0",
+    "mysql2": "3.24.6"
   }
 }
