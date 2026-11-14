@@ -263,7 +263,7 @@ fan-out, recovery and lifecycle against the same patched runtime.
 When upgrading MediaMTX, review all three pins and the patch, rerun these tests
 and the platform authorization/recording checks, and remove the patch when the
 upstream budget covers these cases. Never silently fall back to the unpatched
-image. Historical qualification evidence retains its original runtime version.
+image. Record the selected runtime version with each new test run.
 
 For a repeatable single-host deployment, copy the reviewed example and start
 the supplied Compose service:

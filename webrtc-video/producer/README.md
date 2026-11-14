@@ -749,43 +749,11 @@ The main settings are:
 - `webrtc.adaptive.twccGCC.changeThresholdPct` and `decreaseThresholdPct`, which keep small estimator fluctuations from reconfiguring the encoder; startup validation limits the decrease threshold to 33% under the 1.5× scheduling factor, independently of the FlexFEC ratio already included in the protected target. The reference profiles use immediate decreases (`0`)
 - `webrtc.adaptive.twccGCC.maxIncreaseLossPct`, which prevents a delayed estimator increase from raising the encoder target while measured packet loss is still above the configured recovery threshold
 
-#### Historical 1080p operating envelope
+#### Choose an operating envelope
 
-The evidence at revision `ca8a308` used one coherent 1080p30 transport profile. Its
-limits were exercised together across the direct and relay matrices; changing
-the codec, frame cadence, resolution, CPU budget, or network envelope calls for
-a new qualification run. Each report records the Git revision that produced
-the result, so the measured trade-offs remain tied to an exact implementation.
-Those records do not establish H.264 level conformance: that revision announced
-level 3.1 while producing level 4. Current browser examples use 720p30 and require
-fresh network qualification; the historical measurements below are retained
-without relabeling them as results for the new profile.
+The current bundled H.264 browser profile uses 1280×720 at 30 fps with matching level 3.1 encoder and SDP limits. Select the media profile, bitrate range and repair overhead together for the target network and hardware. A fixed source that cannot preserve usable quality at the available rate needs a resolution/frame-rate ladder rather than an indefinitely lower encoder target.
 
-| Setting                |                                                                   Reference value | Reason and trade-off                                                                                                                                                                                                                                                                                                                                                                     |
-| ---------------------- | --------------------------------------------------------------------------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frame size and cadence |                                                               1920x1080 at 30 fps | Exercises a real live-video workload while remaining reproducible. If the link cannot sustain the quality floor, add a measured resolution/frame-rate ladder instead of compressing this fixed profile indefinitely.                                                                                                                                                                     |
-| x264 latency controls  |                                            `zerolatency`, `veryfast`, `bframes=0` | Avoids frame reordering and deep encoder buffering. The `zerolatency` tune owns its internally coherent lookahead and threading choices; duplicating those private tune settings in the pipeline made the profile harder to reason about without establishing a measured benefit. A slower preset may improve compression, but it spends CPU and can add latency on constrained devices. |
-| Key-frame policy       |                                                    `key-int-max=60`, `scenecut=0` | Gives the qualification source a deterministic maximum two-second GOP at 30 fps, so recovery runs are comparable. Content-driven production encoders may re-enable scene cuts after measuring their key-frame bursts.                                                                                                                                                                    |
-| Encoder VBV            |                                                                            100 ms | Bounds the encoder-side rate reservoir while retaining enough room for normal frame-size variation. It is one component of latency, not a promise that end-to-end delay is 100 ms.                                                                                                                                                                                                       |
-| Initial encoder target |                                                                          5 Mbit/s | Starts 1080p with useful quality before TWCC has accumulated enough feedback. A high startup target can briefly overshoot a smaller access link, which is why the pacer still enforces the current wire budget.                                                                                                                                                                          |
-| Adaptive range         |                                                                        2–8 Mbit/s | The 2 Mbit/s floor protects fixed 1080p quality observed through x264 QP; the ceiling bounds CPU and link demand. Operating below the floor calls for a source ladder, not a hidden quality collapse.                                                                                                                                                                                    |
-| Update hysteresis      |                                           2 s, 10% increases, immediate decreases | Filters optimistic estimator noise while keeping the encoder aligned with the protected-wire pacing budget. Decreases bypass the periodic increase gate.                                                                                                                                                                                                                                 |
-| Recovery gate          |                                           At most 1% loss, followed by a 5 s hold | Prevents a delayed optimistic estimate from raising the encoder while loss is still active. After the hold, the encoder follows GCC's current bounded target rather than applying a second application-side ramp that would starve the estimator of probe traffic.                                                                                                                       |
-| Pacing and admission   | 1.5x scheduling rate over the protected target, 225 ms sustained admission budget | Media, proactive repair, and retransmissions share the same scheduling ceiling. The multiplier drains encoded access units and timely repair; it does not add a second long-term limiter at the lower target. Over-budget access units are rejected whole before RTP packetization.                                                                                                      |
-| Repair scheduling      |                             One repair packet per scheduling burst; 225 ms expiry | Gives a retransmission a prompt opportunity without starving current media, and discards a repair packet once its playback value is lower than the latency it would add.                                                                                                                                                                                                                 |
-| FlexFEC                |                                          One repair packet per five media packets | Adds moderate proactive protection for lossy, higher-RTT paths where reactive RTX can arrive after the playout window. Stronger ratios remain explicit stress profiles; leave FlexFEC disabled when measured NACK/RTX recovery is sufficient or the link cannot afford the overhead.                                                                                                     |
-
-With the 1080p30 H.264 reference settings, the sender starts at `5 Mbps` and may
-adapt within the `2–8 Mbps` range. Qualification showed that allowing the fixed
-1080p encoder to fall to 1.2–1.5 Mbps could preserve frame delivery while
-pushing x264 into visibly destructive quantization. The reference therefore
-protects image quality with a 2 Mbps media floor and qualifies the full
-NACK/RTX/FlexFEC profile on a 4 Mbps wire budget. A deployment that must operate
-below that point should add a measured resolution/frame-rate ladder instead of
-silently degrading a fixed 1080p stream. The viewer page exposes the codec, the
-enabled recovery path, the adaptive backend state, the current TWCC target, and
-the current encoder target so you can validate the behavior without immediately
-jumping into browser internals.
+The viewer exposes the codec, recovery path, adaptive backend state and encoder/controller targets. Use those signals with decoded frame rate, freezes and the encoder’s quantization parameter when evaluating a profile; frame delivery alone does not establish image quality.
 
 For repeatable evidence rather than an interactive spot check, use
 `qualification/adaptive-streaming/run-matrix.sh`. The isolated harness compares
@@ -798,23 +766,11 @@ single `qualification/adaptive-streaming/run.sh` invocation remains useful
 while debugging one path/profile combination. The normal quick start does not
 require Docker or the qualification tooling.
 
-![Measured direct-path bitrate response](./qualification/evidence/ca8a308/direct-reference/adaptive-bitrate.svg)
-
-The [reference evidence pack](./qualification/evidence/ca8a308/report.md) keeps
-the selected direct and rstream relay matrix, synchronized transport and
-playback time series, mobility record, machine-readable assertions, and every
-excluded run. The release profile passed three direct and three relay runs
-under the controlled 4 Mbit/s, 120 ms one-way delay, 30 ms jitter, and 2% loss
-profile. Its median impaired frame rate was 29.9 fps direct and 29.6 fps through
-the relay; median frozen time was 0.6% and 3.6% respectively. The record retains
-the NACK/RTX baseline failures as well as the measured improvement from bounded
-FlexFEC protection.
-
 The comparison does not equate frame delivery with visual quality. The pinned
 qualification encoder reports its per-frame H.264 quantization parameter (QP),
 while Chromium independently reports decoded frame rate, freezes, resolution,
 and decode cost. The checks bound both the absolute sender QP and the
-relay-to-direct QP gap while requiring 1920x1080 output throughout the run. This
+relay-to-direct QP gap while requiring the selected output resolution throughout the run. This
 catches a stream that remains at 30 fps only by compressing the image too
 aggressively, without pretending that sender QP alone is an end-to-end image
 similarity score.

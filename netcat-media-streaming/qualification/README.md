@@ -59,7 +59,3 @@ classified logs. It owns every child process and cleans up on success, failure,
 timeout, or interruption. Raw frame buffers stay in local or CI artifacts;
 `report.md`, the manifests, and compact JSON measurements are sufficient to
 review a published run.
-
-The compact results from clean release runs live in
-[`evidence/`](./evidence/). Start with the report, then follow its links to the
-scenario manifests and analyzer JSON when a result needs closer inspection.

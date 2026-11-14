@@ -79,24 +79,13 @@ Point it at a non-production project context:
 make verify-runtime RSTREAM_RUNTIME_CONTEXT=<context>
 ```
 
-## Reproducible qualification evidence
+## Additional runtime checks
 
-For release evidence, build the sample and run five paced campaigns from a
-clean commit. The qualification pack reuses the runtime gate, records the
-binary hash, individual and aggregate latency summaries, thresholds, and the
-Git revision, then generates a dependency-free SVG and a concise report:
+The [runtime harness](qualification) repeats the sample’s HTTP checks with bounded load, records latency and verifies shutdown. Build the sample, then supply an explicitly selected test context:
 
-```bash
+```sh
 make build
-RSTREAM_RUNTIME_CONTEXT=<staging-context> python3 qualification/run.py
+RSTREAM_RUNTIME_CONTEXT=my-test-context python3 qualification/run.py
 ```
 
-Results remain local under `qualification/results/`. A committed reference
-run is accepted only from a clean worktree and after its manifest reports
-`dirty: false`; it qualifies the recorded commit and staging path, not every
-possible client network. `--allow-dirty` exists only for local diagnostics.
-
-The latest reviewed reference run is the
-[`7500baa` staging qualification](qualification/evidence/7500baa/report.md):
-320 byte-exact responses, p95 765.9 ms, maximum 1260.2 ms, clean revision, and
-no runtime or shutdown error.
+Replace the context with one configured for the test environment. Results remain local under `qualification/results/`; latency thresholds apply to that environment. See [Testing](../docs/testing.md) for artifact handling and the distinction between local checks and live integration.

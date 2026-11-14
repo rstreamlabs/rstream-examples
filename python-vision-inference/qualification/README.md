@@ -116,19 +116,3 @@ correct values depend on the qualified regions, access network, accelerator,
 and service objective. In that mode, `PASS` means functional integrity and the
 latency/throughput values are observations, not an SLO claim; the generated
 report states that distinction prominently.
-
-## Committed reference evidence
-
-[`evidence/34aa947/report.md`](evidence/34aa947/report.md) is the current
-reference run. It pins clean commit
-`34aa947b7139fe58e6b9a4ea32dfb5100b61318e`, the exact model and media hashes,
-all runner parameters, five explicit performance regression budgets, raw logs,
-JSON measurements, and generated SVG charts. The run exercised staging in two
-regions with 250 cancellation races, 50 sequential and 16 concurrent model
-requests, 62 live mesh frames, capacity saturation and recovery, abrupt worker
-loss, failover, 30 repetitions across five transport payload sizes, and
-regional selection.
-
-The report and sibling JSON files qualify that commit on the recorded hardware
-and network path. The configured budgets are regression gates for that
-environment, not a public cross-environment SLO.

@@ -142,7 +142,7 @@ Stop the worker currently serving the device and watch the session move to
 another worker within seconds, with the video playing through the switch. Add
 a worker back and the pool regrows, with no restart anywhere.
 
-## Measured selection and failover
+## Test selection and failover
 
 The [`qualification/`](qualification) pack pins the YOLO model and source media,
 then exercises frame correlation, bounded admission, cancellation races,
@@ -151,14 +151,7 @@ failover passes only after the stream from worker A reports its failure and the
 same reference frame returns from worker B with identical labels, confidence
 scores, and bounding boxes.
 
-The latest [reference record](qualification/evidence/7e512fe/report.md) measured
-failure detection at 75.29 ms and a complete result from the surviving worker
-at 586.46 ms. It also forced two equal-capacity workers into different regions
-and verified that the selector chose the lower measured session-establishment
-latency, saving 249.47 ms of median round-trip time in that run. The configured
-latency and throughput budgets qualify that recorded hardware and network path;
-deployments should set their own gates for the chosen model, accelerator, and
-regions.
+Set latency and throughput budgets for the selected model, accelerator and network. The harness records those inputs with its local results; measurements from one environment do not establish a portable failover bound. See [Testing](../docs/testing.md).
 
 ## Web UI
 

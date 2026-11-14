@@ -144,12 +144,4 @@ under Go's race detector. Its live profile validates the complete UI stream
 through Next.js, scoped-token minting, rstream, and the selected llama.cpp
 worker.
 
-The published [`d7a9dc4` evidence pack](qualification/evidence/d7a9dc4/report.md)
-records 60/60 successful concurrent turns across two real Qwen3 workers with an
-exact 30/30 distribution. A controlled degraded run completed 20/20 turns on
-the surviving worker, and the recovery run completed 20/20 with the restored
-pool split 10/10. The same revision passes the real-model race, bounded
-admission, cancellation, shutdown, routing, web, and dependency gates. The
-worker stop and restart boundaries in this record were controlled by the
-operator; the record proves routing during each phase but does not claim a
-measured automatic failure-detection interval.
+Choose the exact model and target environment when setting latency, capacity or worker-distribution thresholds. The harness writes results locally; a routing check during controlled worker phases does not establish an automatic failure-detection bound. See [Testing](../docs/testing.md) for result handling.

@@ -58,9 +58,7 @@ it as a portable SLO.
 Pre-start worker loss is safe to retry against another eligible worker. Once a
 model request has started, the app does not replay it because an agent turn may
 already have executed a tool. A fully automated loss-and-recovery gate requires
-the harness to own the worker processes and timestamp their lifecycle. The
-current committed record uses controlled stop and restart boundaries and is
-explicitly limited to routing behavior within those phases.
+the harness to own the worker processes and timestamp their lifecycle. Controlled stop and restart phases establish routing behavior within those phases; they do not measure the automatic failure-detection interval.
 
 ## Reading the evidence
 
@@ -69,9 +67,6 @@ explicitly limited to routing behavior within those phases.
 each turn. The manifest pins the repository revision, model hash, runtime
 versions, parameters, and thresholds.
 
-A report from a dirty worktree is diagnostic only. Commit-worthy evidence must
-be rerun on the clean revision it claims to qualify.
+A report from a dirty worktree is diagnostic only. Release measurements must be made on the clean revision they describe.
 
-Compact results from clean runs live in [`evidence/`](evidence). They retain the
-model hash, runtime manifest, thresholds, per-turn measurements, and the useful
-lifecycle view while keeping prompts and model output outside the repository.
+Keep generated reports in the local results directory or CI artifacts. The model hash, runtime versions and configured thresholds make a run interpretable without storing its history in this repository.

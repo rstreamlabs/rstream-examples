@@ -101,13 +101,7 @@ parses RTP sequence numbers, injects packet loss ahead of the tunnel, and
 verifies the RTCP/NACK repair path. Process teardown and unexpected media
 warnings are part of the verdict.
 
-The published [`156e96a` evidence pack](./qualification/evidence/156e96a/report.md)
-records a clean run across every profile: 300 decoded frames in all four
-reliable Go/C++ and FFmpeg/GStreamer combinations, 1,221/1,221 RTP packets and
-300/300 reference-identical frames in both datagram profiles, 300/300 frames
-after RTCP/NACK repair at 1% injected loss, and 300/300 frames through each RTSP
-bridge. The clean best-effort result establishes fidelity on the recorded path;
-the injected-loss profile is the evidence for packet repair.
+The finite profiles check decoded frames, packet fidelity and repair behavior for the selected Go/C++ and media-tool combinations. Run them in the environment being evaluated and keep the generated output locally:
 
 ```bash
 make qualify
