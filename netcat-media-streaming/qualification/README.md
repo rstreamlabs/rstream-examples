@@ -14,11 +14,20 @@ every sequence number, and compare decoded frames with the reference in order.
 The repair scenario removes one percent of RTP packets before rstream and sends
 RTCP/NACK feedback over the reverse channel.
 
-The matrix deliberately crosses media tools and client implementations:
-FFmpeg and GStreamer act as producers and consumers, while both the Go CLI and
-the C++ `rstream-ncat` binary carry the streams. This catches framing,
-half-close, standard-input/output, and teardown defects that a single pipeline
-cannot expose.
+Reliable-stream and RTSP scenarios cross FFmpeg and GStreamer with both client
+implementations. Datagram and RTCP/NACK scenarios use the Go CLI. The C++
+client provides bytestream connectivity.
+
+| Scenario                  | Clients                         |
+| ------------------------- | ------------------------------- |
+| Reliable media            | Go and C++, in both directions. |
+| Best-effort RTP datagrams | Go.                             |
+| Guaranteed datagrams      | Go.                             |
+| RTCP/NACK repair          | Go.                             |
+| RTSP bridging             | Go and C++, in both directions. |
+
+The matrix checks framing, half-close, standard-input/output and teardown
+across those supported paths.
 
 ## Acceptance gates
 

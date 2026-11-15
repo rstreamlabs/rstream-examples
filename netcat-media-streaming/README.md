@@ -4,9 +4,10 @@ This example keeps live media deliberately simple: standard GStreamer or
 FFmpeg processes write to and read from `rstream nc` through standard input and
 output. It covers two different transport choices:
 
-- reliable MPEG-TS over a private byte stream when every byte matters;
-- packetized RTP over a private datagram tunnel when bounded latency matters
-  more than retransmitting late data.
+| Path                                          | When to use it                                              | Client                                 |
+| --------------------------------------------- | ----------------------------------------------------------- | -------------------------------------- |
+| Reliable MPEG-TS over a private byte stream   | Every byte must arrive in order.                            | Go `rstream nc` or C++ `rstream-ncat`. |
+| Packetized RTP over a private datagram tunnel | Bounded latency matters more than retransmitting late data. | Go `rstream nc -u`.                    |
 
 Both machines must use an rstream context for the same project. Install the
 rstream CLI and GStreamer, then check the required elements:
@@ -96,10 +97,11 @@ direct MPEG-TS and shared MediaMTX/RTSP variants.
 
 The [`qualification/`](./qualification/) pack replaces the live sources with
 finite 300-frame inputs and checks the decoded result, not just process exit.
-It crosses FFmpeg and GStreamer with the Go and C++ netcat implementations,
-parses RTP sequence numbers, injects packet loss ahead of the tunnel, and
-verifies the RTCP/NACK repair path. Process teardown and unexpected media
-warnings are part of the verdict.
+Reliable-stream and RTSP profiles cross the Go and C++ netcat implementations
+with FFmpeg and GStreamer. Datagram and RTCP/NACK profiles use the Go CLI;
+the C++ client provides bytestream connectivity. Those profiles parse RTP
+sequence numbers, inject packet loss ahead of the tunnel and verify repair.
+Process teardown and unexpected media warnings are part of the verdict.
 
 The finite profiles check decoded frames, packet fidelity and repair behavior for the selected Go/C++ and media-tool combinations. Run them in the environment being evaluated and keep the generated output locally:
 
