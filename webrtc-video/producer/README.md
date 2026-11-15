@@ -884,7 +884,7 @@ back to the install commands above.
 
 If the process fails with `failed to create the GStreamer pipeline`, one or more configured elements are missing. Install the required plugins or adapt `media.pipeline` to the elements available on the target machine.
 
-If the process cannot connect to the `rstream` engine server, verify the current CLI context with `rstream login` and `rstream project use <project-endpoint> --default`, then inspect `~/.rstream/config.yaml`.
+If the process cannot connect to the `rstream` engine server, verify the current CLI context with `rstream login` and `rstream project use <project-endpoint>`, then inspect `~/.rstream/config.yaml`.
 
 If TURN credential generation fails, verify the current project endpoint and
 credential permissions. Local PAT/APP derivation requires `turn.relay.allocate`;

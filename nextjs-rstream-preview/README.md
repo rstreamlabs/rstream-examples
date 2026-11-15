@@ -38,7 +38,7 @@ Select a local rstream context first:
 
 ```bash
 rstream login
-rstream project use <project-endpoint> --default
+rstream project use <project-endpoint>
 ```
 
 Then start Next.js with a tunnel:

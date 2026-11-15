@@ -56,7 +56,7 @@ Select a project or engine with the rstream CLI, then run the server.
 
 ```bash
 rstream login
-rstream project use <project-endpoint> --default
+rstream project use <project-endpoint>
 make run
 ```
 
