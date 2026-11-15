@@ -80,12 +80,12 @@ short-lived credentials between requests.
 
 ## Stack
 
-| Component | Role |
-| --- | --- |
-| Next.js App Router | Product UI and authorization/provisioning routes. |
-| NextAuth with GitHub OAuth | User sign-in and organization membership. |
-| Prisma and PostgreSQL | Managed device inventory, ownership and presence history. |
-| `@rstreamlabs/rstream` | Control plane project resolution and shared platform contracts. |
-| `@rstreamlabs/tunnels` | Engine inventory, TURN material, scoped tokens and webhook verification. |
-| `@rstreamlabs/react` | Browser watch state for the dashboard. |
-| Tailwind and the existing UI primitives | Application layout and controls. |
+| Component                               | Role                                                                     |
+| --------------------------------------- | ------------------------------------------------------------------------ |
+| Next.js App Router                      | Product UI and authorization/provisioning routes.                        |
+| NextAuth with GitHub OAuth              | User sign-in and organization membership.                                |
+| Prisma and PostgreSQL                   | Managed device inventory, ownership and presence history.                |
+| `@rstreamlabs/rstream`                  | Control plane project resolution and shared platform contracts.          |
+| `@rstreamlabs/tunnels`                  | Engine inventory, TURN material, scoped tokens and webhook verification. |
+| `@rstreamlabs/react`                    | Browser watch state for the dashboard.                                   |
+| Tailwind and the existing UI primitives | Application layout and controls.                                         |
