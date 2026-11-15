@@ -76,7 +76,7 @@ a nonmember, preserves playback when the first member leaves and stops the
 encoder after the last leaves. Both persistent-history and live-only inventory
 checks still run. GitHub membership remains a fixture. Neither variant forces
 a relay path. First prepare adequate Linux UDP socket limits
-as described in the [distribution prerequisites](../../distributor/docs/testing.md#technical-qualification).
+as described in the [distribution prerequisites](../../distributor/docs/004-testing.md#technical-qualification).
 These graceful UI closures do not measure abrupt browser loss, which can use the
 producer's longer bounded ICE recovery grace period before stopping the encoder.
 

@@ -15,7 +15,9 @@ rstream CLI and GStreamer, then check the required elements:
 ```bash
 rstream login
 rstream project use <project-endpoint>
-make check
+for element in x264enc h264parse mpegtsmux rtpstreampay rtpstreamdepay rtpjitterbuffer avdec_h264; do
+  gst-inspect-1.0 "$element" >/dev/null || exit 1
+done
 ```
 
 ## Reliable GStreamer stream
@@ -106,9 +108,17 @@ Process teardown and unexpected media warnings are part of the verdict.
 The finite profiles check decoded frames, packet fidelity and repair behavior for the selected Go/C++ and media-tool combinations. Run them in the environment being evaluated and keep the generated output locally:
 
 ```bash
+make check
 make qualify
 ```
 
 Set `RSTREAM_CONTEXT` to select a non-default CLI context. Set
 `RSTREAM_GO_BIN` or `RSTREAM_CPP_BIN` when testing locally built SDK binaries
 instead of commands installed on `PATH`.
+
+The `make check` target checks the **full qualification** toolchain, beyond the
+two interactive GStreamer recipes: both Go/C++ CLIs, FFmpeg, MediaMTX, jq,
+netcat, Python 3, SHA-256/awk utilities and a timeout implementation. Install
+those only when running that matrix. The first GStreamer path needs the Go CLI
+and the elements checked at the top; an interactive video sink also needs a
+working desktop display. Headless qualification uses finite decoders instead.

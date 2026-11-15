@@ -66,7 +66,7 @@ The dashboard exposes these controls while the device is online. Live
 resource/latency qualification remains pending.
 
 For a separate deployment, configure MediaMTX as described in the
-[distributor recording section](../../distributor/docs/observability.md#optional-recent-recordings).
+[distributor recording section](../../distributor/docs/003-observability.md#optional-recent-recordings).
 Set `MEDIAMTX_PLAYBACK_URL` to its private HTTP(S) playback base URL and
 `MEDIAMTX_RECORDING_WINDOW_SECONDS` to the recent window to expose (300 seconds
 by default, 30–600 supported). An empty URL disables the API. The recent window
@@ -104,7 +104,7 @@ continues to detect a frame counter that stops advancing. Older browsers use
 the available playback counters.
 
 The native MediaMTX integration check requires the distributor's patched
-`mediamtx` 1.21.2 runtime (`make mediamtx` in `../distributor`), FFmpeg,
+`mediamtx` 1.21.3 runtime (`make mediamtx` in `../distributor`), FFmpeg,
 FFprobe and the Playwright Chromium/Firefox/WebKit runtimes:
 
 ```bash
@@ -143,5 +143,5 @@ Selections include an opaque version. A competing change returns `409` and is
 refreshed before another selection; it cannot silently overwrite a newer choice.
 The producer reports selected mode and applied encoder target separately. The
 selection survives idle/reconnect cycles in the running producer and resets to
-`quality.default` after process restart. See the [producer configuration](../../producer/docs/configuration.md#optional-source-quality-presets)
+`quality.default` after process restart. See the [producer configuration](../../producer/docs/001-configuration.md#optional-source-quality-presets)
 for validation and the HTTP contract.

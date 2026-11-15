@@ -6,7 +6,7 @@ The producer owns the media path in all three video examples. Start here for one
 
 ## Requirements
 
-Use the Go version in `go.mod`, a C compiler, `pkg-config` and GStreamer development files. The embedded viewer also needs Node.js 24 and npm. Follow [Build the producer](docs/build.md) for macOS, Linux and WSL2 prerequisites.
+Use the Go version in `go.mod`, a C compiler, `pkg-config` and GStreamer development files. The embedded viewer also needs Node.js 24 and npm. Follow [Build the producer](docs/000-build.md) for macOS, Linux and WSL2 prerequisites.
 
 For publication through rstream, install the CLI and select a project:
 
@@ -46,16 +46,16 @@ The build targets apply the required [ICE concurrency patch](../ICE-PATCH.md). U
 | [Provisioned H.264](config.provisioning.h264.yaml) | Obtain scoped tunnel and TURN credentials from the Next.js platform.                                |
 | [Discovered H.264](config.discovery.h264.yaml)     | Publish a stable device identity with existing project credentials for an organization’s inventory. |
 
-Camera and adaptive profiles are described in [Producer configuration](docs/configuration.md). Match the capture source, encoder and receiver capacity before using a profile on a real device. Optional source presets change one upstream rendition; they do not create a transcoding ladder.
+Camera and adaptive profiles are described in [Producer configuration](docs/001-configuration.md). Match the capture source, encoder and receiver capacity before using a profile on a real device. Optional source presets change one upstream rendition; they do not create a transcoding ladder.
 
 ## Continue the integration
 
 | Task                                                        | Guide                                                                                                      |
 | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Understand SDK, capture and delivery boundaries             | [Architecture](docs/architecture.md)                                                                       |
-| Install native dependencies, build or package the binary    | [Build and troubleshooting](docs/build.md)                                                                 |
-| Configure publication, TURN, codecs, adaptation and metrics | [Configuration](docs/configuration.md)                                                                     |
-| Test an impaired media path                                 | [Network testing](docs/network-testing.md)                                                                 |
+| Understand SDK, capture and delivery boundaries             | [Architecture](docs/002-architecture.md)                                                                       |
+| Install native dependencies, build or package the binary    | [Build and troubleshooting](docs/000-build.md)                                                                 |
+| Configure publication, TURN, codecs, adaptation and metrics | [Configuration](docs/001-configuration.md)                                                                     |
+| Test an impaired media path                                 | [Network testing](docs/003-network-testing.md)                                                                 |
 | Follow the complete walkthrough                             | [Device-to-browser guide](https://rstream.io/guides/build-device-to-browser-webrtc-streaming-with-rstream) |
 
 Use [Contributing](../../CONTRIBUTING.md) and [Security](../../SECURITY.md) for repository-wide development and support.

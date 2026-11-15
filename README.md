@@ -30,6 +30,6 @@ Most examples read a CLI context or explicit engine credentials. Some device app
 
 ## Development and support
 
-[Contributing](CONTRIBUTING.md) covers source changes and the [testing guide](docs/testing.md) explains verification and optional failure/performance tools. Keep generated results outside version control. Coordinated SDK archive verification is described in [SDK dependencies](docs/sdk-dependencies.md).
+[Contributing](CONTRIBUTING.md) covers source changes and the [testing guide](docs/001-testing.md) explains verification and optional failure/performance tools. Keep generated results outside version control. Coordinated SDK archive verification is described in [SDK dependencies](docs/000-sdk-dependencies.md).
 
 Use [GitHub issues](https://github.com/rstreamlabs/rstream-examples/issues) for usage questions and reproducible bugs, with credentials and customer details removed. Report vulnerabilities through [Security](SECURITY.md). Licensed under [Apache-2.0](LICENSE).

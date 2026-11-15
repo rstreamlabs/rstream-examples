@@ -12,7 +12,7 @@ Use Node.js 24, npm, PostgreSQL, a GitHub OAuth application and rstream applicat
 cp .env.example .env.local
 ```
 
-Fill the database URLs, GitHub callback credentials, `NEXTAUTH_SECRET`, `RSTREAM_CLIENT_ID`, `RSTREAM_CLIENT_SECRET` and `RSTREAM_PROJECT_ENDPOINT` before continuing. [Platform setup](docs/setup.md) explains permissions, callbacks and optional settings. Use a database dedicated to this sample.
+Fill the database URLs, GitHub callback credentials, `NEXTAUTH_SECRET`, `RSTREAM_CLIENT_ID`, `RSTREAM_CLIENT_SECRET` and `RSTREAM_PROJECT_ENDPOINT` before continuing. [Platform setup](docs/000-setup.md) explains permissions, callbacks and optional settings. Use a database dedicated to this sample.
 
 ```sh
 npm ci
@@ -42,17 +42,17 @@ Replace `dev_...` with that device’s secret. The device appears online in the 
 | Inventory | The platform registers devices and issues provisioning secrets. | An organization discovers stable, labeled devices using existing project credentials. |
 | Delivery  | Direct WebRTC to the producer.                                  | A MediaMTX adapter shares one upstream for several viewers.                           |
 
-These choices have distinct authorization and lifecycle rules. Configure them through [Platform setup](docs/setup.md), including whether direct fallback is allowed when the distributor is unavailable.
+These choices have distinct authorization and lifecycle rules. Configure them through [Platform setup](docs/000-setup.md), including whether direct fallback is allowed when the distributor is unavailable.
 
 ## Documentation
 
 | Task                                                          | Guide                                                                                                           |
 | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Understand provisioning, tokens and the SDK boundaries        | [Architecture](docs/architecture.md)                                                                            |
-| Configure access, inventory, project credentials and delivery | [Setup](docs/setup.md)                                                                                          |
-| Add distribution metrics, recordings or source controls       | [Media capabilities](docs/media.md)                                                                             |
-| Configure exposure, retention and deployment secrets          | [Deployment](docs/deployment.md)                                                                                |
-| Validate application changes and media integration            | [Testing](docs/testing.md)                                                                                      |
+| Understand provisioning, tokens and the SDK boundaries        | [Architecture](docs/001-architecture.md)                                                                            |
+| Configure access, inventory, project credentials and delivery | [Setup](docs/000-setup.md)                                                                                          |
+| Add distribution metrics, recordings or source controls       | [Media capabilities](docs/002-media.md)                                                                             |
+| Configure exposure, retention and deployment secrets          | [Deployment](docs/004-deployment.md)                                                                                |
+| Validate application changes and media integration            | [Testing](docs/003-testing.md)                                                                                      |
 | Follow the product integration walkthrough                    | [Next.js guide](https://rstream.io/guides/integrate-webrtc-video-streaming-into-a-nextjs-platform-with-rstream) |
 
 See [Contributing](../../CONTRIBUTING.md) and [Security](../../SECURITY.md) for repository-wide guidance.

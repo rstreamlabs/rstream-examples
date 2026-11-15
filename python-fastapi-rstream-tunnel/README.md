@@ -22,7 +22,7 @@ pip install -r requirements.txt
 Or use the Makefile:
 
 ```bash
-make build
+make verify
 ```
 
 ## Run
@@ -54,3 +54,25 @@ Then dial it from another:
 ```bash
 make dial ARGS="--path /items/42"
 ```
+
+## Recognize success and own the lifecycle
+
+Open the printed published address to receive
+`{"service":"python-fastapi-rstream-tunnel","status":"ok"}`. The private dial
+example prints the HTTP response for `/items/42`. Stop the process with an
+interrupt; its nested contexts close the tunnel/client before leaving FastAPI's
+`app.router.lifespan_context(app)`. Startup therefore runs before connection setup,
+and shutdown still runs after setup failure or cancellation. Put process resources
+on `app.state`.
+
+The direct adapter dispatches HTTP/1.1 only. It does not itself serve ASGI lifespan
+or WebSocket scopes and does not inject yielded lifespan state into request
+`scope["state"]`. For a full ASGI server's features, keep that server on loopback
+and use local forwarding as described in the [Python SDK](https://github.com/rstreamlabs/rstream-python/blob/main/docs/002-tunnels.md).
+Reconnection is also application policy: this small service exits when its serving
+operation ends. A long-lived product should supervise that lifecycle with bounded
+backoff and explicit shutdown, rather than recreate a tunnel per request.
+
+`make verify` installs the application requirements and runs its lifecycle tests
+without a rstream account. Those tests prove startup/shutdown on success,
+connection failure, serving failure and cancellation with synthetic controls.

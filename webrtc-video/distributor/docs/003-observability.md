@@ -92,7 +92,7 @@ fault. Prevent saturation with sufficient capacity and monitoring; this optional
 history is not an archival recording service.
 
 Next.js exposes only the configured recent window and proxies bounded MP4
-clips; see the [platform API and local setup](../../platform/docs/media.md#optional-recent-recordings).
+clips; see the [platform API and local setup](../../platform/docs/002-media.md#optional-recent-recordings).
 Live video continues to use WebRTC. Qualify disk activity, full-volume behavior
 and simultaneous replay against your live latency/resource budget before
 enabling this optional feature in a deployment.

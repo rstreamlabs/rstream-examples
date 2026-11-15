@@ -50,6 +50,8 @@ Reaching a worker is a server-to-worker call over a short-lived, narrowly scoped
 
 ### The app
 
+Use Node.js 24 and npm 11 (validated with 11.19.1). The pinned npm command below preserves the dependency overrides in the checked-in lockfile; npm 10 cannot install this tree reliably. The [web guide](web/README.md) details its server and browser configuration.
+
 The application authenticates to rstream with application client credentials and mints its own short-lived, scoped tokens. This is the production model, and it requires no `rstream login` on the server. Create a project and an application client in the rstream dashboard, then set `web/.env.local`:
 
 ```bash
@@ -68,7 +70,7 @@ GITHUB_CLIENT_SECRET=...
 
 ```bash
 cd web
-npm install
+npx --yes npm@11.19.1 ci
 npm run dev
 ```
 
@@ -144,4 +146,4 @@ under Go's race detector. Its live profile validates the complete UI stream
 through Next.js, scoped-token minting, rstream, and the selected llama.cpp
 worker.
 
-Choose the exact model and target environment when setting latency, capacity or worker-distribution thresholds. The harness writes results locally; a routing check during controlled worker phases does not establish an automatic failure-detection bound. See [Testing](../docs/testing.md) for result handling.
+Choose the exact model and target environment when setting latency, capacity or worker-distribution thresholds. The harness writes results locally; a routing check during controlled worker phases does not establish an automatic failure-detection bound. See [Testing](../docs/001-testing.md) for result handling.

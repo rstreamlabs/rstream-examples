@@ -3,16 +3,20 @@ services:
     image: ${RSTREAM_IMAGE:-rstream/rstream:latest}
     command: ["run", "--docker", "--watch", "-v"]
     restart: unless-stopped
-    user: "0:0"
+    user: "${RSTREAM_UID:-1000}:${RSTREAM_GID:-1000}"
+    working_dir: /tmp
+    group_add:
+      - "${DOCKER_GID:-0}"
     profiles:
       - rstream
     environment:
+      RSTREAM_CONFIG: /tmp/rstream-no-config.yaml
       RSTREAM_AUTHENTICATION_TOKEN: ${RSTREAM_AUTHENTICATION_TOKEN:-}
       RSTREAM_ENGINE: ${RSTREAM_ENGINE:-}
     extra_hosts:
       - "${RSTREAM_ENGINE_HOSTNAME:-rstream.local}:host-gateway"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       - grafana
   grafana:
@@ -21,7 +25,7 @@ services:
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_METRICS_ENABLED: "true"
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me-rstream}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?run node scripts/configure.mjs to create a private password}
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-}
       GF_USERS_ALLOW_SIGN_UP: "false"

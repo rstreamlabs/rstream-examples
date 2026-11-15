@@ -14,6 +14,14 @@ private, loopback, link-local, multicast, and documentation ranges are denied
 unless explicitly allowed. This prevents an accidentally exposed relay from
 becoming a path into the gateway's local network.
 
+## Prerequisites
+
+Use Go 1.27.4 or newer (see `go.mod`), Git, Make and a C compiler for race tests.
+OpenSSL generates a demo token below. Local tests require no account; publishing
+also requires the CLI, a selected permitted project and an Engine supporting the
+selected HTTP/3/MASQUE path. The example does not reserve infrastructure or add
+an IP-routing backend.
+
 ## Build and test
 
 ```bash
@@ -26,7 +34,12 @@ Use a local rstream context that points to an engine with HTTP/3 and MASQUE
 support, then run:
 
 ```bash
-PRIVATE_EGRESS_TOKEN="$(openssl rand -hex 24)" \
+umask 077
+mkdir -p "$HOME/.config/rstream-egress"
+token_file="$HOME/.config/rstream-egress/demo-token"
+if [ ! -f "$token_file" ]; then openssl rand -hex 24 > "$token_file"; fi
+chmod 600 "$token_file"
+export PRIVATE_EGRESS_TOKEN="$(cat "$token_file")"
 go run ./cmd/gateway \
   --name home-austin \
   --label role=egress \
@@ -37,6 +50,11 @@ go run ./cmd/gateway \
   --match-domain example.com \
   --write-mobileconfig ./home-austin.mobileconfig
 ```
+
+Keep terminal one running. The token is retained in the private file outside the
+repository; rerunning the setup preserves it. A second terminal must load that
+**same** value for the probe; do not generate a new one or copy it into logs. A prefixed assignment to `go run` alone
+would not retain the value for later shell commands.
 
 The process prints `READY <url>` when the published rstream endpoint is online.
 The same endpoint carries TCP `CONNECT` and UDP `CONNECT-UDP` traffic.
@@ -80,10 +98,11 @@ policy.
 
 ## Verify
 
-The `probe` command can verify all protocol paths against a running gateway.
+In terminal two, after loading the same `PRIVATE_EGRESS_TOKEN`, the `probe` command can verify all protocol paths against a running gateway.
 It expects TCP and UDP echo targets.
 
 ```bash
+export PRIVATE_EGRESS_TOKEN="$(cat "$HOME/.config/rstream-egress/demo-token")"
 go run ./cmd/probe \
   --addr https://<published-rstream-host> \
   --tcp-target <tcp-echo-host:port> \
@@ -92,7 +111,12 @@ go run ./cmd/probe \
 ```
 
 The probe checks plain `CONNECT` over HTTP/1.1, HTTP/2, and HTTP/3 downstreams,
-then checks `CONNECT-UDP` over HTTP/3.
+then checks `CONNECT-UDP` over HTTP/3. It verifies the gateway certificate and
+hostname using system trust by default. For a private CA, add
+`--ca-file /path/to/gateway-ca.pem`; use `--server-name gateway.example` only when
+that is the intended certificate name (it also sets SNI). These settings apply to
+the downstream gateway, separately from the agent's Engine TLS configuration.
+An untrusted certificate or wrong name is an error, including on H2/H3.
 
 ## Local HTTP/3 mode
 
@@ -112,10 +136,28 @@ Then run the H3-only checks:
 go run ./cmd/probe \
   --addr https://127.0.0.1:9443 \
   --downstream h3 \
+  --insecure-demo-tls \
   --tcp-target 127.0.0.1:9000 \
   --udp-target 127.0.0.1:9001 \
   --access-token dev
 ```
+
+The local gateway creates an ephemeral self-signed certificate. The explicit
+`--insecure-demo-tls` option above is restricted to literal loopback addresses
+(`127.0.0.1` or `::1`); it cannot be used against a published hostname or combined
+with CA/name overrides. It is a local protocol demonstration, not an identity
+verification. Prefer a trusted CA and matching name for a deployed gateway.
+
+## Probe TLS options
+
+| Option | Default / purpose |
+| --- | --- |
+| `--ca-file` | Add a PEM CA bundle to system roots; malformed or missing bundles fail before connecting. |
+| `--server-name` | Override the address host for verification and SNI deliberately. |
+| `--insecure-demo-tls` | False; literal-loopback synthetic demos only. |
+| `--timeout` | Total probe budget, default 20 seconds. |
+| `--access-header`, `--access-token` | Application gateway admission, separate from TLS identity and rstream agent credentials. |
+| `--downstream` | `all`, `h1`, `h2`, `h3`, or `none`; UDP checks run when `--udp-target` is supplied. |
 
 ## Apple Relay profile
 

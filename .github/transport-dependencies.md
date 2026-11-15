@@ -8,7 +8,7 @@ and rejects unexpected versions or replacements for this tuple. Run the producer
 through its Makefile so the generated ICE modfile is also checked.
 
 The review branch pins immutable SDK source
-`v1.37.1-0.20261113005657-bc2415800ddf` from SDK PR #185. This is a Go source
+`v1.37.1-0.20261114141308-06bc287010aa` from SDK PR #185. This is a Go source
 commit reference, not a published stable SDK release. Replace it with the
 certified stable SDK through the normal release process before integration;
 source qualification does not authorize publication, merge or deployment.

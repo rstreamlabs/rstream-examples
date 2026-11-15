@@ -18,15 +18,17 @@ only network activity is the outbound runtime session to the engine.
 
 ## Build
 
-The sample uses Conan 2 to resolve Boost and the rstream C++ SDK. Its
+Install a C++20 compiler, CMake 3.22+, Conan 2, Make and Python 3 (`make verify` uses the standard-library test runner). The direct CMake variant below also requires Ninja. The sample uses Conan 2 to resolve Boost and the rstream C++ SDK. Its
 `conanfile.py` requires `rstream/[>=1.12.0 <2]` and disables SDK utility
 binaries for this application build, so a source fallback builds the libraries
 used by the Beast server without also compiling the rstream CLI helpers. Its
 Boost range matches the SDK's supported Conan range (`>=1.81.0 <1.90.0`);
 Boost 1.90 and 1.91 currently expose inconsistent Cobalt package metadata.
 
+On a machine without a Conan default profile, detect one first. Reuse an existing reviewed profile instead of overwriting it:
+
 ```bash
-conan profile detect --force
+conan profile detect
 conan remote add rstream https://nexus.rstream.io/repository/conan
 make verify
 ```
@@ -88,4 +90,4 @@ make build
 RSTREAM_RUNTIME_CONTEXT=my-test-context python3 qualification/run.py
 ```
 
-Replace the context with one configured for the test environment. Results remain local under `qualification/results/`; latency thresholds apply to that environment. See [Testing](../docs/testing.md) for artifact handling and the distinction between local checks and live integration.
+Replace the context with one configured for the test environment. Results remain local under `qualification/results/`; latency thresholds apply to that environment. See [Testing](../docs/001-testing.md) for artifact handling and the distinction between local checks and live integration.

@@ -1,6 +1,9 @@
 # Coordinated SDK dependencies
 
-The web examples install published SDKs with `npm ci` using their checked-in lockfiles. CI starts with a fresh npm cache so a local package cannot silently satisfy a registry dependency.
+The web examples install published SDKs with `npm ci` using their checked-in lockfiles.
+Use the Node/npm versions in each application README; the LLM web application
+requires npm 11 for its dependency overrides, while the SDK monorepo has its own
+contributor toolchain. CI starts with a fresh npm cache so a local package cannot silently satisfy a registry dependency.
 
 To verify a retained SDK archive against one example’s lockfile, run from the repository root:
 

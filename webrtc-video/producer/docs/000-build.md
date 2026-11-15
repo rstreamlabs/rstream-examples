@@ -24,7 +24,7 @@ configs in mind.
 
 The H.264 profiles use `videotestsrc`, `videoconvert`, `x264enc`, `h264parse`, and `appsink`. The AV1 profiles use `av1enc` and `av1parse` on top of the same structure.
 
-The bundled profiles have specific codec and receiver limits; see [Media compatibility](configuration.md#media-compatibility) before changing a pipeline.
+The bundled profiles have specific codec and receiver limits; see [Media compatibility](001-configuration.md#media-compatibility) before changing a pipeline.
 
 ### macOS
 

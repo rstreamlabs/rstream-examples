@@ -8,6 +8,14 @@ The shape is useful for development, migrations, one-off support work, CI jobs,
 or internal admin tools that need database access without a VPN or inbound
 firewall rule.
 
+## Prerequisites
+
+Use Docker with Compose, the rstream CLI on both machines, and `psql` (or another
+PostgreSQL client). Select a context for the same project on both machines before
+opening the private tunnel. The project must allow private dialing; no public
+TCP reservation is used. `make verify` starts only the sample database and checks
+its seeded data, without connecting to rstream.
+
 ## Start the database
 
 ```bash
@@ -77,3 +85,10 @@ start. It verifies PostgreSQL TLS, transactions, bulk copy, concurrent sessions,
 query cancellation, and recovery after independent database and tunnel
 interruptions. The normal `make run` and `make client-port` workflow does not
 depend on the qualification toolchain.
+
+## Stop the example
+
+Interrupt the server tunnel and client-port forwarders in their own terminals.
+`make stop` stops PostgreSQL while preserving its volume. `make clean` removes the
+sample Compose resources **and database volume**; use it only when that sample
+data should be discarded.

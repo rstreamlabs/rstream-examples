@@ -73,7 +73,7 @@ overlay simply disappears.
 
 ## Install
 
-Both roles need Python 3.11+ for the corrected Pillow image decoder; the worker
+Use Python 3.11+ with `venv` and pip, Git and Make. Building the device viewer also needs Node.js 24 and npm; `make -C worker build` does not build browser assets. Both roles need Python 3.11+ for the corrected Pillow image decoder; the worker
 also requires the corrected `filelock`. Each role owns its own dependencies
 and Makefile: `worker/` installs the YOLO inference stack, while `device/`
 installs the viewer, capture, registry, and tracking stack.
@@ -151,7 +151,7 @@ failover passes only after the stream from worker A reports its failure and the
 same reference frame returns from worker B with identical labels, confidence
 scores, and bounding boxes.
 
-Set latency and throughput budgets for the selected model, accelerator and network. The harness records those inputs with its local results; measurements from one environment do not establish a portable failover bound. See [Testing](../docs/testing.md).
+Set latency and throughput budgets for the selected model, accelerator and network. The harness records those inputs with its local results; measurements from one environment do not establish a portable failover bound. See [Testing](../docs/001-testing.md).
 
 ## Web UI
 

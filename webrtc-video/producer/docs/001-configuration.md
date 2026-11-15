@@ -14,7 +14,7 @@ configuration and receivers that advertise sufficient capacity on every leg.
 see [RFC 6184, section 8.2.2](https://www.rfc-editor.org/rfc/rfc6184#section-8.2.2).
 Keep custom encoded caps within the declared limits; the producer does not
 rewrite arbitrary pipelines or infer camera capabilities from pipeline text.
-Check the distributor’s [profile contract](../../distributor/docs/profiles.md) when selecting a source for fan-out; it must also fit the viewers’ advertised capacity.
+Check the distributor’s [profile contract](../../distributor/docs/000-profiles.md) when selecting a source for fan-out; it must also fit the viewers’ advertised capacity.
 
 For H.264 packetization mode 1, consecutive small NAL units within an access
 unit share MTU-bounded STAP-A RTP packets, as specified in

@@ -20,10 +20,18 @@ requests and upgrades, and serves that server directly through rstream with
   variables
 - an additive setup that keeps the normal Next.js commands intact
 
+## Prerequisites
+
+Use Node.js 24, npm, Git and the installed rstream CLI for the tunnel mode.
+Check `node --version` and `npm --version`; this is a self-hosted Node process,
+not an edge/serverless runtime. Local verification uses synthetic fixtures and
+needs no rstream account. Publication needs a selected project that permits the
+HTTP tunnel and chosen access policy.
+
 ## Run locally
 
 ```bash
-npm install
+npm ci
 npm run verify
 npm run dev
 ```
@@ -104,3 +112,22 @@ remote services through rstream APIs, use `@rstreamlabs/rstream` for hosted
 Control plane calls and `@rstreamlabs/tunnels` for Engine API calls from that
 product backend. This sample focuses on serving the Next.js app itself through a
 data-plane tunnel.
+
+## Configuration reference
+
+| Variable                                                                 | Default / purpose                                                                                                                                  |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `RSTREAM_CONFIG`, `RSTREAM_CONTEXT`                                      | Runtime SDK's shared CLI identity/context. Services can instead inject their own Engine/token or certificate settings; see the Node runtime guide. |
+| `RSTREAM_TUNNEL_NAME`, `RSTREAM_TUNNEL_HOSTNAME`                         | `nextjs-preview`; optional requested stable public hostname. A tunnel name alone does not reserve a public URL.                                    |
+| `RSTREAM_TUNNEL_LABELS`                                                  | Add comma-separated `key=value` discovery metadata to the sample's application/framework labels.                                                   |
+| `RSTREAM_TUNNEL_TOKEN_AUTH`, `RSTREAM_TUNNEL_RSTREAM_AUTH`               | False; `1`, `true` or `yes` requests the matching edge policy. Agent authentication is separate.                                                   |
+| `RSTREAM_TUNNEL_RECONNECT_INITIAL_MS`, `RSTREAM_TUNNEL_RECONNECT_MAX_MS` | 1000 / 30000 ms; bounded reconnect backoff owned by this application.                                                                              |
+| `PORT`                                                                   | 3000; Next's application port configuration, while the tunnel server accepts streams directly.                                                     |
+| `NEXT_ALLOWED_DEV_ORIGINS`                                               | Explicit allowed development hosts for HMR through the tunnel.                                                                                     |
+| `GITHUB_WEBHOOK_SECRET`                                                  | Verify unchanged webhook request bytes; independent from every rstream credential.                                                                 |
+
+Open the printed URL to see the preview page. A GitHub webhook delivery to its
+`/api/webhooks/github` route must use the matching signing secret. An interrupt
+stops the supervisor and its current tunnel; production mode requires a prior
+Next build. API administration and browser-token issuance remain different SDK
+roles from serving this process.
