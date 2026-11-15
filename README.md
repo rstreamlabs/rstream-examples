@@ -1,6 +1,8 @@
 # rstream application examples
 
-Build services and applications around rstream’s outbound connectivity model. These examples combine SDKs, the CLI and application frameworks to show complete integration paths, from a first HTTP service to private worker pools and real-time media.
+rstream makes services and devices reachable through outbound connections, without opening inbound ports on their hosts. These examples show how that connectivity fits a complete application, from an HTTP service to private worker pools and real-time media.
+
+Each application combines the relevant SDK or CLI with its framework, configuration and lifecycle. Start with a small HTTP integration to understand the model; choose a larger example when evaluating that particular architecture.
 
 Start with the [product documentation](https://rstream.io/docs) for accounts, projects and connection concepts. The [Go SDK](https://github.com/rstreamlabs/rstream-go) is the reference implementation; the [SDK overview](https://rstream.io/sdks) helps choose a language and runtime.
 
