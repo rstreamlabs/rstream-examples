@@ -1,70 +1,32 @@
 # Adaptive real-time WebRTC video
 
-Builds use a verified temporary ICE concurrency patch. Applications derived
-from this sample must also adopt its build step; see the [ICE patch guide](./ICE-PATCH.md).
+Build a path from a remote video source to a browser-facing application. The Go producer captures and encodes video, adapts to congestion and repairs packet loss. rstream publishes its WHEP signaling through an outbound tunnel and provides managed STUN/TURN; media travels over standard WebRTC.
 
-This reference implementation covers the path from a remote video source to a
-browser-facing product. The device adapts its encoder to live congestion,
-bounds sender queues, repairs recent packet loss, and keeps the WebRTC session
-recoverable as network paths change. rstream publishes the WHEP control
-surface through an outbound tunnel and supplies managed STUN/TURN connectivity;
-media remains a standard WebRTC session between the device and viewer.
+## Choose a delivery path
 
-## One media core, three delivery paths
+| Path                               | Start here                                    | What it adds                                                         |
+| ---------------------------------- | --------------------------------------------- | -------------------------------------------------------------------- |
+| One device and one browser         | [Producer](producer/README.md)                | An embedded viewer and the complete device-side media path.          |
+| A product around device streaming  | [Next.js platform](platform/README.md)        | Device identity, provisioning, viewer authorization and fleet state. |
+| Several viewers sharing one uplink | [MediaMTX distributor](distributor/README.md) | On-demand fan-out around the same producer.                          |
 
-Every integration builds the Go code in [`producer/`](./producer/). Capture,
-encoding, congestion control, pacing, repair, recovery, and OpenMetrics remain
-one device-side implementation while control and distribution evolve around
-it.
+Capture, encoding, congestion control, pacing and repair stay in the producer across all three paths. The platform owns access and inventory. The distributor owns a shared upstream and separate viewer sessions; it does not transcode. Producer metrics describe the device uplink, while MediaMTX and browser telemetry describe downstream delivery.
 
-- The [standalone guide](https://rstream.io/guides/build-device-to-browser-webrtc-streaming-with-rstream)
-  qualifies one WebRTC session between the producer and a browser.
-- The [Next.js guide](https://rstream.io/guides/integrate-webrtc-video-streaming-into-a-nextjs-platform-with-rstream)
-  runs the same producer in provisioning mode and adds product identity,
-  authorization, and fleet state around that session.
-- The [MediaMTX guide](https://rstream.io/guides/distribute-webrtc-video-with-mediamtx-and-rstream)
-  adds an on-demand distribution backend. One adaptive upstream feeds multi-viewer fan-out while direct
-  WebRTC remains available for one-to-one delivery and transport diagnosis.
-
-In fan-out mode, the producer controls and measures the device-to-MediaMTX
-upstream. MediaMTX and browser telemetry describe each downstream. Keeping
-those congestion domains explicit preserves useful diagnosis as the delivery
-architecture grows.
-
-The implementation is split by responsibility:
-
-- [`producer/`](./producer/) is the Go device agent. It captures with
-  GStreamer, serves WHEP and diagnostics, controls Pion WebRTC, and owns
-  the adaptive media loop and producer-side OpenMetrics exporter.
-- [`platform/`](./platform/) is the Next.js product layer. It provisions
-  devices, issues scoped producer and viewer access, and exposes live tunnel
-  state without proxying the live media session. It supports personal or shared
-  organization access and, for organizations, automatic discovery of labeled
-  project tunnels with optional inventory history.
-- [`distributor/`](./distributor/) is the optional MediaMTX backend. It opens
-  one strict producer WHEP session on first demand and republishes a repaired
-  H.264 stream within the configured viewer limit. An optional
-  [recent-recording mode](./platform/README.md#optional-recent-recordings)
-  provides authorized, bounded MP4 replay and timeline controls in the platform;
-  recording remains off by default.
+The [device-to-browser guide](https://rstream.io/guides/build-device-to-browser-webrtc-streaming-with-rstream), [Next.js guide](https://rstream.io/guides/integrate-webrtc-video-streaming-into-a-nextjs-platform-with-rstream) and [MediaMTX guide](https://rstream.io/guides/distribute-webrtc-video-with-mediamtx-and-rstream) follow that progression.
 
 ## Run and develop
 
-The root `make build`, `make test`, `make verify`, and `make clean` targets cover
-both Go roles. `make run` starts the producer. The
-[producer README](./producer/README.md) starts with the standalone path and
-continues through the congestion, repair, mobility, and qualification model.
+Start with the producer’s [quick start](producer/README.md#quick-start), then add the platform if the application needs device management. Its [setup guide](platform/docs/setup.md) explains personal or organization access, managed or discovered inventory and optional distribution.
 
-Use Node.js 24 to run the platform directly with npm:
+The root `make build`, `make test`, `make verify` and `make clean` targets cover both Go roles; `make run` starts the producer. These targets include the required [ICE concurrency patch](ICE-PATCH.md). Preserve that step when adapting the examples.
 
-```bash
-cd platform
-npm ci
-cp .env.example .env.local
-# Fill PostgreSQL, GitHub OAuth, NextAuth, and rstream settings in .env.local.
-npm run prisma:deploy
-npm run dev
-```
+| Development task                                         | Guide                                                                            |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Install native media dependencies and build the producer | [Producer build](producer/docs/build.md)                                         |
+| Configure codecs, source profiles, adaptation and TURN   | [Producer configuration](producer/docs/configuration.md)                         |
+| Run the application and provision a device               | [Platform overview](platform/README.md)                                          |
+| Configure multi-viewer delivery                          | [Distributor setup](distributor/docs/setup.md)                                   |
+| Add bounded recent recordings                            | [Platform media capabilities](platform/docs/media.md#optional-recent-recordings) |
+| Validate changes and measurements                        | [Repository testing](../docs/testing.md)                                         |
 
-`prisma:deploy` applies the committed migrations. Use `prisma:migrate` when
-intentionally developing a schema change.
+See [Contributing](../CONTRIBUTING.md) and [Security](../SECURITY.md) for repository-wide guidance.

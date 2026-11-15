@@ -1,0 +1,376 @@
+# Configure the video platform
+
+Return to the [platform overview](../README.md) for the application path. Run commands from `webrtc-video/platform`, unless a step changes directory.
+
+## Setup
+
+Use Node.js 24 with npm for the platform's verified development and validation
+workflow, and have a PostgreSQL database available. The integration suite uses
+PostgreSQL 17 in disposable containers.
+
+Create the environment file:
+
+```bash
+cp .env.example .env.local
+```
+
+Fill the product values:
+
+```bash
+POSTGRES_PRISMA_POOL_URL="postgresql://postgres:postgres@localhost:5432/webrtc_video_platform?schema=public"
+POSTGRES_PRISMA_DIRECT_URL="postgresql://postgres:postgres@localhost:5432/webrtc_video_platform?schema=public"
+NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_SECRET="replace-with-a-random-secret"
+GITHUB_CLIENT_ID="github-oauth-client-id"
+GITHUB_CLIENT_SECRET="github-oauth-client-secret"
+CRON_SECRET="replace-with-a-random-secret"
+DEMO_CLEANUP_ENABLED="false"
+```
+
+Use the pooled PostgreSQL URL for `POSTGRES_PRISMA_POOL_URL`. Use the direct, non-pooled PostgreSQL URL for `POSTGRES_PRISMA_DIRECT_URL`; Prisma uses it for migrations.
+
+Fill the rstream application credentials and target tunnels project:
+
+```bash
+RSTREAM_CLIENT_ID="rstream-app-client-id"
+RSTREAM_CLIENT_SECRET="hex-encoded-rstream-app-client-secret"
+RSTREAM_PROJECT_ENDPOINT="rstream-project-endpoint"
+RSTREAM_PROJECT_ID=""
+RSTREAM_TURN_KEYRING_BASE_URL=""
+RSTREAM_WEBHOOK_SIGNING_SECRET="whsec_..."
+WATCH_TOKEN_TTL_SECONDS="120"
+```
+
+The sample resolves the engine from `RSTREAM_PROJECT_ENDPOINT`, which is also
+required for TURN credentials even with an explicit engine and project ID.
+`RSTREAM_PROJECT_ID` is optional; when present, it must match the resolved
+project and supplies the default project scope for short-lived tunnel tokens.
+Application TURN credentials are derived locally from the public key published
+for the selected TURN realm. Leave `RSTREAM_TURN_KEYRING_BASE_URL` empty when
+that key is served by `RSTREAM_API_URL`; set it to a separate public HTTPS origin
+when an interactive access gateway protects the control-plane origin. The keyring
+request refuses redirects and validates the bounded DER key before using it.
+
+### Select personal or organization access
+
+`DEVICE_ACCESS_MODE=user` is the default. Each GitHub account owns a private
+inventory. For an internal installation, use:
+
+```bash
+DEVICE_ACCESS_MODE="organization"
+GITHUB_ORGANIZATION="your-github-organization"
+DEMO_CLEANUP_ENABLED="false"
+```
+
+Register a separate GitHub OAuth application with the internal deployment's
+`NEXTAUTH_URL/api/auth/callback/github` callback. Organization mode requests
+`read:org`: members must authorize that scope, and an organization administrator
+must approve the OAuth application if OAuth application restrictions are enabled.
+An invitation alone does not grant access: GitHub must report active membership.
+Existing users must sign out and authorize again after enabling this mode.
+
+Every protected operation rechecks membership through a bounded verifier, with
+at most 60 seconds of positive caching. Failed refreshes never extend cached
+membership. Previously issued short-lived credentials remain valid until their
+own expiry; an already established media session is not forcibly disconnected
+when membership changes. This is admission control, not immediate revocation of
+active media. Stop the affected source/session when immediate eviction is needed.
+
+With `DEVICE_INVENTORY_MODE=managed` (the default), all active members see,
+create, delete, and control the same devices. Inventory,
+provisioning, viewer authorization, and watch labels use GitHub's stable numeric
+organization ID. `createdById` records who created a device; deleting that account
+does not delete the shared device. There is no separate administrator role.
+
+Apply `npm run prisma:deploy` before starting the upgraded application. The
+migration keeps existing personal devices private and adds a database constraint
+requiring exactly one owner. Changing the environment switches the visible
+inventory; it does not copy or reassign devices. Restart the application after
+configuration changes. Device limits are serialized in PostgreSQL per owner;
+Application database connections and pool acquisition time out after five seconds;
+PostgreSQL statements have a five-second server limit with a six-second client
+deadline. Idle transactions terminate after ten seconds. Migration connections
+use the separate direct URL and do not inherit these application limits.
+Request-rate quotas are bounded per process, so deployments with several replicas
+should also apply their own shared ingress rate limits.
+
+### Select managed or discovered inventory
+
+| Access         | Inventory    | Device registration                                                                       |
+| -------------- | ------------ | ----------------------------------------------------------------------------------------- |
+| `user`         | `managed`    | Each account creates devices and receives a provisioning secret.                          |
+| `organization` | `managed`    | Members share provisioned devices.                                                        |
+| `organization` | `discovered` | Existing project credentials publish labeled video tunnels; devices appear automatically. |
+
+For producers already using the rstream CLI, add:
+
+```bash
+DEVICE_INVENTORY_MODE="discovered"
+RSTREAM_PROJECT_ID="your-project-id"
+DEVICE_DISCOVERY_HISTORY_ENABLED="true"
+```
+
+Keep `RSTREAM_PROJECT_ENDPOINT` configured for engine/TURN resolution; its
+resolved project must match the explicit ID. Personal access with discovery is
+rejected. Database accounts and sessions remain in use. With history enabled,
+the platform remembers stable UUIDs, names and first/last observed presence in a
+separate project-scoped table. Setting history to `false` lists only connected
+devices and neither reads nor writes that table; it does not erase existing
+history. Neither setting changes the managed inventory. Restart after changing
+configuration and apply migrations before starting the application.
+
+The discovery contract is a published HTTP tunnel with token authentication,
+with these labels:
+
+```yaml
+labels:
+  app: webrtc-video-platform
+  inventory: discovered
+  device: 85a6703e-04de-42b6-93ac-c3b70c4cab51
+  device-name: Front camera
+```
+
+Generate a different lowercase UUID once for each device and retain it across
+restarts. `device-name` is optional, accepts up to 80 UTF-8 bytes without control
+characters and may change without changing identity. Without it, the UI uses
+`Device <UUID prefix>`. Concurrent tunnels with the same UUID are rejected;
+unrelated HTTP/WebTTY tunnels are ignored. Labels describe devices inside the
+configured project; restrict who can publish tunnels in that project.
+
+On a producer whose CLI context already selects that project and credentials:
+
+```bash
+cd ../producer
+make build-no-web
+export VIDEO_DEVICE_ID="85a6703e-04de-42b6-93ac-c3b70c4cab51" # replace once per device
+export VIDEO_DEVICE_NAME="Front camera"
+./webrtc-video-producer -config ./config.discovery.h264.yaml
+```
+
+This configuration includes optional bitrate presets and a test-pattern pipeline.
+Replace the pipeline for real capture. It uses local rstream credentials for the
+tunnel and TURN; no `API_URL`, `DEVICE_SECRET` or prior device registration is
+needed. The platform still issues narrowly scoped viewer/control credentials.
+Direct and adaptive MediaMTX delivery use the same discovery contract.
+
+The dashboard refreshes discovery five seconds after each completed request and
+aborts pending work when unmounted. It shows a distinct unavailable state if the
+engine cannot be queried. History records the last successful observation, not
+an exact disconnect time; signed provisioning webhooks do not update discovery
+history. Every playback/control admission resolves the current project tunnel,
+so an old database row cannot authorize an offline or replacement endpoint.
+Creation, provisioning and deletion actions are disabled in discovery mode.
+
+The sample bounds discovery to 100 live labeled tunnels and 1000 remembered
+UUIDs per project; exceeding a limit produces an explicit error instead of a
+partial inventory. Archive obsolete history administratively if required.
+Concurrent database updates preserve the newest observation and have bounded
+lock/query waits.
+
+### Select the distribution backend
+
+Direct playback is the default and needs no MediaMTX configuration.
+
+```bash
+VIDEO_DISTRIBUTOR="direct"
+```
+
+Select MediaMTX when several viewers should share one device uplink.
+
+```bash
+VIDEO_DISTRIBUTOR="mediamtx"
+MEDIAMTX_SOURCE_RESOLVER_JWKS='{"keys":[...]}'
+MEDIAMTX_SOURCE_RESOLVER_ISSUER="rstream-video-distributor"
+MEDIAMTX_SOURCE_RESOLVER_AUDIENCE="rstream-video-source-resolver"
+MEDIAMTX_JWT_PRIVATE_KEY_BASE64="..."
+MEDIAMTX_JWT_ADDITIONAL_JWKS='{"keys":[]}'
+MEDIAMTX_JWT_ISSUER="rstream-webrtc-video-platform"
+MEDIAMTX_JWT_AUDIENCE="rstream-mediamtx"
+MEDIAMTX_TOKEN_TTL_SECONDS="300"
+# Disable direct fallback to preserve one shared device uplink during outages.
+MEDIAMTX_ALLOW_DIRECT_FALLBACK="false"
+```
+
+Choose exactly one MediaMTX exposure. Use a public endpoint when MediaMTX
+already has an HTTPS ingress:
+
+```bash
+MEDIAMTX_EXPOSURE="public"
+MEDIAMTX_PUBLIC_URL="https://media.example"
+MEDIAMTX_TUNNEL_NAME=""
+```
+
+Use an rstream endpoint when the MediaMTX HTTP listener has no public ingress:
+
+```bash
+MEDIAMTX_EXPOSURE="rstream"
+MEDIAMTX_PUBLIC_URL=""
+MEDIAMTX_TUNNEL_NAME="webrtc-video-mediamtx"
+```
+
+`MEDIAMTX_PUBLIC_URL` may use plain HTTP only on a loopback address for local
+development. It cannot contain credentials, a query, or a fragment. The public
+mode still requires the path-scoped MediaMTX bearer; the rstream mode adds an
+independent, short-lived edge token. UDP ICE reachability is configured on
+MediaMTX in both cases and is not carried by the HTTP tunnel.
+
+Run `npm run mediamtx:key -- mediamtx-one` once to generate the asymmetric
+signing material for MediaMTX access and the named distributor identity.
+The platform publishes the public key at `/api/video/distributor/jwks` and
+keeps the private key server-side. The source resolver at
+`/api/video/distributor/source` verifies a separate, short-lived Ed25519 request
+signed by the named distributor instance. It returns producer WHEP,
+distributor WHIP, and TURN material only for a known device with an online
+tunnel.
+
+MediaMTX 1.21.2 [refreshes a remote JWKS at most once per hour](https://github.com/bluenviron/mediamtx/blob/v1.21.2/internal/auth/manager.go).
+Rotate the access
+key in two phases so that every instance learns the next key before it signs a
+token. Keep the current private key active, add the next public JWK to
+`MEDIAMTX_JWT_ADDITIONAL_JWKS`, deploy, then wait at least one hour or refresh
+each instance through a controlled restart. Switch to the next private key and
+replace the additional set with the old public JWK. Remove the old public key
+only after the longest token lifetime and another complete JWKS refresh window.
+Private keys are never placed in the additional set.
+
+The [distributor README](../../distributor/README.md) documents the combined image,
+MediaMTX environment, ICE reachability, profile differences, and qualification
+gates. Native MediaMTX WHEP pull is retained as an explicit reduced-feature
+profile. The rstream producer accepts MediaMTX 1.21.2's narrower offer only when
+that compatibility profile is enabled; strict producer profiles remain strict.
+Native pull negotiates NACK/RTX and TWCC, but does not provide FlexFEC,
+adaptive source encoding or the dynamic source resolver.
+
+### Run the complete local MediaMTX stack
+
+The local launcher builds the combined MediaMTX image, starts Next.js, and
+tears everything down on `Ctrl-C`. It creates one temporary rstream tunnel so
+the container can reach the local platform control plane. Its default exposes
+MediaMTX directly on loopback:
+
+```bash
+npm run mediamtx:local
+```
+
+Exercise the same media pipeline with MediaMTX HTTP control published through
+rstream:
+
+```bash
+npm run mediamtx:local -- --exposure rstream
+```
+
+Open `http://localhost:3000`, create a device, and run the producer command
+shown by the dashboard. In the default mode the browser connects to
+`http://localhost:8889`; in rstream mode it connects to the protected MediaMTX
+tunnel. The producer itself still publishes its device WHEP endpoint through
+rstream in both cases. The temporary platform callback lets the container
+reach local JWKS and source-resolution routes; a deployed platform uses its
+normal HTTPS origin instead.
+
+### Edge authentication qualification
+
+Set `RSTREAM_EDGE_AUTH_EXPECTED_ENGINE` to the exact engine selected by the
+sample credentials, then run:
+
+```bash
+npm run test:rstream-edge-auth
+```
+
+The live check creates a temporary token-protected tunnel and exercises a
+complete POST, PATCH, expiry, credential-renewal, and DELETE lifecycle. It
+verifies that rstream authenticates every edge request while the producer
+continues to receive its own application Bearer token. The expected-engine
+guard is evaluated before the check creates any remote resource.
+
+An operator can qualify a deployed context directly:
+
+```bash
+RSTREAM_EDGE_AUTH_CONTEXT="<context>" \
+RSTREAM_EDGE_AUTH_PROJECT_ID="<project-id>" \
+RSTREAM_EDGE_AUTH_EXPECTED_ENGINE="<engine-host:port>" \
+npm run test:rstream-edge-auth:context
+```
+
+This canary verifies complete WHEP-like lifecycles both with and without an
+application bearer, plus path scope, reserved-query sanitization, and
+malformed-token rejection. It validates the context, project, and exact engine
+before creating its temporary tunnel. The check above additionally qualifies
+real expiry and renewal.
+
+### rstream project setup
+
+Use a dedicated rstream project for this sample. Create an application token scoped to that project and store its client id and secret in the Next.js environment.
+
+The app token is used server-side only. It creates short-lived producer tokens, viewer tokens, TURN credentials, and dashboard watch tokens. Devices and browsers should never receive the application client secret. Dashboard watch tokens are minted on demand because browser watch streams send them as `rstream.token` query values to the engine streaming endpoint; they use explicit read-only watch permissions plus list-only tunnel resources filtered to the signed-in user's devices.
+
+Create a webhook destination for the same project:
+
+| Field            | Value                                                           |
+| ---------------- | --------------------------------------------------------------- |
+| Destination type | Webhook endpoint                                                |
+| Endpoint URL     | `https://your-platform.example.com/api/rstream/webhook`         |
+| Events           | `tunnel.created`, `tunnel.deleted`                              |
+| Signing secret   | Copy the generated secret into `RSTREAM_WEBHOOK_SIGNING_SECRET` |
+
+For local development, expose the Next.js app with any HTTPS tunnel and use the public `/api/rstream/webhook` URL as the endpoint URL. The route verifies the raw request body against `rstream-signature` before parsing the event.
+
+You can also drive the local receiver directly from the CLI while developing:
+
+```bash
+rstream events \
+  --webhook \
+  --webhook-secret "$RSTREAM_WEBHOOK_SIGNING_SECRET" \
+  --events tunnel.created,tunnel.deleted \
+  --tunnel-filter 'labels.app=webrtc-video-platform' \
+  --forward-to http://localhost:3000/api/rstream/webhook
+```
+
+Passing the same `RSTREAM_WEBHOOK_SIGNING_SECRET` to the CLI and the Next.js app
+keeps local signatures deterministic. When no `--webhook-secret` is passed, the
+CLI prints an ephemeral `whsec_...` value that can be used for a single receiver
+session. This mirrors the webhook request body and signed headers, but it does
+not create delivery history or retry after the CLI exits.
+
+### rstream resource requirements
+
+The sample always mints short-lived tokens with tunnel resources. Producer tokens can only create the expected tunnel for one device, direct viewer tokens can only connect to that device's `/whep` resource, distributor tokens are bound to one MediaMTX device path, and dashboard watch tokens can only list the sample tunnels for the signed-in user.
+
+Install dependencies, apply the checked-in database migrations, and start the app:
+
+```bash
+npm ci
+npm run prisma:deploy
+npm run dev
+```
+
+`npm run dev` generates the Prisma client before starting Next.js. Use
+`npm run prisma:migrate` when deliberately changing the database schema and
+creating a new development migration.
+
+Open `http://localhost:3000`, sign in with GitHub, create a device, and copy the generated device secret.
+
+For a production-style local run:
+
+```bash
+npm run build
+npm run start
+```
+
+## Run a Producer
+
+From the device-side example:
+
+```bash
+cd ../producer
+make build-provisioning
+API_URL=http://localhost:3000 \
+DEVICE_SECRET=dev_... \
+./webrtc-video-producer -config ./config.provisioning.h264.yaml
+```
+
+The producer asks this application for provisioning, creates its rstream tunnel with the returned short-lived token, and serves only the API surface required by the product viewer when `web.viewer.enabled` is `false`. `make build-provisioning` builds that no-viewer binary without requiring Node.js or npm on the producer machine.
+
+The provisioning profile uses the same adaptive 2–8 Mbit/s H.264 sender,
+bounded pacer, NACK/RTX, and one-per-five FlexFEC protection qualified by the
+standalone producer. It admits one source session: the selected direct browser
+or the MediaMTX adapter owns that feedback loop, never both at once.
