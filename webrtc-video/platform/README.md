@@ -48,11 +48,11 @@ These choices have distinct authorization and lifecycle rules. Configure them th
 
 | Task                                                          | Guide                                                                                                           |
 | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Understand provisioning, tokens and the SDK boundaries        | [Architecture](docs/001-architecture.md)                                                                            |
-| Configure access, inventory, project credentials and delivery | [Setup](docs/000-setup.md)                                                                                          |
-| Add distribution metrics, recordings or source controls       | [Media capabilities](docs/002-media.md)                                                                             |
-| Configure exposure, retention and deployment secrets          | [Deployment](docs/004-deployment.md)                                                                                |
-| Validate application changes and media integration            | [Testing](docs/003-testing.md)                                                                                      |
+| Understand provisioning, tokens and the SDK boundaries        | [Architecture](docs/001-architecture.md)                                                                        |
+| Configure access, inventory, project credentials and delivery | [Setup](docs/000-setup.md)                                                                                      |
+| Add distribution metrics, recordings or source controls       | [Media capabilities](docs/002-media.md)                                                                         |
+| Configure exposure, retention and deployment secrets          | [Deployment](docs/004-deployment.md)                                                                            |
+| Validate application changes and media integration            | [Testing](docs/003-testing.md)                                                                                  |
 | Follow the product integration walkthrough                    | [Next.js guide](https://rstream.io/guides/integrate-webrtc-video-streaming-into-a-nextjs-platform-with-rstream) |
 
 See [Contributing](../../CONTRIBUTING.md) and [Security](../../SECURITY.md) for repository-wide guidance.

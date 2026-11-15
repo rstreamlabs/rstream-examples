@@ -20,11 +20,11 @@ Start with the producer’s [quick start](producer/README.md#quick-start), then 
 
 The root `make build`, `make test`, `make verify` and `make clean` targets cover both Go roles; `make run` starts the producer. These targets include the required [ICE concurrency patch](ICE-PATCH.md). Preserve that step when adapting the examples.
 
-| Development task                                         | Guide                                                                            |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Development task                                         | Guide                                                                                |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | Install native media dependencies and build the producer | [Producer build](producer/docs/000-build.md)                                         |
 | Configure codecs, source profiles, adaptation and TURN   | [Producer configuration](producer/docs/001-configuration.md)                         |
-| Run the application and provision a device               | [Platform overview](platform/README.md)                                          |
+| Run the application and provision a device               | [Platform overview](platform/README.md)                                              |
 | Configure multi-viewer delivery                          | [Distributor setup](distributor/docs/001-setup.md)                                   |
 | Add bounded recent recordings                            | [Platform media capabilities](platform/docs/002-media.md#optional-recent-recordings) |
 | Validate changes and measurements                        | [Repository testing](../docs/001-testing.md)                                         |

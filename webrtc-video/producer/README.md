@@ -52,10 +52,10 @@ Camera and adaptive profiles are described in [Producer configuration](docs/001-
 
 | Task                                                        | Guide                                                                                                      |
 | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Understand SDK, capture and delivery boundaries             | [Architecture](docs/002-architecture.md)                                                                       |
-| Install native dependencies, build or package the binary    | [Build and troubleshooting](docs/000-build.md)                                                                 |
-| Configure publication, TURN, codecs, adaptation and metrics | [Configuration](docs/001-configuration.md)                                                                     |
-| Test an impaired media path                                 | [Network testing](docs/003-network-testing.md)                                                                 |
+| Understand SDK, capture and delivery boundaries             | [Architecture](docs/002-architecture.md)                                                                   |
+| Install native dependencies, build or package the binary    | [Build and troubleshooting](docs/000-build.md)                                                             |
+| Configure publication, TURN, codecs, adaptation and metrics | [Configuration](docs/001-configuration.md)                                                                 |
+| Test an impaired media path                                 | [Network testing](docs/003-network-testing.md)                                                             |
 | Follow the complete walkthrough                             | [Device-to-browser guide](https://rstream.io/guides/build-device-to-browser-webrtc-streaming-with-rstream) |
 
 Use [Contributing](../../CONTRIBUTING.md) and [Security](../../SECURITY.md) for repository-wide development and support.

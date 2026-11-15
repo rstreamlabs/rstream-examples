@@ -30,11 +30,11 @@ The build preserves the [required ICE patch](../ICE-PATCH.md) and the bounded Me
 
 | Task                                                 | Guide                                                                                         |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Choose direct, adapter or native-pull delivery       | [Profiles](docs/000-profiles.md)                                                                  |
-| Build the image and connect it to the platform       | [Setup](docs/001-setup.md)                                                                        |
-| Understand retries, packet bounds and cleanup        | [Lifecycle](docs/002-lifecycle.md)                                                                |
-| Inspect metrics, session associations and recordings | [Observability](docs/003-observability.md)                                                        |
-| Run local integration and performance checks         | [Testing](docs/004-testing.md)                                                                    |
+| Choose direct, adapter or native-pull delivery       | [Profiles](docs/000-profiles.md)                                                              |
+| Build the image and connect it to the platform       | [Setup](docs/001-setup.md)                                                                    |
+| Understand retries, packet bounds and cleanup        | [Lifecycle](docs/002-lifecycle.md)                                                            |
+| Inspect metrics, session associations and recordings | [Observability](docs/003-observability.md)                                                    |
+| Run local integration and performance checks         | [Testing](docs/004-testing.md)                                                                |
 | Follow the distribution walkthrough                  | [MediaMTX guide](https://rstream.io/guides/distribute-webrtc-video-with-mediamtx-and-rstream) |
 
 See [Contributing](../../CONTRIBUTING.md) and [Security](../../SECURITY.md) for repository-wide guidance.
