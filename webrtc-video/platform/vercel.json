@@ -3,7 +3,8 @@
   "git": {
     "deploymentEnabled": {
       "codex/video-organization-quality": false,
-      "codex/lot2-quic-064": false
+      "codex/lot2-quic-064": false,
+      "codex/dependency-updates-and-docs": false
     }
   },
   "crons": [
