@@ -89,10 +89,19 @@ before starting the stack:
 
 ```bash
 # Retain the existing password; add these values to .env:
+# COMPOSE_PATH_SEPARATOR=:
+# COMPOSE_FILE=compose.yaml:compose.hostname.yaml
 # RSTREAM_GRAFANA_HOSTNAME=<your-stable-domain>
 # GRAFANA_ROOT_URL=https://<your-stable-domain>/
 make run
 ```
+
+The base configuration leaves the hostname label absent so the engine allocates
+the endpoint. The optional `compose.hostname.yaml` file adds that label and
+requires a hostname. Retaining the file selection in `.env` applies the same
+[Compose override](https://docs.docker.com/compose/how-tos/multiple-compose-files/merge/)
+to later starts and restarts; `COMPOSE_PATH_SEPARATOR` keeps the file separator
+explicit across platforms.
 
 Recreate the Grafana container after changing `GRAFANA_ROOT_URL`. Keep all terminals on the same local `.env`; no foreground tunnel process or second terminal needs a separately generated secret.
 
@@ -124,6 +133,7 @@ make clean
 | `RSTREAM_ENGINE`, `RSTREAM_AUTHENTICATION_TOKEN` | Project-scoped agent authority and identity for the container, separate from Grafana login. |
 | `RSTREAM_UID`, `RSTREAM_GID`, `DOCKER_GID` | Non-root process identity and separately granted socket group; not a read-only Docker permission model. |
 | `RSTREAM_GRAFANA_HOSTNAME`, `GRAFANA_ROOT_URL` | Optional requested stable tunnel host and matching external Grafana origin. |
+| `COMPOSE_FILE`, `COMPOSE_PATH_SEPARATOR` | Select `compose.yaml:compose.hostname.yaml` with separator `:` when using a stable hostname; omit both for automatic addressing. |
 | `RSTREAM_HTTP_AUTH_RSTREAM` | False; request project-supported browser authentication at the edge. |
 | `GRAFANA_PORT`, `PROMETHEUS_PORT` | Local loopback ports 13000 / 19090. The wait helper loads the same `.env`. |
 | `RSTREAM_SITE_LABEL` | `home`; discovery metadata for this stack. |

@@ -39,12 +39,38 @@ test("generated credentials persist privately and configure a non-root watcher",
   const result = render(envFile);
   assert.equal(result.status, 0, result.stderr);
   const config = JSON.parse(result.stdout);
+  assert.equal(Object.hasOwn(config.services.grafana.labels, "rstream.tunnel.grafana.host"), false, "automatic addressing must omit the optional host label");
   assert.equal(config.services.rstream.user, "1000:1000");
   assert.equal(config.services.rstream.environment.RSTREAM_CONFIG, "/tmp/rstream-no-config.yaml");
   assert.deepEqual(config.services.rstream.group_add, ["997"]);
   assert.equal(config.services.rstream.volumes.find((volume) => volume.target === "/var/run/docker.sock").read_only, true);
   const password = original.match(/GRAFANA_ADMIN_PASSWORD=(.+)/)[1];
   assert.equal(config.services.grafana.environment.GF_SECURITY_ADMIN_PASSWORD, password);
+});
+
+test("a stable-domain override is selected by the retained Compose configuration", async (t) => {
+  const { readFile } = await import("node:fs/promises");
+  const { configure } = await import("./configure.mjs");
+  const directory = await mkdtemp(path.join(os.tmpdir(), "rstream-homelab-host-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  await configure(directory, "997");
+  const envFile = path.join(directory, ".env");
+  const original = await readFile(envFile, "utf8");
+  const selection = "\nCOMPOSE_PATH_SEPARATOR=:\nCOMPOSE_FILE=compose.yaml:compose.hostname.yaml\n";
+  await writeFile(envFile, `${original}${selection}RSTREAM_GRAFANA_HOSTNAME=grafana.example.test\n`, { mode: 0o600 });
+  const renderSelected = () => spawnSync("docker", ["compose", "--profile", "rstream", "--env-file", envFile, "config", "--format", "json"], {
+    cwd: path.dirname(compose), env: { PATH: process.env.PATH, DOCKER_HOST: "tcp://127.0.0.1:1" }, encoding: "utf8", timeout: 10000,
+  });
+  const result = renderSelected();
+  assert.equal(result.error, undefined);
+  assert.equal(result.status, 0, result.stderr);
+  const config = JSON.parse(result.stdout);
+  assert.equal(config.services.grafana.labels["rstream.tunnel.grafana.host"], "grafana.example.test");
+  assert.equal(config.services.grafana.labels["rstream.tunnel.grafana.http.version"], "http/1.1");
+  await writeFile(envFile, `${original}${selection}`, { mode: 0o600 });
+  const missingHost = renderSelected();
+  assert.notEqual(missingHost.status, 0, "explicit stable-domain selection requires a hostname");
+  assert.match(missingHost.stderr, /RSTREAM_GRAFANA_HOSTNAME/);
 });
 
 

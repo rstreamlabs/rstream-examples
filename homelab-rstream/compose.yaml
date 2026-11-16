@@ -33,7 +33,6 @@ services:
       rstream.tunnel.grafana.forward: "3000"
       rstream.tunnel.grafana.publish: "true"
       rstream.tunnel.grafana.protocol: "http"
-      rstream.tunnel.grafana.host: "${RSTREAM_GRAFANA_HOSTNAME:-}"
       rstream.tunnel.grafana.http.version: "http/1.1"
       rstream.tunnel.grafana.http.auth.rstream: "${RSTREAM_HTTP_AUTH_RSTREAM:-false}"
       rstream.tunnel.grafana.label.env: "homelab"
