@@ -31,7 +31,7 @@ access controls before exposing sensitive data.
 rstream login
 rstream project list
 rstream project use my-project-endpoint
-export GITHUB_WEBHOOK_SECRET="$(openssl rand -hex 24)"
+export GITHUB_WEBHOOK_SECRET="$(node -p 'require("node:crypto").randomBytes(24).toString("hex")')"
 npm run dev:tunnel
 ```
 
