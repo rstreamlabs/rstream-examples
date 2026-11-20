@@ -15,9 +15,9 @@ npm run dev
 ```
 
 Open `http://127.0.0.1:3000`. Expect the preview and webhook inbox.
-In a separate terminal, `npm run smoke:local` runs a loopback fixture,
-sends a signed delivery, and checks that the page shows it. Stop the
-development server with Ctrl+C.
+Stop the development server with Ctrl+C. To verify signed delivery without
+starting the app manually, run `npm run smoke:local`. It starts a loopback
+fixture, checks the inbox and stops the fixture.
 
 ## Serve the application through rstream
 
