@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "workflow": "https://github.com/rstreamlabs/rstream-examples/actions/runs/37219326619",
+  "revision": "82c9c400373161b370ebb58a1236796b7912c360",
+  "qualificationPassed": false,
+  "stage": "producer tunnel publication before browser/media setup",
+  "scope": "Forced TURN qualification attempted on hosted Ubuntu 24.04/x86-64 using the compatible bounded-handshake SDK backport. No media measurements are available.",
+  "runtime": {
+    "dockerVersion": "28.0.4",
+    "operatingSystem": "linux",
+    "kernelRelease": "6.17.0-1022-azure",
+    "architecture": "x86_64",
+    "logicalCPUs": 4,
+    "memoryBytes": 16766414848,
+    "producerLocation": "local-docker-daemon"
+  },
+  "producerImage": "sha256:fd478b62e88af82f41e381a678e41792490929cb4801aa37f0dfce571084c3da",
+  "browserImage": "sha256:90628ac4d6674073002b25dbad92c63c3c36d025b4a3d1efb7a5983c5211fd5d",
+  "setupTimeline": [
+    {
+      "name": "runtime-prepared",
+      "observedAt": "2026-10-04T17:08:28.073Z"
+    },
+    {
+      "name": "producer-build-started",
+      "observedAt": "2026-10-04T17:08:28.116Z"
+    },
+    {
+      "name": "producer-build-completed",
+      "observedAt": "2026-10-04T17:10:47.754Z"
+    },
+    {
+      "name": "browser-build-started",
+      "observedAt": "2026-10-04T17:10:47.849Z"
+    },
+    {
+      "name": "browser-build-completed",
+      "observedAt": "2026-10-04T17:11:13.500Z"
+    },
+    {
+      "name": "connection-started",
+      "observedAt": "2026-10-04T17:11:13.530Z"
+    },
+    {
+      "name": "producer-container-started",
+      "observedAt": "2026-10-04T17:11:14.196Z"
+    }
+  ],
+  "connectionDeadlineObservations": {
+    "configuredAttemptTimeoutSeconds": 15,
+    "configuredRetryDelaySeconds": 5,
+    "observedDeadlineErrors": 4,
+    "secondsAfterContainerStart": [14.987333, 35.00122, 55.014717, 75.028571],
+    "scope": "Log observation times relative to Docker container-start acknowledgement, not exact per-attempt execution durations."
+  },
+  "runnerConnectivity": {
+    "schemaVersion": 1,
+    "cliVersion": "1.32.10",
+    "scope": "runner-host",
+    "exitCode": 1,
+    "reportAvailable": true,
+    "checks": [
+      {
+        "name": "config",
+        "status": "pass"
+      },
+      {
+        "name": "context",
+        "status": "pass"
+      },
+      {
+        "name": "token",
+        "status": "pass"
+      },
+      {
+        "name": "control_plane_auth",
+        "status": "pass"
+      },
+      {
+        "name": "project",
+        "status": "pass"
+      },
+      {
+        "name": "engine_address",
+        "status": "pass"
+      },
+      {
+        "name": "dns",
+        "status": "pass"
+      },
+      {
+        "name": "tls",
+        "status": "fail"
+      },
+      {
+        "name": "quic_transport",
+        "status": "fail"
+      },
+      {
+        "name": "tunnel_transport",
+        "status": "fail"
+      },
+      {
+        "name": "engine",
+        "status": "fail"
+      }
+    ],
+    "tokenExpired": false
+  },
+  "socketLimits": {
+    "previous": {
+      "receive": 1048576,
+      "send": 212992
+    },
+    "applied": {
+      "receive": 7500000,
+      "send": 7500000
+    },
+    "restored": true
+  },
+  "boundaries": [
+    "Runner-host diagnostics are distinct from producer-container networking.",
+    "Authentication/project/DNS success does not establish reachable engine TLS or QUIC.",
+    "Neither expired credentials nor an indefinite handshake is demonstrated here. The underlying network/transport failure remains unclassified."
+  ]
+}

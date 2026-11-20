@@ -1,0 +1,268 @@
+{
+  "assertions": [
+    {
+      "description": "every matrix run produced a machine-readable summary",
+      "name": "complete-runs",
+      "passed": true
+    },
+    {
+      "description": "every run qualifies the same repository revision",
+      "name": "single-revision",
+      "passed": true
+    },
+    {
+      "description": "every run qualifies the same WebRTC producer source tree",
+      "name": "single-producer-tree",
+      "passed": true
+    },
+    {
+      "description": "the WebRTC producer source tree is clean for every run",
+      "name": "clean-producer-tree",
+      "passed": true
+    },
+    {
+      "description": "every run applies the same declared network conditions",
+      "name": "single-impairment-profile",
+      "passed": true
+    },
+    {
+      "description": "every full-profile run uses one explicit FlexFEC protection ratio",
+      "name": "single-full-protection-profile",
+      "passed": true
+    },
+    {
+      "description": "direct-nack-rtx has at least 3 complete run(s)",
+      "name": "direct-nack-rtx-coverage",
+      "passed": true
+    },
+    {
+      "description": "relay-nack-rtx has at least 3 complete run(s)",
+      "name": "relay-nack-rtx-coverage",
+      "passed": true
+    },
+    {
+      "description": "direct-nack-rtx-flexfec has at least 3 complete run(s)",
+      "name": "direct-nack-rtx-flexfec-coverage",
+      "passed": true
+    },
+    {
+      "description": "relay-nack-rtx-flexfec has at least 3 complete run(s)",
+      "name": "relay-nack-rtx-flexfec-coverage",
+      "passed": true
+    },
+    {
+      "description": "the full protection profile passes every direct-reference run",
+      "name": "full-direct-pass",
+      "passed": true
+    },
+    {
+      "description": "the full protection profile passes every rstream relay run",
+      "name": "full-relay-pass",
+      "passed": true
+    },
+    {
+      "description": "every full-profile direct run forces and measures a congestion response",
+      "name": "full-direct-adaptation-coverage",
+      "passed": true
+    },
+    {
+      "description": "every full-profile relay run receives valid TWCC feedback and avoids increasing its target under additional pressure",
+      "name": "full-relay-feedback-coverage",
+      "passed": true
+    },
+    {
+      "description": "full-profile rstream relay median impaired output stays at or above 20 fps",
+      "name": "full-relay-frame-rate",
+      "passed": true
+    },
+    {
+      "description": "full-profile rstream relay median impaired freeze ratio stays at or below 10%",
+      "name": "full-relay-freezes",
+      "passed": true
+    },
+    {
+      "description": "every full-profile direct and relay run reports H.264 quantization quality",
+      "name": "full-profile-quality-coverage",
+      "passed": true
+    },
+    {
+      "description": "full-profile rstream relay median impaired H.264 QP stays at or below 42",
+      "name": "full-relay-compression-quality",
+      "passed": true
+    },
+    {
+      "description": "rstream relay stays within 5 fps of the direct reference under identical impairment",
+      "name": "relay-direct-frame-gap",
+      "passed": true
+    },
+    {
+      "description": "rstream relay stays within five freeze-percentage points of the direct reference",
+      "name": "relay-direct-freeze-gap",
+      "passed": true
+    },
+    {
+      "description": "rstream relay average H.264 QP stays within six points of the direct reference",
+      "name": "relay-direct-quality-gap",
+      "passed": true
+    },
+    {
+      "description": "proactive repair materially improves a degraded NACK/RTX relay baseline",
+      "name": "proactive-repair-gain",
+      "passed": true
+    }
+  ],
+  "groups": {
+    "direct-nack-rtx": {
+      "adaptationRuns": 3,
+      "feedbackRuns": 3,
+      "impairedAverageQP": {
+        "maximum": 31.645057142857105,
+        "median": 31.585457142857123,
+        "minimum": 31.309799809342213
+      },
+      "impairedFPS": {
+        "maximum": 29.465983906364304,
+        "median": 29.15886757136172,
+        "minimum": 28.9409767945454
+      },
+      "impairedFreezeRatio": {
+        "maximum": 0.05805753079916893,
+        "median": 0.04064374542794441,
+        "minimum": 0.025093589143659337
+      },
+      "impairedReceivedKbps": {
+        "maximum": 1907.6059701492538,
+        "median": 1898.005946481665,
+        "minimum": 1887.7452736318407
+      },
+      "maximumRTTMilliseconds": {
+        "maximum": 232,
+        "median": 217,
+        "minimum": 197
+      },
+      "passedRuns": 2,
+      "path": "direct",
+      "profile": "nack-rtx",
+      "qualityRuns": 3,
+      "runs": 3
+    },
+    "relay-nack-rtx": {
+      "adaptationRuns": 3,
+      "feedbackRuns": 3,
+      "impairedAverageQP": {
+        "maximum": 31.419704761904736,
+        "median": 31.331092117758743,
+        "minimum": 31.330066666666713
+      },
+      "impairedFPS": {
+        "maximum": 28.63081471940045,
+        "median": 28.163241407576557,
+        "minimum": 28.002926115581566
+      },
+      "impairedFreezeRatio": {
+        "maximum": 0.17029992684711048,
+        "median": 0.16177762164061127,
+        "minimum": 0.1279604203870137
+      },
+      "impairedReceivedKbps": {
+        "maximum": 1912.1990049751244,
+        "median": 1898.841791044776,
+        "minimum": 1894.461843409316
+      },
+      "maximumRTTMilliseconds": {
+        "maximum": 342,
+        "median": 321,
+        "minimum": 317
+      },
+      "passedRuns": 0,
+      "path": "relay",
+      "profile": "nack-rtx",
+      "qualityRuns": 3,
+      "runs": 3
+    },
+    "direct-nack-rtx-flexfec": {
+      "adaptationRuns": 3,
+      "feedbackRuns": 3,
+      "impairedAverageQP": {
+        "maximum": 31.54908658420548,
+        "median": 31.53111322549955,
+        "minimum": 31.189439696106344
+      },
+      "impairedFPS": {
+        "maximum": 29.914904816211948,
+        "median": 29.87389179857799,
+        "minimum": 29.717160490216152
+      },
+      "impairedFreezeRatio": {
+        "maximum": 0.02415981748515604,
+        "median": 0.005994677895721846,
+        "minimum": 0.005939667027533136
+      },
+      "impairedReceivedKbps": {
+        "maximum": 2459.371769383698,
+        "median": 2428.047713717694,
+        "minimum": 2414.836653386454
+      },
+      "maximumRTTMilliseconds": {
+        "maximum": 199,
+        "median": 195,
+        "minimum": 195
+      },
+      "passedRuns": 3,
+      "path": "direct",
+      "profile": "nack-rtx-flexfec",
+      "qualityRuns": 3,
+      "runs": 3
+    },
+    "relay-nack-rtx-flexfec": {
+      "adaptationRuns": 2,
+      "feedbackRuns": 3,
+      "impairedAverageQP": {
+        "maximum": 31.43688867745006,
+        "median": 31.436244041944718,
+        "minimum": 31.32398095238094
+      },
+      "impairedFPS": {
+        "maximum": 29.63634767853486,
+        "median": 29.609690444145357,
+        "minimum": 29.545122129589
+      },
+      "impairedFreezeRatio": {
+        "maximum": 0.04341974369477442,
+        "median": 0.03572159971914222,
+        "minimum": 0.02109112183706304
+      },
+      "impairedReceivedKbps": {
+        "maximum": 2465.321393034826,
+        "median": 2459.8768619662364,
+        "minimum": 2453.715422885572
+      },
+      "maximumRTTMilliseconds": {
+        "maximum": 313,
+        "median": 306,
+        "minimum": 251
+      },
+      "passedRuns": 3,
+      "path": "relay",
+      "profile": "nack-rtx-flexfec",
+      "qualityRuns": 3,
+      "runs": 3
+    }
+  },
+  "impairment": {
+    "discipline": "selective-prio+netem",
+    "scope": "peer-webrtc-transport-address",
+    "capacityKbps": 4000,
+    "queueLimitPackets": 256,
+    "delay": "120ms",
+    "jitter": "30ms",
+    "loss": "2%"
+  },
+  "incomplete": [],
+  "passed": true,
+  "protection": {
+    "mediaPackets": 5,
+    "repairPackets": 1
+  },
+  "runs": 12
+}

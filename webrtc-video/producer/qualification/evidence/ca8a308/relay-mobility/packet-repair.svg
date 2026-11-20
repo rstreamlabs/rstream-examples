@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="460" viewBox="0 0 960 460" role="img" aria-labelledby="title description" style="font-family:system-ui,sans-serif">
+  <title id="title">Packet loss triggers repair</title>
+  <desc id="description">NACK requests and retransmitted packets received in each network phase.</desc>
+  <rect width="100%" height="100%" fill="#ffffff"/>
+  <text x="78" y="38" font-size="32" font-weight="750" fill="#111827">Packet loss triggers repair</text>
+  <line x1="78" y1="70" x2="102" y2="70" stroke="#d97706" stroke-width="3"/><text x="109" y="76" font-size="16" fill="#111827">NACK requests</text><line x1="298" y1="70" x2="322" y2="70" stroke="#2563eb" stroke-width="3"/><text x="329" y="76" font-size="16" fill="#111827">RTX received</text>
+  <line x1="78" y1="388" x2="932" y2="388" stroke="#e2e8f0"/><text x="66" y="393" text-anchor="end" font-size="16" fill="#64748b">0</text>
+  <line x1="78" y1="242" x2="932" y2="242" stroke="#e2e8f0"/><text x="66" y="247" text-anchor="end" font-size="16" fill="#64748b">100</text>
+  <line x1="78" y1="96" x2="932" y2="96" stroke="#e2e8f0"/><text x="66" y="101" text-anchor="end" font-size="16" fill="#64748b">200</text>
+  <rect x="135.8" y="388" width="46" height="1" rx="4" fill="#d97706"/>
+      <rect x="187.8" y="388" width="46" height="1" rx="4" fill="#2563eb"/>
+      <text x="184.8" y="416" text-anchor="middle" font-size="16" fill="#475569">baseline</text>
+<rect x="349.3" y="388" width="46" height="1" rx="4" fill="#d97706"/>
+      <rect x="401.3" y="388" width="46" height="1" rx="4" fill="#2563eb"/>
+      <text x="398.3" y="416" text-anchor="middle" font-size="16" fill="#475569">capacity limit</text>
+<rect x="562.8" y="139.8" width="46" height="248.2" rx="4" fill="#d97706"/>
+      <rect x="614.8" y="167.5" width="46" height="220.5" rx="4" fill="#2563eb"/>
+      <text x="611.8" y="416" text-anchor="middle" font-size="16" fill="#475569">loss + delay</text>
+<rect x="776.3" y="386.5" width="46" height="1.5" rx="4" fill="#d97706"/>
+      <rect x="828.3" y="386.5" width="46" height="1.5" rx="4" fill="#2563eb"/>
+      <text x="825.3" y="416" text-anchor="middle" font-size="16" fill="#475569">recovery</text>
+  <line x1="78" y1="388" x2="932" y2="388" stroke="#94a3b8"/>
+</svg>

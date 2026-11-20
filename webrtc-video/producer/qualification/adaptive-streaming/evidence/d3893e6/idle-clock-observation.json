@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "revision": "2c15bbcf1e606d56e023bc28bba6f5d7289fdf9d",
+  "scope": "Eight-minute simultaneous host/Linux VM scheduling observation with no video producer running; unrelated pre-existing applications left running.",
+  "intervalMilliseconds": 25,
+  "inputSHA256": {
+    "host.json": "7e4f63c6ea8ca16487e1249512f1d26500e4c19a467c6a56373c2a149f18126b",
+    "linux.json": "ab11edda5d601d22f7643a8f1dcf2de57f19a9f9e9c90fbf23233453bed9b57a",
+    "clock-correlation-probe.mjs": "a769e656cfe2f92206e1bad6d52a9e12d25267c1e2fee091a51c9b001a0eb0fa"
+  },
+  "observations": [
+    {
+      "label": "mac-host",
+      "nodeVersion": "v26.7.0",
+      "platform": "darwin",
+      "architecture": "arm64",
+      "startedAt": "2026-10-04T09:05:01.132Z",
+      "finishedAt": "2026-10-04T09:13:01.286Z",
+      "requestedSeconds": 480,
+      "interrupted": false,
+      "intervalMilliseconds": 25,
+      "sampleCount": 18094,
+      "maximumGapMilliseconds": 69.00108399998862,
+      "p99GapMilliseconds": 27.439417000001413,
+      "anomalies": [
+        {
+          "epochMilliseconds": 1791104971379,
+          "elapsedMilliseconds": 270261.860584,
+          "gapMilliseconds": 69.00108399998862,
+          "wallStepMilliseconds": -0.0010839999886229634,
+          "bootGapMilliseconds": null,
+          "capturedAt": "2026-10-04T09:09:31.379000+00:00"
+        },
+        {
+          "epochMilliseconds": 1791104992297,
+          "elapsedMilliseconds": 291181.599209,
+          "gapMilliseconds": 62.68754199997056,
+          "wallStepMilliseconds": 0.31245800002943724,
+          "bootGapMilliseconds": null,
+          "capturedAt": "2026-10-04T09:09:52.297000+00:00"
+        },
+        {
+          "epochMilliseconds": 1791105084496,
+          "elapsedMilliseconds": 383232.88095900003,
+          "gapMilliseconds": 28.482542000012472,
+          "wallStepMilliseconds": 153.51745799998753,
+          "bootGapMilliseconds": null,
+          "capturedAt": "2026-10-04T09:11:24.496000+00:00"
+        }
+      ]
+    },
+    {
+      "label": "linux-vm",
+      "nodeVersion": "v24.21.0",
+      "platform": "linux",
+      "architecture": "arm64",
+      "startedAt": "2026-10-04T09:05:01.210Z",
+      "finishedAt": "2026-10-04T09:13:01.359Z",
+      "requestedSeconds": 480,
+      "interrupted": false,
+      "intervalMilliseconds": 25,
+      "sampleCount": 17661,
+      "maximumGapMilliseconds": 177.97275000001537,
+      "p99GapMilliseconds": 34.545083000000886,
+      "anomalies": [
+        {
+          "epochMilliseconds": 1791104741334,
+          "elapsedMilliseconds": 40126.136892999995,
+          "gapMilliseconds": 52.99058299999888,
+          "wallStepMilliseconds": 0.009417000001121778,
+          "bootGapMilliseconds": 50,
+          "capturedAt": "2026-10-04T09:05:41.334000+00:00"
+        },
+        {
+          "epochMilliseconds": 1791104958681,
+          "elapsedMilliseconds": 257487.250409,
+          "gapMilliseconds": 55.2153330000001,
+          "wallStepMilliseconds": -0.21533300000010058,
+          "bootGapMilliseconds": 50,
+          "capturedAt": "2026-10-04T09:09:18.681000+00:00"
+        },
+        {
+          "epochMilliseconds": 1791104972770,
+          "elapsedMilliseconds": 271576.222416,
+          "gapMilliseconds": 177.97275000001537,
+          "wallStepMilliseconds": 0.027249999984633178,
+          "bootGapMilliseconds": 180,
+          "capturedAt": "2026-10-04T09:09:32.770000+00:00"
+        },
+        {
+          "epochMilliseconds": 1791104992394,
+          "elapsedMilliseconds": 291202.480467,
+          "gapMilliseconds": 59.994459000008646,
+          "wallStepMilliseconds": 0.005540999991353601,
+          "bootGapMilliseconds": 60,
+          "capturedAt": "2026-10-04T09:09:52.394000+00:00"
+        },
+        {
+          "epochMilliseconds": 1791105104489,
+          "elapsedMilliseconds": 403148.657184,
+          "gapMilliseconds": 30.69895800005179,
+          "wallStepMilliseconds": 153.3010419999482,
+          "bootGapMilliseconds": 30,
+          "capturedAt": "2026-10-04T09:11:44.489000+00:00"
+        }
+      ]
+    }
+  ],
+  "finding": "The idle probe records execution delays and civil-clock adjustments independently of video. Near the suspected ten-minute window the two runtimes record about 60 ms gaps, not the 193\u2013212 ms freezes seen under video load. This is correlation only and does not establish the cause of any failed playback trial.",
+  "limitations": [
+    "A single idle window cannot attribute periodic loaded-video freezes to the host or exonerate the application.",
+    "Host and guest civil clocks adjust approximately twenty seconds apart; UTC is retained for coarse correlation and is not substituted for monotonic elapsed time.",
+    "Existing failed playback/encoder verdicts remain unchanged."
+  ],
+  "interpretation": {
+    "windowNear091952UTC": {
+      "hostGapMilliseconds": 62.68754199997056,
+      "linuxGapMilliseconds": 59.994459000008646
+    },
+    "civilClockStepsMilliseconds": {
+      "host": 153.51745799998753,
+      "linux": 153.3010419999482
+    },
+    "videoVerdictsChanged": false
+  }
+}

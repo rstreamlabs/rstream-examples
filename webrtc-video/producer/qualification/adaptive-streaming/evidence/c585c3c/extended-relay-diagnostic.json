@@ -1,0 +1,636 @@
+{
+  "schemaVersion": 1,
+  "revision": "c585c3cc18a331d926cc55a10d8931e2d80ff1d3",
+  "git": {
+    "revision": "c585c3cc18a331d926cc55a10d8931e2d80ff1d3",
+    "producerTree": "ac091b10f8bcc1f1938d02b672b1eb02d5c5e5eb",
+    "dirty": false
+  },
+  "producerImage": "sha256:08a181e34660812e9fd6142d15f87cc4135b4a048b4473493fad93827f8d03ff",
+  "captureImage": "sha256:ba28315ef4d3976aeac11d93a9eda731ae4949c396d917f73c58c18956eba5c5",
+  "qualificationPassed": true,
+  "failedAssertions": [],
+  "qualificationExitCode": 0,
+  "baseline": {
+    "durationSeconds": 181.817,
+    "samples": 181,
+    "encoderTargetKbpsRange": [
+      5700,
+      8000
+    ],
+    "decodedFramesPerSecondMedian": 30,
+    "reportedLostPacketsIncrease": 5,
+    "reportedFreezeDurationSecondsIncrease": 0
+  },
+  "captureCounters": {
+    "producer": {
+      "captured": 400000,
+      "filtered": 401243,
+      "kernelDropped": 0
+    },
+    "vm-out": {
+      "captured": 400000,
+      "filtered": 800422,
+      "kernelDropped": 0
+    },
+    "vm-in": {
+      "captured": 400000,
+      "filtered": 800420,
+      "kernelDropped": 0
+    },
+    "receiver": {
+      "captured": 400000,
+      "filtered": 400281,
+      "kernelDropped": 0
+    }
+  },
+  "excludedFromVMCorrelation": {
+    "reason": "SSRC was not in the initially learned VM capture filter; absence cannot establish packet loss",
+    "packetsByPayloadType": {
+      "109": 4
+    }
+  },
+  "baselinePacketRows": [
+    {
+      "payloadType": 49,
+      "sourcePackets": 37017,
+      "hops": [
+        {
+          "from": "producer",
+          "to": "vm-out",
+          "packets": 37017,
+          "missing": 0,
+          "missingPercent": 0.0
+        },
+        {
+          "from": "vm-out",
+          "to": "vm-in",
+          "packets": 37017,
+          "missing": 0,
+          "missingPercent": 0.0
+        },
+        {
+          "from": "vm-in",
+          "to": "receiver",
+          "packets": 37017,
+          "missing": 0,
+          "missingPercent": 0.0
+        }
+      ]
+    },
+    {
+      "payloadType": 108,
+      "sourcePackets": 185086,
+      "hops": [
+        {
+          "from": "producer",
+          "to": "vm-out",
+          "packets": 185086,
+          "missing": 0,
+          "missingPercent": 0.0
+        },
+        {
+          "from": "vm-out",
+          "to": "vm-in",
+          "packets": 185086,
+          "missing": 5,
+          "missingPercent": 0.002701446894956939
+        },
+        {
+          "from": "vm-in",
+          "to": "receiver",
+          "packets": 185081,
+          "missing": 0,
+          "missingPercent": 0.0
+        }
+      ]
+    }
+  ],
+  "clockProbes": {
+    "host": {
+      "runtime": "v26.7.0",
+      "platform": "darwin",
+      "intervalMilliseconds": 25,
+      "maximumWholeRunGapMilliseconds": 67.61870799999451,
+      "maximumWindowGapMilliseconds": 67.61870799999451,
+      "maximumWindowWallStepMilliseconds": 0.8916670000180602,
+      "windowAnomalies": [
+        {
+          "epochMilliseconds": 1791116992350,
+          "elapsedMilliseconds": 275504.104167,
+          "gapMilliseconds": 67.61870799999451,
+          "wallStepMilliseconds": 0.38129200000548735,
+          "bootGapMilliseconds": null
+        },
+        {
+          "epochMilliseconds": 1791116992413,
+          "elapsedMilliseconds": 275567.244584,
+          "gapMilliseconds": 63.14041699998779,
+          "wallStepMilliseconds": -0.14041699998779222,
+          "bootGapMilliseconds": null
+        }
+      ],
+      "sampleCount": 15056,
+      "interruptedForCleanup": true
+    },
+    "linux": {
+      "runtime": "v24.21.0",
+      "platform": "linux",
+      "intervalMilliseconds": 25,
+      "maximumWholeRunGapMilliseconds": 96.65220800001407,
+      "maximumWindowGapMilliseconds": 96.65220800001407,
+      "maximumWindowWallStepMilliseconds": 0.8682919999700971,
+      "windowAnomalies": [
+        {
+          "epochMilliseconds": 1791116992333,
+          "elapsedMilliseconds": 275412.317793,
+          "gapMilliseconds": 74.70241700002225,
+          "wallStepMilliseconds": 0.29758299997774884,
+          "bootGapMilliseconds": 80
+        },
+        {
+          "epochMilliseconds": 1791116992430,
+          "elapsedMilliseconds": 275508.97000100004,
+          "gapMilliseconds": 96.65220800001407,
+          "wallStepMilliseconds": 0.3477919999859296,
+          "bootGapMilliseconds": 90
+        }
+      ],
+      "sampleCount": 15298,
+      "interruptedForCleanup": true
+    }
+  },
+  "periodicWindow": {
+    "startEpochMilliseconds": 1791116991000.0,
+    "endEpochMilliseconds": 1791116994000.0,
+    "frameEvents": [
+      {
+        "phase": "constrained",
+        "approximateEpochMilliseconds": 1791116992682.7,
+        "kind": "frame-gap",
+        "gapMilliseconds": 216.70000000001164,
+        "previous": {
+          "callbackMilliseconds": 267143.5,
+          "presentationMilliseconds": 267144.2,
+          "expectedDisplayMilliseconds": 267143.5,
+          "receiveMilliseconds": 267124.9,
+          "processingSeconds": 0.0011,
+          "mediaSeconds": 266.099,
+          "rtpTimestamp": 1849425022,
+          "presentedFrames": 7982
+        },
+        "current": {
+          "callbackMilliseconds": 267360.2,
+          "presentationMilliseconds": 267360.7,
+          "expectedDisplayMilliseconds": 267376.8,
+          "receiveMilliseconds": 267347.9,
+          "processingSeconds": 0.001,
+          "mediaSeconds": 266.165,
+          "rtpTimestamp": 1849431022,
+          "presentedFrames": 7983
+        }
+      }
+    ],
+    "packetGaps": [
+      {
+        "role": "producer",
+        "maximumPrimaryPacketGap": {
+          "endEpochMilliseconds": 1791116992431.241,
+          "milliseconds": 97.135009765625
+        }
+      },
+      {
+        "role": "vm-out",
+        "maximumPrimaryPacketGap": {
+          "endEpochMilliseconds": 1791116992431.283,
+          "milliseconds": 97.114990234375
+        }
+      },
+      {
+        "role": "vm-in",
+        "maximumPrimaryPacketGap": {
+          "endEpochMilliseconds": 1791116992458.712,
+          "milliseconds": 113.867919921875
+        }
+      },
+      {
+        "role": "receiver",
+        "maximumPrimaryPacketGap": {
+          "endEpochMilliseconds": 1791116992458.742,
+          "milliseconds": 113.85693359375
+        }
+      }
+    ]
+  },
+  "cleanup": {
+    "originalSocketLimits": [
+      "212992",
+      "212992"
+    ],
+    "restoredSocketLimits": "net.core.rmem_max = 212992\nnet.core.wmem_max = 212992",
+    "hostClockExitCode": 0,
+    "linuxClockStopExitCode": 0,
+    "captureErrors": [],
+    "ownedContainersRemoved": true
+  },
+  "limitations": [
+    "The full trial and collector use a phase-derived bounded deadline. Its original result is retained, including any failed delivery or environment gate.",
+    "The simultaneous scheduling gaps support an environment contribution but do not identify the host process, hypervisor operation or root cause; they do not retrospectively change earlier failed verdicts.",
+    "Baseline packet rows quantify loss for this trial only; they do not establish the cause of the previous sustained-loss failures.",
+    "Header captures, clock probes and the bounded host process CPU observation are diagnostic instrumentation, not a release performance repetition.",
+    "UTC is used only for bounded event correlation; clock probe gaps use monotonic elapsed time.",
+    "The host CPU observation has one-second granularity and itself consumes CPU; process coincidence does not prove causation. No unrelated application was stopped for this run."
+  ],
+  "inputSHA256": {
+    "loaded-relay-c585c3c/producer.pcap": "641f218f0e56e654b69b6f5a680ea98c0b6306136e1db8501fb10d67e310edfa",
+    "loaded-relay-c585c3c/vm-out.pcap": "2b40587a5b7d4cdd5deae1e4e02d46de1dfdc11b79d28e3e0120db98009c97af",
+    "loaded-relay-c585c3c/vm-in.pcap": "5d693ebb6b8b25e9e3a2a13505dda8434bc4e651a357efd99c56171df44548d8",
+    "loaded-relay-c585c3c/receiver.pcap": "cca014887998f44eb80cc994c9f26e746ff5f48465decdc90dece777ee1e66bd",
+    "loaded-relay-c585c3c/producer-capture.log": "060f2b230884327daf93207607d21c18d6c271809836b433a699e8942209b574",
+    "loaded-relay-c585c3c/vm-out-capture.log": "e28a45f753b678534374e63ee455407639cf22572b63b4cf192b00358dcd0740",
+    "loaded-relay-c585c3c/vm-in-capture.log": "596eb7c446152f53b4d7eb25263b33081e60feae77e4eed2c955b33974dc5aed",
+    "loaded-relay-c585c3c/receiver-capture.log": "a1444d743014f808c8172113ac876bd3c6365ed48ff5f2514c2161f54bd28b5b",
+    "loaded-relay-c585c3c/host-clock.json": "f6f5bf049244a2c7f1788641fcc2be987ca9203a9c659c885521bbc5c07cb893",
+    "loaded-relay-c585c3c/linux-clock.json": "624aa6f42f779047e0225420843954cac1931f200f68224fb6b0f173462ef7c4",
+    "loaded-relay-c585c3c/capture-manifest.json": "0513c21b7d54490b657dae512d8a6e796c7458bcdcd52ea289901328d0c62900",
+    "loaded-relay-c585c3c/relay-c585c3c/manifest.json": "d7aeccca877e1013102a3429e402b80c1f94ee911dec1352289a67227863d83e",
+    "loaded-relay-c585c3c/relay-c585c3c/summary.json": "b27f008a5e1f1e55272e2e6c690e381f4ebbfc8bb047603b3e86c4250b9db4de",
+    "loaded-relay-c585c3c/relay-c585c3c/samples.jsonl": "3dab4e4fe0bbb3b48e64112867ef7e1188d8c14c0f035046f4121a0456fc24dc",
+    "loaded-relay-c585c3c/relay-c585c3c/browser.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "loaded-relay-c585c3c/relay-c585c3c/encoder.log": "195eb233ee3c163393078eb3a70d61f0bfb299b591114b2c68a9c07caff1ce81",
+    "run-loaded-relay-c585c3c.py": "b99c333eee2d425e30baa70384d77247ac006bfd308ba31117791b2bdf19d0b8",
+    "analyze-loaded-relay-c585c3c.py": "348bc861638aa8b4ffcace0b078a821123f8b1edb48218683bcd9d0815cff682",
+    "host-top.log": "d22ab79449cfc6e3d8d953247b5490e2b896891363a27d3202eb6a0affc08c10"
+  },
+  "hostTop": {
+    "startedAt": "2026-10-04T12:29:40.647586+00:00",
+    "samples": 20,
+    "intervalSeconds": 1,
+    "maximumProcesses": 15,
+    "fields": [
+      "pid",
+      "command",
+      "cpu",
+      "threads",
+      "state"
+    ],
+    "scope": "Diagnostic scheduling attribution; top itself adds host observation work."
+  },
+  "hostTopExitCode": 0,
+  "browserImage": "sha256:d431bf5d2cb338721c5896e2f67f33780dec1fcc91901da9f4eaf3f29591a0d5",
+  "profile": {
+    "path": "symmetric managed TURN/UDP",
+    "protection": "NACK/RTX/FlexFEC (5 primary / 1 repair)",
+    "video": "H.264 constrained baseline level 3.1, 1280x720 at 30 fps",
+    "configuredBaselineSeconds": 180,
+    "playoutDelayHintSeconds": 0,
+    "configuredImpairment": {
+      "capacityKbps": 4000,
+      "oneWayDelayMilliseconds": 120,
+      "jitterMilliseconds": 30,
+      "lossPercent": 2
+    }
+  },
+  "qualificationAssertions": [
+    {
+      "description": "every configured traffic-control transition is timestamped in chronological order on the metrics collector clock",
+      "name": "network-condition-timeline",
+      "passed": true
+    },
+    {
+      "description": "every measured phase has at least 15 samples",
+      "name": "phase-sample-coverage",
+      "passed": true
+    },
+    {
+      "description": "producer host CPU evidence covers every phase, its p95 hypervisor steal time stays at or below 5%, and its 250 ms sampler never stalls for more than 350 ms",
+      "name": "producer-host-scheduler",
+      "passed": true
+    },
+    {
+      "description": "receiver host CPU evidence covers every phase, its p95 hypervisor steal time stays at or below 5%, and its 250 ms sampler never stalls for more than 350 ms",
+      "name": "receiver-host-scheduler",
+      "passed": true
+    },
+    {
+      "description": "receiver jitter-buffer target evidence covers every phase and remains at or below 250 ms",
+      "name": "playout-target-latency-budget",
+      "passed": true
+    },
+    {
+      "description": "receiver effective buffered delay evidence covers every phase and its phase average remains at or below 300 ms",
+      "name": "playout-effective-latency-budget",
+      "passed": true
+    },
+    {
+      "description": "every sample uses a TURN relay candidate",
+      "name": "ice-path",
+      "passed": true
+    },
+    {
+      "description": "peer connection and playback remain healthy for at least 98% of samples",
+      "name": "session-continuity",
+      "passed": true
+    },
+    {
+      "description": "every created WHEP resource is updated without HTTP failure and deleted before the browser exits",
+      "name": "whep-session-lifecycle",
+      "passed": true
+    },
+    {
+      "description": "baseline median receive throughput is at least 1 Mbps",
+      "name": "baseline-throughput",
+      "passed": true
+    },
+    {
+      "description": "every sample in the pre-transition window stays within the 20% response threshold around the window's median encoder target",
+      "name": "capacity-reference-bounded",
+      "passed": true
+    },
+    {
+      "description": "constrained median encoder target falls by at least 20% from the stable pre-transition target",
+      "name": "congestion-response",
+      "passed": true
+    },
+    {
+      "description": "encoder target reacts to the constrained link within 30 seconds",
+      "name": "response-time",
+      "passed": true
+    },
+    {
+      "description": "the encoder does not increase its target after measured loss exceeds the configured recovery threshold",
+      "name": "continued-pressure",
+      "passed": true
+    },
+    {
+      "description": "median video payload uses at least 55% of constrained link capacity",
+      "name": "constrained-link-efficiency",
+      "passed": true
+    },
+    {
+      "description": "median received video remains at least 85% of the encoder target while loss is injected",
+      "name": "impaired-target-efficiency",
+      "passed": true
+    },
+    {
+      "description": "decoded-frame progress is visible in at least 95% of sample intervals",
+      "name": "decoder-activity",
+      "passed": true
+    },
+    {
+      "description": "baseline and recovery spend at most 2% of measured time frozen",
+      "name": "healthy-link-freezes",
+      "passed": true
+    },
+    {
+      "description": "each shaped phase spends at most 10% of measured time frozen",
+      "name": "impaired-link-freezes",
+      "passed": true
+    },
+    {
+      "description": "maximum RTT stays below 350 ms on unshaped links and 600 ms under the 120 ms one-way impairment",
+      "name": "interactive-latency-budget",
+      "passed": true
+    },
+    {
+      "description": "decoded output stays above 25 fps on healthy links and 20 fps while shaped",
+      "name": "decoded-frame-rate",
+      "passed": true
+    },
+    {
+      "description": "the pinned x264 encoder reports valid per-frame H.264 quantization data in every phase",
+      "name": "encoder-quality-telemetry",
+      "passed": true
+    },
+    {
+      "description": "the encoded source keeps p99 frame gaps at or below 50 ms, every gap at or below 200 ms, and late or catch-up intervals at or below 1% from baseline through recovery",
+      "name": "encoder-cadence",
+      "passed": true
+    },
+    {
+      "description": "impaired-link sender average H.264 QP stays at or below 42",
+      "name": "impaired-compression-quality",
+      "passed": true
+    },
+    {
+      "description": "decoded video remains 1280x720 in every phase",
+      "name": "decoded-resolution",
+      "passed": true
+    },
+    {
+      "description": "encoder target returns to at least 80% of its stable pre-transition target within 35 seconds of the capacity-restoration step",
+      "name": "recovery-time",
+      "passed": true
+    },
+    {
+      "description": "the encoder stays at or above 80% of its stable pre-transition target for at least 80% of a continuous 10-second window after capacity is restored",
+      "name": "sustained-recovery",
+      "passed": true
+    },
+    {
+      "description": "recovery median receive throughput returns to at least 60% of the stable pre-transition receive rate",
+      "name": "throughput-recovery",
+      "passed": true
+    },
+    {
+      "description": "network impairment produces NACK feedback",
+      "name": "loss-feedback",
+      "passed": true
+    },
+    {
+      "description": "the sender records paced retransmissions while loss is injected",
+      "name": "retransmission-sender-pacing",
+      "passed": true
+    },
+    {
+      "description": "the receiver observes RTX repair packets while loss is injected",
+      "name": "rtx-repair",
+      "passed": true
+    },
+    {
+      "description": "NACK feedback remains below 10% of received packets during 2% injected loss",
+      "name": "repair-amplification",
+      "passed": true
+    },
+    {
+      "description": "the browser and producer negotiate the FlexFEC-03 protection stream",
+      "name": "flexfec-negotiation",
+      "passed": true
+    },
+    {
+      "description": "the receiver observes FlexFEC packets while loss is injected",
+      "name": "flexfec-repair",
+      "passed": true
+    },
+    {
+      "description": "the sender records paced FlexFEC packets while loss is injected",
+      "name": "flexfec-sender-pacing",
+      "passed": true
+    },
+    {
+      "description": "runtime telemetry matches the FlexFEC protection recorded by the manifest",
+      "name": "flexfec-configuration",
+      "passed": true
+    },
+    {
+      "description": "the protected wire rate retains the sender's real-time burst headroom",
+      "name": "flexfec-burst-headroom",
+      "passed": true
+    },
+    {
+      "description": "the browser keeps decoding frames throughout the scenario",
+      "name": "decoded-video",
+      "passed": true
+    },
+    {
+      "description": "the sender never overflows its packet queue, keeps actual packet residence within 375 ms, and admits no new media beyond 225 ms",
+      "name": "bounded-pacer-capacity",
+      "passed": true
+    },
+    {
+      "description": "every complete-frame admission drop requests a recovery key frame and encounters no encoder rejection",
+      "name": "pacer-recovery-keyframes",
+      "passed": true
+    },
+    {
+      "description": "receiver PLI feedback reaches the producer's encoder instead of being discarded",
+      "name": "rtcp-keyframe-feedback",
+      "passed": true
+    },
+    {
+      "description": "the producer parses every compound RTCP feedback datagram",
+      "name": "rtcp-feedback-integrity",
+      "passed": true
+    },
+    {
+      "description": "the encoder accepts every rate-limited adaptive bitrate reconfiguration",
+      "name": "adaptive-reconfiguration-integrity",
+      "passed": true
+    },
+    {
+      "description": "TWCC feedback is present and every reported status is parsed without malformed packets",
+      "name": "twcc-feedback-integrity",
+      "passed": true
+    },
+    {
+      "description": "two consecutive sampling intervals above 10% reconciled GCC loss reduce an encoder target that remains above its configured floor without waiting for a delay-estimator callback",
+      "name": "loss-guard-response",
+      "passed": true
+    },
+    {
+      "description": "the selective traffic-control branch handles the measured media flow",
+      "name": "selective-media-shaping",
+      "passed": true
+    },
+    {
+      "description": "the capacity phase has no random-loss injector configured",
+      "name": "capacity-profile-configuration",
+      "passed": true
+    },
+    {
+      "description": "the impaired phase configures exactly 2% random packet loss",
+      "name": "loss-profile-configuration",
+      "passed": true
+    },
+    {
+      "description": "capacity-step transients stay below 15%, and steady capacity plus random-loss phases stay below 5% drops",
+      "name": "traffic-control-drop-budget",
+      "passed": true
+    },
+    {
+      "description": "the shaped queue ends each steady interval below 75% occupancy, preventing a larger limit from hiding sustained bufferbloat",
+      "name": "traffic-control-queue-headroom",
+      "passed": true
+    },
+    {
+      "description": "the healthy recovery profile carries media, adds no drops, and leaves at most one short RTP burst queued before traffic-control teardown",
+      "name": "traffic-control-recovery-drain",
+      "passed": true
+    },
+    {
+      "description": "reconciled GCC loss stays within eight percentage points of shaped-link drops; raw TWCC missing symbols may repeat during reordering",
+      "name": "twcc-loss-fidelity",
+      "passed": true
+    },
+    {
+      "description": "receiver-kernel UDP counters cover every measured phase",
+      "name": "receiver-udp-observability",
+      "passed": true
+    },
+    {
+      "description": "the receiver kernel drops no UDP datagram because its socket buffer is full",
+      "name": "receiver-kernel-capacity",
+      "passed": true
+    },
+    {
+      "description": "producer-kernel UDP counters cover every measured phase",
+      "name": "producer-udp-observability",
+      "passed": true
+    },
+    {
+      "description": "the producer kernel has no UDP receive overflow or send rejection outside each independently measured qdisc interval, allowing at most two datagrams at an asynchronous phase boundary",
+      "name": "producer-kernel-capacity",
+      "passed": true
+    }
+  ],
+  "responseDelayMilliseconds": 10063,
+  "recoveryDelayMilliseconds": 13122,
+  "sustainedRecoveryMilliseconds": 26173,
+  "phasePlayback": {
+    "warmup": {
+      "freezeDurationSeconds": 0,
+      "freezeRatio": 0,
+      "encoderMaximumFrameGapMilliseconds": 43.275916999999026,
+      "encoderFrameGapP99Milliseconds": 38.61991699999999
+    },
+    "baseline": {
+      "freezeDurationSeconds": 0,
+      "freezeRatio": 0,
+      "encoderMaximumFrameGapMilliseconds": 43.519791999977315,
+      "encoderFrameGapP99Milliseconds": 38.00854100000288
+    },
+    "conditioning": {
+      "freezeDurationSeconds": 0,
+      "freezeRatio": 0,
+      "encoderMaximumFrameGapMilliseconds": 41.444250000000466,
+      "encoderFrameGapP99Milliseconds": 39.549958999996306
+    },
+    "constrained": {
+      "freezeDurationSeconds": 0.219,
+      "freezeRatio": 0.0048332634459623495,
+      "encoderMaximumFrameGapMilliseconds": 152.2074160000193,
+      "encoderFrameGapP99Milliseconds": 40.40216700005112
+    },
+    "impaired": {
+      "freezeDurationSeconds": 1.422,
+      "freezeRatio": 0.04153401291000963,
+      "encoderMaximumFrameGapMilliseconds": 43.5787920000148,
+      "encoderFrameGapP99Milliseconds": 38.098500000021886
+    },
+    "recovery": {
+      "freezeDurationSeconds": 0,
+      "freezeRatio": 0,
+      "encoderMaximumFrameGapMilliseconds": 42.29708300001221,
+      "encoderFrameGapP99Milliseconds": 38.83179199998267
+    }
+  },
+  "hostCPUObservation": {
+    "samplingIntervalSeconds": 1,
+    "processScope": "one unrelated host application renderer; application-specific details retained only in private diagnostic logs",
+    "peakProcessCoreRatio": 5.457,
+    "followingSampleProcessCoreRatio": 1.352,
+    "peakAtUTC": "2026-10-04T12:29:52Z",
+    "hostIdlePercentBefore": 83.39,
+    "hostIdlePercentDuring": 25.51,
+    "qualificationBrowserTimerDelayMilliseconds": 160.39999997615814,
+    "observationProcessPeakCoreRatioInShownWindow": 0.097,
+    "causality": "A simultaneous CPU burst is observed; an approved comparison with the unrelated application closed is still needed to establish its contribution."
+  },
+  "findings": [
+    "The complete instrumented relay run passes all 56 original acceptance assertions. Three minutes of baseline decode at a median 30 fps without a freeze; recovery reaches its target after 13.122 seconds and sustains it after 26.173 seconds.",
+    "Of 185086 primary RTP packets during baseline, five are absent between VM egress and ingress (0.00270145%). None are missing on either container/VM boundary. All 37017 observed FEC packets reach every capture point. All four captures report zero kernel drops.",
+    "A 0.219-second constrained-phase freeze coincides with an unrelated host application renderer consuming 5.457 cores. Concurrent independent timers report gaps of 67.619 ms on macOS and 96.652 ms in Linux; the browser timer is delayed by 160.4 ms. Wall-clock steps stay below 1 ms in that window.",
+    "This observed scheduling interruption is retained. Its size remains within this fixed-format runner's existing gates; the format runner has a different recovery-phase gate, which still rejects the prior 0.208-second event. No historical failed verdict is changed.",
+    "The previous sustained roughly 15-percent TURN loss is not reproduced here. Its underlying cause remains unassigned, and this instrumented diagnostic does not replace a repeated release matrix."
+  ]
+}

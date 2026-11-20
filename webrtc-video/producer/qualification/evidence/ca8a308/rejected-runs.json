@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "mediaRevision": "ca8a308907aaa5661954af81d10f04bd8e5f52bb",
+  "runs": [
+    {
+      "runId": 31984426043,
+      "url": "https://github.com/rstreamlabs/rstream-examples/actions/runs/31984426043",
+      "revision": "ca8a308907aaa5661954af81d10f04bd8e5f52bb",
+      "path": "relay",
+      "protection": "nack-rtx-flexfec",
+      "classification": "invalid-precondition",
+      "stableConditioningTargetRatio": 0.4,
+      "reason": "The sender had not settled near its configured pre-transition target before the capacity step. The run is unsuitable for measuring response or recovery and is excluded from the selected matrix."
+    },
+    {
+      "runId": 31984891828,
+      "url": "https://github.com/rstreamlabs/rstream-examples/actions/runs/31984891828",
+      "revision": "ca8a308907aaa5661954af81d10f04bd8e5f52bb",
+      "path": "relay",
+      "protection": "nack-rtx-flexfec",
+      "classification": "invalid-precondition",
+      "stableConditioningTargetRatio": 0.3,
+      "reason": "The sender had not settled near its configured pre-transition target before the capacity step. The run is unsuitable for measuring response or recovery and is excluded from the selected matrix."
+    },
+    {
+      "runId": 31985437564,
+      "url": "https://github.com/rstreamlabs/rstream-examples/actions/runs/31985437564",
+      "revision": "ca8a308907aaa5661954af81d10f04bd8e5f52bb",
+      "path": "relay",
+      "protection": "nack-rtx-flexfec",
+      "classification": "invalid-precondition",
+      "stableConditioningTargetRatio": 0.6,
+      "reason": "The sender had not settled near its configured pre-transition target before the capacity step. The run is unsuitable for measuring response or recovery and is excluded from the selected matrix."
+    },
+    {
+      "runId": 31988057797,
+      "url": "https://github.com/rstreamlabs/rstream-examples/actions/runs/31988057797",
+      "revision": "b7d23457262f45b82b879f2a76099c513e0d8753",
+      "path": "relay-mobility",
+      "protection": "nack-rtx-flexfec",
+      "classification": "invalid-precondition",
+      "stableConditioningTargetRatio": 0.3,
+      "reason": "The mobility transition passed, but the sender had not settled near its configured pre-transition target before the later capacity step. The run is unsuitable for measuring response or recovery and is excluded from the published mobility record."
+    },
+    {
+      "runId": 31988477651,
+      "url": "https://github.com/rstreamlabs/rstream-examples/actions/runs/31988477651",
+      "revision": "b7d23457262f45b82b879f2a76099c513e0d8753",
+      "path": "relay-mobility",
+      "protection": "nack-rtx-flexfec",
+      "classification": "release-gate-failure",
+      "stableConditioningTargetRatio": 1,
+      "reason": "The interface switch passed and playback recovered in 1.005 seconds, but the encoder did not sustain 80% of its stable pre-transition target for the required recovery window after the later congestion sequence. The valid failure remains excluded from the passing mobility record and is reported separately."
+    },
+    {
+      "runId": 31988977252,
+      "url": "https://github.com/rstreamlabs/rstream-examples/actions/runs/31988977252",
+      "revision": "b7d23457262f45b82b879f2a76099c513e0d8753",
+      "path": "relay-mobility",
+      "protection": "nack-rtx-flexfec",
+      "classification": "invalid-precondition",
+      "stableConditioningTargetRatio": 0.7,
+      "reason": "The mobility transition passed, but the sender had not settled near its configured pre-transition target before the later capacity step. The run is unsuitable for measuring response or recovery and is excluded from the published mobility record."
+    }
+  ]
+}

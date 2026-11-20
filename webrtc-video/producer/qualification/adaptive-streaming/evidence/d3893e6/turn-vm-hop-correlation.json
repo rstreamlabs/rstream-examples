@@ -1,0 +1,459 @@
+{
+  "schemaVersion": 1,
+  "revision": "2c15bbcf1e606d56e023bc28bba6f5d7289fdf9d",
+  "scope": "Correlate exact RTP packet identities across producer egress, Docker VM eth0 egress/ingress, and browser-container ingress. VM filters include only trial SSRCs learned from producer headers.",
+  "inputSHA256": {
+    "producer.pcap": "2f0a5e9a1ae47b232b774ad115ed1b917303be042b8d5cfe78175bee766ee62e",
+    "vm-out.pcap": "7840e3a2ec6c2d21c39685544cc5a87254fa59fd183cf6d6d2d90a28e3d5dbe0",
+    "vm-in.pcap": "0864eaa78573bccbd8ba374cd3a049d5abdf2f5102df136ff30e0aa384be9692",
+    "receiver.pcap": "7e430f0c23abc07fe4ed2f0ed89d29406f30b9f3b44adac9cb5902ac0a4b7088",
+    "producer-capture.log": "2b3b3a23631e4c9d427e9a025aa27ccc234d976b9331a772c2ab6ef547c404c1",
+    "vm-out-capture.log": "ac42eb225ea70447a9f39302f9a1dc99e724a4a3ff5e61885d13e23d40d20974",
+    "vm-in-capture.log": "bca648338a4429d475c3c6e1c50d123189792af5fc1f85ea3b21ab4a463b1ea1",
+    "receiver-capture.log": "6fc351296be613de2cf4bef5101dcc5891fa686628eb9cbef6dae607041210cd",
+    "capture-manifest.json": "6e93200d93c409de1de28e08ad64d1e850e8cf483c7b175351e24c9d6097347f",
+    "relay-2c15bbc/manifest.json": "feb9e63a53297058def6953a0fa80f8a7d1339c7ed8892f460a71be1fed81a6c",
+    "relay-2c15bbc/summary.json": "43fd84556f2d0273af7156c89b998e413f5317c0c83a74028b03c2ae9dd85456",
+    "run-vm-hop.py": "c7c11e5428fc1ea9a1e5e489d17b366179f4df94c0d917c0294969d5a8df9c54",
+    "analyze-vm-hop.py": "12d7b5bc3767acccb846567942fd9b27d6e45afca81dd712e3844afc70293b2a",
+    "analyze.py": "620d7601be5c5961b5734b6976e49a45baad80ffe006973b7de8f30bd5081692"
+  },
+  "packetCounts": {
+    "producer": 201387,
+    "vm-out": 200230,
+    "vm-in": 199819,
+    "receiver": 200377
+  },
+  "rows": [
+    {
+      "phase": "baseline",
+      "payloadType": 108,
+      "sourcePackets": 24064,
+      "hops": [
+        {
+          "from": "producer",
+          "to": "vm-out",
+          "observedUpstream": 24064,
+          "observedDownstream": 24064,
+          "missing": 0,
+          "missingPercent": 0.0,
+          "matchedTransitMedianMilliseconds": 0.006103515625
+        },
+        {
+          "from": "vm-out",
+          "to": "vm-in",
+          "observedUpstream": 24064,
+          "observedDownstream": 24026,
+          "missing": 38,
+          "missingPercent": 0.1579122340425532,
+          "matchedTransitMedianMilliseconds": 11.8470458984375
+        },
+        {
+          "from": "vm-in",
+          "to": "receiver",
+          "observedUpstream": 24026,
+          "observedDownstream": 24026,
+          "missing": 0,
+          "missingPercent": 0.0,
+          "matchedTransitMedianMilliseconds": 0.010986328125
+        }
+      ]
+    },
+    {
+      "phase": "baseline",
+      "payloadType": 49,
+      "sourcePackets": 4813,
+      "hops": [
+        {
+          "from": "producer",
+          "to": "vm-out",
+          "observedUpstream": 4813,
+          "observedDownstream": 4813,
+          "missing": 0,
+          "missingPercent": 0.0,
+          "matchedTransitMedianMilliseconds": 0.006103515625
+        },
+        {
+          "from": "vm-out",
+          "to": "vm-in",
+          "observedUpstream": 4813,
+          "observedDownstream": 4807,
+          "missing": 6,
+          "missingPercent": 0.12466237274049449,
+          "matchedTransitMedianMilliseconds": 11.839111328125
+        },
+        {
+          "from": "vm-in",
+          "to": "receiver",
+          "observedUpstream": 4807,
+          "observedDownstream": 4807,
+          "missing": 0,
+          "missingPercent": 0.0,
+          "matchedTransitMedianMilliseconds": 0.010986328125
+        }
+      ]
+    },
+    {
+      "phase": "conditioning",
+      "payloadType": 108,
+      "sourcePackets": 43813,
+      "hops": [
+        {
+          "from": "producer",
+          "to": "vm-out",
+          "observedUpstream": 43813,
+          "observedDownstream": 43813,
+          "missing": 0,
+          "missingPercent": 0.0,
+          "matchedTransitMedianMilliseconds": 0.006103515625
+        },
+        {
+          "from": "vm-out",
+          "to": "vm-in",
+          "observedUpstream": 43813,
+          "observedDownstream": 43799,
+          "missing": 14,
+          "missingPercent": 0.03195398625978591,
+          "matchedTransitMedianMilliseconds": 11.89990234375
+        },
+        {
+          "from": "vm-in",
+          "to": "receiver",
+          "observedUpstream": 43799,
+          "observedDownstream": 43799,
+          "missing": 0,
+          "missingPercent": 0.0,
+          "matchedTransitMedianMilliseconds": 0.012939453125
+        }
+      ]
+    },
+    {
+      "phase": "conditioning",
+      "payloadType": 49,
+      "sourcePackets": 8729,
+      "hops": [
+        {
+          "from": "producer",
+          "to": "vm-out",
+          "observedUpstream": 8729,
+          "observedDownstream": 8729,
+          "missing": 0,
+          "missingPercent": 0.0,
+          "matchedTransitMedianMilliseconds": 0.006103515625
+        },
+        {
+          "from": "vm-out",
+          "to": "vm-in",
+          "observedUpstream": 8729,
+          "observedDownstream": 8726,
+          "missing": 3,
+          "missingPercent": 0.03436819796082025,
+          "matchedTransitMedianMilliseconds": 11.93798828125
+        },
+        {
+          "from": "vm-in",
+          "to": "receiver",
+          "observedUpstream": 8726,
+          "observedDownstream": 8726,
+          "missing": 0,
+          "missingPercent": 0.0,
+          "matchedTransitMedianMilliseconds": 0.011962890625
+        }
+      ]
+    },
+    {
+      "phase": "constrained",
+      "payloadType": 108,
+      "sourcePackets": 27867,
+      "hops": [
+        {
+          "from": "producer",
+          "to": "vm-out",
+          "observedUpstream": 27867,
+          "observedDownstream": 27867,
+          "missing": 0,
+          "missingPercent": 0.0,
+          "matchedTransitMedianMilliseconds": 0.007080078125
+        },
+        {
+          "from": "vm-out",
+          "to": "vm-in",
+          "observedUpstream": 27867,
+          "observedDownstream": 27841,
+          "missing": 26,
+          "missingPercent": 0.09330031937417016,
+          "matchedTransitMedianMilliseconds": 10.0439453125
+        },
+        {
+          "from": "vm-in",
+          "to": "receiver",
+          "observedUpstream": 27841,
+          "observedDownstream": 27841,
+          "missing": 0,
+          "missingPercent": 0.0,
+          "matchedTransitMedianMilliseconds": 0.010009765625
+        }
+      ]
+    },
+    {
+      "phase": "constrained",
+      "payloadType": 49,
+      "sourcePackets": 5568,
+      "hops": [
+        {
+          "from": "producer",
+          "to": "vm-out",
+          "observedUpstream": 5568,
+          "observedDownstream": 5568,
+          "missing": 0,
+          "missingPercent": 0.0,
+          "matchedTransitMedianMilliseconds": 0.007080078125
+        },
+        {
+          "from": "vm-out",
+          "to": "vm-in",
+          "observedUpstream": 5568,
+          "observedDownstream": 5562,
+          "missing": 6,
+          "missingPercent": 0.10775862068965517,
+          "matchedTransitMedianMilliseconds": 10.08154296875
+        },
+        {
+          "from": "vm-in",
+          "to": "receiver",
+          "observedUpstream": 5562,
+          "observedDownstream": 5562,
+          "missing": 0,
+          "missingPercent": 0.0,
+          "matchedTransitMedianMilliseconds": 0.0087890625
+        }
+      ]
+    },
+    {
+      "phase": "impaired",
+      "payloadType": 108,
+      "sourcePackets": 15096,
+      "hops": [
+        {
+          "from": "producer",
+          "to": "vm-out",
+          "observedUpstream": 15096,
+          "observedDownstream": 15096,
+          "missing": 0,
+          "missingPercent": 0.0,
+          "matchedTransitMedianMilliseconds": 0.008056640625
+        },
+        {
+          "from": "vm-out",
+          "to": "vm-in",
+          "observedUpstream": 15096,
+          "observedDownstream": 15079,
+          "missing": 17,
+          "missingPercent": 0.11261261261261261,
+          "matchedTransitMedianMilliseconds": 9.567138671875
+        },
+        {
+          "from": "vm-in",
+          "to": "receiver",
+          "observedUpstream": 15079,
+          "observedDownstream": 15079,
+          "missing": 0,
+          "missingPercent": 0.0,
+          "matchedTransitMedianMilliseconds": 0.010009765625
+        }
+      ]
+    },
+    {
+      "phase": "impaired",
+      "payloadType": 49,
+      "sourcePackets": 3013,
+      "hops": [
+        {
+          "from": "producer",
+          "to": "vm-out",
+          "observedUpstream": 3013,
+          "observedDownstream": 3013,
+          "missing": 0,
+          "missingPercent": 0.0,
+          "matchedTransitMedianMilliseconds": 0.009033203125
+        },
+        {
+          "from": "vm-out",
+          "to": "vm-in",
+          "observedUpstream": 3013,
+          "observedDownstream": 3004,
+          "missing": 9,
+          "missingPercent": 0.2987056090275473,
+          "matchedTransitMedianMilliseconds": 9.466064453125
+        },
+        {
+          "from": "vm-in",
+          "to": "receiver",
+          "observedUpstream": 3004,
+          "observedDownstream": 3004,
+          "missing": 0,
+          "missingPercent": 0.0,
+          "matchedTransitMedianMilliseconds": 0.008056640625
+        }
+      ]
+    },
+    {
+      "phase": "recovery",
+      "payloadType": 108,
+      "sourcePackets": 33236,
+      "hops": [
+        {
+          "from": "producer",
+          "to": "vm-out",
+          "observedUpstream": 33236,
+          "observedDownstream": 33236,
+          "missing": 0,
+          "missingPercent": 0.0,
+          "matchedTransitMedianMilliseconds": 0.006103515625
+        },
+        {
+          "from": "vm-out",
+          "to": "vm-in",
+          "observedUpstream": 33236,
+          "observedDownstream": 33143,
+          "missing": 93,
+          "missingPercent": 0.2798170658322301,
+          "matchedTransitMedianMilliseconds": 11.27490234375
+        },
+        {
+          "from": "vm-in",
+          "to": "receiver",
+          "observedUpstream": 33143,
+          "observedDownstream": 33143,
+          "missing": 0,
+          "missingPercent": 0.0,
+          "matchedTransitMedianMilliseconds": 0.011962890625
+        }
+      ]
+    },
+    {
+      "phase": "recovery",
+      "payloadType": 49,
+      "sourcePackets": 6647,
+      "hops": [
+        {
+          "from": "producer",
+          "to": "vm-out",
+          "observedUpstream": 6647,
+          "observedDownstream": 6647,
+          "missing": 0,
+          "missingPercent": 0.0,
+          "matchedTransitMedianMilliseconds": 0.006103515625
+        },
+        {
+          "from": "vm-out",
+          "to": "vm-in",
+          "observedUpstream": 6647,
+          "observedDownstream": 6621,
+          "missing": 26,
+          "missingPercent": 0.3911539040168497,
+          "matchedTransitMedianMilliseconds": 11.3759765625
+        },
+        {
+          "from": "vm-in",
+          "to": "receiver",
+          "observedUpstream": 6621,
+          "observedDownstream": 6621,
+          "missing": 0,
+          "missingPercent": 0.0,
+          "matchedTransitMedianMilliseconds": 0.010986328125
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "This is an instrumented diagnostic, not a substitute for release-matrix repetitions.",
+    "VM eth0 does not observe the macOS side of Docker Desktop networking or the remote TURN server.",
+    "All capture kernel-drop counters and complete baseline overlap must be verified before interpreting packet absence.",
+    "Packets are grouped by source capture UTC; transit timing is diagnostic, not capture-to-display latency.",
+    "Shaping phases are not used to identify unintended baseline loss."
+  ],
+  "git": {
+    "revision": "2c15bbcf1e606d56e023bc28bba6f5d7289fdf9d",
+    "producerTree": "724f5b9e8f18cb712d6b42db172bee33cb5ecf75",
+    "dirty": false
+  },
+  "images": {
+    "producerImage": "sha256:ed0dd0a8355f60a7168908319f68862292ad8d96cb0ab4a758921b00ac3d84e4",
+    "browserImage": "sha256:5c6437f0d018835c54ecabe14c65ad674d76073e832f2e21e327f30ccddd51ce",
+    "captureImage": "sha256:ba28315ef4d3976aeac11d93a9eda731ae4949c396d917f73c58c18956eba5c5"
+  },
+  "qualificationPassed": true,
+  "failedGates": [],
+  "captureCounters": {
+    "producer": {
+      "captured": 201387,
+      "filtered": 201387,
+      "kernelDropped": 0
+    },
+    "vm-out": {
+      "captured": 200230,
+      "filtered": 400134,
+      "kernelDropped": 0
+    },
+    "vm-in": {
+      "captured": 199819,
+      "filtered": 399945,
+      "kernelDropped": 0
+    },
+    "receiver": {
+      "captured": 200377,
+      "filtered": 201059,
+      "kernelDropped": 0
+    }
+  },
+  "captureCounterNotes": "VM direction-filtered captures may count both directions at the kernel filter. Endpoint captures end when parent interfaces disappear; only fully overlapping baseline data is used for the location finding.",
+  "delivery": {
+    "warmup": {
+      "freezeDurationSeconds": 0,
+      "freezeRatio": 0,
+      "medianEncoderTargetKbps": 5700,
+      "encoderMaximumFrameGapMilliseconds": 42.84308399999827
+    },
+    "baseline": {
+      "freezeDurationSeconds": 0,
+      "freezeRatio": 0,
+      "medianEncoderTargetKbps": 7400,
+      "encoderMaximumFrameGapMilliseconds": 41.28120800000033
+    },
+    "conditioning": {
+      "freezeDurationSeconds": 0,
+      "freezeRatio": 0,
+      "medianEncoderTargetKbps": 7600,
+      "encoderMaximumFrameGapMilliseconds": 199.58750000000873
+    },
+    "constrained": {
+      "freezeDurationSeconds": 0.398,
+      "freezeRatio": 0.00878975265017668,
+      "medianEncoderTargetKbps": 2400,
+      "encoderMaximumFrameGapMilliseconds": 40.91250000000582
+    },
+    "impaired": {
+      "freezeDurationSeconds": 2.892,
+      "freezeRatio": 0.08207980927513196,
+      "medianEncoderTargetKbps": 2000,
+      "encoderMaximumFrameGapMilliseconds": 41.64908300002571
+    },
+    "recovery": {
+      "freezeDurationSeconds": 0,
+      "freezeRatio": 0,
+      "medianEncoderTargetKbps": 5400,
+      "encoderMaximumFrameGapMilliseconds": 43.3957910000172
+    }
+  },
+  "recoveryDelayMilliseconds": 24201,
+  "sustainedRecoveryMilliseconds": 14096,
+  "finding": "This second diagnostic passes delivery and does not reproduce the first trial's 14.96% baseline loss. Of 24064 primary packets in its unshaped baseline, all reach Docker VM eth0 egress; 38 (0.1579%) are absent at VM eth0 ingress; every packet observed at VM ingress reaches the browser namespace. This localizes the small observed loss to the path outside the VM, including macOS Docker networking and the external route/relay. It does not locate or establish the cause of the first trial's larger loss.",
+  "cleanup": {
+    "socketLimitsRestored": [
+      212992,
+      212992
+    ],
+    "ownedContainersRemoved": true
+  }
+}

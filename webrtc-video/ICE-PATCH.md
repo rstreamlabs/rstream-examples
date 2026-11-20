@@ -1,14 +1,27 @@
 # Adopt the ICE concurrency fix
 
 The producer and distributor can update STUN/TURN configuration while Pion
-is still gathering connection candidates. Official Pion ICE v4.4.9 reads the
+is still gathering connection candidates. Official Pion ICE v4.4.2 reads the
 URL list concurrently with those updates. The samples apply a small verified
 patch at build time, pending [the upstream fix](https://github.com/pion/ice/pull/1049).
 There is no public API change or Engine deployment for this fix.
 
 ## Use the samples
 
-Use the Makefile or Docker build for each component to apply the patch automatically. See [Producer build and distribution](producer/docs/000-build.md#build-and-distribution) and [Build the distributor image](distributor/docs/001-setup.md#build-the-combined-image).
+Install Go and Git on the build host, then use the Makefile:
+
+```sh
+cd producer
+make build-provisioning
+make test-race
+```
+
+For the distributor, use `make build`, `make test-race` and
+`make test-decoded-restarts` (the last command also requires FFmpeg).
+The Dockerfiles and the producer's static Linux build apply the same patch.
+The distributor Docker build context is now `webrtc-video/`, so use `make image`
+or `docker build -f distributor/Dockerfile .` from that directory. Its
+`Dockerfile.dockerignore` keeps the context limited to required build inputs.
 
 ## Adapt an application based on the samples
 
@@ -38,7 +51,7 @@ inherit replacement directives from dependencies. A direct `go build` that
 omits the generated module file still uses unpatched ICE. No change to the
 application's session API or additional timeout is required.
 
-The tool accepts exactly official ICE v4.4.9 and validates archive, patch and
+The tool accepts exactly official ICE v4.4.2 and validates archive, patch and
 source hashes. It creates a private local copy, leaves the shared module
 cache and source `go.mod`/`go.sum` intact, and records
 `out/ice-patch/provenance.json`. It fails on unsupported versions or changed

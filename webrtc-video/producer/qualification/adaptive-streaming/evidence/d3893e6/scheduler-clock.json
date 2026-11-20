@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "revision": "d3893e607cf889b866f36ae584c5b97818efc99a",
+  "case": "run-2-direct-nack-rtx",
+  "originalVerdict": "failed",
+  "scope": "Qualification sampler; no production pipeline or acceptance threshold changes.",
+  "inputSHA256": {
+    "samples.jsonl": "993e421f826213b28d61ed3aef643d81a17173cbb50d16bc7741a75ad152e342",
+    "producer-host-cpu.jsonl": "f63a898d9f084eef31cec9e0b756951b17aa012a5d5fda1526fa5f2ee966296b",
+    "receiver-host-cpu.jsonl": "9ddec05cb52bd474ce5e0afdd7ddfe427c0e7bd2f3471ced25be65eab2ac7869",
+    "summary.json": "3676e650145c643518c878987b6c1cfafb8fe08c846955663bd2735624f487c5"
+  },
+  "browserEvidence": [
+    {
+      "previousCapturedAt": "2026-10-04T08:23:43.301Z",
+      "capturedAt": "2026-10-04T08:23:44.717Z",
+      "phase": "baseline",
+      "wallDeltaMilliseconds": 1416,
+      "monotonicDeltaMilliseconds": 1006,
+      "wallStepMilliseconds": 410,
+      "browserMonotonicDeltaMilliseconds": 1005.8999999761581,
+      "browserMaximumTimerDelayMilliseconds": 1.0999999940395355,
+      "browserMaximumFrameGapMilliseconds": 83.40000000000146
+    }
+  ],
+  "hostEvidence": [
+    {
+      "component": "producer",
+      "capturedAt": "2026-10-04T08:23:44.230Z",
+      "wallGapMilliseconds": 661,
+      "aggregateCPUTickDelta": 248
+    },
+    {
+      "component": "receiver",
+      "capturedAt": "2026-10-04T08:23:44.187Z",
+      "wallGapMilliseconds": 662,
+      "aggregateCPUTickDelta": 248
+    }
+  ],
+  "finding": "A 410 ms realtime step inflated host heartbeat gaps to 661/662 ms while the Node/browser monotonic interval remained approximately 1006 ms. Browser timer delay in that interval was 1.1 ms. The original artifact and its failed verdict are retained.",
+  "limitations": [
+    "The trial also fails impaired-link freezes; correcting the scheduler measurement does not establish delivery success.",
+    "The clock observation does not explain the persistent loss in run-1-relay-nack-rtx-flexfec.",
+    "The original sampler did not record boot-time intervals; historical heartbeat measurements are not retroactively converted."
+  ],
+  "correction": {
+    "clock": "Linux CLOCK_BOOTTIME via /proc/uptime",
+    "resolutionMilliseconds": 10,
+    "utcPurpose": "phase correlation",
+    "source": "https://raw.githubusercontent.com/torvalds/linux/v6.12/fs/proc/uptime.c",
+    "signalHandling": "Terminate and reap the outstanding sleep when the sampler receives SIGINT or SIGTERM."
+  },
+  "regression": {
+    "test": "test/host-cpu.test.mjs",
+    "oldClockGapsMilliseconds": [0, 650, -350, 750],
+    "correctedClockGapsMilliseconds": [0, 250, 250, 750],
+    "cases": [
+      "Forward/backward civil-clock steps leave elapsed intervals unchanged; a real boot-time pause stays visible.",
+      "Decimal centiseconds 08 and 09 parse correctly.",
+      "Terminating the sampler stops and reaps a pending 60-second sleep."
+    ],
+    "before": "Three assertions fail on the original sampler, including the realtime step and orphaned sleep.",
+    "after": "Three focused tests pass under macOS and Linux /bin/sh. The full 121-test collector suite passes. A live Linux /proc sample check passes with 11 samples and a maximum 60 ms observed gap at a configured 50 ms interval.",
+    "linuxImage": "sha256:d0121a43d72234f55d64aa9667d5b498b757639f7e86f9198989d6d4ab10cf4b",
+    "fixtureSetup": "The first Linux fixture attempt used a noexec tmpfs and could not start test scripts. Re-running with an explicitly executable temporary fixture filesystem passes; no production container permissions change."
+  }
+}

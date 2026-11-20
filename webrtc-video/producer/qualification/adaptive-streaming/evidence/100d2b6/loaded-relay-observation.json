@@ -1,0 +1,265 @@
+{
+  "schemaVersion": 1,
+  "revision": "100d2b6e9e347303330a490bc71eae0e51238867",
+  "git": {
+    "revision": "100d2b6e9e347303330a490bc71eae0e51238867",
+    "producerTree": "134a091c31c9e2518cca100a6a3538083e6210c5",
+    "dirty": false
+  },
+  "producerImage": "sha256:a6e4a6a01cbeec3f56d42cca19472b5fe6be59dd1a54405508ee75d895a1c06b",
+  "captureImage": "sha256:ba28315ef4d3976aeac11d93a9eda731ae4949c396d917f73c58c18956eba5c5",
+  "qualificationOutcome": "incomplete: collector reached its fixed 300-second safety deadline during the impaired phase; no release verdict or recovery result",
+  "baseline": {
+    "durationSeconds": 182.048,
+    "samples": 181,
+    "encoderTargetKbpsRange": [
+      6600,
+      8000
+    ],
+    "decodedFramesPerSecondMedian": 30,
+    "reportedLostPacketsIncrease": 1,
+    "reportedFreezeDurationSecondsIncrease": 0
+  },
+  "captureCounters": {
+    "producer": {
+      "captured": 353731,
+      "filtered": 353731,
+      "kernelDropped": 0
+    },
+    "vm-out": {
+      "captured": 352824,
+      "filtered": 705654,
+      "kernelDropped": 0
+    },
+    "vm-in": {
+      "captured": 352732,
+      "filtered": 705466,
+      "kernelDropped": 0
+    },
+    "receiver": {
+      "captured": 353572,
+      "filtered": 353728,
+      "kernelDropped": 0
+    }
+  },
+  "excludedFromVMCorrelation": {
+    "reason": "SSRC was not in the initially learned VM capture filter; absence cannot establish packet loss",
+    "packetsByPayloadType": {
+      "109": 1
+    }
+  },
+  "baselinePacketRows": [
+    {
+      "payloadType": 49,
+      "sourcePackets": 38088,
+      "hops": [
+        {
+          "from": "producer",
+          "to": "vm-out",
+          "packets": 38088,
+          "missing": 0,
+          "missingPercent": 0.0
+        },
+        {
+          "from": "vm-out",
+          "to": "vm-in",
+          "packets": 38088,
+          "missing": 0,
+          "missingPercent": 0.0
+        },
+        {
+          "from": "vm-in",
+          "to": "receiver",
+          "packets": 38088,
+          "missing": 0,
+          "missingPercent": 0.0
+        }
+      ]
+    },
+    {
+      "payloadType": 108,
+      "sourcePackets": 190439,
+      "hops": [
+        {
+          "from": "producer",
+          "to": "vm-out",
+          "packets": 190439,
+          "missing": 0,
+          "missingPercent": 0.0
+        },
+        {
+          "from": "vm-out",
+          "to": "vm-in",
+          "packets": 190439,
+          "missing": 1,
+          "missingPercent": 0.0005251025262682539
+        },
+        {
+          "from": "vm-in",
+          "to": "receiver",
+          "packets": 190438,
+          "missing": 0,
+          "missingPercent": 0.0
+        }
+      ]
+    }
+  ],
+  "clockProbes": {
+    "host": {
+      "runtime": "v26.7.0",
+      "platform": "darwin",
+      "intervalMilliseconds": 25,
+      "maximumWholeRunGapMilliseconds": 71.90379199999734,
+      "maximumWindowGapMilliseconds": 70.02354199999536,
+      "maximumWindowWallStepMilliseconds": 0.776624999998603,
+      "windowAnomalies": [
+        {
+          "epochMilliseconds": 1791111592515,
+          "elapsedMilliseconds": 108785.596334,
+          "gapMilliseconds": 70.02354199999536,
+          "wallStepMilliseconds": -0.02354199999535922,
+          "bootGapMilliseconds": null
+        },
+        {
+          "epochMilliseconds": 1791111592581,
+          "elapsedMilliseconds": 108851.507375,
+          "gapMilliseconds": 65.91104099999939,
+          "wallStepMilliseconds": 0.08895900000061374,
+          "bootGapMilliseconds": null
+        }
+      ],
+      "sampleCount": 13842,
+      "interruptedForCleanup": true
+    },
+    "linux": {
+      "runtime": "v24.21.0",
+      "platform": "linux",
+      "intervalMilliseconds": 25,
+      "maximumWholeRunGapMilliseconds": 120.54195899999468,
+      "maximumWindowGapMilliseconds": 120.54195899999468,
+      "maximumWindowWallStepMilliseconds": 0.9468749999941792,
+      "windowAnomalies": [
+        {
+          "epochMilliseconds": 1791111592571,
+          "elapsedMilliseconds": 108855.876301,
+          "gapMilliseconds": 120.54195899999468,
+          "wallStepMilliseconds": -0.5419589999946766,
+          "bootGapMilliseconds": 120
+        },
+        {
+          "epochMilliseconds": 1791111592668,
+          "elapsedMilliseconds": 108952.638343,
+          "gapMilliseconds": 96.76204200000211,
+          "wallStepMilliseconds": 0.2379579999978887,
+          "bootGapMilliseconds": 100
+        },
+        {
+          "epochMilliseconds": 1791111593124,
+          "elapsedMilliseconds": 109408.188009,
+          "gapMilliseconds": 48.28870800000732,
+          "wallStepMilliseconds": 0.7112919999926817,
+          "bootGapMilliseconds": 50
+        }
+      ],
+      "sampleCount": 14088,
+      "interruptedForCleanup": true
+    }
+  },
+  "periodicWindow": {
+    "startEpochMilliseconds": 1791111591000.0,
+    "endEpochMilliseconds": 1791111594000.0,
+    "frameEvents": [
+      {
+        "approximateEpochMilliseconds": 1791111592647.2002,
+        "kind": "frame-gap",
+        "gapMilliseconds": 183.29999999999563,
+        "previous": {
+          "callbackMilliseconds": 55790.3,
+          "presentationMilliseconds": 55792,
+          "expectedDisplayMilliseconds": 55790.3,
+          "receiveMilliseconds": 55774.6,
+          "processingSeconds": 0.0013,
+          "mediaSeconds": 54.691,
+          "rtpTimestamp": 2948836665,
+          "presentedFrames": 1641
+        },
+        "current": {
+          "callbackMilliseconds": 55973.6,
+          "presentationMilliseconds": 55912,
+          "expectedDisplayMilliseconds": 55923.6,
+          "receiveMilliseconds": 55791.4,
+          "processingSeconds": 0.0089,
+          "mediaSeconds": 54.725,
+          "rtpTimestamp": 2948839665,
+          "presentedFrames": 1643
+        }
+      }
+    ],
+    "packetGaps": [
+      {
+        "role": "producer",
+        "maximumPrimaryPacketGap": {
+          "endEpochMilliseconds": 1791111592674.736,
+          "milliseconds": 146.16796875
+        }
+      },
+      {
+        "role": "vm-out",
+        "maximumPrimaryPacketGap": {
+          "endEpochMilliseconds": 1791111592674.762,
+          "milliseconds": 146.19189453125
+        }
+      },
+      {
+        "role": "vm-in",
+        "maximumPrimaryPacketGap": {
+          "endEpochMilliseconds": 1791111592587.697,
+          "milliseconds": 122.7939453125
+        }
+      },
+      {
+        "role": "receiver",
+        "maximumPrimaryPacketGap": {
+          "endEpochMilliseconds": 1791111592587.929,
+          "milliseconds": 123.011962890625
+        }
+      }
+    ]
+  },
+  "cleanup": {
+    "originalSocketLimits": [
+      "212992",
+      "212992"
+    ],
+    "restoredSocketLimits": "net.core.rmem_max = 212992\nnet.core.wmem_max = 212992",
+    "hostClockExitCode": 0,
+    "linuxClockStopExitCode": 0,
+    "captureErrors": []
+  },
+  "limitations": [
+    "The extended baseline completed, but the full run is incomplete because the fixed collector timeout did not account for custom phase durations.",
+    "The simultaneous scheduling gaps support an environment contribution but do not identify the host process, hypervisor operation or root cause; they do not retrospectively change earlier failed verdicts.",
+    "No large sustained TURN loss was reproduced; low loss here does not exonerate the external route or relay in the previous failed run.",
+    "Header captures and clock probes are diagnostic instrumentation, not a release performance repetition.",
+    "UTC is used only for bounded event correlation; clock probe gaps use monotonic elapsed time."
+  ],
+  "inputSHA256": {
+    "loaded-relay-100d2b6/producer.pcap": "84a5f6a53e6004a73f57195c417469142fde4c0bc3104c9b6c470c2531491443",
+    "loaded-relay-100d2b6/vm-out.pcap": "86201bb7cd978ccc73a3013825b2c5631dc335df62d04ce1656ac10282b56a5a",
+    "loaded-relay-100d2b6/vm-in.pcap": "951130bf09c6853cfcb7bdae0dccd09e79143d7b38c9ec885f733b0db873258d",
+    "loaded-relay-100d2b6/receiver.pcap": "e805b1825165a7feda093470283a4ab6751eb5f97f72a329c9dbaf555ab53492",
+    "loaded-relay-100d2b6/producer-capture.log": "ee165fbc616fd861bab5683a20a2a69686efbb019d6baa76e552533927c0b9e1",
+    "loaded-relay-100d2b6/vm-out-capture.log": "11bbd6154c218d8dae9eecef1cbc87c0a8bbfad899d89a2db5467f031daab6d9",
+    "loaded-relay-100d2b6/vm-in-capture.log": "1010a5afa064a077c8f346d7a7345108426ddb470647163f984084aa9c742ad9",
+    "loaded-relay-100d2b6/receiver-capture.log": "6ba0061e45650fe483190805457f6d822791ea60620d54231da4c1c32859981a",
+    "loaded-relay-100d2b6/host-clock.json": "8113a5935ee1cec9a987609a55707b188bf5ec62484392c50979423c323a2302",
+    "loaded-relay-100d2b6/linux-clock.json": "7e5f88ad5a4cbf93a816b935f1aa7e8b8dd7130299e366c939e560b7bc3ee477",
+    "loaded-relay-100d2b6/capture-manifest.json": "d2bb066ab5f6b6f156ab9366e447f28c3ee6bfd0d8b9596d00659db768761bca",
+    "loaded-relay-100d2b6/relay-100d2b6/manifest.json": "a81e56afd3080b83c76bf4b3eb00941974e1f169f1791615eb26511f92a65efd",
+    "loaded-relay-100d2b6/relay-100d2b6/samples.jsonl": "e723fbe97f63e5e0ae695d9f341b725013aa474ccb318b4ecbaa200978465e69",
+    "loaded-relay-100d2b6/relay-100d2b6/browser.log": "0cf7e720ef1f3a5246abb8eb20f9635f7b3edfd08f47485eb8f6e574d9c9d5eb",
+    "loaded-relay-100d2b6/relay-100d2b6/encoder.log": "72bce9a7e747be5b843cf7dede870980e4febfdac64987fbbe83e89b8c6df8d2",
+    "run-loaded-relay-100d2b6.py": "ab63a3c86cb6434ae616b4a825f4c241eda4d6d72e36531cf3901296f8039399",
+    "analyze-loaded-relay-100d2b6.py": "0ca9165213fdb32e06ac8318532e57d90d73f8e570f36a4f5f01bb42b8b28cf0"
+  }
+}

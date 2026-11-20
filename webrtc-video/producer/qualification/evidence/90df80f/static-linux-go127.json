@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "buildSourceRevision": "90df80ffbad6502a2f1237c12d47cdc74efa3bc0",
+  "runtimeSourceRevision": "be401dc5faabb2721ef32d53aeaf069c0d46d6bc",
+  "sourceDifference": "Only platform/docs changes after the build; git diff for producer and shared sources is empty.",
+  "buildCommand": "make -C webrtc-video/producer dist",
+  "goVersion": "go1.27.0",
+  "gstreamerVersion": "1.28.7",
+  "aomVersion": "3.15.1",
+  "browserImage": "sha256:d33f6151adf7d4a24bebba0f44635692cc7ed63694fe31dc2206ffd7b109df7e",
+  "criteria": {
+    "minimumMedianDecodedFramesPerSecond": 28,
+    "receivedMbitPerSecond": [4, 6],
+    "maximumFreezeSecondsIncrease": 0,
+    "maximumDecodedDropIncrease": 0,
+    "maximumPacketLossIncrease": 0,
+    "shutdownDeadlineSeconds": 10
+  },
+  "runtimes": [
+    {
+      "architecture": "arm64",
+      "binarySHA256": "d30b0d3e3ca4afd5871d7da15ce90d2a376aa51a0d8d670386cb8fe091f13b67",
+      "sourceRevision": "be401dc5faabb2721ef32d53aeaf069c0d46d6bc",
+      "runtimeImage": "sha256:af9307693dc8349f74b067910969da32c3cb89f452533664686336b77e0b470a",
+      "cases": [
+        {
+          "codec": "h264",
+          "configurationSHA256": "73f6e473da4c625a1d58a506c83b6efe992ed5b0ab73adc205de68a0bb631d90",
+          "passed": true,
+          "encodedFrames": 604.0,
+          "medianDecodedFramesPerSecond": 30.0,
+          "observationSeconds": 21.142,
+          "receivedMbitPerSecond": 5.0016323905023174,
+          "playbackDeltas": {
+            "totalFreezesDurationSeconds": 0,
+            "framesDropped": 0,
+            "packetsLost": 0
+          },
+          "samples": 22,
+          "decodedFrames": 634,
+          "width": 1280,
+          "height": 720,
+          "shutdownSeconds": 0.15754616598132998,
+          "producerExitCode": 0,
+          "browser": "154.0.8037.92",
+          "whepSessionCreates": 1,
+          "whepSessionDeletes": 1
+        },
+        {
+          "codec": "av1",
+          "configurationSHA256": "65e4a45c4b3f6b1869623b2c9e9673a25d3e65cf29414271f34abd58b42a3c68",
+          "passed": true,
+          "encodedFrames": 603.0,
+          "medianDecodedFramesPerSecond": 30.0,
+          "observationSeconds": 21.144,
+          "receivedMbitPerSecond": 5.125118047673099,
+          "playbackDeltas": {
+            "totalFreezesDurationSeconds": 0,
+            "framesDropped": 0,
+            "packetsLost": 0
+          },
+          "samples": 22,
+          "decodedFrames": 634,
+          "width": 1280,
+          "height": 720,
+          "shutdownSeconds": 0.17664937500376254,
+          "producerExitCode": 0,
+          "browser": "154.0.8037.92",
+          "whepSessionCreates": 1,
+          "whepSessionDeletes": 1
+        }
+      ],
+      "scope": "Short real-media/static-link and cadence/rate check; no latency or CPU performance claim"
+    },
+    {
+      "architecture": "amd64",
+      "binarySHA256": "8ea39c15ca91759c47a115aa0653cee17ff4a729e1e5c34be6a387bae3fc4cab",
+      "sourceRevision": "be401dc5faabb2721ef32d53aeaf069c0d46d6bc",
+      "runtimeImage": "sha256:1f8ba47a2c8b171777434f15d8cee1f397489ba78fb0baba8a3d9b35db562396",
+      "cases": [
+        {
+          "codec": "h264",
+          "configurationSHA256": "73f6e473da4c625a1d58a506c83b6efe992ed5b0ab73adc205de68a0bb631d90",
+          "passed": true,
+          "encodedFrames": 604.0,
+          "medianDecodedFramesPerSecond": 30.0,
+          "observationSeconds": 21.139,
+          "receivedMbitPerSecond": 4.999247268082692,
+          "playbackDeltas": {
+            "totalFreezesDurationSeconds": 0,
+            "framesDropped": 0,
+            "packetsLost": 0
+          },
+          "samples": 22,
+          "decodedFrames": 635,
+          "width": 1280,
+          "height": 720,
+          "shutdownSeconds": 0.15279895899584517,
+          "producerExitCode": 0,
+          "browser": "154.0.8037.92",
+          "whepSessionCreates": 1,
+          "whepSessionDeletes": 1
+        },
+        {
+          "codec": "av1",
+          "configurationSHA256": "65e4a45c4b3f6b1869623b2c9e9673a25d3e65cf29414271f34abd58b42a3c68",
+          "passed": true,
+          "encodedFrames": 604.0,
+          "medianDecodedFramesPerSecond": 30.0,
+          "observationSeconds": 21.13,
+          "receivedMbitPerSecond": 5.117724940842404,
+          "playbackDeltas": {
+            "totalFreezesDurationSeconds": 0,
+            "framesDropped": 0,
+            "packetsLost": 0
+          },
+          "samples": 22,
+          "decodedFrames": 634,
+          "width": 1280,
+          "height": 720,
+          "shutdownSeconds": 0.15373212494887412,
+          "producerExitCode": 0,
+          "browser": "154.0.8037.92",
+          "whepSessionCreates": 1,
+          "whepSessionDeletes": 1
+        }
+      ],
+      "scope": "Short real-media/static-link and cadence/rate check; no latency or CPU performance claim"
+    }
+  ],
+  "qualificationHarnessSHA256": "cc4b168655db5c187a2cfee8b7d8298ab7aec25b2699f0c19434f466e71f48de",
+  "buildLogSHA256": "fce629dfb1b4c2266dad2927a87865bb6c162583c713d2276d1205ee87e99767",
+  "interpretation": [
+    "Both files are static ELF executables built with Go 1.27.0 and run in a scratch filesystem without shared GStreamer or codec libraries. H.264 and AV1 each sustain a median 30 decoded fps at 1280x720, near the configured 5 Mbit/s, for approximately 21 seconds.",
+    "All four cases observe zero additional packet loss, decoded drops or freeze duration. Each creates and deletes exactly one WHEP session, then exits normally within 153\u2013177ms after SIGTERM; browser logs are empty.",
+    "AMD64 is emulated on the test host. This checks packaged functionality and short source cadence/rate, not native AMD64 performance, impaired-network robustness, physical capture, latency or a device CPU budget.",
+    "This repeat includes the current shared WHEP cleanup, source key-frame changes and the v1.30-compatible tunnel handshake backport. Direct local media uses no tunnel or TURN, so it does not independently qualify external transport connectivity."
+  ],
+  "cleanup": {
+    "ownedContainersRemoved": true
+  }
+}

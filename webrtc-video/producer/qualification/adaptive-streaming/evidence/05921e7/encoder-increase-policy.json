@@ -1,0 +1,369 @@
+{
+  "purpose": "Retain bounded encoder increase-policy experiments without changing production policy",
+  "passed": false,
+  "policyPromoted": false,
+  "scope": "Symmetric managed TURN, H.264 720p30, NACK/RTX/FlexFEC 5/1, no requested playout-delay hint. Same full stepped-capacity and 120 ms / 30 ms / 2% impairment qualification as the preceding direct/TURN regression. Only generated private encoder configuration differs; production source, pacing and controller code remain unchanged.",
+  "interpretation": [
+    "The first controller-only trial recovers more quickly, but changes both the loss threshold and hold duration. Its continued-pressure gate fails because a 100% threshold supplies no above-threshold loss observation; the gate is preserved, not reclassified or relaxed.",
+    "The two 1% / zero-hold trials do not validate removing the hold. Relay-1 has 13\u201324% reported loss even without injected impairment, remains at the 2 Mbit/s floor and never exercises bitrate recovery. Kernel receive overflow and encoder/host-scheduling gates pass; the loss source remains unresolved.",
+    "Relay-2 recovers to 6.8 Mbit/s but fails impairment freezes and scheduling/cadence: host sampler gaps reach 381 ms and one encoded-frame gap reaches 205.530 ms. Host invalidity prevents a stable performance conclusion; it does not excuse the distinct impaired-phase freeze failure.",
+    "All four raw results remain failures. The unchanged 1% / 5-second production policy remains pending diagnosis and qualification. No capture-to-display latency claim is made."
+  ],
+  "udpSocketLimitsRestored": true,
+  "ownedContainersRemoved": true,
+  "cases": [
+    {
+      "case": "baseline",
+      "maxIncreaseLossPct": 1,
+      "increaseHoldAfterLossSeconds": 5,
+      "summarySHA256": "d5cf295a2c1820f21e70703e274c0d70bee0ae26fde80a6bb77a17118f39393f",
+      "manifestSHA256": "7510fcdc85d11ddc50b6707a0088914d78502ff554d5046164e0abe0076f60cf",
+      "git": {
+        "revision": "05921e7a653e6aeedc14246569aa71b56f2b2cd1",
+        "producerTree": "eb080e5435b43b7dd6e26ad98e0baf9cbb07837f",
+        "dirty": false
+      },
+      "producerImage": "sha256:ece5a1f2a282f9bc5ccec46541b004954aa6353b84e975bc3f6dab8f5ec6ba7f",
+      "browserImage": "sha256:119116b99435a9843c29a3b5401e8aac9626ebe0cf4877f4e9e5a68170a1d739",
+      "passed": false,
+      "passedAssertions": 53,
+      "failedAssertions": [
+        "impaired-link-freezes",
+        "sustained-recovery",
+        "throughput-recovery"
+      ],
+      "stableConditioningMedianEncoderTargetKbps": 5000,
+      "congestionResponseRequired": true,
+      "recoveryDelayMilliseconds": 34272,
+      "sustainedRecoveryMilliseconds": 5032,
+      "maximumHostSamplerGapMilliseconds": 258,
+      "phases": {
+        "baseline": {
+          "samples": 26,
+          "medianEncoderTargetKbps": 5000,
+          "endingEncoderTargetKbps": 5000,
+          "medianReceivedBitrateKbps": 6009.266314809555,
+          "decodedFramesPerSecond": 29.984114376489277,
+          "freezeDurationSeconds": 0.47400000000000003,
+          "freezeRatio": 0.018824463860206513,
+          "medianAverageLoss": 0.006397181932241869,
+          "averageJitterBufferDelayMilliseconds": 23.576086092715226,
+          "encoderMaximumFrameGapMilliseconds": 43.8966250000085
+        },
+        "conditioning": {
+          "samples": 44,
+          "medianEncoderTargetKbps": 5000,
+          "endingEncoderTargetKbps": 5000,
+          "medianReceivedBitrateKbps": 5915.065504162356,
+          "decodedFramesPerSecond": 29.98452262699531,
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0.010277918235957705,
+          "averageJitterBufferDelayMilliseconds": 21.750360554699533,
+          "encoderMaximumFrameGapMilliseconds": 42.60366700000304
+        },
+        "constrained": {
+          "samples": 45,
+          "medianEncoderTargetKbps": 2600,
+          "endingEncoderTargetKbps": 2500,
+          "medianReceivedBitrateKbps": 3173.4632206759443,
+          "decodedFramesPerSecond": 29.332068825362416,
+          "freezeDurationSeconds": 1.9320000000000002,
+          "freezeRatio": 0.04362552499661293,
+          "medianAverageLoss": 0.005573011818445079,
+          "averageJitterBufferDelayMilliseconds": 41.94350577367205,
+          "encoderMaximumFrameGapMilliseconds": 42.205082999993465
+        },
+        "impaired": {
+          "samples": 35,
+          "medianEncoderTargetKbps": 2000,
+          "endingEncoderTargetKbps": 2000,
+          "medianReceivedBitrateKbps": 2455.3399602385684,
+          "decodedFramesPerSecond": 28.393655244939097,
+          "freezeDurationSeconds": 9.941,
+          "freezeRatio": 0.2903923115122835,
+          "medianAverageLoss": 0.034264058925705033,
+          "averageJitterBufferDelayMilliseconds": 99.71487860082306,
+          "encoderMaximumFrameGapMilliseconds": 42.82200000001467
+        },
+        "recovery": {
+          "samples": 45,
+          "medianEncoderTargetKbps": 2500,
+          "endingEncoderTargetKbps": 5800,
+          "medianReceivedBitrateKbps": 3030.210735586481,
+          "decodedFramesPerSecond": 30.132719393282773,
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0.00025345230177641265,
+          "averageJitterBufferDelayMilliseconds": 59.6385213483146,
+          "encoderMaximumFrameGapMilliseconds": 42.721833000017796
+        }
+      }
+    },
+    {
+      "case": "controller-only",
+      "maxIncreaseLossPct": 100,
+      "increaseHoldAfterLossSeconds": 0,
+      "summarySHA256": "e4066e4661234a33eef1ee0e282c5aa33afbef3af0027aaafce83d2f01bb2b99",
+      "manifestSHA256": "840980c23980e3f48111046a513a1984e665f03f4de152dba46ce09d174c4a2a",
+      "git": {
+        "revision": "05921e7a653e6aeedc14246569aa71b56f2b2cd1",
+        "producerTree": "eb080e5435b43b7dd6e26ad98e0baf9cbb07837f",
+        "dirty": false
+      },
+      "producerImage": "sha256:ece5a1f2a282f9bc5ccec46541b004954aa6353b84e975bc3f6dab8f5ec6ba7f",
+      "browserImage": "sha256:119116b99435a9843c29a3b5401e8aac9626ebe0cf4877f4e9e5a68170a1d739",
+      "passed": false,
+      "passedAssertions": 55,
+      "failedAssertions": [
+        "continued-pressure"
+      ],
+      "stableConditioningMedianEncoderTargetKbps": 8000,
+      "congestionResponseRequired": true,
+      "recoveryDelayMilliseconds": 14130,
+      "sustainedRecoveryMilliseconds": 24159,
+      "maximumHostSamplerGapMilliseconds": 267,
+      "phases": {
+        "baseline": {
+          "samples": 25,
+          "medianEncoderTargetKbps": 7700,
+          "endingEncoderTargetKbps": 7700,
+          "medianReceivedBitrateKbps": 9106.150793650793,
+          "decodedFramesPerSecond": 30.0335084598519,
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 3.1454883654963992e-06,
+          "averageJitterBufferDelayMilliseconds": 22.77615013774105,
+          "encoderMaximumFrameGapMilliseconds": 40.58325000000332
+        },
+        "conditioning": {
+          "samples": 45,
+          "medianEncoderTargetKbps": 8000,
+          "endingEncoderTargetKbps": 6800,
+          "medianReceivedBitrateKbps": 9160.825396825398,
+          "decodedFramesPerSecond": 29.986226206335946,
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 1.4459010418392198e-05,
+          "averageJitterBufferDelayMilliseconds": 23.91465210843373,
+          "encoderMaximumFrameGapMilliseconds": 43.89275000001362
+        },
+        "constrained": {
+          "samples": 45,
+          "medianEncoderTargetKbps": 2800,
+          "endingEncoderTargetKbps": 2600,
+          "medianReceivedBitrateKbps": 3414.91956305859,
+          "decodedFramesPerSecond": 29.288230512148857,
+          "freezeDurationSeconds": 1.282,
+          "freezeRatio": 0.028949507722879596,
+          "medianAverageLoss": 2.9438767234237924e-06,
+          "averageJitterBufferDelayMilliseconds": 45.491553585196606,
+          "encoderMaximumFrameGapMilliseconds": 43.46470799998497
+        },
+        "impaired": {
+          "samples": 35,
+          "medianEncoderTargetKbps": 2000,
+          "endingEncoderTargetKbps": 2100,
+          "medianReceivedBitrateKbps": 2506.2504970178925,
+          "decodedFramesPerSecond": 29.740863010897193,
+          "freezeDurationSeconds": 1.7810000000000001,
+          "freezeRatio": 0.05203190277250285,
+          "medianAverageLoss": 0.020198747434663374,
+          "averageJitterBufferDelayMilliseconds": 89.14887229862477,
+          "encoderMaximumFrameGapMilliseconds": 44.08041600001161
+        },
+        "recovery": {
+          "samples": 44,
+          "medianEncoderTargetKbps": 7400,
+          "endingEncoderTargetKbps": 7400,
+          "medianReceivedBitrateKbps": 8811.893102861643,
+          "decodedFramesPerSecond": 30.169327080782647,
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 4.1454527246920045e-08,
+          "averageJitterBufferDelayMilliseconds": 57.46684762634,
+          "encoderMaximumFrameGapMilliseconds": 42.829292000009445
+        }
+      }
+    },
+    {
+      "case": "relay-1",
+      "maxIncreaseLossPct": 1,
+      "increaseHoldAfterLossSeconds": 0,
+      "summarySHA256": "a58d1e3d5fbb8ed5a351b069be0baa32a7a81498f6b7a51036a0aae5ceade917",
+      "manifestSHA256": "e9c664f3e6aa0e01f410b9aecdfea2b21d5fcad7a56f45c915829e8f60d7661d",
+      "git": {
+        "revision": "05921e7a653e6aeedc14246569aa71b56f2b2cd1",
+        "producerTree": "eb080e5435b43b7dd6e26ad98e0baf9cbb07837f",
+        "dirty": false
+      },
+      "producerImage": "sha256:ece5a1f2a282f9bc5ccec46541b004954aa6353b84e975bc3f6dab8f5ec6ba7f",
+      "browserImage": "sha256:119116b99435a9843c29a3b5401e8aac9626ebe0cf4877f4e9e5a68170a1d739",
+      "passed": false,
+      "passedAssertions": 51,
+      "failedAssertions": [
+        "playout-effective-latency-budget",
+        "healthy-link-freezes",
+        "impaired-link-freezes",
+        "repair-amplification",
+        "twcc-loss-fidelity"
+      ],
+      "stableConditioningMedianEncoderTargetKbps": 2000,
+      "congestionResponseRequired": false,
+      "recoveryDelayMilliseconds": null,
+      "sustainedRecoveryMilliseconds": null,
+      "maximumHostSamplerGapMilliseconds": 258,
+      "phases": {
+        "baseline": {
+          "samples": 25,
+          "medianEncoderTargetKbps": 2000,
+          "endingEncoderTargetKbps": 2000,
+          "medianReceivedBitrateKbps": 2355.5793650793653,
+          "decodedFramesPerSecond": 29.588247465342437,
+          "freezeDurationSeconds": 4.555000000000001,
+          "freezeRatio": 0.1884957583281606,
+          "medianAverageLoss": 0.15260027311785795,
+          "averageJitterBufferDelayMilliseconds": 72.37511748251748,
+          "encoderMaximumFrameGapMilliseconds": 40.884708999990835
+        },
+        "conditioning": {
+          "samples": 45,
+          "medianEncoderTargetKbps": 2000,
+          "endingEncoderTargetKbps": 2000,
+          "medianReceivedBitrateKbps": 2367.9205561072495,
+          "decodedFramesPerSecond": 29.8473765013998,
+          "freezeDurationSeconds": 9.093000000000002,
+          "freezeRatio": 0.20529666756976434,
+          "medianAverageLoss": 0.13657716078283103,
+          "averageJitterBufferDelayMilliseconds": 82.54008774583964,
+          "encoderMaximumFrameGapMilliseconds": 41.620208000000275
+        },
+        "constrained": {
+          "samples": 45,
+          "medianEncoderTargetKbps": 2000,
+          "endingEncoderTargetKbps": 2000,
+          "medianReceivedBitrateKbps": 2298.0278330019883,
+          "decodedFramesPerSecond": 29.042740443200795,
+          "freezeDurationSeconds": 21.246999999999996,
+          "freezeRatio": 0.4794647289795549,
+          "medianAverageLoss": 0.19478693562380628,
+          "averageJitterBufferDelayMilliseconds": 191.69782595182593,
+          "encoderMaximumFrameGapMilliseconds": 43.37766699999338
+        },
+        "impaired": {
+          "samples": 34,
+          "medianEncoderTargetKbps": 2000,
+          "endingEncoderTargetKbps": 2000,
+          "medianReceivedBitrateKbps": 2272.809759121537,
+          "decodedFramesPerSecond": 22.89272606943024,
+          "freezeDurationSeconds": 27.849999999999994,
+          "freezeRatio": 0.8377955598339449,
+          "medianAverageLoss": 0.23609160483309308,
+          "averageJitterBufferDelayMilliseconds": 709.650567674113,
+          "encoderMaximumFrameGapMilliseconds": 43.288999999989755
+        },
+        "recovery": {
+          "samples": 45,
+          "medianEncoderTargetKbps": 2000,
+          "endingEncoderTargetKbps": 2000,
+          "medianReceivedBitrateKbps": 2360.5328031809145,
+          "decodedFramesPerSecond": 30.240797995982938,
+          "freezeDurationSeconds": 11.754000000000005,
+          "freezeRatio": 0.2652614474961072,
+          "medianAverageLoss": 0.15614564612477116,
+          "averageJitterBufferDelayMilliseconds": 137.48278656716403,
+          "encoderMaximumFrameGapMilliseconds": 44.1433750000142
+        }
+      }
+    },
+    {
+      "case": "relay-2",
+      "maxIncreaseLossPct": 1,
+      "increaseHoldAfterLossSeconds": 0,
+      "summarySHA256": "a9584d2658456f170bd2838dfeaddeecb66e23954537772caf1a9002014ab34f",
+      "manifestSHA256": "f664ae53086de27f1b4ec31ac1c1a144f53b3b7a10f8fd30d43f3640a419d1d2",
+      "git": {
+        "revision": "05921e7a653e6aeedc14246569aa71b56f2b2cd1",
+        "producerTree": "eb080e5435b43b7dd6e26ad98e0baf9cbb07837f",
+        "dirty": false
+      },
+      "producerImage": "sha256:ece5a1f2a282f9bc5ccec46541b004954aa6353b84e975bc3f6dab8f5ec6ba7f",
+      "browserImage": "sha256:119116b99435a9843c29a3b5401e8aac9626ebe0cf4877f4e9e5a68170a1d739",
+      "passed": false,
+      "passedAssertions": 52,
+      "failedAssertions": [
+        "producer-host-scheduler",
+        "receiver-host-scheduler",
+        "impaired-link-freezes",
+        "encoder-cadence"
+      ],
+      "stableConditioningMedianEncoderTargetKbps": 8000,
+      "congestionResponseRequired": true,
+      "recoveryDelayMilliseconds": 24205,
+      "sustainedRecoveryMilliseconds": 14085,
+      "maximumHostSamplerGapMilliseconds": 381,
+      "phases": {
+        "baseline": {
+          "samples": 25,
+          "medianEncoderTargetKbps": 8000,
+          "endingEncoderTargetKbps": 8000,
+          "medianReceivedBitrateKbps": 9246.188679245282,
+          "decodedFramesPerSecond": 29.963166825311426,
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 7.368674414107608e-06,
+          "averageJitterBufferDelayMilliseconds": 24.2575,
+          "encoderMaximumFrameGapMilliseconds": 43.31204200000502
+        },
+        "conditioning": {
+          "samples": 45,
+          "medianEncoderTargetKbps": 8000,
+          "endingEncoderTargetKbps": 8000,
+          "medianReceivedBitrateKbps": 9192.06368159204,
+          "decodedFramesPerSecond": 30.00609604660089,
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0.00041770604240246246,
+          "averageJitterBufferDelayMilliseconds": 26.3083938253012,
+          "encoderMaximumFrameGapMilliseconds": 43.96308399999543
+        },
+        "constrained": {
+          "samples": 45,
+          "medianEncoderTargetKbps": 2500,
+          "endingEncoderTargetKbps": 2600,
+          "medianReceivedBitrateKbps": 3149.638170974155,
+          "decodedFramesPerSecond": 29.270275763940646,
+          "freezeDurationSeconds": 1.872,
+          "freezeRatio": 0.042279287214580935,
+          "medianAverageLoss": 0.012919355021961548,
+          "averageJitterBufferDelayMilliseconds": 47.9630038580247,
+          "encoderMaximumFrameGapMilliseconds": 205.53029199998127
+        },
+        "impaired": {
+          "samples": 35,
+          "medianEncoderTargetKbps": 2000,
+          "endingEncoderTargetKbps": 2000,
+          "medianReceivedBitrateKbps": 2483.404761904762,
+          "decodedFramesPerSecond": 29.585280373831775,
+          "freezeDurationSeconds": 6.491,
+          "freezeRatio": 0.1895735981308411,
+          "medianAverageLoss": 0.0343082982860027,
+          "averageJitterBufferDelayMilliseconds": 101.46336426456071,
+          "encoderMaximumFrameGapMilliseconds": 42.52379199999268
+        },
+        "recovery": {
+          "samples": 44,
+          "medianEncoderTargetKbps": 6000,
+          "endingEncoderTargetKbps": 6800,
+          "medianReceivedBitrateKbps": 6465.083609180183,
+          "decodedFramesPerSecond": 30.16863016863017,
+          "freezeDurationSeconds": 0,
+          "freezeRatio": 0,
+          "medianAverageLoss": 0.006036154561411229,
+          "averageJitterBufferDelayMilliseconds": 58.383041347626325,
+          "encoderMaximumFrameGapMilliseconds": 41.9955009999976
+        }
+      }
+    }
+  ]
+}

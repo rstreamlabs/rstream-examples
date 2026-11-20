@@ -21,11 +21,11 @@ func TestReviewedTransportDependencyGraph(t *testing.T) {
 		t.Fatal("missing compiled dependency metadata")
 	}
 	expected := map[string]string{
-		"github.com/quic-go/quic-go":         "v0.64.1",
-		"github.com/quic-go/webtransport-go": "v0.13.0",
+		"github.com/quic-go/quic-go":         "v0.60.0",
+		"github.com/quic-go/webtransport-go": "v0.11.1",
 		"github.com/pion/dtls/v3":            "v3.1.15",
-		"github.com/quic-go/masque-go":       "v0.6.0",
-		"github.com/quic-go/connect-ip-go":   "v0.6.0",
+		"github.com/quic-go/masque-go":       "v0.4.0",
+		"github.com/quic-go/connect-ip-go":   "v0.1.0",
 	}
 	for _, dependency := range info.Deps {
 		version, required := expected[dependency.Path]

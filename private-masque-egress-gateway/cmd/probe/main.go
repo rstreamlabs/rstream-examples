@@ -11,7 +11,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"flag"
 	"fmt"
@@ -20,7 +19,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -40,9 +38,6 @@ func main() {
 	downstream := flag.String("downstream", "all", "plain CONNECT downstream: h1, h2, h3, all, none")
 	accessHeader := flag.String("access-header", "X-Egress-Token", "gateway access token header")
 	accessToken := flag.String("access-token", "", "gateway access token")
-	caFile := flag.String("ca-file", "", "additional PEM CA bundle for gateway verification")
-	serverName := flag.String("server-name", "", "gateway TLS verification name and SNI; defaults to address host")
-	insecureDemoTLS := flag.Bool("insecure-demo-tls", false, "disable certificate verification for a literal loopback demo only")
 	timeout := flag.Duration("timeout", 20*time.Second, "probe timeout")
 	flag.Parse()
 	if *addr == "" {
@@ -51,10 +46,6 @@ func main() {
 	hostport, baseURL, err := normalizeEndpoint(*addr)
 	if err != nil {
 		log.Fatalf("addr: %v", err)
-	}
-	tlsConfig, err := newProbeTLSConfig(hostport, *caFile, *serverName, *insecureDemoTLS)
-	if err != nil {
-		log.Fatalf("TLS configuration: %v", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
@@ -65,7 +56,7 @@ func main() {
 			if *tcpTarget == "" {
 				log.Fatal("--tcp-target is required when --downstream is not none")
 			}
-			if err := runPlainConnect(ctx, proto, hostport, *tcpTarget, header, tlsConfig); err != nil {
+			if err := runPlainConnect(ctx, proto, hostport, *tcpTarget, header); err != nil {
 				log.Fatalf("CONNECT %s: %v", proto, err)
 			}
 			fmt.Printf("CONNECT %s ok\n", proto)
@@ -74,7 +65,7 @@ func main() {
 		if *tcpTarget == "" {
 			log.Fatal("--tcp-target is required when --downstream is not none")
 		}
-		if err := runPlainConnect(ctx, *downstream, hostport, *tcpTarget, header, tlsConfig); err != nil {
+		if err := runPlainConnect(ctx, *downstream, hostport, *tcpTarget, header); err != nil {
 			log.Fatalf("CONNECT %s: %v", *downstream, err)
 		}
 		fmt.Printf("CONNECT %s ok\n", *downstream)
@@ -83,7 +74,7 @@ func main() {
 		log.Fatalf("invalid --downstream %q", *downstream)
 	}
 	if *udpTarget != "" {
-		if err := runConnectUDP(ctx, hostport, baseURL, *udpTarget, header, tlsConfig); err != nil {
+		if err := runConnectUDP(ctx, hostport, baseURL, *udpTarget, header); err != nil {
 			log.Fatalf("CONNECT-UDP: %v", err)
 		}
 		fmt.Println("CONNECT-UDP ok")
@@ -124,51 +115,16 @@ func accessHeaders(name, token string) http.Header {
 	return h
 }
 
-func newProbeTLSConfig(forwarding, caFile, serverName string, insecureDemo bool) (*tls.Config, error) {
-	host, _, err := net.SplitHostPort(forwarding)
-	if err != nil {
-		return nil, err
-	}
-	if insecureDemo {
-		ip := net.ParseIP(host)
-		if ip == nil || !ip.IsLoopback() {
-			return nil, errors.New("--insecure-demo-tls requires a literal loopback gateway address")
-		}
-		if caFile != "" || serverName != "" {
-			return nil, errors.New("--insecure-demo-tls cannot be combined with --ca-file or --server-name")
-		}
-	}
-	if serverName == "" {
-		serverName = host
-	}
-	config := &tls.Config{MinVersion: tls.VersionTLS12, ServerName: serverName, InsecureSkipVerify: insecureDemo}
-	if caFile != "" {
-		bundle, err := os.ReadFile(caFile)
-		if err != nil {
-			return nil, fmt.Errorf("read gateway CA: %w", err)
-		}
-		roots, err := x509.SystemCertPool()
-		if err != nil {
-			return nil, fmt.Errorf("load system roots: %w", err)
-		}
-		if !roots.AppendCertsFromPEM(bundle) {
-			return nil, errors.New("gateway CA file contains no certificates")
-		}
-		config.RootCAs = roots
-	}
-	return config, nil
-}
-
-func runPlainConnect(ctx context.Context, downstream, forwarding, target string, header http.Header, tlsConfig *tls.Config) error {
+func runPlainConnect(ctx context.Context, downstream, forwarding, target string, header http.Header) error {
 	var conn io.ReadWriteCloser
 	var err error
 	switch strings.ToLower(downstream) {
 	case "h1":
-		conn, err = dialH1(ctx, forwarding, target, header, tlsConfig)
+		conn, err = dialH1(ctx, forwarding, target, header)
 	case "h2":
-		conn, err = dialH2(ctx, forwarding, target, header, tlsConfig)
+		conn, err = dialH2(ctx, forwarding, target, header)
 	case "h3":
-		conn, err = dialH3Connect(ctx, forwarding, target, header, tlsConfig)
+		conn, err = dialH3Connect(ctx, forwarding, target, header)
 	default:
 		return fmt.Errorf("unsupported downstream %q", downstream)
 	}
@@ -179,18 +135,18 @@ func runPlainConnect(ctx context.Context, downstream, forwarding, target string,
 	return verifyStreamEcho(conn)
 }
 
-func dialH1(ctx context.Context, forwarding, target string, header http.Header, tlsConfig *tls.Config) (io.ReadWriteCloser, error) {
-	config := tlsConfig.Clone()
-	config.NextProtos = []string{"http/1.1"}
-	conn, err := (&tls.Dialer{Config: config}).DialContext(ctx, "tcp", forwarding)
+func dialH1(ctx context.Context, forwarding, target string, header http.Header) (io.ReadWriteCloser, error) {
+	forwardingHost, _, err := net.SplitHostPort(forwarding)
 	if err != nil {
 		return nil, err
 	}
-	if deadline, ok := ctx.Deadline(); ok {
-		if err := conn.SetDeadline(deadline); err != nil {
-			_ = conn.Close()
-			return nil, err
-		}
+	conn, err := (&tls.Dialer{Config: &tls.Config{
+		InsecureSkipVerify: true,
+		NextProtos:         []string{"http/1.1"},
+		ServerName:         forwardingHost,
+	}}).DialContext(ctx, "tcp", forwarding)
+	if err != nil {
+		return nil, err
 	}
 	req := connectRequest(target, header)
 	if err := req.Write(conn); err != nil {
@@ -214,13 +170,17 @@ func dialH1(ctx context.Context, forwarding, target string, header http.Header, 
 	return conn, nil
 }
 
-func dialH2(ctx context.Context, forwarding, target string, header http.Header, tlsConfig *tls.Config) (io.ReadWriteCloser, error) {
-	config := tlsConfig.Clone()
-	config.NextProtos = []string{"h2"}
+func dialH2(ctx context.Context, forwarding, target string, header http.Header) (io.ReadWriteCloser, error) {
+	forwardingHost, _, err := net.SplitHostPort(forwarding)
+	if err != nil {
+		return nil, err
+	}
 	pr, pw := io.Pipe()
 	tr := &http2.Transport{
-		TLSClientConfig: config,
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true, NextProtos: []string{"h2"}},
 		DialTLSContext: func(ctx context.Context, _, _ string, cfg *tls.Config) (net.Conn, error) {
+			cfg = cfg.Clone()
+			cfg.ServerName = forwardingHost
 			return (&tls.Dialer{Config: cfg}).DialContext(ctx, "tcp", forwarding)
 		},
 	}
@@ -244,8 +204,8 @@ func dialH2(ctx context.Context, forwarding, target string, header http.Header, 
 	return &h2Stream{reader: resp.Body, writer: pw, transport: tr}, nil
 }
 
-func dialH3Connect(ctx context.Context, forwarding, target string, header http.Header, tlsConfig *tls.Config) (io.ReadWriteCloser, error) {
-	conn, closeConn, err := dialH3(ctx, forwarding, tlsConfig)
+func dialH3Connect(ctx context.Context, forwarding, target string, header http.Header) (io.ReadWriteCloser, error) {
+	conn, closeConn, err := dialH3(ctx, forwarding)
 	if err != nil {
 		return nil, err
 	}
@@ -287,8 +247,8 @@ func connectRequest(target string, header http.Header) *http.Request {
 	}
 }
 
-func runConnectUDP(ctx context.Context, forwarding, baseURL, target string, header http.Header, tlsConfig *tls.Config) error {
-	conn, closeConn, err := dialH3(ctx, forwarding, tlsConfig)
+func runConnectUDP(ctx context.Context, forwarding, baseURL, target string, header http.Header) error {
+	conn, closeConn, err := dialH3(ctx, forwarding)
 	if err != nil {
 		return err
 	}
@@ -367,17 +327,21 @@ func runConnectUDP(ctx context.Context, forwarding, baseURL, target string, head
 	return nil
 }
 
-func dialH3(ctx context.Context, forwarding string, tlsConfig *tls.Config) (*http3.ClientConn, func(), error) {
-	config := tlsConfig.Clone()
-	config.NextProtos = []string{http3.NextProtoH3}
-	qconn, err := quic.DialAddr(ctx, forwarding, config, &quic.Config{EnableDatagrams: true})
+func dialH3(ctx context.Context, forwarding string) (*http3.ClientConn, func(), error) {
+	host, _, err := net.SplitHostPort(forwarding)
 	if err != nil {
 		return nil, nil, err
 	}
-	stop := context.AfterFunc(ctx, func() { _ = qconn.CloseWithError(0, "probe canceled") })
+	qconn, err := quic.DialAddr(ctx, forwarding, &tls.Config{
+		InsecureSkipVerify: true,
+		NextProtos:         []string{http3.NextProtoH3},
+		ServerName:         host,
+	}, &quic.Config{EnableDatagrams: true})
+	if err != nil {
+		return nil, nil, err
+	}
 	h3conn := (&http3.Transport{EnableDatagrams: true}).NewClientConn(qconn)
 	closeConn := func() {
-		stop()
 		_ = h3conn.CloseWithError(0, "")
 		_ = qconn.CloseWithError(0, "")
 	}

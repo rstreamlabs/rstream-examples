@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "8d252c3289884b50403999b38da42cd63f9e738b",
+  "browserRuntime": "Chromium 154.0.8037.92 on Linux ARM64",
+  "regression": {
+    "before": {
+      "failures": [
+        "net::ERR_ABORTED",
+        "net::ERR_ABORTED",
+        "net::ERR_ABORTED"
+      ],
+      "finished": 0,
+      "states": [
+        null,
+        null,
+        null
+      ],
+      "errors": []
+    },
+    "after": {
+      "failures": [],
+      "finished": 3,
+      "states": [
+        null,
+        null,
+        null
+      ],
+      "errors": []
+    }
+  },
+  "checks": {
+    "unitBefore": {
+      "passed": 7,
+      "failed": 1,
+      "failure": "empty 204 request was cancelled"
+    },
+    "unitAfter": {
+      "passed": 175,
+      "failed": 0
+    },
+    "typeChecks": [
+      "Next.js platform",
+      "embedded viewer"
+    ]
+  },
+  "inputSHA256": {
+    "rstream-quality-204-red.log": "0c27a890469dea2934e8dbd56f7a6db5abaef82ffb79ab295211cc1963ecdf65",
+    "rstream-quality-204-green.log": "3dcfa440a89fd1332d5bb9a2e6c3bb9959685d054fb3133463588833242966bc",
+    "rstream-quality-204-types.log": "80a080fab22e692c42672f5ec6ca83c19bfe7db3b38e2f1ac88534110813e3de",
+    "rstream-quality-204-browser.log": "30805f50f2c696db45959ca26c073fde2e4da0c367372b9c3c6d3eade365f37f",
+    "rstream-producer-quality-204-types-final.log": "2bef43d2290da84c5946ad70b505ff44546e6e5cc437807f61891298f3ebc4b9"
+  }
+}
