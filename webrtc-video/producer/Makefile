@@ -129,10 +129,10 @@ vet: ice-patch check-build-tools css
 
 verify: check-format vet test test-race test-gcc-regression test-provisioning build
 
-format:
+format: $(NPM_STAMP)
 	npm run format
 
-check-format:
+check-format: $(NPM_STAMP)
 	npm run format:check
 
 clean:
