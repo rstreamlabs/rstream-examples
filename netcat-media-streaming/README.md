@@ -1,35 +1,23 @@
 # Netcat media streaming
 
-This example keeps live media deliberately simple: standard GStreamer or
-FFmpeg processes write to and read from `rstream nc` through standard input and
-output. It covers two different transport choices:
+Send a GStreamer test pattern between two terminals on Linux or macOS over a private rstream tunnel. The producer writes encoded media to `rstream nc`. The consumer reads the bytes and displays the video.
 
-| Path                                          | When to use it                                              | Client                                 |
-| --------------------------------------------- | ----------------------------------------------------------- | -------------------------------------- |
-| Reliable MPEG-TS over a private byte stream   | Every byte must arrive in order.                            | Go `rstream nc` or C++ `rstream-ncat`. |
-| Packetized RTP over a private datagram tunnel | Bounded latency matters more than retransmitting late data. | Go `rstream nc -u`.                    |
+## Play a test pattern
 
-Both machines must use an rstream context for the same project. Install the
-rstream CLI and GStreamer, then check the required elements:
+Install the rstream CLI and GStreamer on both machines. Use a project that supports [private tunnel dialing](https://rstream.io/docs/tunnels/private-tunnels). Use the same `your-project-endpoint` value on both machines.
 
-```bash
+```sh
 rstream login
-rstream project use <project-endpoint>
-for element in x264enc h264parse mpegtsmux rtpstreampay rtpstreamdepay rtpjitterbuffer avdec_h264; do
-  gst-inspect-1.0 "$element" >/dev/null || exit 1
-done
+rstream project use your-project-endpoint
 ```
 
-## Reliable GStreamer stream
+On the producer, verify `videotestsrc`, `videoconvert`, `x264enc`, `h264parse` and `mpegtsmux` with `gst-inspect-1.0`. On the consumer, verify `tsdemux`, `avdec_h264` and `autovideosink` and use a desktop session for playback. Install the matching elements from the GStreamer base, good, bad, ugly and libav plugin sets.
 
-On the producer, create a private tunnel and attach one GStreamer process to
-each connection. File descriptor 3 carries only media; diagnostics remain in
-the terminal.
+Start the producer. File descriptor 3 keeps MPEG-TS on the tunnel connection while GStreamer diagnostics go to standard error.
 
-```bash
-TTY=$(tty); rstream nc -L rstrm://demo-ts -c 'exec 3>&1 1>'"$TTY"' 2>'"$TTY"'; \
-  exec env GST_DEBUG_NO_COLOR=1 GST_DEBUG="*:2" \
-  gst-launch-1.0 -v --no-position \
+```sh
+rstream nc -L rstrm://demo-ts -c 'exec 3>&1 1>&2
+exec gst-launch-1.0 --no-position \
   videotestsrc is-live=true pattern=smpte ! \
   video/x-raw,width=1280,height=720,framerate=30/1 ! \
   videoconvert ! x264enc tune=zerolatency bitrate=2000 key-int-max=60 ! \
@@ -37,28 +25,36 @@ TTY=$(tty); rstream nc -L rstrm://demo-ts -c 'exec 3>&1 1>'"$TTY"' 2>'"$TTY"'; \
   fdsink fd=3 sync=false'
 ```
 
-On the consumer:
+Dial `rstrm://demo-ts` from the consumer to decode and display the stream.
 
-```bash
+```sh
 rstream nc rstrm://demo-ts | \
-  env GST_DEBUG_NO_COLOR=1 GST_DEBUG="*:2" \
-  gst-launch-1.0 -v --no-position \
-  fdsrc fd=0 ! tsdemux name=demux \
-  demux. ! queue ! decodebin ! videoconvert ! autovideosink sync=false
+  gst-launch-1.0 --no-position \
+  fdsrc fd=0 ! tsdemux ! queue ! h264parse ! avdec_h264 ! \
+  videoconvert ! autovideosink sync=false
 ```
 
-## Low-latency RTP datagrams
+The consumer opens a window with SMPTE color bars. The tunnel carries an ordered byte stream and starts a fresh encoder process for each connection. Press `Ctrl-C` in both terminals when finished.
 
-The RTP variant preserves packet boundaries and does not force late packets to
-block newer frames. `rtpstreampay` supplies the RFC 4571 framing consumed by
-`rstream nc -u`.
+## Choose a media path
 
-Producer:
+| Path                    | Use it for                                                                                                              | Client and procedure                                                                                                                                          |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reliable MPEG-TS        | Preserve every byte in order.                                                                                           | Go `rstream nc` as above, or C++ `rstream-ncat`. Both clients work with the [FFmpeg recipes](https://rstream.io/guides/stream-video-with-ffmpeg-and-rstream). |
+| Best-effort RTP         | Deliver newer packets without waiting for older missing packets.                                                        | Go `rstream nc -u`. See [Send RTP datagrams](#send-rtp-datagrams).                                                                                            |
+| Guaranteed datagrams    | Preserve packet boundaries where complete delivery takes priority over recovering the latest frames quickly.            | Go `rstream nc -u` with `--datagram-guaranteed-delivery` on the listener. See the [qualification profile](qualification/README.md).                           |
+| Bidirectional RTCP/NACK | Request missing packets while they are useful to the receiver.                                                          | Go `rstream nc -u`. See the [GStreamer guide](https://rstream.io/guides/stream-video-with-gstreamer-and-rstream).                                             |
+| Shared RTSP             | Keep one camera source available through MediaMTX and bridge RTSP control and interleaved media over a reliable tunnel. | Go `rstream nc` or C++ `rstream-ncat`. See the [FFmpeg and MediaMTX guide](https://rstream.io/guides/stream-video-with-ffmpeg-and-rstream).                   |
 
-```bash
-rstream nc -u -L rstrm://demo-rtp -c 'exec 3>&1 1>&2; \
-  exec env GST_DEBUG_NO_COLOR=1 GST_DEBUG="*:2" \
-  gst-launch-1.0 -v --no-position \
+## Send RTP datagrams
+
+Use Enterprise Edition or a Cloud project with datagram support. The producer needs `rtph264pay` and `rtpstreampay`. The consumer needs `rtpstreamdepay`, `rtpjitterbuffer` and `rtph264depay` in addition to the H.264 decoder and video sink. `rtpstreampay` adds RFC 4571 length prefixes so `rstream nc -u` sends one RTP packet per datagram.
+
+Start the RTP listener on the producer.
+
+```sh
+rstream nc -u -L rstrm://demo-rtp -c 'exec 3>&1 1>&2
+exec gst-launch-1.0 --no-position \
   videotestsrc is-live=true pattern=smpte ! \
   video/x-raw,width=1280,height=720,framerate=30/1 ! \
   videoconvert ! x264enc tune=zerolatency bitrate=2000 key-int-max=60 ! \
@@ -66,59 +62,25 @@ rstream nc -u -L rstrm://demo-rtp -c 'exec 3>&1 1>&2; \
   rtpstreampay ! fdsink fd=3 sync=false'
 ```
 
-Consumer:
+Dial `rstrm://demo-rtp` from the consumer.
 
-```bash
+```sh
 rstream nc -u rstrm://demo-rtp | \
-  env GST_DEBUG_NO_COLOR=1 GST_DEBUG="*:2" \
-  gst-launch-1.0 -v --no-position \
+  gst-launch-1.0 --no-position \
   fdsrc fd=0 do-timestamp=true ! \
   application/x-rtp-stream,media=video,clock-rate=90000,encoding-name=H264,payload=96 ! \
   rtpstreamdepay ! rtpjitterbuffer latency=100 drop-on-latency=true ! \
-  rtph264depay ! h264parse ! avdec_h264 ! \
-  videoconvert ! autovideosink sync=false
+  rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! autovideosink sync=false
 ```
 
-Datagrams do not carry an end-of-stream marker. For a finite producer, add an
-idle deadline so the receiving CLI exits after the last packet instead of
-waiting for a future datagram:
+The same pattern plays with a 100 ms RTP jitter buffer. Stop both terminals with `Ctrl-C`.
 
-```bash
-rstream nc -u --idle-timeout 3s rstrm://demo-rtp
-```
+| Option                           | Where to use it                                          | Effect                                                                                                                                  |
+| -------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `--idle-timeout 3s`              | Consumer dialing a finite datagram source.               | Ends the session three seconds after the last received datagram. Live sources normally use the default with the idle deadline disabled. |
+| `--datagram-guaranteed-delivery` | Listener creating a guaranteed-delivery datagram tunnel. | Retransmits at the transport layer. The low-latency recipe above uses best-effort datagrams so the transport can drop late packets.     |
+| `--max-connections N`            | Listener running `-c` per connection.                    | Caps the number of concurrent sessions and child processes.                                                                             |
 
-Do not add that deadline to a live camera unless an idle source should close
-and be restarted by its supervisor.
+## Verify a client or transport change
 
-Do not add guaranteed datagram delivery to this RTP path: retransmitting late
-packets below RTP can replace visible loss with growing latency. The full
-GStreamer guide adds bidirectional RTCP/NACK repair; the FFmpeg guide adds the
-direct MPEG-TS and shared MediaMTX/RTSP variants.
-
-## Qualification
-
-The [`qualification/`](./qualification/) pack replaces the live sources with
-finite 300-frame inputs and checks the decoded result, not just process exit.
-Reliable-stream and RTSP profiles cross the Go and C++ netcat implementations
-with FFmpeg and GStreamer. Datagram and RTCP/NACK profiles use the Go CLI;
-the C++ client provides bytestream connectivity. Those profiles parse RTP
-sequence numbers, inject packet loss ahead of the tunnel and verify repair.
-Process teardown and unexpected media warnings are part of the verdict.
-
-The finite profiles check decoded frames, packet fidelity and repair behavior for the selected Go/C++ and media-tool combinations. Run them in the environment being evaluated and keep the generated output locally:
-
-```bash
-make check
-make qualify
-```
-
-Set `RSTREAM_CONTEXT` to select a non-default CLI context. Set
-`RSTREAM_GO_BIN` or `RSTREAM_CPP_BIN` when testing locally built SDK binaries
-instead of commands installed on `PATH`.
-
-The `make check` target checks the **full qualification** toolchain, beyond the
-two interactive GStreamer recipes: both Go/C++ CLIs, FFmpeg, MediaMTX, jq,
-netcat, Python 3, SHA-256/awk utilities and a timeout implementation. Install
-those only when running that matrix. The first GStreamer path needs the Go CLI
-and the elements checked at the top; an interactive video sink also needs a
-working desktop display. Headless qualification uses finite decoders instead.
+The [qualification suite](qualification/README.md) runs finite FFmpeg and GStreamer sources and checks decoded frames, packet delivery, repair and teardown. It lists the full toolchain, both client builds and the command that writes the report.

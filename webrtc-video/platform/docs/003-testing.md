@@ -2,11 +2,18 @@
 
 Return to the [platform overview](../README.md) for the application path. Run commands from `webrtc-video/platform`, unless a step changes directory.
 
-## Validate changes
+## Validate changes locally
 
-```bash
+Use Node.js 24 with npm. Copy `.env.example` to `.env.local` and keep the local defaults for the fixture checks. Prisma reads `POSTGRES_PRISMA_DIRECT_URL` during client generation, which runs in both the type check and the build. Run the checks from `webrtc-video/platform`.
+
+```sh
 npm ci
 npm run verify
+```
+
+The command runs the test suite, checks types and builds Next.js. Use Docker to check database migrations and access routes.
+
+```sh
 npm run test:access
 ```
 
@@ -16,6 +23,18 @@ sessions and substitutes GitHub/engine HTTP responses; it does not certify a rea
 organization's OAuth approval or SSO policy. It covers cross-account access,
 shared inventory, owner lock timeouts, nonmembers, watch-token scope, and the
 server-side prohibition on direct fallback.
+
+Build the pinned MediaMTX binary with `make -C ../distributor mediamtx` for the authorization and recording tests. Set its path for both checks.
+
+```sh
+export RSTREAM_MEDIAMTX_BINARY="$PWD/../distributor/out/mediamtx"
+npm run test:mediamtx-auth
+npm run test:mediamtx-recording
+```
+
+Install FFmpeg for the recording test. Both checks start local MediaMTX processes and verify the actual runtime's behavior.
+
+## Qualify discovered devices
 
 To check discovery against a real rstream project, configure the application
 credentials and project endpoint in `.env.local`, build the application, then run:
@@ -80,7 +99,9 @@ as described in the [distribution prerequisites](../../distributor/docs/004-test
 These graceful UI closures do not measure abrupt browser loss, which can use the
 producer's longer bounded ICE recovery grace period before stopping the encoder.
 
-To additionally exercise full-page viewing in Chromium, Firefox and WebKit:
+## Check full-page viewing and playback
+
+This optional layer of the access-route suite uses Chromium, Firefox and WebKit. Pass the Chromium executable and an output location for captures.
 
 ```bash
 npx playwright-core install firefox webkit
@@ -115,8 +136,9 @@ private. This uses real WebRTC media without a browser HTTP proxy, which can
 restrict Firefox's UDP candidates. The default remains local browsers and
 automatically allocated application ports.
 
-With the rstream credentials in `.env.local`, Docker, and Chrome installed, run
-the complete distribution and quality paths:
+## Qualify the complete distribution paths
+
+With rstream credentials in `.env.local`, Docker and Chrome installed, choose a distribution scenario. Use a fresh output directory outside the checkout for each run.
 
 ```bash
 npm run qualify:distribution -- /path/to/empty/evidence-directory

@@ -1,94 +1,92 @@
-# Private PostgreSQL access without a VPN
+# Access PostgreSQL through a private tunnel
 
-This example exposes a PostgreSQL database through a private rstream bytestream
-tunnel. The database is never published as a public Internet endpoint. Standard
-tools still connect to a local TCP port on the client machine.
+Create a private rstream bytestream tunnel from the machine that can reach
+PostgreSQL. On the client, the rstream CLI dials that tunnel and provides a
+loopback TCP port for standard PostgreSQL clients. PostgreSQL continues to
+authenticate database users and enforce their SQL permissions.
 
-The shape is useful for development, migrations, one-off support work, CI jobs,
-or internal admin tools that need database access without a VPN or inbound
-firewall rule.
+## Verify the sample database locally
 
-## Prerequisites
+Use Docker with Compose and Make on the database host. In this directory, run:
 
-Use Docker with Compose, the rstream CLI on both machines, and `psql` (or another
-PostgreSQL client). Select a context for the same project on both machines before
-opening the private tunnel. The project must allow private dialing; no public
-TCP reservation is used. `make verify` starts only the sample database and checks
-its seeded data, without connecting to rstream.
-
-## Start the database
-
-```bash
+```sh
 make verify
 ```
 
-The local PostgreSQL container listens on `127.0.0.1:55432` and contains a small
-`notes` table.
+This starts the sample PostgreSQL container and queries its initialized
+`notes` table without an rstream connection. Expect one row with the text
+`hello from a private PostgreSQL service`. The database stays running on
+`127.0.0.1:55432`.
 
-## Create the private rstream tunnel
+## Prepare the private connection
 
-On the machine that can reach PostgreSQL:
+Install the rstream CLI on both machines and `psql` on the client. Both rstream
+processes must use the same project or direct engine and be authorized for
+their respective roles.
 
-```bash
+| Deployment | Configuration |
+| --- | --- |
+| Hosted rstream Pro or Enterprise | Select the same project on both machines. For an interactive trial, run `rstream login` and `rstream project use <project-endpoint>` on each. Give long-running services scoped credentials. The database side needs `tunnels.tunnels.create-delete`. The client side needs `tunnels.streams.create-delete` for the named tunnel. |
+| Direct Community Edition engine | Configure both clients with the same engine address and JWT credentials issued by its operator. For a JWT in a protected file, create a context with `rstream context create postgres-ce --engine <engine-host>:443 --token-file /path/to/agent.jwt --no-api-url`, then export `RSTREAM_CONTEXT=postgres-ce` in each forwarding terminal. |
+
+See [Private Tunnels](https://rstream.io/docs/tunnels/private-tunnels) and
+[Fine-grained Tokens](https://rstream.io/docs/security/fine-grained-tokens).
+
+## Create the tunnel and query through it
+
+On the database host, keep the following command running:
+
+```sh
 make run
 ```
 
-This is equivalent to:
+This starts PostgreSQL if needed, waits for readiness, then runs
+`rstream nc -L rstrm://staging-postgres -R 127.0.0.1:55432`.
+The tunnel has no public hostname or port.
 
-```bash
-make start
-rstream nc -L rstrm://staging-postgres -R 127.0.0.1:55432
-```
+On the client, open a local TCP port in a second terminal. This command needs
+only the rstream CLI and its selected configuration.
 
-The tunnel is private. It has no public hostname, and clients must use rstream
-dialing permissions to reach it.
-
-## Open a local client port
-
-On the client machine:
-
-```bash
-make client-port
-```
-
-This is equivalent to:
-
-```bash
+```sh
 rstream nc -L 127.0.0.1:15432 -R rstrm://staging-postgres
 ```
 
-Now normal PostgreSQL clients can use `127.0.0.1:15432`:
+If you have this checkout on the client, `make client-port` runs the same
+command. Leave the forwarders running and query from another client terminal.
 
-```bash
-psql "postgres://app:app@127.0.0.1:15432/app"
+```sh
+psql 'postgres://app:app@127.0.0.1:15432/app' \
+  -c 'select id, body from notes order by id limit 5;'
 ```
 
-The same connection string works for Prisma, Drizzle, `node-postgres`,
-migration tools, and CI tasks that accept a standard PostgreSQL URL.
+Expect the same seeded row. Use this loopback address for a migration tool,
+database driver, or CI job running alongside the client forwarder. The
+`app:app` credential belongs to the sample database only.
 
-## Security notes
+## Connect an existing database
 
-Keep the database tunnel private by default. The database protocol stays
-end-to-end between the client and PostgreSQL, while rstream controls who may
-dial the private tunnel. On hosted rstream, private tunnel dialing requires a
-project plan that supports private tunnels. Self-hosted CE supports private
-bytestream tunnels for direct engine deployments.
+Run `rstream nc -L rstrm://staging-postgres -R <database-host>:5432` from the
+machine that can reach your database. The client forwarder can use the same
+tunnel name and local port. Use a dedicated PostgreSQL role with the necessary
+permissions. For a TLS-enabled database, verify the database certificate
+against its own DNS name and trusted CA. With libpq, set `host` to that name,
+`hostaddr=127.0.0.1`, `port=15432`, and `sslmode=verify-full`. Set
+`sslrootcert` to the CA bundle if your client requires an explicit path.
+See the [libpq connection parameters](https://www.postgresql.org/docs/18/libpq-connect.html#LIBPQ-PARAMKEYWORDS).
 
-Use a dedicated database role for tunneled workflows, and keep normal database
-authentication enabled. rstream controls access to the network path; PostgreSQL
-still owns database identity, authorization, and audit behavior.
+| Setting | Default and use |
+| --- | --- |
+| `TUNNEL_NAME` | `staging-postgres`. Set the same name for the server and client. |
+| `POSTGRES_HOST_PORT` | `55432`. Loopback port where Compose exposes the sample database. |
+| `LOCAL_PORT` | `55432`. Port the server-side CLI connects to. Change this and `POSTGRES_HOST_PORT` together when moving the sample's database port. |
+| `CLIENT_PORT` | `15432`. Client-side loopback port. Also update the PostgreSQL connection string if you change it. |
 
-## Qualification evidence
-
-The optional [`qualification`](qualification/) pack goes beyond the quick
-start. It verifies PostgreSQL TLS, transactions, bulk copy, concurrent sessions,
-query cancellation, and recovery after independent database and tunnel
-interruptions. The normal `make run` and `make client-port` workflow does not
-depend on the qualification toolchain.
+The optional [qualification suite](qualification/) exercises TLS, transaction
+semantics, bulk copy, concurrent sessions, cancellation, and recovery in an
+isolated non-production rstream context.
 
 ## Stop the example
 
-Interrupt the server tunnel and client-port forwarders in their own terminals.
-`make stop` stops PostgreSQL while preserving its volume. `make clean` removes the
-sample Compose resources **and database volume**; use it only when that sample
-data should be discarded.
+Interrupt both forwarders with Ctrl+C. On the database host, use `make stop`
+to stop PostgreSQL and keep its data. Use `make clean` to remove the sample
+Compose resources and database volume.

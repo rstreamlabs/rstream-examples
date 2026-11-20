@@ -2,26 +2,25 @@
 
 Return to the [distributor overview](../README.md) for the application path. Run commands from `webrtc-video/distributor`, unless a step changes directory.
 
-## Technical qualification
+## Run local tests
 
-Prepare the Linux host's UDP socket limits before live QUIC qualification:
+Run the adapter tests with Go 1.27.4 or newer.
 
-```bash
-sudo sysctl -w net.core.rmem_max=7500000 net.core.wmem_max=7500000
+```sh
+make test
 ```
 
-These are host settings, not producer configuration. With Docker Desktop, the
-relevant host is its Linux VM. Record existing values and restore them after a
-temporary experiment; the command does not persist across reboot. See the
-[quic-go buffer guidance](https://github.com/quic-go/quic-go/wiki/UDP-Buffer-Sizes).
-A socket-buffer warning fails the performance-environment gate even if video
-plays correctly. Do not suppress the warning to qualify an undersized host.
+Install Python 3 for the local WebRTC integration suite. Build the pinned MediaMTX binary into a temporary working directory and pass its path to the Go tests.
 
-```bash
-make test test-race vet
-GOFLAGS="-modfile=$PWD/out/ice-patch/go.mod" go test -race -tags=integration ./internal/bridge
-make qualify-fanout OUT=/tmp/rstream-video-distributor
+```sh
+output_directory=$(mktemp -d)
+make mediamtx OUT="$output_directory"
+RSTREAM_MEDIAMTX_BINARY="$output_directory/mediamtx" \
+GOFLAGS="-modfile=$PWD/out/ice-patch/go.mod" \
+  go test -race -tags=integration ./internal/bridge
 ```
+
+`make test` prepares the patched Go module used by the integration command. The integration suite uses loopback traffic. `make integration` also builds and smoke-tests the combined Docker image. `make verify` checks formatting, vet and race tests, verifies decoded restart and loss recovery with FFmpeg, and builds the adapter.
 
 The integration suite starts the real MediaMTX 1.21.3 binary. It proves that two
 viewers create one source WHEP session, injects and repairs a missing H.264 RTP
@@ -35,7 +34,16 @@ negotiation. A separate native-pull test drops a primary packet, requires an
 actual RTX retransmission and delivery to both readers, and locks the remaining
 capability differences that make the two profiles explicit.
 
-The fan-out qualification runs three independent passes with a real
+## Measure local fan-out
+
+Run the fan-out profile with jq, Node.js and the same MediaMTX binary.
+
+```sh
+RSTREAM_MEDIAMTX_BINARY="$output_directory/mediamtx" \
+  make qualify-fanout OUT="$output_directory"
+```
+
+Open `qualification/fanout/summary.json` and `qualification/fanout/fanout.svg` under the output directory. The fan-out qualification runs three independent passes with a real
 constrained-baseline H.264 GOP at approximately 8 Mbit/s. It requires constant
 device ingress, linear MediaMTX egress, identical payload delivery to all
 readers, one source lifecycle, bounded process count, CPU and memory, and
@@ -45,11 +53,20 @@ twelve successful leave-and-replacement cycles. Any MediaMTX B-frame, packet
 loss, source-timeout, or adapter-failure diagnostic fails the run rather than
 being hidden behind aggregate byte counters.
 
-The finite browser qualification uses a real rstream context and enables edge
-authentication by default:
+## Technical qualification
+
+Set the Linux host's receive and send buffer limits before running live QUIC qualification.
+
+```sh
+sudo sysctl -w net.core.rmem_max=7500000 net.core.wmem_max=7500000
+```
+
+With Docker Desktop, set the limits in its Linux VM. Record the old values and restore them after the run. The performance gate requires sufficient UDP buffers even when video plays. See the [quic-go buffer guidance](https://github.com/quic-go/quic-go/wiki/UDP-Buffer-Sizes).
+
+The finite browser qualification needs Docker, Git, Go, jq, Node.js, the rstream CLI and an explicit rstream context. The runner builds its own browser image and enables edge authentication by default. Open `result.json` in the output directory for the verdict and individual gates.
 
 ```bash
-RSTREAM_CONTEXT="<staging-context>" \
+RSTREAM_CONTEXT="your-qualification-context" \
 RSTREAM_DISTRIBUTOR_MODE="mediamtx" \
 qualification/end-to-end/run.sh /tmp/rstream-video-result
 ```
@@ -57,9 +74,7 @@ qualification/end-to-end/run.sh /tmp/rstream-video-result
 The runner identifies the exact temporary producer tunnel and project before
 minting a WHEP-path-scoped connect token. The token remains in process memory
 and the WHEP URL; result files record only that edge authentication was active.
-Use `RSTREAM_DISTRIBUTOR_MODE=direct` for the one-to-one reference. Setting
-`RSTREAM_DISTRIBUTOR_EDGE_AUTH=false` is useful only when isolating local media
-behavior and does not satisfy the release authentication gate.
+Set `RSTREAM_CONTEXT` to a non-production context prepared for qualification. Use `RSTREAM_DISTRIBUTOR_MODE=direct` for the one-to-one reference, or `mediamtx-native` for the static native WHEP path. Keep edge authentication enabled for release qualification.
 
 For a direct media diagnostic without an external control-plane dependency,
 unset `RSTREAM_CONTEXT` and set `RSTREAM_DISTRIBUTOR_CONTROL_PATH=local`,
@@ -111,7 +126,7 @@ variables shape UDP after it leaves the producer and only when its destination
 is the adapter:
 
 ```bash
-RSTREAM_CONTEXT="<staging-context>" \
+RSTREAM_CONTEXT="your-qualification-context" \
 RSTREAM_DISTRIBUTOR_MODE="mediamtx" \
 RSTREAM_DISTRIBUTOR_SOURCE_CAPACITY_KBPS="5000" \
 qualification/end-to-end/run.sh /tmp/rstream-video-source-capacity
@@ -128,7 +143,7 @@ To qualify automatic source resolution and frame-rate changes, use the optional
 format profile and name the expected format during the constrained phase:
 
 ```bash
-RSTREAM_CONTEXT="<staging-context>" \
+RSTREAM_CONTEXT="your-qualification-context" \
 RSTREAM_DISTRIBUTOR_MODE="mediamtx" \
 RSTREAM_DISTRIBUTOR_SOURCE_CAPACITY_KBPS="1500" \
 RSTREAM_DISTRIBUTOR_EXPECT_FORMAT="small" \

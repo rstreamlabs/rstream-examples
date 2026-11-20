@@ -1,144 +1,127 @@
-# Homelab Grafana and Prometheus with rstream
+# Publish a homelab Grafana dashboard
 
-This example runs a small Grafana and Prometheus monitoring stack and publishes
-Grafana through an outbound rstream tunnel. Prometheus stays off the public
-tunnel and remains reachable from the Docker network and the local host.
-Grafana is the browser-facing entrypoint.
+Run Grafana and Prometheus in Docker Compose. Grafana comes with a Prometheus
+datasource and the **Homelab Monitoring** dashboard. When you enable the
+rstream service, it reads Grafana's Docker labels and publishes the dashboard
+through an outbound HTTPS tunnel. Prometheus stays on the Compose network and
+the host's loopback interface.
 
-The sample is intentionally close to a real homelab setup:
+## Start and verify the stack locally
 
-- Grafana is provisioned with a Prometheus datasource and a starter dashboard.
-- Prometheus scrapes itself and Grafana metrics.
-- Grafana binds to `127.0.0.1` for local access.
-- rstream discovers the Grafana tunnel from Docker labels.
-- Labels identify the service as `env=homelab`, `stack=monitoring`, and
-  `service=grafana`.
+Use Docker with the `docker compose` command, Node.js 24 or newer, and Make.
+Run the commands from this directory.
 
-## Prepare a private local configuration
-
-Use Docker with Compose, Node.js 24 and the Compose v2 CLI. On a Linux host using the local Docker socket, run from this directory:
+On Linux with the default local Docker socket:
 
 ```sh
 node scripts/configure.mjs
-make check
 ```
 
-On a Linux host using the local Docker socket, the setup writes an ignored `.env` with mode 0600, a random Grafana password,
-non-root watcher UID/GID and the Docker socket's local group ID. Rerunning it
-preserves the existing file and password. If the socket is provided elsewhere,
-or when using Docker Desktop, pass its container-visible group ID explicitly:
-`node scripts/configure.mjs --docker-gid <gid>`. On Linux, check it with
-`stat -c %g /var/run/docker.sock`. Docker Desktop uses a Linux VM: verify the socket GID in that daemon namespace (commonly 0) and pass it explicitly; the macOS host socket group is not authoritative. Choose this explicit command instead of the no-argument setup above on Docker Desktop.
-Keep `.env` private and inspect it locally to copy the Grafana login password.
-The configuration refuses to start without a password; there is no shared
-predictable fallback. The variable initializes a new Grafana database, not a
-password rotation of an existing volume. Rotate an existing account through
-Grafana's administrative workflow.
-
-`make check` validates configuration and private-file behavior without contacting
-Docker's daemon. The optional `make verify` starts an isolated smoke Compose
-project; use it only on a Docker host intended for testing.
-
-## Run the stack
+On Docker Desktop, read the socket's group ID from inside the daemon's Linux
+environment. The group of the macOS host socket may differ.
 
 ```sh
+docker_gid="$(docker run --rm -v /var/run/docker.sock:/run/daemon.sock:ro \
+  alpine:3.24 stat -c '%g' /run/daemon.sock)"
+node scripts/configure.mjs --docker-gid "$docker_gid"
+```
+
+The helper creates a gitignored `.env` with mode `0600` and a randomly generated
+Grafana admin password. It reuses an existing private file on later runs.
+Inspect it locally to retrieve the password. Grafana uses these admin settings
+when initializing a new database. Rotate an existing account in Grafana.
+
+```sh
+make check
 make start
 ```
 
-Open Grafana at `http://127.0.0.1:13000` and sign in as `admin` with the password
-retained in `.env`. Prometheus is local at `http://127.0.0.1:19090`.
-Compose reads the same `.env` on later commands, so restarting or publishing the
-stack does not silently generate another password.
+`make check` validates configuration without a running Docker daemon.
+`make start` waits for Grafana's database and for the `grafana` and
+`prometheus` jobs to appear in Prometheus. Sign in at
+`http://127.0.0.1:13000` as `admin` and open **Homelab Monitoring**. Query
+`up` in Prometheus at `http://127.0.0.1:19090` to inspect both scrape jobs.
 
-## Publish Grafana from Docker labels
+For an automated provisioning check, run `make verify` after configuration.
+It checks the datasource, dashboard, and scrape jobs, then removes its separate
+test stack.
 
-The Compose file carries rstream tunnel labels on the `grafana` service. Run the
-rstream reconciler as a Compose service:
+## Publish Grafana through rstream
 
-```bash
-# Edit these values in the private .env, keeping mode 0600:
-# RSTREAM_ENGINE=<engine-host>:443
-# RSTREAM_AUTHENTICATION_TOKEN=<project-scoped-agent-token>
-make run
-```
+Choose the deployment that owns the endpoint.
 
-`make run` is an alias for the full Docker profile with the rstream reconciler;
-`make start` runs only Grafana and Prometheus for local checks.
-
-This keeps tunnel configuration next to the container that owns the browser
-surface. It scales cleanly when a homelab host runs several services and a
-single rstream agent should reconcile them from Docker labels.
-
-The watcher runs as `RSTREAM_UID:RSTREAM_GID` (1000:1000 by default), with
-`DOCKER_GID` added for socket access. Override those numeric IDs in `.env` when
-the host requires a different dedicated service account. The container uses an
-empty explicit config path under `/tmp` and does not depend on a home directory
-for that numeric UID; its Engine identity comes from the configured environment. The socket bind is
-mounted `:ro`, but that does **not** make the Docker API read-only: membership in
-its group grants powerful host control. Use a deliberately restricted socket
-proxy or host policy when the watcher must have less authority. This Compose
-example does not implement that proxy or claim host isolation.
-
-For local testing against an engine running on the Docker host, also set
-`RSTREAM_ENGINE_HOSTNAME` to the hostname inside `RSTREAM_ENGINE`. The Compose
-file maps that hostname to the Docker host through `host-gateway` so TLS keeps
-the expected server name while the container reaches the local engine.
-
-For a stable browser URL, set the tunnel hostname label and Grafana root URL
-before starting the stack:
-
-```bash
-# Retain the existing password; add these values to .env:
-# COMPOSE_PATH_SEPARATOR=:
-# COMPOSE_FILE=compose.yaml:compose.hostname.yaml
-# RSTREAM_GRAFANA_HOSTNAME=<your-stable-domain>
-# GRAFANA_ROOT_URL=https://<your-stable-domain>/
-make run
-```
-
-The base configuration leaves the hostname label absent so the engine allocates
-the endpoint. The optional `compose.hostname.yaml` file adds that label and
-requires a hostname. Retaining the file selection in `.env` applies the same
-[Compose override](https://docs.docker.com/compose/how-tos/multiple-compose-files/merge/)
-to later starts and restarts; `COMPOSE_PATH_SEPARATOR` keeps the file separator
-explicit across platforms.
-
-Recreate the Grafana container after changing `GRAFANA_ROOT_URL`. Keep all terminals on the same local `.env`; no foreground tunnel process or second terminal needs a separately generated secret.
-
-## Access policy
-
-Grafana keeps its own login enabled and anonymous access disabled. For team
-browser access, enable rstream Auth at the edge when the selected rstream
-project supports it:
-
-Add `RSTREAM_HTTP_AUTH_RSTREAM=true` to the private `.env`, then run
-`make run`. The existing Engine identity and Grafana password remain in that
-same local configuration.
-
-Token authentication is a better fit for API endpoints and automation than for
-a browser application like Grafana, because browsers will not attach a bearer
-token to every Grafana asset and API request automatically.
-
-## Clean up
-
-```bash
-make clean
-```
-
-## Configuration reference
-
-| Variable | Default / role |
+| Deployment | What to provide |
 | --- | --- |
-| `GRAFANA_ADMIN_PASSWORD`, `GRAFANA_ADMIN_USER` | Required retained bootstrap password; `admin` user. Changing the file does not rotate an existing database account. |
-| `RSTREAM_ENGINE`, `RSTREAM_AUTHENTICATION_TOKEN` | Project-scoped agent authority and identity for the container, separate from Grafana login. |
-| `RSTREAM_UID`, `RSTREAM_GID`, `DOCKER_GID` | Non-root process identity and separately granted socket group; not a read-only Docker permission model. |
-| `RSTREAM_GRAFANA_HOSTNAME`, `GRAFANA_ROOT_URL` | Optional requested stable tunnel host and matching external Grafana origin. |
-| `COMPOSE_FILE`, `COMPOSE_PATH_SEPARATOR` | Select `compose.yaml:compose.hostname.yaml` with separator `:` when using a stable hostname; omit both for automatic addressing. |
-| `RSTREAM_HTTP_AUTH_RSTREAM` | False; request project-supported browser authentication at the edge. |
-| `GRAFANA_PORT`, `PROMETHEUS_PORT` | Local loopback ports 13000 / 19090. The wait helper loads the same `.env`. |
-| `RSTREAM_SITE_LABEL` | `home`; discovery metadata for this stack. |
-| `RSTREAM_IMAGE`, `GRAFANA_IMAGE`, `PROMETHEUS_IMAGE` | Image overrides. Preserve and qualify reviewed versions for a managed deployment. |
+| Hosted or managed rstream | An engine address and a project-scoped agent token allowed to create the published HTTP tunnel. The project must permit the chosen browser access policy. |
+| Direct Community Edition engine | The direct engine address and an agent JWT issued for that engine. Configure the engine's TLS certificates and published DNS first. |
 
-`make clean` removes the sample's Grafana/Prometheus volumes. It leaves the
-private `.env` in place so a routine cleanup does not silently replace the login
-secret; remove it deliberately when retiring the sample.
+Set these values in the same private `.env` used for the local run.
+
+```dotenv
+RSTREAM_ENGINE=<engine-host>:443
+RSTREAM_AUTHENTICATION_TOKEN=<agent-token>
+```
+
+If the engine runs on the Docker host, set `RSTREAM_ENGINE_HOSTNAME` to the
+hostname in `RSTREAM_ENGINE`. Compose maps that name to the host gateway so
+the agent can keep using the engine's TLS hostname.
+
+```sh
+make run
+docker compose logs -f rstream
+```
+
+When the watcher creates the Grafana tunnel, open the HTTPS URL printed in its
+logs. The `rstream.tunnel.grafana.forward` label points to Grafana's container
+port `3000`, so changing the host's loopback port does not change tunnel
+routing. The watcher publishes only services with the corresponding labels.
+See [Docker labels](https://rstream.io/docs/tunnels/declarative-tunnels/docker-labels)
+and the [self-hosted engine guide](https://rstream.io/docs/tunnels/self-hosted).
+
+## Choose the browser URL and access policy
+
+For a durable URL, select a hostname your project or engine can serve. Add
+these settings to `.env`, then run `make run` again. Compose recreates Grafana
+with the updated root URL and adds the hostname label from
+`compose.hostname.yaml`.
+
+```dotenv
+COMPOSE_PATH_SEPARATOR=:
+COMPOSE_FILE=compose.yaml:compose.hostname.yaml
+RSTREAM_GRAFANA_HOSTNAME=<stable-hostname>
+GRAFANA_ROOT_URL=https://<stable-hostname>/
+```
+
+Grafana enforces its own login and disables anonymous access and sign-up. To
+require an rstream account before visitors reach Grafana, set
+`RSTREAM_HTTP_AUTH_RSTREAM=true` in `.env` and rerun `make run` on a project
+that supports rstream Auth. Use a browser that can complete both sign-in
+flows. See [Stable Domains](https://rstream.io/docs/tunnels/stable-domains)
+and [rstream Auth](https://rstream.io/docs/tunnels/http-tunnels/authentication#rstream-auth).
+
+The watcher runs as a non-root user with Docker socket group access. The socket
+mount's `:ro` flag still lets the watcher send Docker API requests with
+substantial host privileges. On a host that requires a restricted daemon API,
+provide a socket proxy or host policy designed for that boundary.
+
+## Configuration
+
+| Setting | Default and use |
+| --- | --- |
+| `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` | `admin` and a generated bootstrap password. The password is required. |
+| `GRAFANA_PORT`, `PROMETHEUS_PORT` | Loopback ports `13000` and `19090`. |
+| `RSTREAM_ENGINE`, `RSTREAM_AUTHENTICATION_TOKEN` | Engine address and agent identity required for publication. |
+| `RSTREAM_ENGINE_HOSTNAME` | `rstream.local`. Override for an engine on the Docker host. |
+| `RSTREAM_UID`, `RSTREAM_GID`, `DOCKER_GID` | Watcher user and group `1000:1000` and the socket's supplemental group. The helper sets `DOCKER_GID`. Compose falls back to `0`. |
+| `COMPOSE_FILE`, `COMPOSE_PATH_SEPARATOR` | Select the base and hostname override files for a stable URL. The base alone requests an allocated address. |
+| `RSTREAM_GRAFANA_HOSTNAME`, `GRAFANA_ROOT_URL` | Requested stable hostname and matching external Grafana origin. |
+| `RSTREAM_HTTP_AUTH_RSTREAM` | `false`. Set to `true` to require rstream account sign-in on a supported project. |
+| `RSTREAM_SITE_LABEL` | `home`. Grafana's tunnel also carries `env=homelab`, `service=grafana`, and `stack=monitoring`. |
+| `RSTREAM_IMAGE`, `GRAFANA_IMAGE`, `PROMETHEUS_IMAGE` | Override the images selected in `compose.yaml`. |
+
+## Stop or remove the stack
+
+Run `make stop` to stop the services and keep the Grafana and Prometheus
+data volumes. Run `make clean` when you want to remove the containers, network,
+and both data volumes. Remove the private `.env` separately when retiring the
+sample.

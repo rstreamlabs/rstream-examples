@@ -4,63 +4,35 @@ Return to the [platform overview](../README.md) for the application path. Run co
 
 ## Setup
 
-Use Node.js 24 with npm for the platform's verified development and validation
-workflow, and have a PostgreSQL database available. The integration suite uses
-PostgreSQL 17 in disposable containers.
+Start with a dedicated PostgreSQL database and create `.env.local` from [`.env.example`](../.env.example). Follow the [platform quick start](../README.md#run-the-application) to install, apply the migrations and launch the application. The integration suite uses PostgreSQL 17 in disposable containers.
 
-Create the environment file:
+| Variable                                     | Value for the local application                                                                                                 |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `POSTGRES_PRISMA_POOL_URL`                   | Pooled connection URL for application queries. With local PostgreSQL you can use its direct URL for both fields.                |
+| `POSTGRES_PRISMA_DIRECT_URL`                 | Direct connection URL for Prisma migrations.                                                                                    |
+| `NEXTAUTH_URL`                               | `http://localhost:3000`. Use `http://localhost:3000/api/auth/callback/github` as the GitHub OAuth callback.                     |
+| `NEXTAUTH_SECRET`                            | A random application secret. Generate one with `openssl rand -hex 32`.                                                          |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`   | Client credentials for the GitHub OAuth application.                                                                            |
+| `RSTREAM_CLIENT_ID`, `RSTREAM_CLIENT_SECRET` | Client ID and hex-encoded secret of the server-side rstream application credential.                                             |
+| `RSTREAM_PROJECT_ENDPOINT`                   | Endpoint for the rstream project. Required for engine and TURN discovery.                                                       |
+| `RSTREAM_PROJECT_ID`                         | Optional explicit project scope for minted tokens. Must match the resolved project when set. Required for discovered inventory. |
+| `RSTREAM_TURN_KEYRING_BASE_URL`              | Optional public HTTPS origin that serves the TURN key when an interactive access gateway protects `RSTREAM_API_URL`.            |
+| `RSTREAM_WEBHOOK_SIGNING_SECRET`             | Signing secret for managed tunnel lifecycle webhooks. Set it when configuring [webhook delivery](#rstream-project-setup).       |
+| `WATCH_TOKEN_TTL_SECONDS`                    | `120` by default for a dashboard watch token.                                                                                   |
+| `DEMO_CLEANUP_ENABLED`                       | `false` for development and organization use.                                                                                   |
+| `CRON_SECRET`                                | Random secret for authenticated cleanup jobs if enabled.                                                                        |
 
-```bash
-cp .env.example .env.local
-```
-
-Fill the product values:
-
-```bash
-POSTGRES_PRISMA_POOL_URL="postgresql://postgres:postgres@localhost:5432/webrtc_video_platform?schema=public"
-POSTGRES_PRISMA_DIRECT_URL="postgresql://postgres:postgres@localhost:5432/webrtc_video_platform?schema=public"
-NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="replace-with-a-random-secret"
-GITHUB_CLIENT_ID="github-oauth-client-id"
-GITHUB_CLIENT_SECRET="github-oauth-client-secret"
-CRON_SECRET="replace-with-a-random-secret"
-DEMO_CLEANUP_ENABLED="false"
-```
-
-Use the pooled PostgreSQL URL for `POSTGRES_PRISMA_POOL_URL`. Use the direct, non-pooled PostgreSQL URL for `POSTGRES_PRISMA_DIRECT_URL`; Prisma uses it for migrations.
-
-Fill the rstream application credentials and target tunnels project:
-
-```bash
-RSTREAM_CLIENT_ID="rstream-app-client-id"
-RSTREAM_CLIENT_SECRET="hex-encoded-rstream-app-client-secret"
-RSTREAM_PROJECT_ENDPOINT="rstream-project-endpoint"
-RSTREAM_PROJECT_ID=""
-RSTREAM_TURN_KEYRING_BASE_URL=""
-RSTREAM_WEBHOOK_SIGNING_SECRET="whsec_..."
-WATCH_TOKEN_TTL_SECONDS="120"
-```
-
-The sample resolves the engine from `RSTREAM_PROJECT_ENDPOINT`, which is also
-required for TURN credentials even with an explicit engine and project ID.
-`RSTREAM_PROJECT_ID` is optional; when present, it must match the resolved
-project and supplies the default project scope for short-lived tunnel tokens.
-Application TURN credentials are derived locally from the public key published
-for the selected TURN realm. Leave `RSTREAM_TURN_KEYRING_BASE_URL` empty when
-that key is served by `RSTREAM_API_URL`; set it to a separate public HTTPS origin
-when an interactive access gateway protects the control-plane origin. The keyring
-request refuses redirects and validates the bounded DER key before using it.
+The server derives application TURN credentials locally using the public key for the selected realm. It requests the key from `RSTREAM_API_URL` by default, rejects redirects and validates the bounded DER key before use.
 
 ### Select personal or organization access
 
-`DEVICE_ACCESS_MODE=user` is the default. Each GitHub account owns a private
-inventory. For an internal installation, use:
+Each GitHub account owns a private inventory by default. Configure `.env.local` to share the inventory across an organization.
 
-```bash
-DEVICE_ACCESS_MODE="organization"
-GITHUB_ORGANIZATION="your-github-organization"
-DEMO_CLEANUP_ENABLED="false"
-```
+| Variable               | Value for shared access   |
+| ---------------------- | ------------------------- |
+| `DEVICE_ACCESS_MODE`   | `organization`.           |
+| `GITHUB_ORGANIZATION`  | GitHub organization slug. |
+| `DEMO_CLEANUP_ENABLED` | `false`.                  |
 
 Register a separate GitHub OAuth application with the internal deployment's
 `NEXTAUTH_URL/api/auth/callback/github` callback. Organization mode requests
@@ -102,13 +74,13 @@ should also apply their own shared ingress rate limits.
 | `organization` | `managed`    | Members share provisioned devices.                                                        |
 | `organization` | `discovered` | Existing project credentials publish labeled video tunnels; devices appear automatically. |
 
-For producers already using the rstream CLI, add:
+Enable discovery for producers that already use rstream project credentials.
 
-```bash
-DEVICE_INVENTORY_MODE="discovered"
-RSTREAM_PROJECT_ID="your-project-id"
-DEVICE_DISCOVERY_HISTORY_ENABLED="true"
-```
+| Variable                           | Value for discovery                                                     |
+| ---------------------------------- | ----------------------------------------------------------------------- |
+| `DEVICE_INVENTORY_MODE`            | `discovered`.                                                           |
+| `RSTREAM_PROJECT_ID`               | ID of the project the producers select.                                 |
+| `DEVICE_DISCOVERY_HISTORY_ENABLED` | `true` to retain offline devices, or `false` to show live devices only. |
 
 Keep `RSTREAM_PROJECT_ENDPOINT` configured for engine/TURN resolution; its
 resolved project must match the explicit ID. Personal access with discovery is
@@ -169,44 +141,18 @@ lock/query waits.
 
 ### Select the distribution backend
 
-Direct playback is the default and needs no MediaMTX configuration.
+Set `VIDEO_DISTRIBUTOR=direct` for browser-to-producer playback. Set `VIDEO_DISTRIBUTOR=mediamtx` to share one device uplink across multiple viewers. Configure the signing and resolver values using the [distributor control-plane guide](../../distributor/docs/001-setup.md#configure-the-control-plane).
 
-```bash
-VIDEO_DISTRIBUTOR="direct"
-```
+| Variable               | Public HTTPS signaling                            | Authenticated rstream signaling |
+| ---------------------- | ------------------------------------------------- | ------------------------------- |
+| `MEDIAMTX_EXPOSURE`    | `public`                                          | `rstream`                       |
+| `MEDIAMTX_PUBLIC_URL`  | MediaMTX origin, such as `https://media.example`. | Empty.                          |
+| `MEDIAMTX_TUNNEL_NAME` | Empty.                                            | Published MediaMTX tunnel name. |
 
-Select MediaMTX when several viewers should share one device uplink.
-
-```bash
-VIDEO_DISTRIBUTOR="mediamtx"
-MEDIAMTX_SOURCE_RESOLVER_JWKS='{"keys":[...]}'
-MEDIAMTX_SOURCE_RESOLVER_ISSUER="rstream-video-distributor"
-MEDIAMTX_SOURCE_RESOLVER_AUDIENCE="rstream-video-source-resolver"
-MEDIAMTX_JWT_PRIVATE_KEY_BASE64="..."
-MEDIAMTX_JWT_ADDITIONAL_JWKS='{"keys":[]}'
-MEDIAMTX_JWT_ISSUER="rstream-webrtc-video-platform"
-MEDIAMTX_JWT_AUDIENCE="rstream-mediamtx"
-MEDIAMTX_TOKEN_TTL_SECONDS="300"
-# Disable direct fallback to preserve one shared device uplink during outages.
-MEDIAMTX_ALLOW_DIRECT_FALLBACK="false"
-```
-
-Choose exactly one MediaMTX exposure. Use a public endpoint when MediaMTX
-already has an HTTPS ingress:
-
-```bash
-MEDIAMTX_EXPOSURE="public"
-MEDIAMTX_PUBLIC_URL="https://media.example"
-MEDIAMTX_TUNNEL_NAME=""
-```
-
-Use an rstream endpoint when the MediaMTX HTTP listener has no public ingress:
-
-```bash
-MEDIAMTX_EXPOSURE="rstream"
-MEDIAMTX_PUBLIC_URL=""
-MEDIAMTX_TUNNEL_NAME="webrtc-video-mediamtx"
-```
+| Variable                         | Default | Effect                                                                    |
+| -------------------------------- | ------- | ------------------------------------------------------------------------- |
+| `MEDIAMTX_ALLOW_DIRECT_FALLBACK` | `true`  | Set `false` to preserve the one-uplink policy during distributor outages. |
+| `MEDIAMTX_TOKEN_TTL_SECONDS`     | `300`   | Lifetime of the path-scoped MediaMTX viewer token.                        |
 
 `MEDIAMTX_PUBLIC_URL` may use plain HTTP only on a loopback address for local
 development. It cannot contain credentials, a query, or a fragment. The public
@@ -243,29 +189,18 @@ adaptive source encoding or the dynamic source resolver.
 
 ### Run the complete local MediaMTX stack
 
-The local launcher builds the combined MediaMTX image, starts Next.js, and
-tears everything down on `Ctrl-C`. It creates one temporary rstream tunnel so
-the container can reach the local platform control plane. Its default exposes
-MediaMTX directly on loopback:
+Follow the [distributor quick start](../../distributor/README.md#run-with-the-platform) for the default local setup. The launcher needs Docker, the rstream CLI, platform dependencies and migrations, and the rstream application credentials in `.env.local`. It makes its own CLI context for temporary resources. Keep TCP ports 3000, 8889, 9998 and 9999 and UDP port 8189 free. Recording also requires TCP port 9996.
 
-```bash
-npm run mediamtx:local
-```
+| Launcher option           | Default | Effect                                                                               |
+| ------------------------- | ------- | ------------------------------------------------------------------------------------ |
+| `--exposure public`       | Yes     | Gives the browser `http://localhost:8889` for WHEP.                                  |
+| `--exposure rstream`      |         | Publishes WHEP through a token-authenticated rstream HTTP tunnel.                    |
+| `--next-mode development` | Yes     | Runs the Next.js development server.                                                 |
+| `--next-mode production`  |         | Builds and starts Next.js in production mode.                                        |
+| `--recording true`        | `false` | Enables temporary MediaMTX recording and the local playback endpoint.                |
+| `--state-file PATH`       | Unset.  | Writes launcher state for local automation. Use an output path outside the checkout. |
 
-Exercise the same media pipeline with MediaMTX HTTP control published through
-rstream:
-
-```bash
-npm run mediamtx:local -- --exposure rstream
-```
-
-Open `http://localhost:3000`, create a device, and run the producer command
-shown by the dashboard. In the default mode the browser connects to
-`http://localhost:8889`; in rstream mode it connects to the protected MediaMTX
-tunnel. The producer itself still publishes its device WHEP endpoint through
-rstream in both cases. The temporary platform callback lets the container
-reach local JWKS and source-resolution routes; a deployed platform uses its
-normal HTTPS origin instead.
+To use an authenticated distributor tunnel, run `npm run mediamtx:local -- --exposure rstream` instead of the default command. The producer publishes its own WHEP endpoint through rstream in either mode. The container reaches local JWKS and source resolution through a temporary callback tunnel. `Ctrl-C` stops the application, container and temporary tunnels. A deployed platform uses its normal HTTPS origin for callbacks.
 
 ### Edge authentication qualification
 
@@ -335,42 +270,8 @@ not create delivery history or retry after the CLI exits.
 
 The sample always mints short-lived tokens with tunnel resources. Producer tokens can only create the expected tunnel for one device, direct viewer tokens can only connect to that device's `/whep` resource, distributor tokens are bound to one MediaMTX device path, and dashboard watch tokens can only list the sample tunnels for the signed-in user.
 
-Install dependencies, apply the checked-in database migrations, and start the app:
-
-```bash
-npm ci
-npm run prisma:deploy
-npm run dev
-```
-
-`npm run dev` generates the Prisma client before starting Next.js. Use
-`npm run prisma:migrate` when deliberately changing the database schema and
-creating a new development migration.
-
-Open `http://localhost:3000`, sign in with GitHub, create a device, and copy the generated device secret.
-
-For a production-style local run:
-
-```bash
-npm run build
-npm run start
-```
+For a production-style run after the database migrations, use `npm run build` and `npm run start`. Use `npm run prisma:migrate` when changing the database schema and creating a development migration.
 
 ## Run a Producer
 
-From the device-side example:
-
-```bash
-cd ../producer
-make build-provisioning
-API_URL=http://localhost:3000 \
-DEVICE_SECRET=dev_... \
-./webrtc-video-producer -config ./config.provisioning.h264.yaml
-```
-
-The producer asks this application for provisioning, creates its rstream tunnel with the returned short-lived token, and serves only the API surface required by the product viewer when `web.viewer.enabled` is `false`. `make build-provisioning` builds that no-viewer binary without requiring Node.js or npm on the producer machine.
-
-The provisioning profile uses the same adaptive 2–8 Mbit/s H.264 sender,
-bounded pacer, NACK/RTX, and one-per-five FlexFEC protection qualified by the
-standalone producer. It admits one source session: the selected direct browser
-or the MediaMTX adapter owns that feedback loop, never both at once.
+Build and launch the device using the [platform quick start](../README.md#run-the-application). The provisioning profile uses H.264 with a 2–8 Mbit/s adaptive encoder, bounded pacing, NACK/RTX and one FlexFEC repair packet per five media packets. It admits one source session, owned by either the browser or the MediaMTX adapter. The producer receives a scoped tunnel token through the platform and serves the WHEP and control endpoints used by the dashboard.

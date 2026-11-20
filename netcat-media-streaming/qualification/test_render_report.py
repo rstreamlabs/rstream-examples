@@ -71,7 +71,8 @@ class RenderReportTest(unittest.TestCase):
                 output,
             )
             report = output.read_text(encoding="utf-8")
-        self.assertIn("checked frame by frame", report)
+        self.assertIn("checked for exact frame count", report)
+        self.assertIn("timestamp regressions, duplicates and reordering for diagnosis", report)
         self.assertIn("PASS 300/300 frames", report)
 
 

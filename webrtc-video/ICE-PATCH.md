@@ -8,20 +8,7 @@ There is no public API change or Engine deployment for this fix.
 
 ## Use the samples
 
-Install Go and Git on the build host, then use the Makefile:
-
-```sh
-cd producer
-make build-provisioning
-make test-race
-```
-
-For the distributor, use `make build`, `make test-race` and
-`make test-decoded-restarts` (the last command also requires FFmpeg).
-The Dockerfiles and the producer's static Linux build apply the same patch.
-The distributor Docker build context is now `webrtc-video/`, so use `make image`
-or `docker build -f distributor/Dockerfile .` from that directory. Its
-`Dockerfile.dockerignore` keeps the context limited to required build inputs.
+Use the Makefile or Docker build for each component to apply the patch automatically. See [Producer build and distribution](producer/docs/000-build.md#build-and-distribution) and [Build the distributor image](distributor/docs/001-setup.md#build-the-combined-image).
 
 ## Adapt an application based on the samples
 

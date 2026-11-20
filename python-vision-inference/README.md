@@ -1,186 +1,97 @@
 # Python vision inference over rstream
 
-This sample splits an edge vision workload across two roles connected only by
-rstream tunnels. A device captures video and serves an annotated viewer. A
-worker runs a YOLO model wherever the compute is. Neither side has a public
-IP, an open port, or any knowledge of the other's network, and rstream
-provides both the transport and the signaling between them.
+Run a video source and a YOLO worker on one laptop, then open a browser to see tracked detections over the video. The same two commands can run on separate machines later. The device captures and displays the video and discovers workers through rstream. Each worker runs inference and returns detections over a private tunnel. The device publishes a separate HTTPS viewer at the edge. Both processes connect outbound and need no local inbound port.
 
-## How it works
+## Before you start
 
-Workers join the pool by creating a private tunnel labeled `role=inference`.
-There is no registry service: the tunnel inventory is the registry. Devices
-seed their worker pool from `list_tunnels` filtered by that label, then keep
-it current through the real-time watch API, so starting a worker anywhere adds
-capacity within seconds and stopping one removes it. The labels also carry the
-`model`, the `device` (`cpu`, `mps`, `cuda:0`), and the `accelerator` name, so
-the pool view in any viewer reads the hardware behind each worker straight from
-the registry, including the rstream region that accepted each worker, with no
-extra service. Both roles also survive losing the engine
-connection itself: the worker recreates its registration tunnel, the device
-re-seeds its pool and republishes the viewer, each with a capped backoff, while
-sessions in flight ride their own connections.
+| Where          | What you need                                                                                                                                                                          |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Both roles     | Git, Make, and Python with `venv` and pip. Use Python 3.13 for this walkthrough. CI covers Python 3.11 and 3.13.                                                                       |
+| Device         | Node.js 24 and npm to build the browser assets. The default highway clip lets you start without a camera.                                                                              |
+| Worker         | Enough disk space to install PyTorch and download the default `yolov8n.pt` weights. A CPU is sufficient for the default model.                                                         |
+| Hosted rstream | The [rstream CLI](https://rstream.io/download) and one hosted Pro or Enterprise project shared by both roles. Workers use [private tunnels](https://rstream.io/docs/support/editions). |
 
-Each device dials one worker and opens a session. The worker starts the
-session with a `hello` advertising its model, input size, and supported
-codecs, and the device adapts its encoding policy to that answer: frames are
-resized to the model input before encoding, which is the cheapest bandwidth
-win available, then sent as JPEG by default (`--codec png` switches to
-lossless for fidelity-critical domains, `--codec webp` trades CPU for
-bandwidth). Up to two frames stay in flight so transfer overlaps inference,
-and since the device always sends its most recent frame, a slow worker simply
-lowers the detection rate without building a queue anywhere.
+## 1. Prepare the laptop
 
-Every frame leaves the device with a `frame_id` and a timestamp from the
-device's own monotonic clock, and results echo the `frame_id`. The device
-never compares clocks across machines: the worker reports its inference time
-as an interval, the device measures the round trip on its own clock, and the
-difference is the network share. From the smoothed round trip the device sizes
-a small display delay, an application-layer jitter buffer, so each rendered
-frame carries the detections computed for that exact frame rather than boxes
-trailing behind moving objects.
-
-Load spreads across the pool without a balancer. Each device ranks workers
-by rendezvous hashing, so different devices prefer different workers, then
-probes its two best candidates and keeps the less loaded one, the classic
-power of two choices, using the session count each worker reports in its
-hello. When normalized loads are equal, the concurrently measured session
-establishment time breaks the tie; this avoids choosing a remote region merely
-because it appeared first without allowing latency to outrank available
-capacity. When the pool empties, the device suspends detection and resumes it by
-itself as soon as capacity returns; an explicit enable or disable from the UI
-always wins over that automatism. The viewer can also pin the session to a
-specific worker by clicking it in the pool, which routes inference there
-explicitly; the pin is advisory, so if that worker disappears the device falls
-back to automatic selection and snaps back when it returns.
-
-Each worker has a bounded session capacity (`--max-sessions`, four by default)
-and rejects excess devices explicitly instead of accumulating an unbounded
-queue. Devices normalize the advertised active-session count by that capacity,
-so a one-of-two worker is considered busier than a one-of-eight worker. An
-overloaded candidate enters the normal cooldown and the device immediately
-tries another pool member. A device that stops sending frames also loses its
-slot after a bounded idle timeout, so a dead peer cannot exhaust the worker
-pool indefinitely.
-
-Display is fully decoupled from inference. The video always plays, whether or
-not a worker is reachable and whether or not detection is enabled. A ByteTrack
-tracker runs on the device and carries box identities across frames, and
-across worker failovers: workers are stateless on purpose, so any pool member
-can serve any device and a kill mid-session only causes a brief gap in the
-overlay while the video keeps playing. When detections stop being fresh, the
-overlay simply disappears.
-
-## Install
-
-Use Python 3.11+ with `venv` and pip, Git and Make. Building the device viewer also needs Node.js 24 and npm; `make -C worker build` does not build browser assets. Both roles need Python 3.11+ for the corrected Pillow image decoder; the worker
-also requires the corrected `filelock`. Each role owns its own dependencies
-and Makefile: `worker/` installs the YOLO inference stack, while `device/`
-installs the viewer, capture, registry, and tracking stack.
+Use the same project for the device and worker. Replace `YOUR_PROJECT_ENDPOINT` with the endpoint from the Dashboard.
 
 ```bash
-make build
+rstream login
+rstream project use YOUR_PROJECT_ENDPOINT
+git clone https://github.com/rstreamlabs/rstream-examples.git
+cd rstream-examples/python-vision-inference
+make build PYTHON=python3.13
 ```
 
-You can also prepare a single role directly:
+The build creates a separate virtual environment for each role and builds the viewer assets. On a separate worker machine, `make -C worker build PYTHON=python3.13` builds just the inference role. If Python 3.13 is the default `python3`, you can omit the `PYTHON` override.
+
+## 2. Start a worker and open the viewer
+
+From the example directory, start a worker in the first terminal.
 
 ```bash
-make -C worker build
-make -C device build
+make run-worker PYTHON=python3.13 ARGS="--name vision-first --device cpu"
 ```
 
-## Run a worker
-
-Run this on the machine that has the compute, with a project selected through
-the rstream CLI (`rstream login`, then `rstream project use <endpoint>
---default`).
+Wait for `Worker ready: vision-first` after the model download and warmup. In a second terminal in the same directory, start the device.
 
 ```bash
-make -C worker run
-# or, from this directory
-make run-worker ARGS="--device cpu"
+make run-device PYTHON=python3.13
 ```
 
-The first run downloads the YOLO weights. `--model`, `--imgsz`, and `--conf`
-select the model, its input size, and the confidence threshold. The worker
-picks the best inference device automatically (CUDA, then Apple MPS, then CPU,
-since ultralytics defaults to CPU even when a GPU is present) and advertises it
-through its labels; `--device cpu` forces one, which is handy for running a CPU
-worker and a GPU worker side by side from the same machine. Start more workers
-on other machines to grow the pool; every worker registers itself through its
-tunnel labels. Worker names are ephemeral by default; pass `--name` when a
-stable routing identity is useful.
+Open the **Viewer address** printed by the device. The highway clip should play, `vision-first` should appear in the worker pool, and the viewer should show detections on vehicles along with the inference time and detection frame rate. The device downloads and caches the [Pexels highway clip](https://www.pexels.com/video/2103099/) on first run. If the clip is unavailable, it falls back to a synthetic animation. The animation is enough to check video playback and an active inference session. Use the highway clip or another scene with recognizable objects to check bounding boxes.
 
-## Run the device
+The default viewer URL gives anyone who can reach it access to the video and the detection controls. Use the sample clip for the first run. For private footage, provide browser-session access control or an authenticated gateway in front of the viewer. On hosted rstream, `--token-auth` requires a scoped token on every request, including assets, streams, and controls. A gateway can supply that token on each upstream request. See [HTTP tunnel authentication](https://rstream.io/docs/tunnels/http-tunnels/authentication).
 
-Run this where the camera is. The default source downloads a short highway
-traffic clip on first run ([Pexels video 2103099](https://www.pexels.com/video/2103099/),
-free Pexels license, 720p60), so the sample is reproducible without hardware
-and gives the model something dense to detect.
+## 3. Verify failover
 
-```bash
-make -C device run ARGS="--source 0"          # first local camera
-make -C device run                            # downloaded highway clip
-make -C device run ARGS="--source synthetic"
-```
+1. Start a second worker with `make run-worker PYTHON=python3.13 ARGS="--name vision-second --device cpu"`.
+2. Wait for both workers to appear, then stop the worker serving the device. The video continues while detection reconnects. Confirm the active worker changes and detections resume.
+3. Restart the stopped worker and verify it rejoins the pool. Click a worker in the pool to pin detection to it. If it disappears, the device uses another worker until the pinned worker returns.
 
-The device prints the viewer address. By default it derives a stable
-project-scoped domain once at startup, the same way the Go and C++ SDKs do, and
-reuses it on every reconnect, so when the engine connection drops and the tunnel
-is recreated the open tab keeps working on the same URL. The address is fresh
-on each process start; pass `--host` for a fixed name that also survives full
-restarts (see [Stable Domains](https://rstream.io/docs/tunnels/stable-domains)).
-The page shows the annotated stream, the
-live worker pool, the active session, and the latency breakdown: source and
-detection FPS, inference time, network time, the display buffer, and the
-uplink bandwidth. The Enable/Disable detection button pauses inference while the
-video keeps playing, with the device exposing its actual state (connected,
-reconnecting, waiting for workers, disabled) alongside the desired one; since the viewer is published, protect it with
-`--token-auth` when the URL leaves your hands.
+Switch detection off in the UI to check that the video plays without the overlay. To finish, stop the device and both workers with Ctrl+C in their respective terminals.
 
-Stop the worker currently serving the device and watch the session move to
-another worker within seconds, with the video playing through the switch. Add
-a worker back and the pool regrows, with no restart anywhere.
+If a worker is missing, run `rstream tunnel list --filter 'status=online,labels.role=inference'` with the same context used by the device. Confirm the worker is online in that project or on that engine. Check the worker terminal for model download, warmup, or registration errors. An empty pool still allows video playback.
 
-## Test selection and failover
+## Choose credentials and deployment
 
-The [`qualification/`](qualification) pack pins the YOLO model and source media,
-then exercises frame correlation, bounded admission, cancellation races,
-selection under load, rstream transit, worker loss, and recovery. A live
-failover passes only after the stream from worker A reports its failure and the
-same reference frame returns from worker B with identical labels, confidence
-scores, and bounding boxes.
+Both Python entry points use `rstream.Client.from_env()`. Run both roles with a shared hosted project or a shared direct engine.
 
-Set latency and throughput budgets for the selected model, accelerator and network. The harness records those inputs with its local results; measurements from one environment do not establish a portable failover bound. See [Testing](../docs/001-testing.md).
+| Credential source              | Use                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hosted CLI context             | Run `rstream login` and `rstream project use YOUR_PROJECT_ENDPOINT` on each host. Set `RSTREAM_CONTEXT` to use a specific named context.                                                                                                                                                                                           |
+| Provisioned engine credentials | Set `RSTREAM_ENGINE` to the engine address and `RSTREAM_AUTHENTICATION_TOKEN` to its agent token for each process. On hosted rstream, use project-scoped tokens and keep the device's viewer token separate from its agent token.                                                                                                  |
+| Self-hosted Community Edition  | Use the direct engine address and a JWT signed for that engine. The engine must serve HTTPS for the device viewer with working DNS and trusted certificates. Restrict viewer reachability at your own network boundary. CE supports private bytestream and published HTTP tunnels, and hosted `--token-auth` is unavailable there. |
 
-## Web UI
+With scoped hosted credentials, grant workers access to register their private inference tunnels. The device needs to list and watch those tunnels, dial workers, and publish its viewer. See the [SDK configuration guide](https://github.com/rstreamlabs/rstream-python/blob/main/docs/001-configuration.md) and [Community Edition setup](https://rstream.io/docs/tunnels/self-hosted).
 
-The viewer page is served by the device process itself through the published
-tunnel. Frames travel as timestamped JPEGs with backpressure-driven adaptive
-quality, over a plain byte stream rather than a multipart response, since
-WebKit special-cases `multipart/x-mixed-replace` and silently fails `fetch()`
-reads of it. The page plays the frames through a browser-side jitter buffer: a
-playback clock renders them at their true cadence behind a small adaptive
-delay, so network jitter shallower than the buffer never reaches the eye. Two
-buffers thus protect different things, the device delays display only while
-detection runs, just long enough to align each frame with its own boxes, and
-the browser buffers to absorb the network. For full-codec browser delivery,
-see the WebRTC guides.
+## Change the source or model
 
-The front end is TypeScript bundled with esbuild, and the stylesheet is
-generated with Tailwind:
+Pass flags to the appropriate Make target with `ARGS`, for example `make run-device ARGS="--source 0"`.
 
-```bash
-cd device
-npm install
-npm run build
-```
+| Role   | Option                         | Default and use                                                                                                                                                                                                                                                                             |
+| ------ | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Device | `--source`                     | `sample`. Use a camera index such as `0`, a video file path, or `synthetic` for generated frames without a media download.                                                                                                                                                                  |
+| Device | `--name`                       | `vision-device`. Choose a distinct name for each capture device.                                                                                                                                                                                                                            |
+| Device | `--host`                       | On hosted rstream, the device generates a hostname at startup and reuses it across tunnel reconnects. Set an explicit hostname to reuse it after a process restart or to give a direct-engine viewer a fixed address. See [Stable domains](https://rstream.io/docs/tunnels/stable-domains). |
+| Device | `--token-auth`                 | Off by default. Require a scoped HTTP edge token for the hosted viewer.                                                                                                                                                                                                                     |
+| Device | `--fps`                        | `0` to use the source rate or the capture fallback. Set an explicit capture rate when needed.                                                                                                                                                                                               |
+| Device | `--codec`, `--quality`         | `jpeg` at quality `80`. Choose `webp` or lossless `png` for the worker uplink. Quality applies to lossy codecs.                                                                                                                                                                             |
+| Worker | `--model`, `--imgsz`, `--conf` | `yolov8n.pt`, `640`, and `0.4`. Select the weights, input size, and confidence threshold.                                                                                                                                                                                                   |
+| Worker | `--device`                     | Automatic selection tries CUDA, then Apple MPS, then CPU. Set `cpu`, `mps`, or a CUDA device such as `cuda:0` explicitly.                                                                                                                                                                   |
+| Worker | `--name`                       | Ephemeral name. Set a distinct stable name when you want to pin a device to this worker.                                                                                                                                                                                                    |
+| Worker | `--max-sessions`               | `4` concurrent sessions. Excess connections are rejected, and idle sessions time out.                                                                                                                                                                                                       |
 
-The equivalent Makefile command is:
+## How the sample works
 
-```bash
-make -C device build
-```
+The device lists and watches tunnels labeled `role=inference`. The tunnel labels describe the worker's model, accelerator, and engine region. Each worker session starts with a `hello` that advertises its input size, codecs, and current load. Automatic routing uses rendezvous hashing to pick up to two candidates, probes them concurrently, and prefers the lower active-session count divided by capacity. Equal normalized load is resolved by session establishment time.
 
-The generated files under `device/web/generated/` are ignored and rebuilt by
-the device Makefile.
+The device resizes each input for the worker's model before encoding, with up to two frames in flight. When inference is slower than capture, the device sends the newest available frame and drops older ones from the inference path. Worker results echo the frame ID. The device measures round-trip time on its own monotonic clock and uses the worker's reported inference duration to estimate the remaining network time. A display buffer aligns detections with the corresponding video frame. ByteTrack state stays on the device, so tracking can continue across worker changes.
+
+The device serves the viewer in-process with the Python SDK's ASGI bridge. The browser receives timestamped JPEGs and buffers them for steady playback. This is separate from the device's frame alignment buffer.
+
+## Verify changes and explore further
+
+Run `make verify PYTHON=python3.13` from this directory to check the Python roles, protocol, and viewer build with local fixtures. Use the [qualification tools](qualification/README.md) for real models, workload thresholds, and controlled multi-worker selection and recovery. See [Testing](../docs/001-testing.md) for the shared workflow.
+
+The [rstream vision guide](https://rstream.io/guides/run-edge-vision-inference-on-your-own-machines-with-rstream) explains the integration. See the [WebRTC example](../webrtc-video/README.md) if you need full-codec browser video delivery.

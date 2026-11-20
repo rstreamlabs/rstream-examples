@@ -1,32 +1,24 @@
 # Adaptive real-time WebRTC video
 
-Build a path from a remote video source to a browser-facing application. The Go producer captures and encodes video, adapts to congestion and repairs packet loss. rstream publishes its WHEP signaling through an outbound tunnel and provides managed STUN/TURN; media travels over standard WebRTC.
+Stream a remote device to a browser. The Go producer captures and encodes with GStreamer, handles congestion feedback and retransmission, and publishes WebRTC signaling through an outbound rstream tunnel. ICE establishes the media path directly or through TURN.
 
-## Choose a delivery path
+| If you want to                               | Start here                                                             | First result                                                           |
+| -------------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Stream a device to a browser                 | [Producer quick start](producer/README.md#quick-start)                 | The embedded viewer plays a 720p H.264 test pattern from the producer. |
+| Give signed-in users access to their devices | [Platform quick start](platform/README.md#run-the-application)         | A provisioned device comes online and plays in the Next.js dashboard.  |
+| Serve several viewers over one device uplink | [Distributor quick start](distributor/README.md#run-with-the-platform) | Two browser sessions view one device through MediaMTX.                 |
 
-| Path                               | Start here                                    | What it adds                                                         |
-| ---------------------------------- | --------------------------------------------- | -------------------------------------------------------------------- |
-| One device and one browser         | [Producer](producer/README.md)                | An embedded viewer and the complete device-side media path.          |
-| A product around device streaming  | [Next.js platform](platform/README.md)        | Device identity, provisioning, viewer authorization and fleet state. |
-| Several viewers sharing one uplink | [MediaMTX distributor](distributor/README.md) | On-demand fan-out around the same producer.                          |
+The producer owns capture, encoding, congestion response and source metrics in all three paths. The platform owns authentication, device inventory and scoped credentials. MediaMTX distributes one rendition through independent downstream sessions. The adapter and native-pull options have different repair and source-control features. See [distribution profiles](distributor/docs/000-profiles.md).
 
-Capture, encoding, congestion control, pacing and repair stay in the producer across all three paths. The platform owns access and inventory. The distributor owns a shared upstream and separate viewer sessions; it does not transcode. Producer metrics describe the device uplink, while MediaMTX and browser telemetry describe downstream delivery.
+## Build and test both Go components
 
-The [device-to-browser guide](https://rstream.io/guides/build-device-to-browser-webrtc-streaming-with-rstream), [Next.js guide](https://rstream.io/guides/integrate-webrtc-video-streaming-into-a-nextjs-platform-with-rstream) and [MediaMTX guide](https://rstream.io/guides/distribute-webrtc-video-with-mediamtx-and-rstream) follow that progression.
+From `webrtc-video`, use `make build` for the producer and adapter and `make verify` for their full checks. The Next.js application has [its own verification commands](platform/docs/003-testing.md).
 
-## Run and develop
-
-Start with the producer’s [quick start](producer/README.md#quick-start), then add the platform if the application needs device management. Its [setup guide](platform/docs/000-setup.md) explains personal or organization access, managed or discovered inventory and optional distribution.
-
-The root `make build`, `make test`, `make verify` and `make clean` targets cover both Go roles; `make run` starts the producer. These targets include the required [ICE concurrency patch](ICE-PATCH.md). Preserve that step when adapting the examples.
-
-| Development task                                         | Guide                                                                                |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Install native media dependencies and build the producer | [Producer build](producer/docs/000-build.md)                                         |
-| Configure codecs, source profiles, adaptation and TURN   | [Producer configuration](producer/docs/001-configuration.md)                         |
-| Run the application and provision a device               | [Platform overview](platform/README.md)                                              |
-| Configure multi-viewer delivery                          | [Distributor setup](distributor/docs/001-setup.md)                                   |
-| Add bounded recent recordings                            | [Platform media capabilities](platform/docs/002-media.md#optional-recent-recordings) |
-| Validate changes and measurements                        | [Repository testing](../docs/001-testing.md)                                         |
-
-See [Contributing](../CONTRIBUTING.md) and [Security](../SECURITY.md) for repository-wide guidance.
+| Task                                                              | Guide                                                                                                                                 |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Install media dependencies and package the producer               | [Build the producer](producer/docs/000-build.md)                                                                                      |
+| Choose a capture source, codec or adaptation policy               | [Producer configuration](producer/docs/001-configuration.md)                                                                          |
+| Set up organization access or discover existing devices           | [Platform setup](platform/docs/000-setup.md)                                                                                          |
+| Add a separate distributor host                                   | [Distributor setup](distributor/docs/001-setup.md)                                                                                    |
+| Enable recent recordings, distribution metrics or source controls | [Platform media capabilities](platform/docs/002-media.md)                                                                             |
+| Exercise network impairment, recovery and fan-out                 | [Producer qualification](producer/qualification/adaptive-streaming/README.md), [Distributor testing](distributor/docs/004-testing.md) |

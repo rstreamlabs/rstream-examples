@@ -4,27 +4,9 @@ Return to the [producer overview](../README.md) for the application path. Run co
 
 ## Requirements
 
-Before running the example, install the `rstream` CLI, create a free `rstream` account, create a project, and select that project locally. The sample expects an active CLI context:
+Use Go 1.27.4 or newer, Git, a C compiler, `pkg-config` and the GStreamer headers and libraries. The viewer build and its tests use Node.js 24 with npm. The no-viewer build uses Go and the native media dependencies.
 
-```bash
-rstream login
-rstream project use <project-endpoint>
-```
-
-For local development you need Go `1.27.4` or newer, a C compiler, `pkg-config`,
-and a GStreamer installation that includes the development files and the
-elements required by the selected pipeline. Use Node.js `24 LTS` for the
-embedded viewer build. Node.js and npm are only required with `make build`,
-`make run`, or `make test`.
-
-When using the Next.js platform provisioning profile, the producer does not
-serve the embedded viewer UI. Use `make build-provisioning` for that mode; it
-skips npm entirely and builds the binary with `web.viewer.enabled: false`
-configs in mind.
-
-The H.264 profiles use `videotestsrc`, `videoconvert`, `x264enc`, `h264parse`, and `appsink`. The AV1 profiles use `av1enc` and `av1parse` on top of the same structure.
-
-The bundled profiles have specific codec and receiver limits; see [Media compatibility](001-configuration.md#media-compatibility) before changing a pipeline.
+The H.264 test pattern uses `videotestsrc`, `videoconvert`, `x264enc`, `h264parse` and `appsink`. The AV1 test pattern uses `av1enc` and `av1parse` in place of the H.264 encoder and parser. Check the elements for your profile with `gst-inspect-1.0`. Review the codec and receiver limits before changing a pipeline. [Media compatibility](001-configuration.md#media-compatibility).
 
 ### macOS
 
@@ -32,7 +14,7 @@ The bundled profiles have specific codec and receiver limits; see [Media compati
 brew install go pkg-config gstreamer
 ```
 
-The [Homebrew GStreamer formula](https://formulae.brew.sh/formula/gstreamer) includes the plugin collections. Install Node.js 24 with npm only when embedding the viewer; the [Node.js download page](https://nodejs.org/en/download) provides version-specific installers. The producer-only build does not need Node.js:
+Install Xcode Command Line Tools for the C compiler. The [Homebrew GStreamer formula](https://formulae.brew.sh/formula/gstreamer) includes the plugin collections. For the embedded viewer, install [Node.js 24 with npm](https://nodejs.org/en/download).
 
 ### Ubuntu / Debian
 
@@ -71,51 +53,23 @@ of those profiles, separate from the test-pattern source.
 
 ### Windows
 
-Please run the sample inside WSL2. This repository does not ship a Windows-native distribution target for this example.
+Use WSL2 and follow the Linux dependency instructions for its distribution.
 
 ## Build and distribution
 
-For local development:
+The Makefiles and Docker builds for the producer and distributor apply the required [ICE concurrency patch](../../ICE-PATCH.md).
 
-```bash
-make build
-make run
-```
+| Command                   | Output                                                                                                                           |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `make build`              | `./webrtc-video-producer` with the browser viewer embedded. See the [quick start](../README.md#quick-start) for launch commands. |
+| `make build-provisioning` | `./webrtc-video-producer` for profiles with `web.viewer.enabled: false`. This build skips npm.                                   |
+| `make test`               | TypeScript checks and Go tests.                                                                                                  |
+| `make verify`             | Formatting, vet, Go and race tests, GCC regression, no-viewer tests and a build.                                                 |
+| `make dist-linux-amd64`   | Static binary in `dist/linux-amd64`. Requires Docker with Buildx.                                                                |
+| `make dist-linux-arm64`   | Static binary in `dist/linux-arm64`. Requires Docker with Buildx.                                                                |
+| `make dist`               | Both static Linux builds.                                                                                                        |
 
-`make build` embeds the local viewer UI and therefore requires Node.js and npm.
-For the Next.js platform provisioning profile, use the no-viewer build:
-
-```bash
-make build-provisioning
-```
-
-For a local-only run:
-
-```bash
-make run-local
-```
-
-For tests:
-
-```bash
-make test
-```
-
-The source-format tests encode and decode real H.264 frames, so the development
-runtime also needs `avdec_h264` from GStreamer's libav plugin (`gstreamer1.0-libav`
-on Debian/Ubuntu, included above). Check it with `gst-inspect-1.0 avdec_h264`.
-This decoder is a test dependency; the producer's runtime pipeline and static
-distribution do not decode the transmitted video.
-
-The repository also ships Docker-based static packaging targets for Linux:
-
-```bash
-make dist-linux-amd64
-make dist-linux-arm64
-make dist
-```
-
-Artifacts are written to `dist/linux-amd64` and `dist/linux-arm64`.
+The source-format tests encode and decode real H.264 frames. Check for `avdec_h264` with `gst-inspect-1.0 avdec_h264`. On Debian/Ubuntu it comes from `gstreamer1.0-libav`. The producer runtime and static package encode outbound video.
 
 Those targets build a static Linux binary linked against a statically packaged `gstreamer-full` toolchain. The Docker build compiles the GStreamer subset needed by the sample, including `x264`, `libaom`, the parsers, and the `appsink` path, then links the Go binary against that toolchain with `musl`.
 
@@ -124,9 +78,7 @@ The default bundle includes the test-pattern source. Camera sources such as
 GStreamer build on that device, or extend the static toolchain before packaging.
 Copying a camera YAML file alone does not add its capture plugin to the binary.
 
-The practical outcome is a standalone executable you can copy to a target machine without asking that machine to install the full GStreamer development stack first. In other words, `make dist` is the path you use when you want to build once and then copy the resulting binary to a remote device.
-
-That static toolchain is defined in `build-gstreamer-static-linux.sh`. If you change the reference pipelines and introduce new elements or plugins, update that script as well. Otherwise the local development setup may keep working while the static distribution build silently stops matching the pipeline you intend to run.
+Copy the static executable to the matching Linux architecture. If a profile adds a new GStreamer element, include its plugin in [the static toolchain build](../build-gstreamer-static-linux.sh) before packaging it.
 
 The packaged sources are GStreamer 1.28.9, libaom 3.15.3 and the immutable x264
 commit recorded in that script. Both release archives are verified with SHA-256
@@ -144,7 +96,7 @@ to the installation commands in this guide.
 
 If the process fails with `failed to create the GStreamer pipeline`, one or more configured elements are missing. Install the required plugins or adapt `media.pipeline` to the elements available on the target machine.
 
-If the process cannot connect to the `rstream` engine server, verify the current CLI context with `rstream login` and `rstream project use <project-endpoint>`, then inspect `~/.rstream/config.yaml`.
+If the process cannot connect to the `rstream` engine server, verify the current CLI context with `rstream login` and `rstream project use your-project-endpoint`, then inspect `~/.rstream/config.yaml`.
 
 If TURN credential generation fails, verify the current project endpoint and
 credential permissions. Local PAT/APP derivation requires `turn.relay.allocate`;

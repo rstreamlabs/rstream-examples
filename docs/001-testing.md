@@ -1,23 +1,17 @@
-# Test the examples
+# Verify an example
 
-Start with the example’s README and its normal verification command. Each integration owns tests for its application behavior; shared protocol and security regressions belong in the SDK or service that implements them.
+Use the expected result in the application's README for the first run.
+When changing the example, start with its local checks and add a runtime
+check for the behavior you changed.
 
-## Choose the test scope
+| Check | When to run it |
+| --- | --- |
+| Unit and local fixture tests | Validate application inputs, authorization decisions, framing or lifecycle with local dependencies. |
+| Runtime integration | Exercise a documented tunnel, service or framework with a selected Engine and caller. |
+| Load and failure scenarios | Use the owning example's `qualification/` tools for a controlled topology, workload and acceptance threshold. |
 
-| Scope                        | Purpose                                                                                                            |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Unit and local fixture tests | Validate configuration, framing, authorization decisions, cancellation and data handling without a hosted service. |
-| Runtime integration          | Exercise the actual example against an explicitly configured engine or dependency.                                 |
-| Load and failure scenarios   | Measure bounded workloads, recovery and resource behavior in a declared environment.                               |
-
-Several examples keep reusable runtime and performance tools under `qualification/`. They are optional for the ordinary quick start. Their READMEs document prerequisites, commands and acceptance criteria. Use isolated credentials and explicit targets for tests that create tunnels or call services.
-
-## Results and artifacts
-
-Write generated reports, traces, captures and charts to a local output directory or CI artifacts. Do not commit per-run results, revision inventories or investigation journals. A small synthetic input belongs in test fixtures only when a regression actually consumes it.
-
-Retain enough information with a run to interpret the result: source revision, dependency versions, workload, topology and configured thresholds. Preserve failures and inconclusive observations. Environment-specific timings are not portable product guarantees.
-
-A runner must bound execution and resources, own its child processes and clean up on failure or interruption. Report a missing dependency or unreachable fixture as a harness error, rather than interpreting it as a product measurement. Keep credentials, customer identifiers and private diagnostics out of publishable output.
-
-For source changes, see [Contributing](../CONTRIBUTING.md). Source publication, deployments and cloud campaigns are separate operations.
+Use a test project or isolated Engine for commands that start tunnels or
+call other services. Keep results, captures and charts in a local output
+directory or CI artifacts. Record the inputs and thresholds with any
+results you compare. See [Contributing](../CONTRIBUTING.md) for changes to
+the examples and their checks.

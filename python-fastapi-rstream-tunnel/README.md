@@ -1,78 +1,86 @@
-# Python FastAPI rstream tunnel
+# Serve FastAPI through an rstream tunnel
 
-This sample serves a FastAPI application through a published rstream HTTP
-tunnel using the Python SDK.
+FastAPI owns the routes. The Python SDK accepts HTTP streams from rstream
+and passes them to the application. Run the same app as published HTTPS,
+behind edge token authentication, or as a private service.
 
-It demonstrates the Python-native path where the application keeps its normal
-ASGI shape and the SDK serves accepted rstream streams in-process. There is no
-Uvicorn behind a reverse proxy, no loopback port, and no public listener owned
-by the process.
+## Install and run
 
-## Install
+Use Python 3.10 or newer. From this directory, create an environment.
 
-The sample needs Python 3.10+ and two packages, ideally in a virtual
-environment.
-
-```bash
+```sh
 python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+. .venv/bin/activate
+python -m pip install -r requirements.txt
 ```
 
-Or use the Makefile:
+In PowerShell, use `py -m venv .venv` and
+`.\.venv\Scripts\Activate.ps1`. Run the same pip command there.
 
-```bash
-make verify
-```
+For a hosted project, install the [rstream CLI](https://rstream.io/docs/getting-started/installation)
+and select the endpoint listed for the project. Create a project in the Dashboard if you need one. For the first unauthenticated request, use a project with published access set to `allowed`. If the project requires caller authentication, follow the token path below.
 
-## Run
-
-Select a project with the rstream CLI, then run the server.
-
-```bash
+```sh
 rstream login
-rstream project use <project-endpoint>
-make run
+rstream project list
+rstream project use my-project-endpoint
+python main.py
 ```
 
-The process prints the forwarding address once the tunnel is created. Add
-`--token-auth` to require an rstream token at the edge of the published
-endpoint, or `--private` to keep the tunnel unpublished and reachable only
-through an rstream dial.
+For a self-hosted Engine, configure a [direct context](https://rstream.io/docs/tunnels/self-hosted/deployment#agent-context)
+that permits the operation. Set `SSL_CERT_FILE` to the private CA bundle
+when needed. Configure trust for your HTTPS client as well.
 
-## Dial the private tunnel
+Open the printed `Forwarding address` and try `/items/42`. A successful
+request returns HTTP 200 and `{"item_id":42,"source":"rstream tunnel"}`.
+Keep the printed hostname for TLS verification. Stop the program with
+Ctrl+C before switching modes.
 
-With the server running in `--private` mode, the second script consumes the
-API over a raw rstream dial. Run the server in one terminal:
+## Require caller authentication
 
-```bash
-make run-private
+On a project that supports
+[HTTP token authentication](https://rstream.io/docs/tunnels/http-tunnels/authentication),
+start the sample with:
+
+```sh
+python main.py --token-auth
 ```
 
-Then dial it from another:
+Use the new forwarding address. Expect 401 without a credential. Send a
+Bearer token allowed to reach the tunnel and `/items/42` to get the same
+JSON response. The credential that started the tunnel and the credential
+used by this HTTP caller serve different purposes.
 
-```bash
-make dial ARGS="--path /items/42"
+## Dial the private service
+
+Use a hosted project with private tunnels (Pro or Enterprise), or a direct Engine that supports private bytestreams. The owner creates a private tunnel named `python-fastapi-demo`. Start it
+in one terminal with a context allowed to create private tunnels:
+
+```sh
+python main.py --private
 ```
 
-## Recognize success and own the lifecycle
+In a second terminal, activate the same Python environment and use a
+context allowed to dial that tunnel. The client sends an HTTP/1.1 request
+through the private stream and prints its response.
 
-Open the printed published address to receive
-`{"service":"python-fastapi-rstream-tunnel","status":"ok"}`. The private dial
-example prints the HTTP response for `/items/42`. Stop the process with an
-interrupt; its nested contexts close the tunnel/client before leaving FastAPI's
-`app.router.lifespan_context(app)`. Startup therefore runs before connection setup,
-and shutdown still runs after setup failure or cancellation. Put process resources
-on `app.state`.
+```sh
+python dial_client.py --path /items/42
+```
 
-The direct adapter dispatches HTTP/1.1 only. It does not itself serve ASGI lifespan
-or WebSocket scopes and does not inject yielded lifespan state into request
-`scope["state"]`. For a full ASGI server's features, keep that server on loopback
-and use local forwarding as described in the [Python SDK](https://github.com/rstreamlabs/rstream-python/blob/main/docs/002-tunnels.md).
-Reconnection is also application policy: this small service exits when its serving
-operation ends. A long-lived product should supervise that lifecycle with bounded
-backoff and explicit shutdown, rather than recreate a tunnel per request.
+The response starts with HTTP 200 and contains the item JSON. Stop the
+owner when finished. If you change `--name`, use the same value in both
+commands.
 
-`make verify` installs the application requirements and runs its lifecycle tests
-without a rstream account. Those tests prove startup/shutdown on success,
-connection failure, serving failure and cancellation with synthetic controls.
+## Integrate your application
+
+The runner enters the FastAPI lifespan before opening the tunnel and closes
+the SDK resources before leaving the lifespan. Put shared resources on
+`app.state`. The direct adapter handles HTTP/1.1; run a regular ASGI server
+with [local forwarding](https://rstream.io/docs/integrations/python-sdk#managed-local-forwarding)
+for WebSockets or server-managed lifespan state.
+
+Use `python -m unittest -v test_main` to check startup and cleanup locally.
+On a machine with Make, `make verify` also prepares the environment and
+checks both commands. Follow the [product tutorial](https://rstream.io/guides/serve-a-fastapi-app-through-rstream-tunnels)
+for the three access paths and caller credentials.
