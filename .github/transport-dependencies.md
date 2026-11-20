@@ -1,11 +1,12 @@
 # Go transport dependencies
 
-The LLM worker uses Go SDK v1.38.1 with QUIC v0.60.0, WebTransport v0.11.1,
+The LLM worker and private MASQUE gateway use Go SDK v1.38.1 with QUIC
+v0.60.0, WebTransport v0.11.1,
 MASQUE v0.4.0, CONNECT-IP v0.1.0 and DTLS v3.1.15.
 `TestReviewedTransportDependencyGraph` checks the linked versions.
 
-The private MASQUE gateway and video producer retain their verified module
-graphs. Run the producer through its Makefile to apply the matching ICE patch.
+The video producer retains its verified module graph. Run it through its
+Makefile to apply the matching ICE patch.
 Keep its WebRTC and Interceptor forks compatible with that patch. The video
 distributor has its own module graph.
 

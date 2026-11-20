@@ -374,6 +374,8 @@ type DiagnosticIPBackend struct {
 }
 
 func (b DiagnosticIPBackend) ServeIP(ctx context.Context, conn *connectip.Conn) error {
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
 	clientPrefix := b.ClientPrefix
 	if !clientPrefix.IsValid() {
 		clientPrefix = netip.MustParsePrefix("10.77.0.2/32")
