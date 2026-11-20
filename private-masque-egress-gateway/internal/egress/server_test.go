@@ -12,7 +12,9 @@ import (
 	"net/http"
 	"net/url"
 	"testing"
+	"time"
 
+	connectip "github.com/quic-go/connect-ip-go"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 	"github.com/quic-go/quic-go/quicvarint"
@@ -157,10 +159,16 @@ func TestServerRejectsMissingAccessToken(t *testing.T) {
 
 func startTestGateway(t *testing.T) string {
 	t.Helper()
+	return startTestGatewayWithIPBackend(t, nil)
+}
+
+func startTestGatewayWithIPBackend(t *testing.T, backend IPBackend) string {
+	t.Helper()
 	policy := DefaultPolicy()
 	policy.AllowLoopback = true
 	counterSet := metrics.NewCounterSet()
 	server := NewServer(policy, authz.New("X-Egress-Token", "secret"), counterSet, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	server.ConnectIP = backend
 	tlsConfig, err := tlsutil.SelfSignedH3Config()
 	if err != nil {
 		t.Fatalf("TLS config: %v", err)
@@ -182,6 +190,48 @@ func startTestGateway(t *testing.T) string {
 		}
 	})
 	return pc.LocalAddr().String()
+}
+
+type cancelableIPBackend struct {
+	ctx  context.Context
+	done chan struct{}
+}
+
+func (b cancelableIPBackend) ServeIP(_ context.Context, conn *connectip.Conn) error {
+	defer close(b.done)
+	return (DiagnosticIPBackend{}).ServeIP(b.ctx, conn)
+}
+
+func TestConnectIPBackendCancellationStopsIdlePacketRead(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan struct{})
+	address := startTestGatewayWithIPBackend(t, cancelableIPBackend{ctx: ctx, done: done})
+	h3, cleanup := dialTestH3(t, address)
+	defer cleanup()
+	requestCtx, stopRequest := context.WithTimeout(t.Context(), 10*time.Second)
+	defer stopRequest()
+	request, err := connectip.NewRequest(requestCtx, uritemplate.MustNew("https://"+address+"/connect-ip"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header().Set("X-Egress-Token", "secret")
+	conn, _, err := connectip.NewClientConn(h3).Dial(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	receiveCtx, stopReceive := context.WithTimeout(t.Context(), 5*time.Second)
+	defer stopReceive()
+	if _, err := conn.ReceiveAddressAssignment(receiveCtx); err != nil {
+		t.Fatalf("receive address assignment: %v", err)
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("canceled CONNECT-IP backend retained an idle packet reader")
+	}
 }
 
 func dialTestH3(t *testing.T, addr string) (*http3.ClientConn, func()) {

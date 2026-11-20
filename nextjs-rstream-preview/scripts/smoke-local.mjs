@@ -115,6 +115,20 @@ try {
   if (!response.ok) {
     throw new Error(`webhook returned ${response.status}`);
   }
+  const tampered = await fetch(`${origin}/api/webhooks/github`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-github-delivery": "tampered-delivery",
+      "x-hub-signature-256": sign(payload),
+    },
+    body: payload + " ",
+  });
+  if (tampered.status !== 401) {
+    throw new Error(
+      `tampered webhook returned ${tampered.status}, expected 401`,
+    );
+  }
   const page = await fetch(origin);
   const html = await page.text();
   if (

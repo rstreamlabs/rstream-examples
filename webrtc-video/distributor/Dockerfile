@@ -1,4 +1,4 @@
-FROM golang:1.27.3-alpine@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c AS build
+FROM golang:1.27.4-alpine@sha256:0a5f7fe796599ff487605987432e7619ae45beeb2fba4c2ce0b907879932aebf AS build
 
 RUN apk add --no-cache git
 WORKDIR /src
@@ -10,14 +10,14 @@ COPY distributor/cmd ./cmd
 COPY distributor/internal ./internal
 RUN CGO_ENABLED=0 go build -modfile=out/ice-patch/go.mod -trimpath -ldflags="-s -w" -o /out/rstream-video-distributor ./cmd/rstream-video-distributor
 
-FROM golang:1.27.3-alpine@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c AS mediamtx
+FROM golang:1.27.4-alpine@sha256:0a5f7fe796599ff487605987432e7619ae45beeb2fba4c2ce0b907879932aebf AS mediamtx
 
 RUN apk add --no-cache python3
 WORKDIR /build
 COPY distributor/mediamtx-build ./mediamtx-build
 RUN python3 mediamtx-build/build.py --output /mediamtx
 
-FROM alpine:3.22.1@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1
+FROM alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
 
 RUN apk add --no-cache ca-certificates \
     && addgroup -S -g 10001 rstream \

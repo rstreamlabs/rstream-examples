@@ -94,7 +94,7 @@ def build(output, verify):
             run(["go", "test", "-race", "-count=1", "github.com/bluenviron/mediacommon/v2/pkg/codecs/h264"], media)
             run(["go", "test", "-race", "-count=1", "github.com/bluenviron/gortsplib/v5/pkg/format/rtph264"], media)
             run(["go", "test", "-race", "-count=1", "h264_budget_test.go"], media)
-        (media / "internal/core/VERSION").write_text("v1.21.2-rstream.1")
+        (media / "internal/core/VERSION").write_text("v1.21.3-rstream.1")
         for package in ("internal/servers/hls", "internal/staticsources/rpicamera"):
             run(["go", "generate", "./" + package], media)
         run(["go", "build", "-mod=readonly", "-trimpath", "-ldflags=-s -w", "-o", str(output), "."], media, env={"CGO_ENABLED": "0"})

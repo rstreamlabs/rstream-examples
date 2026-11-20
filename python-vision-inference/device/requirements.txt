@@ -1,6 +1,8 @@
 fastapi>=0.140,<1
-numpy>=2.5,<3
+numpy>=2.3,<2.5; python_version >= "3.11" and python_version < "3.12"
+numpy>=2.5,<3; python_version >= "3.12"
 opencv-python>=5.0.0.93,<6
-rstreamlabs-rstream[asgi,api,realtime]>=0.7.0
-supervision>=0.29.1,<0.30
+pillow>=13,<14
+rstreamlabs-rstream[asgi,api,realtime]>=0.8.1
+supervision>=0.31.7,<0.32
 trackers>=2.5.0.post0,<3

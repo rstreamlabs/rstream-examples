@@ -7,11 +7,15 @@ interfaces to qualify Trickle ICE and ICE restart on the recovered session.
 
 The current bundled H.264 source is 1280×720 at 30 fps, explicitly bounded to
 level 3.1 in both the encoder and SDP. The manifest expects that resolution;
-stale prepared 1080p runtimes are rejected. Historical evidence at `ca8a308`
-used 1920×1080 and remains unchanged. It is a transport/playback record for
-that revision, not proof of the current profile or H.264 level conformance.
-Compare revisions at identical source settings. Frame-rate, freeze, QP,
+stale prepared runtimes with a different resolution are rejected. Compare revisions at identical source settings. Frame-rate, freeze, QP,
 queue, recovery and network-loss gates are unchanged.
+
+| Task                                                          | Where to start                                                |
+| ------------------------------------------------------------- | ------------------------------------------------------------- |
+| Run one direct or TURN scenario                               | [Run one scenario](#run-one-scenario)                         |
+| Check an in-place restart after a producer address change     | [Qualify Trickle ICE mobility](#qualify-trickle-ice-mobility) |
+| Compare direct and relay delivery across both repair profiles | [Run the release matrix](#run-the-release-matrix)             |
+| Interpret the verdict and measurements                        | [Read one result](#read-one-result)                           |
 
 ## What the harness measures
 
@@ -30,7 +34,7 @@ backdate missed callbacks or assert physical display timing. Hidden or invalid
 frames keep the observer armed until a valid frame or teardown; missing evidence
 remains invalid. Distributor results include both measurements under
 `setup.presentation` and require the visible observation, with its raw timestamp
-and visibility evidence. Historical results are unchanged.
+and visibility evidence.
 
 These durations exclude page navigation, device-process startup and physical
 display scanout. They measure one fresh activation; repeat/cold/warm/churn
@@ -40,12 +44,12 @@ threshold is implied by measurement validity.
 The distributor runner's `RSTREAM_DISTRIBUTOR_STARTUP_CYCLES=true` mode provides
 that repeated adaptive MediaMTX check using the same viewer/client bundle.
 It measures cold/reopen/join cases and observes setup cancellations through
-the source setup deadline. See the [distribution qualification](../../../distributor/README.md#technical-qualification)
+the source setup deadline. See the [distribution qualification](../../../distributor/docs/004-testing.md#technical-qualification)
 for its scope and lifecycle gates.
 
 For QUIC signaling, first prepare adequate UDP socket limits on the Linux
 container host (the Linux VM when using Docker Desktop). The
-[distribution prerequisites](../../../distributor/README.md#technical-qualification)
+[distribution prerequisites](../../../distributor/docs/004-testing.md#technical-qualification)
 give the commands and explain how to preserve and restore temporary settings.
 
 Each run starts the exact producer source in an ephemeral Linux container and
@@ -388,7 +392,9 @@ requires the measured target to remain below 250 ms.
 
 ## Run one scenario
 
-Requirements are Docker with `NET_ADMIN` support, Node.js, jq, and an
+Use Docker with `NET_ADMIN` support, Git, Node.js 24, jq and tar. Prepare the
+Linux host's [UDP socket limits](../../../distributor/docs/004-testing.md#technical-qualification)
+for relay signaling. Run these commands from `webrtc-video/producer` using an
 authenticated rstream CLI context. Go builds the context-preparation helper by
 default. A qualification host without Go can use the same audited helper as a
 prebuilt binary through `RSTREAM_QUALIFICATION_PREPARE_CONTEXT_BINARY`. The
@@ -465,6 +471,7 @@ docker context create video-producer \
 
 RSTREAM_QUALIFICATION_PATH=relay \
 RSTREAM_QUALIFICATION_PROTECTION=nack-rtx-flexfec \
+RSTREAM_CONTEXT=your-context \
 RSTREAM_QUALIFICATION_PRODUCER_DOCKER_CONTEXT=video-producer \
   ./qualification/adaptive-streaming/run.sh \
   ./qualification/adaptive-streaming/.artifacts/split-host-relay
@@ -513,9 +520,10 @@ the normal release matrix keeps one stable path per run.
 ## Run the release matrix
 
 The release-oriented command runs both paths and both protection profiles, then
-generates a single comparison report:
+generates a single comparison report. Use the same non-production context as for an individual relay scenario.
 
 ```bash
+RSTREAM_CONTEXT=your-context \
 RSTREAM_QUALIFICATION_REPETITIONS=3 \
   ./qualification/adaptive-streaming/run-matrix.sh
 ```

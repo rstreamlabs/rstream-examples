@@ -28,6 +28,7 @@ dial: build
 
 test: build
 	$(PY) -m py_compile main.py dial_client.py
+	$(PY) -m unittest -v test_main
 	$(PY) main.py --help >/dev/null
 	$(PY) dial_client.py --help >/dev/null
 	$(PIP) check

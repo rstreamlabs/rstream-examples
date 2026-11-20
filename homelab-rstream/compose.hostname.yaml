@@ -1,0 +1,4 @@
+services:
+  grafana:
+    labels:
+      rstream.tunnel.grafana.host: "${RSTREAM_GRAFANA_HOSTNAME:?set a stable tunnel hostname before selecting compose.hostname.yaml}"
