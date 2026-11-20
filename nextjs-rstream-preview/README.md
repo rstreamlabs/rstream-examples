@@ -14,7 +14,7 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:3000`. Expect the preview and webhook inbox.
+Open `http://127.0.0.1:3000`. Expect the preview and webhook inbox.
 In a separate terminal, `npm run smoke:local` runs a loopback fixture,
 sends a signed delivery, and checks that the page shows it. Stop the
 development server with Ctrl+C.
@@ -36,13 +36,15 @@ npm run dev:tunnel
 ```
 
 Open the `Public URL` printed by the server. Configure a GitHub webhook at
-`/api/webhooks/github` on that origin with the same signing secret.
-Expect a signed delivery to be accepted and displayed in the inbox. If the
-project requires an edge credential, use a caller that can provide it.
-A webhook signature authenticates the webhook to the application.
+`/api/webhooks/github` on that origin. Choose `application/json` and enter
+the same signing secret. Expect a signed delivery to appear in the inbox.
+For a GitHub delivery, use a disposable preview whose edge policy allows the
+callback. If the project requires an additional caller credential, use the
+local smoke test or a relay that can present that credential.
 
 The SDK passes requests and upgrades to Next.js and supervises the tunnel
-using bounded retry. Ctrl+C stops the running server. For an application
+using bounded retry. Ctrl+C stops the running server. Remove the temporary GitHub webhook after
+testing. For an application
 that keeps its existing HTTP listener, use [CLI forwarding](https://rstream.io/guides/expose-a-local-nextjs-app-with-rstream#add-a-cli-tunnel-sidecar-to-an-existing-app).
 
 ## Choose stable access

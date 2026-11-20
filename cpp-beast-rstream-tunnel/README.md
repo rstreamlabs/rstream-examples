@@ -6,8 +6,9 @@ tunnel and owns the HTTP handler.
 
 ## Build the application
 
-Use a C++20 compiler, CMake 3.22 or newer, Conan 2 and Make. From this
-directory on macOS or Linux, use Conan's default profile and the rstream
+Use a C++20 compiler, CMake 3.22 or newer, Conan 2, Python 3 and Make.
+Install Ninja for Conan source builds. From this directory on macOS or Linux,
+use Conan's default profile and the rstream
 package remote. Run `conan profile detect` and add the remote only if they
 are missing.
 

@@ -8,7 +8,7 @@
     "build": "next build",
     "clean": "rm -rf .next .data .data-smoke tsconfig.tsbuildinfo",
     "dev:tunnel": "tsx src/server/rstream-next-server.ts",
-    "dev": "next dev",
+    "dev": "next dev --hostname 127.0.0.1",
     "format:check": "prettier --check .",
     "format": "prettier --write .",
     "smoke:local": "node scripts/smoke-local.mjs",
