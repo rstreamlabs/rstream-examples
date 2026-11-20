@@ -4,7 +4,7 @@ Return to the [distributor overview](../README.md) for the application path. Run
 
 ## Build the combined image
 
-Run `make image` from `webrtc-video/distributor` to build `rstream-video-distributor:local` with Docker.
+Install Docker with Compose. Run `make image` from `webrtc-video/distributor` to build `rstream-video-distributor:local`.
 
 ```sh
 make image
@@ -48,7 +48,7 @@ Copy [`distributor.env.example`](../distributor.env.example) to `webrtc-video/di
 | `RSTREAM_SOURCE_RESOLVER_ISSUER`, `RSTREAM_SOURCE_RESOLVER_AUDIENCE` | Match the platform resolver issuer and audience.                                                |
 | `RSTREAM_MEDIAMTX_URL`                                               | `http://127.0.0.1:8889` inside the combined container.                                          |
 
-Reverse proxy `8889/tcp` through the selected HTTPS ingress or authenticated rstream tunnel. Leave the unused platform endpoint variable empty. In either mode, make UDP `8189` reachable through the advertised host or configure STUN or TURN under `webrtcICEServers2`.
+Reverse proxy `8889/tcp` through the selected HTTPS ingress or authenticated rstream tunnel. Leave the unused platform endpoint variable empty. In either mode, confirm browsers can reach MediaMTX on UDP `8189` through the advertised host. Configure STUN under `webrtcICEServers2` if MediaMTX needs to advertise a public candidate, or TURN if viewers need a reachable relay.
 
 ## Start the Compose service
 

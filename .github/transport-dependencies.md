@@ -7,11 +7,10 @@ CONNECT-IP v0.6.0 and DTLS v3.1.15. Each module's
 and rejects unexpected versions or replacements for this tuple. Run the producer
 through its Makefile so the generated ICE modfile is also checked.
 
-The review branch pins immutable SDK source
+The three modules pin the same immutable SDK source
 `v1.37.1-0.20261114141308-06bc287010aa` from SDK PR #185. This is a Go source
-commit reference, not a published stable SDK release. Replace it with the
-certified stable SDK through the normal release process before integration;
-source qualification does not authorize publication, merge or deployment.
+commit reference, not a published stable SDK release. Qualify and select its
+stable replacement through the normal SDK release process.
 
 Preserve the producer's WebRTC and interceptor forks and generated ICE patch.
 The distributor has no QUIC dependency and retains its separately reviewed
@@ -23,7 +22,7 @@ packet reader terminates even when no more packets arrive. The real HTTP/3
 cancellation regression must pass under `go test -race`; it fails without the
 explicit lifecycle binding.
 
-Use `make verify` in the three changed modules. The producer requires GStreamer
+Use `make verify` in the three modules. The producer requires GStreamer
 and its Node build tools; the worker requires its pinned llama.cpp build. Worker
 model inference tests additionally require `MODEL` to reference a suitable GGUF
 model; compiling and running the ordinary unit suite does not qualify inference.

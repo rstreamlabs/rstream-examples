@@ -32,7 +32,11 @@ npm run test:mediamtx-auth
 npm run test:mediamtx-recording
 ```
 
-Install FFmpeg for the recording test. Both checks start local MediaMTX processes and verify the actual runtime's behavior.
+For the recording check, install FFmpeg with `libx264`, FFprobe and the browser runtimes that match the lockfile. Both checks start local MediaMTX processes and verify actual runtime behavior.
+
+```sh
+npx playwright-core install chromium firefox webkit
+```
 
 ## Qualify discovered devices
 
@@ -138,7 +142,7 @@ automatically allocated application ports.
 
 ## Qualify the complete distribution paths
 
-With rstream credentials in `.env.local`, Docker and Chrome installed, choose a distribution scenario. Use a fresh output directory outside the checkout for each run.
+Install Docker, Git, curl, Node.js 24 with npm, the rstream CLI and Chrome or Chromium. Configure the sample credentials in `.env.local`. The recording scenario also requires FFprobe. Choose a distribution scenario and use a fresh output directory outside the checkout for each run.
 
 ```bash
 npm run qualify:distribution -- /path/to/empty/evidence-directory

@@ -4,7 +4,7 @@ Run a finite, headless matrix against a project that supports private byte-strea
 
 ## Run the matrix
 
-From `netcat-media-streaming`, install `rstream`, `rstream-ncat`, FFmpeg with `libx264`, GStreamer with the base, good, bad, ugly and libav plugin sets, MediaMTX, jq, netcat, Python 3, `awk`, `shasum` and `timeout` or `gtimeout`. Select the rstream project in your CLI context before running. To use locally built clients, export `RSTREAM_GO_BIN` and `RSTREAM_CPP_BIN` before both commands.
+From `netcat-media-streaming`, install `rstream`, `rstream-ncat`, FFmpeg with `libx264`, GStreamer with the base, good, bad, ugly and libav plugin sets, MediaMTX, jq, netcat, Python 3, `awk`, `grep`, `shasum` and `timeout` or `gtimeout`. Select the rstream project in your CLI context before running. To use locally built clients, export `RSTREAM_GO_BIN` and `RSTREAM_CPP_BIN` before both commands.
 
 ```sh
 make check
@@ -17,6 +17,8 @@ output_directory=$(mktemp -d)
 ## Profiles and acceptance criteria
 
 The default target is 300 frames at 320 × 240. The reliable and RTSP cases decode raw I420 and require the exact decoded frame count. The best-effort and guaranteed datagram cases capture the RFC 4571 RTP stream at both ends, compare unique sequence numbers and compare decoded frames against the reference in order.
+
+The reliable matrix uses `-I` on both clients to receive media without reading from standard input. With the Go client in its default interactive mode, stdin EOF closes the sending side of the tunnel. A C++ `rstream-ncat -c` listener ends its private tunnel session on that EOF, which can cut off the encoder.
 
 | Profile                     | Clients                               | Passing result                                                                                                                                                                               |
 | --------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

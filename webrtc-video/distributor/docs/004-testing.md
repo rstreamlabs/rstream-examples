@@ -4,7 +4,7 @@ Return to the [distributor overview](../README.md) for the application path. Run
 
 ## Run local tests
 
-Run the adapter tests with Go 1.27.4 or newer.
+Install Go 1.27.4 or newer and Git. Run the adapter unit tests.
 
 ```sh
 make test
@@ -20,7 +20,9 @@ GOFLAGS="-modfile=$PWD/out/ice-patch/go.mod" \
   go test -race -tags=integration ./internal/bridge
 ```
 
-`make test` prepares the patched Go module used by the integration command. The integration suite uses loopback traffic. `make integration` also builds and smoke-tests the combined Docker image. `make verify` checks formatting, vet and race tests, verifies decoded restart and loss recovery with FFmpeg, and builds the adapter.
+`make test` prepares the patched Go module used by the integration command. The integration suite uses loopback traffic. With Docker and Compose, `make integration` also builds and smoke-tests the combined image. Set `RSTREAM_MEDIAMTX_BINARY` to the pinned executable above for that command too.
+
+Install Node.js 24 with npm and FFmpeg with `libx264` for `make verify`. That target runs formatting, vet, analyzer and race tests, checks decoded restart and loss recovery, and builds the adapter.
 
 The integration suite starts the real MediaMTX 1.21.3 binary. It proves that two
 viewers create one source WHEP session, injects and repairs a missing H.264 RTP
@@ -63,7 +65,7 @@ sudo sysctl -w net.core.rmem_max=7500000 net.core.wmem_max=7500000
 
 With Docker Desktop, set the limits in its Linux VM. Record the old values and restore them after the run. The performance gate requires sufficient UDP buffers even when video plays. See the [quic-go buffer guidance](https://github.com/quic-go/quic-go/wiki/UDP-Buffer-Sizes).
 
-The finite browser qualification needs Docker, Git, Go, jq, Node.js, the rstream CLI and an explicit rstream context. The runner builds its own browser image and enables edge authentication by default. Open `result.json` in the output directory for the verdict and individual gates.
+The finite browser qualification needs Docker, Git, Go, jq, Node.js 24, rstream CLI 1.29.0 or newer, and an explicit rstream context. The runner builds its own browser image and enables edge authentication by default. Open `result.json` in the output directory for the verdict and individual gates.
 
 ```bash
 RSTREAM_CONTEXT="your-qualification-context" \

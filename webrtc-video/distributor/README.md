@@ -14,7 +14,7 @@ npm run mediamtx:local
 
 Open `http://localhost:3000`, sign in and create a device. Start the [provisioning producer](../platform/README.md#run-the-application) with the device secret. Select the same device in two signed-in browser sessions. Both can play the test pattern through the MediaMTX listener on `http://localhost:8889`. Closing the last viewer releases the upstream after its idle grace. Press `Ctrl-C` to stop the producer and the launcher.
 
-The local launcher creates a temporary rstream tunnel for control-plane callbacks. See [Local stack options](../platform/docs/000-setup.md#run-the-complete-local-mediamtx-stack) to publish the WHEP listener through rstream, test a production build or enable the disposable recording volume.
+The local launcher creates a temporary HTTPS tunnel so MediaMTX can fetch signing keys and call the source resolver. Use a test project that allows public HTTPS publication for that callback tunnel. See [Local stack options](../platform/docs/000-setup.md#run-the-complete-local-mediamtx-stack) to publish the WHEP listener through rstream, test a production build or enable the disposable recording volume.
 
 ## Choose a distribution profile
 

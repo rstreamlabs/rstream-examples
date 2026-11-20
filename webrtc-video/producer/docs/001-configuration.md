@@ -2,11 +2,18 @@
 
 Return to the [producer overview](../README.md) for the application path. Run commands from `webrtc-video/producer`, unless a step changes directory.
 
+| Task | Where to start |
+| --- | --- |
+| Choose a test pattern or camera | [Reference profiles](#reference-profiles) |
+| Publish a tunnel or enroll a device | [Tunnel publication and authentication](#tunnel-publication-and-authentication), [Remote provisioning](#remote-provisioning) |
+| Configure bitrate, resolution or frame rate | [Source quality presets](#optional-source-quality-presets), [Source resolution and frame rate](#optional-source-resolution-and-frame-rate) |
+| Inspect capture and delivery | [Producer metrics](#producer-metrics), [Transport feedback and packet repair](#transport-feedback-and-packet-repair) |
+
 ## Media compatibility
 
 The bundled H.264 profiles use 720p30 and explicitly constrain the encoded
 stream to level 3.1, matching their SDP and the browser receive offers tested
-with this sample. The producer now checks the receiver's level and maximum bitrate before
+with this sample. The producer checks the receiver's level and maximum bitrate before
 answering, including fixed pipelines without optional format control.
 Custom 1080p30 pipelines remain possible with a matching level 4 encoder/SDP
 configuration and receivers that advertise sufficient capacity on every leg.
@@ -46,17 +53,17 @@ Use those files as starting points. On a real device you will often need to adju
 
 Start from one of the shipped profiles and adjust only the sections you need. That is a better fit for this example than building a full config file up front.
 
-The configuration is split by responsibility:
-
-- `server` controls the local HTTP listener.
-- `metrics` controls the optional producer-side OpenMetrics listener.
-- `web` controls whether the producer serves its local viewer.
-- `tunnel` controls publication through `rstream`, edge authentication, provisioning, and tunnel reconnection.
-- `turn` controls TURN credential lifetime.
-- `webrtc` controls codec settings, interceptors, adaptive bitrate, and viewer limits.
-- `media` controls the GStreamer pipeline itself and how pipelines are allocated across viewers.
-- `logging` controls verbosity.
-- `quality` optionally advertises source bitrate presets.
+| Section | What it controls |
+| --- | --- |
+| `server` | Local HTTP listener. |
+| `metrics` | Optional producer-side OpenMetrics listener. |
+| `web` | Embedded viewer and WHEP options. |
+| `tunnel` | Publication, edge authentication, provisioning and reconnection. |
+| `turn` | TURN credential lifetime and transports. |
+| `webrtc` | Codec, interceptors, adaptive bitrate and viewer limits. |
+| `media` | GStreamer pipeline, optional source formats and pipeline allocation. |
+| `logging` | Verbosity. |
+| `quality` | Optional source presets. |
 
 ### Optional source quality presets
 
@@ -566,7 +573,7 @@ The main settings are:
 - `webrtc.adaptive.backend`, which selects the backend
 - `webrtc.adaptive.twccGCC.minBitrateKbps` and `maxBitrateKbps`, which define the allowed range (configuration accepts up to 50000 kbit/s; the qualified reference remains 2000–8000 kbit/s, and the optional quality profile uses 500–10000 kbit/s)
 - `webrtc.adaptive.twccGCC.updateInterval`, which sets how often bitrate changes may be applied
-- `webrtc.adaptive.twccGCC.changeThresholdPct` and `decreaseThresholdPct`, which keep small estimator fluctuations from reconfiguring the encoder; startup validation limits the decrease threshold to 33% under the 1.5× scheduling factor, independently of the FlexFEC ratio already included in the protected target. The reference profiles use immediate decreases (`0`)
+- `webrtc.adaptive.twccGCC.changeThresholdPct` and `decreaseThresholdPct` keep small estimator fluctuations from reconfiguring the encoder. Startup validation limits the decrease threshold to 33% under the 1.5× scheduling factor. The provisioning and FlexFEC reference profiles use immediate decreases (`0`). The NACK/RTX-only adaptive test-pattern profile uses `5`.
 - `webrtc.adaptive.twccGCC.maxIncreaseLossPct`, which prevents a delayed estimator increase from raising the encoder target while measured packet loss is still above the configured recovery threshold
 
 #### Choose an operating envelope

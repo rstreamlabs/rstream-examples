@@ -24,7 +24,8 @@ source.
 
 ## Open a tunnel and make a request
 
-Select a hosted project that allows HTTP publication. Use the endpoint
+Install the [rstream CLI](https://rstream.io/docs/getting-started/installation)
+and select a hosted project that allows HTTP publication. Use the endpoint
 printed by `rstream project list`.
 
 ```sh

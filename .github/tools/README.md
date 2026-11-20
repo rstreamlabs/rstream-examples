@@ -1,7 +1,7 @@
 # Go analysis tools
 
 The isolated module pins staticcheck and its `golang.org/x/tools` export-data
-reader for Go 1.27.2. From `webrtc-video/producer`, for example, run
+reader for Go 1.27.4. From `webrtc-video/producer`, for example, run
 `../../.github/scripts/staticcheck.sh ./...`. The wrapper
 builds from this lock file and analyzes the caller's module.
 

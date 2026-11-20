@@ -12,7 +12,7 @@ The producer owns capture, encoding, congestion response and source metrics in a
 
 ## Build and test both Go components
 
-From `webrtc-video`, use `make build` for the producer and adapter and `make verify` for their full checks. The Next.js application has [its own verification commands](platform/docs/003-testing.md).
+Install the [producer build dependencies](producer/docs/000-build.md#requirements) and the [distributor test dependencies](distributor/docs/004-testing.md#run-local-tests). From `webrtc-video`, run `make build` for both Go binaries or `make verify` for both local suites. Use the [platform testing guide](platform/docs/003-testing.md) for Next.js.
 
 | Task                                                              | Guide                                                                                                                                 |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |

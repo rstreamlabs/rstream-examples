@@ -10,6 +10,13 @@ level 3.1 in both the encoder and SDP. The manifest expects that resolution;
 stale prepared runtimes with a different resolution are rejected. Compare revisions at identical source settings. Frame-rate, freeze, QP,
 queue, recovery and network-loss gates are unchanged.
 
+| Task                                                          | Where to start                                                |
+| ------------------------------------------------------------- | ------------------------------------------------------------- |
+| Run one direct or TURN scenario                               | [Run one scenario](#run-one-scenario)                         |
+| Check an in-place restart after a producer address change     | [Qualify Trickle ICE mobility](#qualify-trickle-ice-mobility) |
+| Compare direct and relay delivery across both repair profiles | [Run the release matrix](#run-the-release-matrix)             |
+| Interpret the verdict and measurements                        | [Read one result](#read-one-result)                           |
+
 ## What the harness measures
 
 First-picture timing is recorded separately in `signaling-events.json` under
@@ -385,7 +392,9 @@ requires the measured target to remain below 250 ms.
 
 ## Run one scenario
 
-Requirements are Docker with `NET_ADMIN` support, Node.js, jq, and an
+Use Docker with `NET_ADMIN` support, Git, Node.js 24, jq and tar. Prepare the
+Linux host's [UDP socket limits](../../../distributor/docs/004-testing.md#technical-qualification)
+for relay signaling. Run these commands from `webrtc-video/producer` using an
 authenticated rstream CLI context. Go builds the context-preparation helper by
 default. A qualification host without Go can use the same audited helper as a
 prebuilt binary through `RSTREAM_QUALIFICATION_PREPARE_CONTEXT_BINARY`. The
@@ -462,6 +471,7 @@ docker context create video-producer \
 
 RSTREAM_QUALIFICATION_PATH=relay \
 RSTREAM_QUALIFICATION_PROTECTION=nack-rtx-flexfec \
+RSTREAM_CONTEXT=your-context \
 RSTREAM_QUALIFICATION_PRODUCER_DOCKER_CONTEXT=video-producer \
   ./qualification/adaptive-streaming/run.sh \
   ./qualification/adaptive-streaming/.artifacts/split-host-relay
@@ -510,9 +520,10 @@ the normal release matrix keeps one stable path per run.
 ## Run the release matrix
 
 The release-oriented command runs both paths and both protection profiles, then
-generates a single comparison report:
+generates a single comparison report. Use the same non-production context as for an individual relay scenario.
 
 ```bash
+RSTREAM_CONTEXT=your-context \
 RSTREAM_QUALIFICATION_REPETITIONS=3 \
   ./qualification/adaptive-streaming/run-matrix.sh
 ```

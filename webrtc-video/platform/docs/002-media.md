@@ -62,8 +62,9 @@ WebRTC session; replay still uses a separate MP4 decoder. Contiguous clips load 
 instead of silently jumping forward. Clip changes can introduce a short pause;
 this is not a seamless DVR. Hiding the page cancels the replay media load and
 index polling; returning restores the position paused, subject to retention.
-The dashboard exposes these controls while the device is online. Live
-resource/latency qualification remains pending.
+The dashboard exposes these controls while the device is online. The recording
+quality run checks replay and disk-full recovery. Measuring live overhead needs
+matched recording-enabled and recording-disabled runs. [Distribution testing](003-testing.md#qualify-the-complete-distribution-paths).
 
 For a separate deployment, configure MediaMTX as described in the
 [distributor recording section](../../distributor/docs/003-observability.md#optional-recent-recordings).
@@ -104,16 +105,7 @@ continues to detect a frame counter that stops advancing. Older browsers use
 the available playback counters.
 
 The native MediaMTX integration check requires the distributor's patched
-`mediamtx` 1.21.3 runtime (`make mediamtx` in `../distributor`), FFmpeg,
-FFprobe and the Playwright Chromium/Firefox/WebKit runtimes:
-
-```bash
-npm run test:mediamtx-recording
-```
-
-This checks recording authorization, idle-source behavior, actual H.264
-recording and MP4 decoding, and deletion after a short test retention period.
-It does not replace the live latency/resource and replay-UI qualification.
+`mediamtx` 1.21.3 runtime. Follow the [local testing commands](003-testing.md#validate-changes-locally) to build it, set `RSTREAM_MEDIAMTX_BINARY` and install the matching browsers. The check exercises recording authorization, idle-source behavior, H.264 recording and MP4 decoding, and deletion after a short test retention period.
 
 ## Optional source quality
 

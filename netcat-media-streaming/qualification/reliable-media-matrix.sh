@@ -10,7 +10,7 @@ output_directory="$(prepare_output_directory "${1:?output directory is required}
 go_binary="$(resolve_binary "${RSTREAM_GO_BIN:-}" rstream)"
 cpp_binary="$(resolve_binary "${RSTREAM_CPP_BIN:-}" rstream-ncat)"
 timeout_binary="$(resolve_timeout)"
-for command in ffmpeg gst-launch-1.0 shasum; do
+for command in ffmpeg grep gst-launch-1.0 shasum; do
   require_command "${command}"
 done
 validate_positive_integer RSTREAM_MEDIA_FRAMES "${media_frames}"
@@ -23,23 +23,30 @@ start_server() {
   local tunnel_name="$2"
   local media_command="$3"
   local log_path="$4"
+  local ready_message
   if [[ "${implementation}" == go ]]; then
-    "${context_environment[@]}" "${go_binary}" nc -L "rstrm://${tunnel_name}" \
+    ready_message='netcat server started'
+    "${context_environment[@]}" "${go_binary}" nc -v -L "rstrm://${tunnel_name}" \
       -c "${media_command}" >"${log_path}" 2>&1 &
   else
-    "${context_environment[@]}" "${cpp_binary}" --buffer-size=16 \
+    # The native acceptor starts locally before the Engine creates its tunnel.
+    ready_message='tunnel created successfully'
+    "${context_environment[@]}" "${cpp_binary}" -v --buffer-size=16 \
       -L "rstrm://${tunnel_name}?rstrm.publish=false&rstrm.protocol=tls" \
       -c "${media_command}" --jobs=4 >"${log_path}" 2>&1 &
   fi
   server_pid=$!
   register_pid "${server_pid}"
-  sleep 3
-  if ! kill -0 "${server_pid}" 2>/dev/null; then
-    wait "${server_pid}" || true
-    forget_pid "${server_pid}"
-    server_pid=""
-    return 1
-  fi
+  local deadline=$((SECONDS + 20))
+  while kill -0 "${server_pid}" 2>/dev/null && ((SECONDS < deadline)); do
+    if grep -Fqs -- "${ready_message}" "${log_path}"; then
+      return 0
+    fi
+    sleep 0.1
+  done
+  stop_pid "${server_pid}" INT || true
+  server_pid=""
+  return 1
 }
 
 stop_server() {
@@ -55,12 +62,13 @@ stop_server() {
 run_client() {
   local implementation="$1"
   local tunnel_name="$2"
+  # Keep stdin EOF from closing the write side of a receive-only tunnel.
   if [[ "${implementation}" == go ]]; then
-    "${context_environment[@]}" "${go_binary}" nc "rstrm://${tunnel_name}"
-	else
-		"${context_environment[@]}" "${cpp_binary}" --buffer-size=16 \
-			"rstrm://${tunnel_name}" -I --jobs=4
-	fi
+    "${context_environment[@]}" "${go_binary}" nc -I "rstrm://${tunnel_name}"
+  else
+    "${context_environment[@]}" "${cpp_binary}" --buffer-size=16 \
+      "rstrm://${tunnel_name}" -I --jobs=4
+  fi
 }
 
 run_ffmpeg_case() {

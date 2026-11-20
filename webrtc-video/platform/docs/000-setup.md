@@ -2,25 +2,34 @@
 
 Return to the [platform overview](../README.md) for the application path. Run commands from `webrtc-video/platform`, unless a step changes directory.
 
+| Task                                       | Where to start                                                                                                                                         |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Prepare an application and producer        | [Setup](#setup), [rstream project setup](#rstream-project-setup), [Run a producer](#run-a-producer)                                                    |
+| Share devices or discover existing tunnels | [Personal or organization access](#select-personal-or-organization-access), [Managed or discovered inventory](#select-managed-or-discovered-inventory) |
+| Share an uplink between viewers            | [Distribution backend](#select-the-distribution-backend), [Local MediaMTX stack](#run-the-complete-local-mediamtx-stack)                               |
+| Check the edge credential lifecycle        | [Edge authentication qualification](#edge-authentication-qualification)                                                                                |
+
 ## Setup
 
 Start with a dedicated PostgreSQL database and create `.env.local` from [`.env.example`](../.env.example). Follow the [platform quick start](../README.md#run-the-application) to install, apply the migrations and launch the application. The integration suite uses PostgreSQL 17 in disposable containers.
 
-| Variable                                     | Value for the local application                                                                                                 |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `POSTGRES_PRISMA_POOL_URL`                   | Pooled connection URL for application queries. With local PostgreSQL you can use its direct URL for both fields.                |
-| `POSTGRES_PRISMA_DIRECT_URL`                 | Direct connection URL for Prisma migrations.                                                                                    |
-| `NEXTAUTH_URL`                               | `http://localhost:3000`. Use `http://localhost:3000/api/auth/callback/github` as the GitHub OAuth callback.                     |
-| `NEXTAUTH_SECRET`                            | A random application secret. Generate one with `openssl rand -hex 32`.                                                          |
-| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`   | Client credentials for the GitHub OAuth application.                                                                            |
-| `RSTREAM_CLIENT_ID`, `RSTREAM_CLIENT_SECRET` | Client ID and hex-encoded secret of the server-side rstream application credential.                                             |
-| `RSTREAM_PROJECT_ENDPOINT`                   | Endpoint for the rstream project. Required for engine and TURN discovery.                                                       |
-| `RSTREAM_PROJECT_ID`                         | Optional explicit project scope for minted tokens. Must match the resolved project when set. Required for discovered inventory. |
-| `RSTREAM_TURN_KEYRING_BASE_URL`              | Optional public HTTPS origin that serves the TURN key when an interactive access gateway protects `RSTREAM_API_URL`.            |
-| `RSTREAM_WEBHOOK_SIGNING_SECRET`             | Signing secret for managed tunnel lifecycle webhooks. Set it when configuring [webhook delivery](#rstream-project-setup).       |
-| `WATCH_TOKEN_TTL_SECONDS`                    | `120` by default for a dashboard watch token.                                                                                   |
-| `DEMO_CLEANUP_ENABLED`                       | `false` for development and organization use.                                                                                   |
-| `CRON_SECRET`                                | Random secret for authenticated cleanup jobs if enabled.                                                                        |
+| Variable                                               | Value for the local application                                                                                                 |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `POSTGRES_PRISMA_POOL_URL`                             | Pooled connection URL for application queries. With local PostgreSQL you can use its direct URL for both fields.                |
+| `POSTGRES_PRISMA_DIRECT_URL`                           | Direct connection URL for Prisma migrations.                                                                                    |
+| `NEXTAUTH_URL`                                         | `http://localhost:3000`. Use `http://localhost:3000/api/auth/callback/github` as the GitHub OAuth callback.                     |
+| `NEXTAUTH_SECRET`                                      | A random application secret. Generate one with `openssl rand -hex 32`.                                                          |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`             | Client credentials for the GitHub OAuth application.                                                                            |
+| `RSTREAM_CLIENT_ID`, `RSTREAM_CLIENT_SECRET`           | Client ID and hex-encoded secret of the server-side rstream application credential.                                             |
+| `RSTREAM_PROJECT_ENDPOINT`                             | Endpoint for the rstream project. Required for engine and TURN discovery.                                                       |
+| `RSTREAM_PROJECT_ID`                                   | Optional explicit project scope for minted tokens. Must match the resolved project when set. Required for discovered inventory. |
+| `RSTREAM_TURN_KEYRING_BASE_URL`                        | Optional public HTTPS origin that serves the TURN key when an interactive access gateway protects `RSTREAM_API_URL`.            |
+| `RSTREAM_WEBHOOK_SIGNING_SECRET`                       | Signing secret for managed tunnel lifecycle webhooks. Set it when configuring [webhook delivery](#rstream-project-setup).       |
+| `WATCH_TOKEN_TTL_SECONDS`                              | `120` by default for a dashboard watch token.                                                                                   |
+| `DEMO_CLEANUP_ENABLED`                                 | `false` for development and organization use.                                                                                   |
+| `CRON_SECRET`                                          | Random secret for authenticated cleanup jobs if enabled.                                                                        |
+| `DEVICE_TOKEN_TTL_SECONDS`, `VIEWER_TOKEN_TTL_SECONDS` | Default to `300` for producer publication and `120` for viewer authorization.                                                   |
+| `TURN_CREDENTIAL_TTL_SECONDS`                          | `600` by default. Supported range is 90–3600 seconds.                                                                           |
 
 The server derives application TURN credentials locally using the public key for the selected realm. It requests the key from `RSTREAM_API_URL` by default, rejects redirects and validates the bounded DER key before use.
 
@@ -58,8 +67,8 @@ Apply `npm run prisma:deploy` before starting the upgraded application. The
 migration keeps existing personal devices private and adds a database constraint
 requiring exactly one owner. Changing the environment switches the visible
 inventory; it does not copy or reassign devices. Restart the application after
-configuration changes. Device limits are serialized in PostgreSQL per owner;
-Application database connections and pool acquisition time out after five seconds;
+configuration changes. Device limits are serialized in PostgreSQL per owner.
+Application database connections and pool acquisition time out after five seconds.
 PostgreSQL statements have a five-second server limit with a six-second client
 deadline. Idle transactions terminate after ten seconds. Migration connections
 use the separate direct URL and do not inherit these application limits.
@@ -236,9 +245,21 @@ real expiry and renewal.
 
 Use a dedicated rstream project for this sample. Create an application token scoped to that project and store its client id and secret in the Next.js environment.
 
-The app token is used server-side only. It creates short-lived producer tokens, viewer tokens, TURN credentials, and dashboard watch tokens. Devices and browsers should never receive the application client secret. Dashboard watch tokens are minted on demand because browser watch streams send them as `rstream.token` query values to the engine streaming endpoint; they use explicit read-only watch permissions plus list-only tunnel resources filtered to the signed-in user's devices.
+Keep the credential on the Next.js server. The app signs scoped producer, viewer and dashboard watch tokens and derives TURN credentials locally for the same project.
 
-Create a webhook destination for the same project:
+| Permission                      | Use                                                                       |
+| ------------------------------- | ------------------------------------------------------------------------- |
+| `account.projects.read-only`    | Resolve the project endpoint.                                             |
+| `tunnels.tunnels.create-delete` | Provision the device's published HTTP tunnel.                             |
+| `tunnels.streams.create-delete` | Authorize WHEP and source-control requests for one device.                |
+| `tunnels.resources.read-only`   | Read inventory and issue list-only dashboard watch tokens.                |
+| `turn.relay.allocate`           | Allow relay allocation with locally derived application TURN credentials. |
+
+Dashboard watch streams send their short-lived token as the `rstream.token` query value. The token authorizes listing only the signed-in user's device tunnels. See [rstream TURN authentication](https://rstream.io/docs/integrations/stun-turn).
+
+#### Optional lifecycle webhooks
+
+The dashboard reads live presence from tunnel inventory. Configure a webhook to retain managed-device lifecycle timestamps. Create a destination for the same project.
 
 | Field            | Value                                                           |
 | ---------------- | --------------------------------------------------------------- |
@@ -272,6 +293,6 @@ The sample always mints short-lived tokens with tunnel resources. Producer token
 
 For a production-style run after the database migrations, use `npm run build` and `npm run start`. Use `npm run prisma:migrate` when changing the database schema and creating a development migration.
 
-## Run a Producer
+## Run a producer
 
 Build and launch the device using the [platform quick start](../README.md#run-the-application). The provisioning profile uses H.264 with a 2–8 Mbit/s adaptive encoder, bounded pacing, NACK/RTX and one FlexFEC repair packet per five media packets. It admits one source session, owned by either the browser or the MediaMTX adapter. The producer receives a scoped tunnel token through the platform and serves the WHEP and control endpoints used by the dashboard.

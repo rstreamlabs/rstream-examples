@@ -28,19 +28,19 @@ exec gst-launch-1.0 --no-position \
 Dial `rstrm://demo-ts` from the consumer to decode and display the stream.
 
 ```sh
-rstream nc rstrm://demo-ts | \
+rstream nc -I rstrm://demo-ts | \
   gst-launch-1.0 --no-position \
   fdsrc fd=0 ! tsdemux ! queue ! h264parse ! avdec_h264 ! \
   videoconvert ! autovideosink sync=false
 ```
 
-The consumer opens a window with SMPTE color bars. The tunnel carries an ordered byte stream and starts a fresh encoder process for each connection. Press `Ctrl-C` in both terminals when finished.
+The consumer opens a window with SMPTE color bars. The `-I` option puts the consumer in receive-only mode, so closed standard input does not end a C++ producer's command. The tunnel carries an ordered byte stream and starts a fresh encoder process for each connection. Press `Ctrl-C` in both terminals when finished.
 
 ## Choose a media path
 
 | Path                    | Use it for                                                                                                              | Client and procedure                                                                                                                                          |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Reliable MPEG-TS        | Preserve every byte in order.                                                                                           | Go `rstream nc` as above, or C++ `rstream-ncat`. Both clients work with the [FFmpeg recipes](https://rstream.io/guides/stream-video-with-ffmpeg-and-rstream). |
+| Reliable MPEG-TS        | Preserve every byte in order.                                                                                           | Go `rstream nc` and C++ `rstream-ncat` work in both directions with receive-only consumers. See the [reliable media matrix](qualification/README.md#profiles-and-acceptance-criteria) for the FFmpeg and GStreamer checks. |
 | Best-effort RTP         | Deliver newer packets without waiting for older missing packets.                                                        | Go `rstream nc -u`. See [Send RTP datagrams](#send-rtp-datagrams).                                                                                            |
 | Guaranteed datagrams    | Preserve packet boundaries where complete delivery takes priority over recovering the latest frames quickly.            | Go `rstream nc -u` with `--datagram-guaranteed-delivery` on the listener. See the [qualification profile](qualification/README.md).                           |
 | Bidirectional RTCP/NACK | Request missing packets while they are useful to the receiver.                                                          | Go `rstream nc -u`. See the [GStreamer guide](https://rstream.io/guides/stream-video-with-gstreamer-and-rstream).                                             |
