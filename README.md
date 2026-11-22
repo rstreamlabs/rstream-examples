@@ -1,156 +1,52 @@
-# rstream examples
+# rstream application examples
 
-This repository contains end-to-end examples built around `rstream`.
+rstream connects services and devices through outbound tunnels. This
+repository shows where that connection fits in an application, from
+serving one HTTP handler to routing requests across a private worker pool
+or distributing live video.
 
-Each example shows a complete integration path and provides a base that can be adapted to an actual device, service, or deployment. The focus is on runnable architectures, operational behavior, packaging, and integration with the rest of the application stack.
-
-## Repository layout
-
-The repository currently includes the following examples:
-
-| Directory                       | What it shows                                                                                                                                                                                                                                                 |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cpp-beast-rstream-tunnel`      | A native C++ Boost.Beast HTTP server that creates a published rstream HTTP tunnel with the C++ SDK and accepts inbound requests as `rstream::io_rstrm::socket` streams.                                                                                      |
-| `python-fastapi-rstream-tunnel` | A FastAPI application served directly through a published rstream HTTP tunnel with the Python SDK, including an edge token-auth mode and a private variant consumed over a raw rstream dial.                                                                  |
-| `homelab-rstream`               | A Docker-based homelab monitoring stack that publishes Grafana from Docker labels, keeps Prometheus private, and uses labels for inventory.                                                                                                                 |
-| `nextjs-rstream-preview`        | A standard Next.js App Router application with a signed webhook endpoint and an advanced SDK tunnel mode that serves a custom Next.js HTTP server directly through rstream while preserving the normal `next dev` and `next start` commands.                  |
-| `netcat-media-streaming`        | Minimal GStreamer and FFmpeg pipelines over `rstream nc`, with reliable MPEG-TS, low-latency RTP datagrams, bidirectional RTCP repair, Go/C++ interoperability, and reproducible media qualification.                                                       |
-| `private-llm-mesh`              | A private LLM mesh with a Next.js chat app, live tunnel discovery, scoped worker tokens, and Go workers that embed llama.cpp to serve local OpenAI-compatible models over rstream.                                                                           |
-| `private-masque-egress-gateway` | A private MASQUE egress gateway that publishes a rstream HTTP/3 endpoint and serves plain `CONNECT` for TCP plus `CONNECT-UDP` for UDP/QUIC, with conservative target policy, auth, metrics, and Apple Relay profile generation.                              |
-| `private-postgres-access`       | A private bytestream tunnel pattern for PostgreSQL, using `rstream nc` to connect local tools, migrations, or CI jobs to a database that stays inside a private network without a VPN.                                                                        |
-| `published-tcp-ssh`             | An OpenSSH server kept on a private Compose network and exposed through an ephemeral published TCP address, with public-key authentication and no host port mapping.                                                                                         |
-| `python-vision-inference`       | An edge vision workload split across `device/` and `worker/` roles with the Python SDK: devices stream frames to private YOLO inference workers discovered through tunnel labels and the real-time watch API, with live failover and a published annotated viewer. |
-| `webrtc-video`                  | Adaptive WebRTC with a Go device producer, personal or shared-organization access, provisioned or discovered inventory, and optional MediaMTX distribution through a Next.js platform. |
-
-Each example directory contains its own README with the platform-specific setup, configuration profiles, build commands, and operational notes required by that example.
-
-## Coordinated SDK qualification
-
-The video platform, Next.js preview and mesh web app install published SDKs
-with `npm ci`. CI runs their tests from the checked-in lockfiles with a fresh
-npm cache.
-
-To verify a retained SDK release archive against the video platform lockfile,
-run this command from the repository root. Use `nextjs-rstream-preview` or
-`private-llm-mesh/web` to check the other examples.
+Get the source with Git.
 
 ```sh
-node .github/scripts/sdk-candidate.mjs webrtc-video/platform /path/to/original-artifact.zip
+git clone https://github.com/rstreamlabs/rstream-examples.git
+cd rstream-examples
 ```
 
-The helper checks the archive against the source and checksum in
-`.github/sdk-candidate.json` and verifies each SDK package against the
-example's lockfile.
+For a first tunnel, start with [FastAPI](python-fastapi-rstream-tunnel).
+Each directory gives its prerequisites, run commands and expected result.
+See [prepare access](docs/000-running-examples.md) to choose between a
+hosted project, a direct Engine and local fixtures.
 
-## Examples and qualification packs
+## Serve a web application
 
-Every example has two deliberately separate layers:
+| Example | What you can run |
+| --- | --- |
+| [FastAPI](python-fastapi-rstream-tunnel) | Serve an async Python application over HTTP, then add caller authentication or dial it privately. |
+| [Boost.Beast](cpp-beast-rstream-tunnel) | Run a C++ coroutine HTTP server on Asio tunnel sockets. |
+| [Next.js preview](nextjs-rstream-preview) | Publish a self-hosted Node app and receive a signed webhook. |
 
-- the main README and implementation are the shortest production-shaped path
-  to understand and run the use case;
-- an optional `qualification/` directory contains controlled failure scenarios,
-  load tests, benchmarks, analyzers, and reproducible evidence.
+## Reach an existing service
 
-You never need the qualification harness to try an example. Its extra tooling
-exists to answer harder questions: how a stream reacts to loss, whether routing
-remains fair under saturation, whether cancellation leaks work, or how quickly a
-service recovers after a dependency disappears. Keeping that machinery beside
-the implementation makes the claims inspectable without turning the quick start
-into a test laboratory.
+| Example | What you can run |
+| --- | --- |
+| [Homelab services](homelab-rstream) | Publish a Grafana dashboard and keep selected Docker services private. |
+| [Private PostgreSQL](private-postgres-access) | Connect standard database tools through a local relay and a private tunnel. |
+| [SSH over TCP](published-tcp-ssh) | Reach an SSH server via a published TCP address using public-key authentication. |
+| [Private egress gateway](private-masque-egress-gateway) | Route TCP or UDP through an authenticated gateway with explicit destination policy. |
 
-A qualification pack records the exact repository revision, relevant runtime
-and environment versions, test parameters, explicit acceptance thresholds, raw
-measurements, and a compact human-readable report. High-volume logs stay in CI
-artifacts; portable CSV or JSON summaries, their generator, and useful SVG
-charts may be versioned with the example. A passing result qualifies only the
-pinned code and environment recorded in its manifest, not every possible
-deployment.
+## Connect workers and media sources
 
-[`QUALIFICATION.md`](./QUALIFICATION.md) defines the common evidence contract,
-the review gate, and the minimum failure and performance scenarios for every
-use case. Individual packs keep their scenario-specific thresholds beside the
-sample they qualify.
+| Example | What you can run |
+| --- | --- |
+| [Private LLM mesh](private-llm-mesh) | Stream inference from a local-model worker, then discover and route across a pool. |
+| [Vision inference](python-vision-inference) | Send frames to private inference workers and render detections at the edge. |
+| [WebRTC video](webrtc-video) | View a camera stream in a browser and add a distributor for more viewers. |
+| [Netcat media](netcat-media-streaming) | Deliver GStreamer or FFmpeg media over rstream streams and datagrams. |
 
-## Integration postures
+## Contributing and security
 
-The examples do not all place `rstream` authority in the same part of the
-architecture. That is intentional: depending on the product shape, `rstream` can
-be abstracted behind an application backend, or it can remain explicit on the
-process running on a device, worker, or homelab machine.
-
-| Posture | Cloud application / backend | Device, worker, or homelab process |
-| ------- | --------------------------- | ---------------------------------- |
-| Application-provisioned runtime | The backend owns the rstream application credentials, knows the target project, mints short-lived scoped tokens, and exposes a product API. | The remote process has no local rstream context. It receives a product secret and fetches its rstream runtime configuration when it starts. |
-| Self-managed rstream runtime | A backend may still use rstream for discovery, authorization, or routing, but it does not necessarily provision the runtime identity of each agent. | The remote process carries its own rstream context through the CLI, local config, or injected environment variables such as an engine address and token. |
-
-The application-provisioned posture is shown by `webrtc-video/platform` with the
-producer provisioning profile. The producer does not run `rstream login`, does
-not select a project locally, and does not handle long-lived rstream
-credentials. It only knows the platform URL and a `DEVICE_SECRET`; the platform
-returns the short-lived rstream configuration required to create exactly the
-producer tunnel and to refresh TURN credentials.
-
-This can be the right shape for a SaaS product, a multi-device platform, or an
-onboarding flow where rstream should be hidden behind domain-specific product
-concepts. It avoids project-selection mistakes on devices and centralizes
-authorization in the backend. The tradeoff is that the product must operate a
-provisioning layer: application credentials, device secrets, rotation,
-revocation, auditing, and failure handling when a device cannot reach the
-product API.
-
-The self-managed runtime posture is used by most other examples. The process on
-the remote machine creates or dials tunnels with its own rstream context, using
-`rstream login` / `rstream project use`, a config file, or injected runtime
-credentials. This is often simpler for labs, homelabs, internal fleets,
-infrastructure tools, and examples that focus directly on SDK or CLI
-primitives. It also keeps the runtime flexible: changing the active project or
-environment is an operational decision made where the process runs, and
-debugging can use the same CLI context as the application. The tradeoff is that
-rstream is less abstracted from the machine: every host must be provisioned
-carefully, host credentials must be protected, and the active project must be
-intentional. That mobility is useful for operators, but it can be a source of
-mistakes in a product meant for unmanaged devices.
-
-The video platform also supports [shared organization access and discovered
-inventory](./webrtc-video/platform/README.md#select-managed-or-discovered-inventory).
-In discovery mode, producers use their existing CLI project credentials and
-appear automatically from labeled video tunnels, including an optional device
-name. Inventory history is optional; PostgreSQL still stores authentication
-accounts and sessions. Organization access can also retain managed provisioning.
-
-`private-llm-mesh` combines the two ideas without introducing a third posture.
-The web application is rstream-aware: it uses application credentials to watch
-the worker pool, discover workers, and mint short-lived tokens for calls to a
-selected worker. The workers themselves join the pool with their own runtime
-rstream context. This keeps the application in control of request routing while
-letting each compute machine remain an autonomous rstream runtime participant.
-
-## Getting started
-
-For self-managed runtime examples, start by installing the CLI, creating an
-account, creating a project, and selecting that project locally.
-
-```bash
-rstream login
-rstream project use <project-endpoint> --default
-```
-
-Once the local context is in place, move into the example directory you want to
-run and follow its README. Application-provisioned examples document their own
-backend credentials and device secret flow instead.
-
-```bash
-cd webrtc-video
-```
-
-## Design goals
-
-The examples in this repository follow a few simple rules:
-
-- keep the code small enough to read and modify
-- keep the architecture close to a real deployment
-- prefer standard interfaces and idiomatic integrations
-- make packaging and deployment paths explicit when they matter
-- turn important performance and resilience claims into reproducible evidence
-
-In practice, that means an example may still be compact while handling the kinds of issues that appear quickly on real systems, such as disconnects, media-pipeline failures, or deployment on machines without a local toolchain.
+See [Contributing](CONTRIBUTING.md) for development and verification.
+Open a [GitHub issue](https://github.com/rstreamlabs/rstream-examples/issues)
+for usage questions or reproducible bugs. Follow the [security
+policy](SECURITY.md) for vulnerability reports. The examples are licensed
+under [Apache-2.0](LICENSE).

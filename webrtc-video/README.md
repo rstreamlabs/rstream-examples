@@ -1,94 +1,24 @@
 # Adaptive real-time WebRTC video
 
-Builds use a verified temporary ICE concurrency patch. Applications derived
-from this sample must also adopt its build step; see the [ICE patch guide](./ICE-PATCH.md).
+Stream a remote device to a browser. The Go producer captures and encodes with GStreamer, handles congestion feedback and retransmission, and publishes WebRTC signaling through an outbound rstream tunnel. ICE establishes the media path directly or through TURN.
 
-This reference implementation covers the path from a remote video source to a
-browser-facing product. The device adapts its encoder to live congestion,
-bounds sender queues, repairs recent packet loss, and keeps the WebRTC session
-recoverable as network paths change. rstream publishes the WHEP control
-surface through an outbound tunnel and supplies managed STUN/TURN connectivity;
-media remains a standard WebRTC session between the device and viewer.
+| If you want to                               | Start here                                                             | First result                                                           |
+| -------------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Stream a device to a browser                 | [Producer quick start](producer/README.md#quick-start)                 | The embedded viewer plays a 720p H.264 test pattern from the producer. |
+| Give signed-in users access to their devices | [Platform quick start](platform/README.md#run-the-application)         | A provisioned device comes online and plays in the Next.js dashboard.  |
+| Serve several viewers over one device uplink | [Distributor quick start](distributor/README.md#run-with-the-platform) | Two browser sessions view one device through MediaMTX.                 |
 
-## One media core, three delivery paths
+The producer owns capture, encoding, congestion response and source metrics in all three paths. The platform owns authentication, device inventory and scoped credentials. MediaMTX distributes one rendition through independent downstream sessions. The adapter and native-pull options have different repair and source-control features. See [distribution profiles](distributor/docs/000-profiles.md).
 
-Every integration builds the Go code in [`producer/`](./producer/). Capture,
-encoding, congestion control, pacing, repair, recovery, and OpenMetrics remain
-one device-side implementation while control and distribution evolve around
-it.
+## Build and test both Go components
 
-- The [standalone guide](https://rstream.io/guides/build-device-to-browser-webrtc-streaming-with-rstream)
-  qualifies one WebRTC session between the producer and a browser.
-- The [Next.js guide](https://rstream.io/guides/integrate-webrtc-video-streaming-into-a-nextjs-platform-with-rstream)
-  runs the same producer in provisioning mode and adds product identity,
-  authorization, and fleet state around that session.
-- The [MediaMTX guide](https://rstream.io/guides/distribute-webrtc-video-with-mediamtx-and-rstream)
-  adds an on-demand distribution backend. One adaptive upstream feeds multi-viewer fan-out while direct
-  WebRTC remains available for one-to-one delivery and transport diagnosis.
+Install the [producer build dependencies](producer/docs/000-build.md#requirements) and the [distributor test dependencies](distributor/docs/004-testing.md#run-local-tests). From `webrtc-video`, run `make build` for both Go binaries or `make verify` for both local suites. Use the [platform testing guide](platform/docs/003-testing.md) for Next.js.
 
-In fan-out mode, the producer controls and measures the device-to-MediaMTX
-upstream. MediaMTX and browser telemetry describe each downstream. Keeping
-those congestion domains explicit preserves useful diagnosis as the delivery
-architecture grows.
-
-The implementation is split by responsibility:
-
-- [`producer/`](./producer/) is the Go device agent. It captures with
-  GStreamer, serves WHEP and diagnostics, controls Pion WebRTC, and owns
-  the adaptive media loop and producer-side OpenMetrics exporter.
-- [`platform/`](./platform/) is the Next.js product layer. It provisions
-  devices, issues scoped producer and viewer access, and exposes live tunnel
-  state without proxying the live media session. It supports personal or shared
-  organization access and, for organizations, automatic discovery of labeled
-  project tunnels with optional inventory history.
-- [`distributor/`](./distributor/) is the optional MediaMTX backend. It opens
-  one strict producer WHEP session on first demand and republishes a repaired
-  H.264 stream within the configured viewer limit. An optional
-  [recent-recording mode](./platform/README.md#optional-recent-recordings)
-  provides authorized, bounded MP4 replay and timeline controls in the platform;
-  recording remains off by default.
-
-## Qualified reference path
-
-The following results belong to the historical `ca8a308` 1080p30 revision.
-Current H.264 browser examples use 720p30 with matching level 3.1 encoder/SDP
-limits; the earlier examples produced level 4 while advertising 3.1. The
-historical matrix remains useful as a transport record, but does not establish
-codec conformance or qualify the revised source profile.
-
-![Adaptive 1080p30 response under controlled congestion](./producer/qualification/evidence/ca8a308/direct-reference/adaptive-bitrate.svg)
-
-The selected matrix contains three direct and three forced-rstream-relay runs
-for both NACK/RTX and NACK/RTX/FlexFEC. Every run uses the same clean producer
-revision and the same controlled 4 Mbit/s, 120 ms one-way delay, 30 ms jitter,
-and 2% loss profile. The full protection profile passed all six release runs.
-
-Under impairment, its direct median was 29.9 fps with 0.6% frozen time; the
-relay median was 29.6 fps with 3.6% frozen time. Average H.264 QP remained 31.5
-direct and 31.4 through the relay. The NACK/RTX-only relay baseline reached
-16.2% median frozen time, making the gain from bounded proactive protection
-visible rather than assumed.
-
-The [qualification record](./producer/qualification/evidence/ca8a308/report.md)
-contains the selected matrix, synchronized network, sender, playback, and
-transport time series, mobility evidence, every automated gate, and the
-rejected-run register.
-
-The root `make build`, `make test`, `make verify`, and `make clean` targets cover
-both Go roles. `make run` starts the producer. The
-[producer README](./producer/README.md) starts with the standalone path and
-continues through the congestion, repair, mobility, and qualification model.
-
-Use Node.js 24 to run the platform directly with npm:
-
-```bash
-cd platform
-npm ci
-cp .env.example .env.local
-# Fill PostgreSQL, GitHub OAuth, NextAuth, and rstream settings in .env.local.
-npm run prisma:deploy
-npm run dev
-```
-
-`prisma:deploy` applies the committed migrations. Use `prisma:migrate` when
-intentionally developing a schema change.
+| Task                                                              | Guide                                                                                                                                 |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Install media dependencies and package the producer               | [Build the producer](producer/docs/000-build.md)                                                                                      |
+| Choose a capture source, codec or adaptation policy               | [Producer configuration](producer/docs/001-configuration.md)                                                                          |
+| Set up organization access or discover existing devices           | [Platform setup](platform/docs/000-setup.md)                                                                                          |
+| Add a separate distributor host                                   | [Distributor setup](distributor/docs/001-setup.md)                                                                                    |
+| Enable recent recordings, distribution metrics or source controls | [Platform media capabilities](platform/docs/002-media.md)                                                                             |
+| Exercise network impairment, recovery and fan-out                 | [Producer qualification](producer/qualification/adaptive-streaming/README.md), [Distributor testing](distributor/docs/004-testing.md) |

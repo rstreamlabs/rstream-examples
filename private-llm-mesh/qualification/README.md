@@ -1,44 +1,35 @@
-# Private LLM mesh qualification
+# Qualify the private LLM mesh
 
-This pack tests the worker pool at two boundaries. The local profile exercises
-the application and worker with a pinned GGUF model. The live profile drives
-the same UI stream used by the browser through Next.js, scoped-token minting,
-rstream, and multiple independent workers.
+The local profile exercises the web app and the embedded model runtime
+without a hosted account. The optional live profile sends turns through the
+same Next.js streaming route as the chat UI.
 
-## Local qualification
+## Local model and lifecycle checks
 
-Use an exact GGUF file. The runner hashes it into the manifest, owns every child
-process, applies a timeout to every phase, and writes raw logs plus Markdown,
-JSON, and SVG evidence under `qualification/results/`.
+Install the [web](../web/README.md) and [worker](../worker/README.md)
+prerequisites plus Python 3. Install the web dependencies with
+`npx --yes npm@11.19.1 ci` in `web/` before launching the runner. From
+`private-llm-mesh`, pass an exact GGUF file for a model with structured tool
+support, such as the `qwen3:4b` build in the worker's model guide.
 
 ```bash
-cd private-llm-mesh
-python3 qualification/run.py \
-  --model "$HOME/Library/Caches/private-llm-mesh/models/<repo>/<model>.gguf"
+python3 qualification/run.py --model /absolute/path/to/model.gguf
 ```
 
-Acceptance requires all of the following:
+The local profile runs the web and worker verification commands, repeats
+race-enabled admission and shutdown tests 100 times, and tests real-model
+text, structured tool calls, concurrent HTTP, active cancellation,
+saturation, and concurrent close with and without Go's race detector.
 
-- web lint, type checking, unit tests, production build, and dependency audit;
-- worker formatting, vet, unit tests, race tests, build, static analysis, and
-  vulnerability scan;
-- 100 repeated race-enabled admission/shutdown lifecycle tests;
-- real-model text, structured tool-call, concurrent HTTP, active cancellation,
-  saturation, and concurrent-close tests, both normally and with Go's race
-  detector;
-- no credential-shaped value in the resulting evidence.
+## Live worker pool checks
 
-The local profile qualifies application and worker semantics. Deployed routing
-and worker-pool behavior belong to the live profile.
-
-## Live mesh qualification
-
-Run the app with `AUTH_DISABLED=true` only in a controlled qualification
-environment, start at least two equivalent workers, then add:
+Start a loopback Next.js app with `AUTH_DISABLED=true` and at least two
+equivalent workers that advertise the same model ID. Use an isolated hosted
+project for the run. From `private-llm-mesh`:
 
 ```bash
 python3 qualification/run.py \
-  --model /absolute/path/model.gguf \
+  --model /absolute/path/to/model.gguf \
   --base-url http://127.0.0.1:3000 \
   --live-model qwen3:4b \
   --turns 60 \
@@ -47,31 +38,23 @@ python3 qualification/run.py \
   --max-worker-share 0.65
 ```
 
-The live driver parses every UI stream. A response passes only when it identifies
-its worker, contains text or structured tool output, ends with the protocol
-terminator, and contains no error part. The default profile allows no failed
-turn, requires at least two workers, and caps the largest worker share at 65%.
-Latency ceilings become verdict gates when supplied with `--max-ttft-p95-ms`
-and `--max-total-p95-ms`; otherwise the report records latency without treating
-it as a portable SLO.
+Each turn must identify its worker, contain text or structured tool output,
+reach the stream terminator, and contain no error part. The defaults allow
+zero failed turns, require at least two workers, and cap the largest worker
+share at 65%. Use `--max-ttft-p95-ms` and `--max-total-p95-ms` for latency
+budgets chosen for this model, workload, and environment.
 
-Pre-start worker loss is safe to retry against another eligible worker. Once a
-model request has started, the app does not replay it because an agent turn may
-already have executed a tool. A fully automated loss-and-recovery gate requires
-the harness to own the worker processes and timestamp their lifecycle. The
-current committed record uses controlled stop and restart boundaries and is
-explicitly limited to routing behavior within those phases.
+The driver uses the workers you started. To observe loss and recovery, run
+separate controlled phases with the online pool and pause or restart workers
+between them. Set the worker count and distribution thresholds for each
+phase. Those runs verify routing within each phase. Measuring failure
+detection requires recording the worker lifecycle and the app's observations
+on a shared timeline. The app can retry auto-selection before dispatch, and
+after dispatch it avoids replaying turns that may already have executed tools.
 
-## Reading the evidence
+## Output
 
-`report.md` states the scope, method, thresholds, and result. `live.json`,
-`degraded.json`, and `recovery.json` retain the worker attribution and timing for
-each turn. The manifest pins the repository revision, model hash, runtime
-versions, parameters, and thresholds.
-
-A report from a dirty worktree is diagnostic only. Commit-worthy evidence must
-be rerun on the clean revision it claims to qualify.
-
-Compact results from clean runs live in [`evidence/`](evidence). They retain the
-model hash, runtime manifest, thresholds, per-turn measurements, and the useful
-lifecycle view while keeping prompts and model output outside the repository.
+Use `--output` to select a new local output directory. By default the runner
+uses `qualification/results/`. Retain the revision, model hash, runtime
+versions, workload, and thresholds with any result. See the shared
+[testing guide](../../docs/001-testing.md).

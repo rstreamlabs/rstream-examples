@@ -1,155 +1,79 @@
-# private-llm-mesh
+# Private LLM mesh
 
-private-llm-mesh is a chat application whose inference stays on machines you control. Open models run on your own hardware, whether a workstation, a laptop, or a GPU server, and a Next.js application reaches them over rstream. No machine needs a public address or an inbound port, and the weights never leave your infrastructure while the front end deploys to Vercel.
+Run a Next.js chat app on your laptop and stream a response from a model running on the same laptop or another machine you control. Workers join a pool as they start. The app discovers them through rstream, routes chat turns, and shows which worker answered.
 
-Each worker is a single program you run on a machine that holds a model. It loads the model in-process, serves an OpenAI-compatible API, and creates a published, token-protected tunnel that serves as its entry in the mesh. The application discovers the pool from the tunnel registry, routes each message across the available workers, runs the agent turn against the selected worker over rstream, and streams the response back to the browser. Adding capacity is a matter of starting another worker, which joins the pool as soon as it connects.
+The browser talks to Next.js. The model runs on the worker, which opens an outbound connection to rstream and serves an OpenAI-compatible API through a token-protected HTTPS endpoint at the edge. The worker machine needs no inbound port. Model weights stay on the worker. Prompts travel through the app and rstream to the selected worker.
 
-A companion guide walks through the architecture and the rstream integration in detail: [Build a Private LLM Mesh with rstream](https://rstream.io/guides/build-a-private-llm-mesh-with-rstream).
+## Before you start
 
-## Architecture
+| Where   | What you need                                                                                                                                         |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web app | Git, Node.js 24, npm 11, and OpenSSL. The lockfile uses npm 11.19.1.                                                                                  |
+| Worker  | Git, Go 1.27.4, Make, CMake, and a C/C++ toolchain. Apple Silicon uses Metal by default.                                                              |
+| rstream | A hosted project and its endpoint, application client credentials for the web app, and the [rstream CLI](https://rstream.io/download) for the worker. |
 
-The application hosts the chat interface and the agent runtime, and rstream provides the private connectivity to the workers.
+The same laptop can run both roles. The default worker model, `qwen3:4b`, downloads roughly 2.5 GB of weights on first run. Allow room for the download, the native build, and the model in memory. See the [worker model and hardware guide](worker/README.md#models).
 
-A worker publishes an HTTP tunnel with token authentication. The rstream edge gives that tunnel a public HTTPS host, but every request must carry a token scoped to it — there is no inbound port on the machine, only the worker's outbound tunnel.
+## 1. Start the chat app
 
-When a message arrives (`POST /api/chat`), the application authenticates the request, selects a worker that serves the chosen model, preferring the lightest load with round-trip time as a tiebreak, and mints a short-lived token (300 seconds by default) scoped to that one tunnel and the single path `/v1/chat/completions`. The lifetime covers the whole turn, since an agent turn makes several calls to the worker. It then runs the turn on the server. The model, reached over rstream with that token, either answers in text or calls a tool, and the application streams the result back to the browser. The agent loop runs on the server because its tools do: web search and the rstream MCP hold server-only credentials, so the worker token is minted and used on the server and never reaches the browser.
-
-Discovery and presence come from the tunnel registry. The pool panel uses `@rstreamlabs/react` to watch tunnel state from the browser in real time, so a worker that joins or leaves appears at once without polling. Each worker is then probed on its OpenAI `/v1/models` endpoint for liveness, its current model list, and round-trip time, with in-flight load read from an optional `/healthz`; every answer is tagged with the machine that produced it.
-
-The universal model probe and optional load probe run concurrently. Immediately
-before dispatch, the application performs only the universal model request, so
-the optional load extension never adds a second sequential network round trip to
-the time to first token.
-
-Routing compares workers in this order:
-
-1. normalized active and waiting work, divided by the worker's parallel capacity;
-2. round-trip time, only when the normalized load is equal;
-3. a random choice, only when both values are equal.
-
-This means a nearby busy worker cannot beat an idle remote worker merely because
-it is closer. A process-local lease reserves the selected capacity until the
-turn ends, which closes the two-second discovery-cache feedback gap for
-concurrent requests handled by the same application instance. Equal-score
-randomization spreads requests from independent application instances, while
-the worker's bounded admission queue is the final fleet-wide overload boundary.
-The application therefore remains stateless and does not require Redis just for
-routing.
-
-Reaching a worker is a server-to-worker call over a short-lived, narrowly scoped tunnel token. The same primitive lets the agent open a shell on one of the user's machines through the rstream MCP, with no change to the connectivity or authorization model.
-
-## Stack
-
-- Next.js App Router, Vercel AI SDK, and AI Elements for the chat UI
-- `@rstreamlabs/tunnels` — application client credentials, tunnel discovery, and fine-grained, capability-scoped auth tokens
-- `@rstreamlabs/react` — live tunnel-state watch in the browser
-- NextAuth (GitHub) with an environment allowlist — JWT sessions, no database
-- A single Go binary worker that embeds llama.cpp in-process — it runs the model itself and serves an OpenAI-compatible API with native, grammar-driven tool-calling
-
-## Setup
-
-### The app
-
-The application authenticates to rstream with application client credentials and mints its own short-lived, scoped tokens. This is the production model, and it requires no `rstream login` on the server. Create a project and an application client in the rstream dashboard, then set `web/.env.local`:
+In the rstream Dashboard, open the workspace's Tokens page and create an Application key (APP) for the selected project. Grant `account.projects.read-only` for project resolution, `tunnels.resources.read-only` for inventory and watches, and `tunnels.streams.create-delete` for worker requests. The Next.js server keeps the client ID and secret and signs the scoped tokens it needs. See [Tokens](https://rstream.io/docs/security/tokens).
 
 ```bash
-RSTREAM_CLIENT_ID=...
-RSTREAM_CLIENT_SECRET=...
-RSTREAM_PROJECT_ENDPOINT=...           # the project's 8-hex endpoint id
-
-# Auth: GitHub SSO restricted by an allowlist, or disabled for a local quickstart.
-NEXTAUTH_SECRET=...                    # openssl rand -hex 32
-NEXTAUTH_URL=http://localhost:3000
-GITHUB_CLIENT_ID=...
-GITHUB_CLIENT_SECRET=...
-# ALLOWED_EMAIL_DOMAINS=your-org.com   # and/or ALLOWED_EMAILS, ALLOWED_GITHUB_LOGINS
-# AUTH_DISABLED=true                   # quickstart: no sign-in at all
-```
-
-```bash
-cd web
-npm install
-npm run dev
-```
-
-### A worker
-
-A worker is a single Go binary that embeds llama.cpp and runs the model in-process, so there is no separate inference server to install or proxy. It authenticates with the local rstream configuration on the machine, which lets each machine join the organization's pool directly, and no application secret travels to the worker.
-
-```bash
-# 1. The rstream CLI (from rstream.io), pointed at your project.
-rstream login
-rstream project use <project-endpoint>
-
-# 2. Build the worker. `make deps` clones and builds llama.cpp (pinned) on the
-#    first run; you need Go, CMake, and a C/C++ compiler.
 git clone https://github.com/rstreamlabs/rstream-examples.git
-cd rstream-examples/private-llm-mesh/worker
-make build
-
-# 3. Run it. The model downloads on first run — pass an alias, a HF repo, or a
-#    local path (any tool-capable model: Qwen3, gpt-oss, Llama 3.1, Mistral, …).
-make run ARGS="--model qwen3:4b"
+cd rstream-examples/private-llm-mesh/web
+cp .env.example .env.local
+openssl rand -hex 32
 ```
 
-Set `--ctx` to the model's context window and `--model-id` to the name the application shows. Apple Silicon builds use Metal automatically. Elsewhere the default is a portable CPU build; on NVIDIA hardware, use `make build LLAMA_CMAKE_FLAGS=-DGGML_CUDA=ON`. Changing the acceleration flags triggers the required llama.cpp rebuild, so no `make distclean` is needed. A single machine can run several workers for different models.
+Set these values in `.env.local` using the generated secret.
 
-The worker-pool panel includes an Add worker dialog that carries these exact steps, pre-filled with the project endpoint.
+| Variable                                     | Value for the first run                                                   |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| `RSTREAM_CLIENT_ID`, `RSTREAM_CLIENT_SECRET` | The application credential from the Dashboard.                            |
+| `RSTREAM_PROJECT_ENDPOINT`                   | The same eight-character project endpoint you will select for the worker. |
+| `NEXTAUTH_SECRET`                            | The value printed by OpenSSL.                                             |
+| `NEXTAUTH_URL`                               | `http://127.0.0.1:3000`.                                                  |
+| `AUTH_DISABLED`                              | `true` for this loopback-only run.                                        |
 
-### Worker variants
+```bash
+npx --yes npm@11.19.1 ci
+npm run dev -- --hostname 127.0.0.1
+```
 
-The standalone binary is the primary way to run a worker, and the one the Add worker dialog installs. It is one of two interchangeable, fully sovereign variants that publish the same discovery labels and the same OpenAI API, so they share one pool and can be mixed machine by machine.
+Open [the chat app](http://127.0.0.1:3000). The pool starts empty.
 
-- **[`worker/`](worker)** — the standalone Go binary here. It embeds llama.cpp and runs the model in-process, so the weights stay on your hardware. Maximum control over the build and native GPU acceleration; one model per worker.
-- **[`worker-compose/`](worker-compose)** — Ollama and the rstream reconciler, composed from stock parts with no custom code. Turnkey and multi-model, and a natural fit on a Linux host with a GPU.
+## 2. Start a worker
 
-Both keep inference on your own hardware. Because the pool is defined only by labels and the OpenAI contract, any other OpenAI-compatible server — including a bridge to a hosted model — could join the same way later.
+In a second terminal, select the same project for the worker's CLI context. Replace `YOUR_PROJECT_ENDPOINT` with your actual endpoint. From the repository root, build and run the worker.
 
-## The engine
+```bash
+rstream login
+rstream project use YOUR_PROJECT_ENDPOINT
+cd private-llm-mesh/worker
+make build
+./bin/worker --model qwen3:4b --tunnel-name laptop-qwen
+```
 
-The worker embeds llama.cpp through a small cgo shim and serves the OpenAI API from llama.cpp's own `common_chat` layer, the same machinery `llama-server` uses. Tool-calling is grammar-driven and parsed in-process: the model either answers in text or emits a structured tool call, with no client-side `<tool_call>` scraping. The model runs in a single process, and nothing needs to bind a port for it.
+If the worker runs on another machine, install the worker prerequisites and clone the repository there first. The worker uses its CLI context or [provisioned agent credentials](worker/README.md#rstream-credentials). The first build compiles the pinned llama.cpp revision, and the worker reports `worker online` with its tunnel URL when the model and tunnel are ready.
 
-- **Models.** Any GGUF file works; point `--model` at it. The worker ships aliases for recognized, tool-capable models grouped by hardware tier (laptop, homelab, and GPU server), listed in the [worker README](worker/README.md#models).
-- **Acceleration.** Metal is selected automatically on Apple Silicon. Elsewhere the default is a portable CPU build; set `LLAMA_CMAKE_FLAGS=-DGGML_CUDA=ON` for NVIDIA GPU offload.
-- **Context.** `--ctx` sets the window, and `--max-tokens` and `--temp` set generation defaults that a request can override.
+## 3. Verify a turn
 
-## Security postures
+1. Wait for `laptop-qwen` to appear as reachable in the worker pool.
+2. Select `qwen3:4b` and send a short prompt, such as “In one sentence, explain what a tunnel does.”
+3. Confirm that the reply streams into the chat and that the response identifies `laptop-qwen`.
 
-Authorization is least-privilege by construction. The token that reaches a worker is scoped to a single path on a single worker and is short-lived, and the edge rejects anything else. It is minted and used on the server, so the browser never holds it. The browser's only rstream credential is a separate short-lived, read-only token for watching tunnel presence, and the broad client credentials never leave the server.
+If the pool stays empty, confirm that both roles use the same endpoint and that the worker is online. If a worker is visible but unreachable, check the application's permissions to probe `/v1/models` on that tunnel. A visit to the worker URL without a scoped token is rejected by the edge.
 
-Workers are reached from the server over a token-gated edge host, so no machine exposes an inbound port and only the outbound tunnel remains. If a policy forbids any public ingress to compute, the same SDK primitives keep workers fully private, dialed over rstream without a public edge host. Both postures keep authorization on the application and differ only in the worker's ingress shape; neither is inherently more secure than the other.
+Stop each process with Ctrl+C when finished. The app stays open if only the worker stops, and the worker disappears from the pool.
 
-Access to the application itself is gated separately by NextAuth, through GitHub single sign-on restricted by an email, domain, or login allowlist, or disabled entirely for a local quickstart. GitHub authentication fails closed when no allowlist is configured. The worker pool is global to the application, so it is the front door that this gates.
+## Add capacity or deploy
 
-## rstream deployment
+| Goal                                              | Where to go                                                                                                                                                                                                       |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Replicate a model or serve a different one        | Start another [standalone worker](worker/README.md) in the same project with a distinct tunnel name. Each process loads one GGUF model. Set `--model-id` if you need two runtimes to advertise the same model ID. |
+| Run a multi-model catalog on a Docker host        | Use the [Ollama and rstream Compose worker](worker-compose/README.md). It joins the same pool and loads models on demand.                                                                                         |
+| Bring your own model server                       | Implement the worker discovery and serving contract in the [web guide](web/README.md#worker-discovery-and-routing).                                                                                               |
+| Enable GitHub sign-in or deploy the app           | Follow the [web guide](web/README.md#github-sign-in-and-deployment) for a Next.js server or Vercel.                                                                                                               |
+| Exercise routing, streaming, and worker lifecycle | Run the [web checks](web/README.md#verification), [worker checks](worker/README.md#verification), or [qualification tools](qualification/README.md).                                                              |
 
-The sample uses a hosted rstream project. Its application credentials resolve the project, mint scoped worker and watch tokens, and reach the hosted rstream MCP. Model weights stay on the worker machines and inference runs there. Chat messages pass through the Next.js application and the encrypted rstream tunnel on their way to the selected worker.
-
-## Deploy
-
-The application is stateless. Client credentials and the authentication configuration are the only server state, so it deploys to Vercel as it stands, and chat history lives in the browser session with no database to provision. Set the same environment variables in the Vercel project, point the GitHub OAuth callback at the deployed URL, and the workers connect as soon as they start.
-
-## Qualification
-
-The browser pool imports `useRstream` from `@rstreamlabs/react/hooks`. This
-focused entry point keeps inventory watches independent of optional WebTTY
-and native file-transfer dependencies during Next.js server rendering.
-`npm run verify` in `web/` covers types, unit tests, the production build and
-the dependency audit after SDK upgrades.
-
-The [`qualification/`](qualification) pack tests the routing and lifecycle
-claims against a real GGUF model. Its local profile runs admission,
-cancellation, concurrent shutdown, model behavior, and scheduler invariants
-under Go's race detector. Its live profile validates the complete UI stream
-through Next.js, scoped-token minting, rstream, and the selected llama.cpp
-worker.
-
-The published [`d7a9dc4` evidence pack](qualification/evidence/d7a9dc4/report.md)
-records 60/60 successful concurrent turns across two real Qwen3 workers with an
-exact 30/30 distribution. A controlled degraded run completed 20/20 turns on
-the surviving worker, and the recovery run completed 20/20 with the restored
-pool split 10/10. The same revision passes the real-model race, bounded
-admission, cancellation, shutdown, routing, web, and dependency gates. The
-worker stop and restart boundaries in this record were controlled by the
-operator; the record proves routing during each phase but does not claim a
-measured automatic failure-detection interval.
+The complete sample uses hosted project resolution and managed token minting. The web app can target an explicit engine for the same hosted project, and workers can use provisioned credentials for that engine. The complete mesh still needs the hosted APIs. See the [rstream architecture guide](https://rstream.io/guides/build-a-private-llm-mesh-with-rstream).

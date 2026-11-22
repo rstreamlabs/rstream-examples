@@ -1,14 +1,5 @@
-# Security Policy
+# Security policy
 
-If you believe you have found a security issue in `rstream-examples`, please avoid opening a public issue with exploit details.
+Use GitHub private vulnerability reporting when available, or contact `reports@rstream.io`. Keep vulnerability details out of public issues.
 
-Use GitHub private vulnerability reporting for this repository when it is available. If that path is not enabled yet, contact the maintainers privately at `reports@rstream.io` before disclosing the issue in public.
-
-When reporting an issue, include:
-
-- the affected sample application or script
-- the version or commit you tested
-- the impact you observed
-- enough reproduction detail for the issue to be validated
-
-Security reports are treated as a priority and handled through a coordinated fix and disclosure process.
+Include the affected example, source version, relevant SDK and a minimal reproduction. Remove tokens, application secrets, private keys, customer endpoints and payloads from shared diagnostics. Reports are handled through coordinated investigation and disclosure.

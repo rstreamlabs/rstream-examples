@@ -53,12 +53,13 @@ async def main() -> None:
     if args.private and args.token_auth:
         parser.error("--token-auth applies to published endpoints only")
     async with (
+        app.router.lifespan_context(app),
         rstream.Client.from_env() as client,
         await client.connect() as control,
     ):
         if args.private:
-            # Private tunnels reject public exposure options such as the
-            # protocol and HTTP version: the engine never terminates them.
+            # The private path carries opaque HTTP/1.1 bytes and needs no
+            # public protocol or edge authentication declaration.
             tunnel = await control.create_tunnel(
                 name=args.name,
                 publish=False,

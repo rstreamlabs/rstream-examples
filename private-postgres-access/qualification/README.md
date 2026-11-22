@@ -19,7 +19,7 @@ the quick-start stack.
 
 ## Run
 
-Use a non-production context with private-tunnel permissions:
+From `private-postgres-access`, use Python 3, Git, the rstream CLI and Docker Compose. The PostgreSQL client and `pgbench` run in containers. Those containers must be able to reach the host loopback relay through `host.docker.internal`, as on Docker Desktop. Use a non-production context with permission to create and dial private tunnels.
 
 ```bash
 python3 qualification/run.py --context your-context

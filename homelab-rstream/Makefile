@@ -1,7 +1,13 @@
 DOCKER_COMPOSE ?= docker compose
 NODE ?= node
 
-.PHONY: build run start wait verify config test smoke run-docker logs stop clean
+.PHONY: configure check build run start wait verify config test smoke run-docker logs stop clean
+
+configure:
+	$(NODE) scripts/configure.mjs
+
+check:
+	$(NODE) --test scripts/config.test.mjs
 
 build: config
 
@@ -12,7 +18,7 @@ start:
 	$(MAKE) wait
 
 wait:
-	$(NODE) scripts/wait-local.mjs
+	$(NODE) --env-file=.env scripts/wait-local.mjs
 
 verify: config test
 
