@@ -4,13 +4,19 @@ Send a GStreamer test pattern between two terminals on Linux or macOS over a pri
 
 ## Play a test pattern
 
-Install the rstream CLI and GStreamer on both machines. Use a project that supports [private tunnel dialing](https://rstream.io/docs/tunnels/private-tunnels). Use the same `your-project-endpoint` value on both machines.
+Install the rstream CLI and GStreamer on both machines. For hosted rstream, use a Pro or Enterprise project that allows [private tunnel dialing](https://rstream.io/docs/tunnels/private-tunnels). On each machine, sign in if needed. The streaming commands can run from any directory.
 
 ```sh
 rstream login
 ```
 
-Select the project for this example.
+List the projects available to the signed-in account.
+
+```sh
+rstream project list
+```
+
+Replace `your-project-endpoint` with the same project endpoint on both machines.
 
 ```sh
 rstream project use your-project-endpoint
@@ -53,7 +59,7 @@ The consumer opens a window with SMPTE color bars. The `-I` option puts the cons
 
 ## Send RTP datagrams
 
-Use Enterprise Edition or a Cloud project with datagram support. The producer needs `rtph264pay` and `rtpstreampay`. The consumer needs `rtpstreamdepay`, `rtpjitterbuffer` and `rtph264depay` in addition to the H.264 decoder and video sink. `rtpstreampay` adds RFC 4571 length prefixes so `rstream nc -u` sends one RTP packet per datagram.
+Use a hosted Pro or Enterprise project or a private Enterprise Engine with datagrams enabled. See [Editions and plans](https://rstream.io/docs/support/editions). The producer needs `rtph264pay` and `rtpstreampay`. The consumer needs `rtpstreamdepay`, `rtpjitterbuffer` and `rtph264depay` in addition to the H.264 decoder and video sink. `rtpstreampay` adds RFC 4571 length prefixes so `rstream nc -u` sends one RTP packet per datagram.
 
 Start the RTP listener on the producer.
 

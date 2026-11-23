@@ -7,19 +7,18 @@ tunnel and owns the HTTP handler.
 ## Build the application
 
 Use a C++20 compiler, CMake 3.22 or newer, Conan 2, Python 3 and Make.
-Install Ninja for Conan source builds. From this directory on macOS or Linux,
-use Conan's default profile and the rstream
-package remote. Run `conan profile detect` and add the remote only if they
+Install Ninja for Conan source builds. From the root of the examples checkout, enter the C++ sample.
+
+```sh
+cd cpp-beast-rstream-tunnel
+```
+
+On macOS or Linux, use Conan's default profile and the rstream package remote. Run `conan profile detect` and add the remote only if they
 are missing.
 
 ```sh
 conan profile detect
 conan remote add rstream https://nexus.rstream.io/repository/conan
-```
-
-Build the server from the example directory.
-
-```sh
 make build
 ```
 
@@ -30,20 +29,20 @@ source.
 ## Open a tunnel and make a request
 
 Install the [rstream CLI](https://rstream.io/docs/getting-started/installation)
-and select a hosted project that allows HTTP publication. Use the endpoint
-printed by `rstream project list`.
+to configure the connection. For a hosted project that allows HTTP publication,
+sign in if needed.
 
 ```sh
 rstream login
 ```
 
-List the projects available to your account.
+After browser approval, list the projects your account can access.
 
 ```sh
 rstream project list
 ```
 
-Select the endpoint from the list.
+Replace `my-project-endpoint` with the endpoint from the list.
 
 ```sh
 rstream project use my-project-endpoint
@@ -54,13 +53,13 @@ For a self-hosted Engine, prepare a
 with its agent credential and CA bundle. Use the same `RSTREAM_CONFIG`
 if you stored that context in a separate file.
 
-Start the installed server using the selected context.
+With your hosted or self-hosted context selected, start the application.
 
 ```sh
 ./out/bin/cpp_beast_rstream_tunnel
 ```
 
-Request the printed `Forwarding address`. Expect HTTP 200 with
+In another terminal, request the printed `Forwarding address`. Expect HTTP 200 with
 `Hello from Boost.Beast through rstream`. Use an authorized caller
 credential if required and trust the Engine CA if private. Ctrl+C closes
 the client and stops the server.

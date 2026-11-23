@@ -6,7 +6,13 @@ behind edge token authentication, or as a private service.
 
 ## Install and run
 
-Use Python 3.10 or newer. From this directory, create an environment.
+Use Python 3.10 or newer. Start at the root of the [examples checkout](../README.md) and enter the FastAPI sample.
+
+```sh
+cd python-fastapi-rstream-tunnel
+```
+
+Create the virtual environment and install the sample dependencies.
 
 ```sh
 python3 -m venv .venv
@@ -18,19 +24,19 @@ In PowerShell, use `py -m venv .venv` and
 `.\.venv\Scripts\Activate.ps1`. Run the same pip command there.
 
 For a hosted project, install the [rstream CLI](https://rstream.io/docs/getting-started/installation)
-and select the endpoint listed for the project. Create a project in the Dashboard if you need one. For the first unauthenticated request, use a project with published access set to `allowed`. If the project requires caller authentication, follow the token path below.
+and sign in if needed. Create a project in the Dashboard if you need one. For the first unauthenticated request, use a project with published access set to `allowed`. If the project requires caller authentication, follow the token path below.
 
 ```sh
 rstream login
 ```
 
-List the projects available to your account.
+List your projects to find the endpoint and project ID for this sample.
 
 ```sh
 rstream project list
 ```
 
-Select the endpoint from the list.
+Replace `my-project-endpoint` with the endpoint for your project.
 
 ```sh
 rstream project use my-project-endpoint
@@ -40,7 +46,7 @@ For a self-hosted Engine, configure a [direct context](https://rstream.io/docs/t
 that permits the operation. Set `SSL_CERT_FILE` to the private CA bundle
 when needed. Configure trust for your HTTPS client as well.
 
-Start the application from the activated virtual environment.
+Once your hosted or self-hosted context is ready, start the application.
 
 ```sh
 python main.py
@@ -61,10 +67,44 @@ start the sample with:
 python main.py --token-auth
 ```
 
-Use the new forwarding address. Expect 401 without a credential. Send a
-Bearer token allowed to reach the tunnel and `/items/42` to get the same
-JSON response. The credential that started the tunnel and the credential
-used by this HTTP caller serve different purposes.
+Leave the server running. In a second terminal, set `TUNNEL_URL` to the new `Forwarding address`. In a POSIX shell, replace the example origin below. Check the route without a token and expect HTTP 401.
+
+```sh
+TUNNEL_URL='https://your-forwarding-host'
+curl -i "${TUNNEL_URL%/}/items/42"
+```
+
+To issue a caller token on hosted rstream, your signed-in CLI credential needs `account.tokens.create` and permission to delegate `tunnels.streams.create-delete` for this project and route. See [issuer credentials](https://rstream.io/docs/security/tokens#create-and-manage-tokens). Save the following resource policy as `fastapi-caller.json` in the caller’s working directory. Replace `PROJECT_ID` with the **ID** from `rstream project list` for the project you selected earlier. The sample's default tunnel name is `python-fastapi-demo`.
+
+```json
+{
+  "tunnels": {
+    "projects": ["PROJECT_ID"],
+    "scopes": {
+      "tunnels": {
+        "connect": {
+          "filters": { "name": { "exact": "python-fastapi-demo" } },
+          "params": { "path": { "regex": "^/items/42$" } }
+        }
+      }
+    }
+  }
+}
+```
+
+Mint the token from the directory containing that file. It is valid for 60 seconds.
+
+```sh
+CALLER_TOKEN=$(rstream token create --expires-in 60 --permission tunnels.streams.create-delete --resources-file fastapi-caller.json)
+```
+
+Send it with the request. Expect HTTP 200 and `{"item_id":42,"source":"rstream tunnel"}`.
+
+```sh
+curl -i -H "Authorization: Bearer $CALLER_TOKEN" "${TUNNEL_URL%/}/items/42"
+```
+
+In PowerShell, set `$TUNNEL_URL` to the printed address without a trailing slash. Use `curl.exe -i "$TUNNEL_URL/items/42"` for the first check, assign the same `rstream token create` command to `$CALLER_TOKEN`, then add `-H "Authorization: Bearer $CALLER_TOKEN"` to the request. Stop the server with Ctrl+C when finished.
 
 ## Dial the private service
 

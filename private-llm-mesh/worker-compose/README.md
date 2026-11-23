@@ -6,10 +6,16 @@ Ollama serves models through its OpenAI-compatible API. The rstream Docker recon
 
 Use a Linux host with Docker Engine and Docker Compose, enough memory for your models, and an engine address and [project-scoped agent token](https://rstream.io/docs/security/tokens) for the same hosted project as the web app. The reconciler needs permission to create and delete the worker tunnel. It mounts the Docker socket to inspect containers and watch events, which grants privileged access to the host.
 
-From `private-llm-mesh/worker-compose`, copy the environment template and fill in the two credential values.
+From `private-llm-mesh/worker-compose`, create your local `.env` from the template if you do not already have one.
 
 ```bash
-cp .env.example .env
+cp -n .env.example .env
+```
+
+Set `RSTREAM_ENGINE` and `RSTREAM_AUTHENTICATION_TOKEN` in `.env`. Then start
+Ollama and pull the first model.
+
+```bash
 docker compose config --quiet
 docker compose up -d
 docker compose exec ollama ollama pull qwen2.5:7b

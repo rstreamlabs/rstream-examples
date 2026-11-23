@@ -6,9 +6,10 @@ Serve several browser viewers over one device uplink. On the first request for a
 
 Prepare `webrtc-video/platform/.env.local`, install its npm dependencies and apply the PostgreSQL migrations using the [platform quick start](../platform/README.md#run-the-application). Keep the platform's `npm run dev` stopped and install Docker and the rstream CLI. The launcher starts Next.js and builds the combined MediaMTX and Go adapter image.
 
-Start the stack from `webrtc-video/platform`.
+In a terminal at the root of the examples checkout, enter the platform directory and start the stack.
 
 ```sh
+cd webrtc-video/platform
 npm run mediamtx:local
 ```
 

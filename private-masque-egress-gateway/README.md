@@ -8,11 +8,10 @@ checks target addresses before dialing them.
 
 ## Verify locally
 
-Use Go 1.27.4 or newer, Git, Make, and a C compiler for race tests. Commands run
-from this directory. The local tests use loopback fixtures and require no
-rstream account.
+Use Go 1.27.4 or newer, Git, Make, and a C compiler for race tests. From the root of the examples checkout, enter the gateway directory and run the local checks. They use loopback fixtures and require no rstream account.
 
 ```sh
+cd private-masque-egress-gateway
 make verify
 ```
 
@@ -89,8 +88,9 @@ probe below assumes the project allows published endpoints without additional
 edge authentication. See [Editions and Plans](https://rstream.io/docs/support/editions)
 and [Connection Upgrades](https://rstream.io/docs/tunnels/http-tunnels/connection-upgrades).
 
-On the gateway host, create and retain a private token file outside the
-checkout, then start the gateway. This step uses OpenSSL.
+On the gateway host, build the binaries with `make verify` as described above.
+Create a private token file outside the checkout using OpenSSL. Use an account
+that owns the directory and token file.
 
 ```sh
 egress_dir="$HOME/.config/rstream-egress"
@@ -100,8 +100,13 @@ if [ ! -e "$token_file" ]; then
   (umask 077 && openssl rand -hex 32 > "$token_file")
 fi
 chmod 600 "$token_file"
-export PRIVATE_EGRESS_TOKEN="$(cat "$token_file")"
+```
 
+After the file has been created and its permissions set, start the gateway
+from the sample directory in the same shell.
+
+```sh
+export PRIVATE_EGRESS_TOKEN="$(cat "$token_file")"
 test -n "$PRIVATE_EGRESS_TOKEN" && ./out/bin/private-masque-egress-gateway \
   --name home-egress --label role=egress \
   --metrics 127.0.0.1:9090
@@ -119,7 +124,8 @@ errors exit.
 ## Check the published endpoint
 
 In a second terminal, load the same gateway token. If the client is on
-another host, transfer that token through your secret store. Set
+another host, install the probe built for that host and transfer the token
+through your secret store. The example reads it from the same private path. Set
 `gateway_url` to the printed URL and `tcp_target` and `udp_target` to the
 `host:port` addresses of echo services you control, reachable from the
 gateway and permitted by its address policy.

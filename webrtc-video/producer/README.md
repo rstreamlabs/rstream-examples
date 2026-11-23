@@ -4,16 +4,22 @@ Run a Go producer that encodes a test pattern with GStreamer, serves a browser v
 
 ## Quick start
 
-Install the Go version in `go.mod`, a C compiler, `pkg-config`, GStreamer development files and Node.js 24 with npm. Use the [native dependency commands](docs/000-build.md#requirements) for macOS or Ubuntu/Debian. For a public viewer URL, install the rstream CLI and select the project that will publish the demo. Replace `your-project-endpoint` with its endpoint.
+Install the Go version in `go.mod`, a C compiler, `pkg-config`, GStreamer development files and Node.js 24 with npm. Use the [native dependency commands](docs/000-build.md#requirements) for macOS or Ubuntu/Debian. For a public viewer URL, install the rstream CLI and sign in if needed.
 
 ```sh
 rstream login
+```
+
+Replace `your-project-endpoint` with the endpoint of the project that will publish the demo.
+
+```sh
 rstream project use your-project-endpoint
 ```
 
-Build the producer and its embedded viewer from `webrtc-video/producer`. Start it with the H.264 test-pattern profile.
+From the root of the examples checkout, enter the producer directory and build its embedded viewer. Start it with the H.264 test-pattern profile.
 
 ```sh
+cd webrtc-video/producer
 make build
 ./webrtc-video-producer -config ./config.h264.yaml
 ```

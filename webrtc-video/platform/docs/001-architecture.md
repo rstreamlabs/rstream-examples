@@ -57,8 +57,8 @@ The app also exposes `POST /api/rstream/webhook`. rstream signs lifecycle events
 Producer OpenMetrics stay on the device boundary. Enable the private metrics
 listener in `../producer/config.provisioning.h264.yaml` and let a collector on
 the device or edge host scrape it; the Next.js application does not proxy the
-metrics endpoint. The producer README documents the complete series and useful
-queries.
+metrics endpoint. See [Producer metrics](../../producer/docs/001-configuration.md#producer-metrics)
+for the series and example queries.
 
 Direct delivery has one congestion domain from producer to browser. The
 adapter profile has two: producer to adapter, then MediaMTX to each browser.

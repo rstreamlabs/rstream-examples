@@ -8,7 +8,9 @@ There is no public API change or Engine deployment for this fix.
 
 ## Use the samples
 
-Install Go and Git on the build host, then use the Makefile:
+Install the [producer build dependencies](producer/docs/000-build.md#requirements),
+including the native GStreamer libraries and Node.js for the viewer tests.
+From `webrtc-video`, run:
 
 ```sh
 cd producer
@@ -16,11 +18,11 @@ make build-provisioning
 make test-race
 ```
 
-For the distributor, use `make build`, `make test-race` and
+From `webrtc-video/distributor`, use `make build`, `make test-race` and
 `make test-decoded-restarts` (the last command also requires FFmpeg).
 The Dockerfiles and the producer's static Linux build apply the same patch.
-The distributor Docker build context is now `webrtc-video/`, so use `make image`
-or `docker build -f distributor/Dockerfile .` from that directory. Its
+From `webrtc-video`, run `make -C distributor image` or
+`docker build -f distributor/Dockerfile .`. Both use `webrtc-video` as the build context. Its
 `Dockerfile.dockerignore` keeps the context limited to required build inputs.
 
 ## Adapt an application based on the samples

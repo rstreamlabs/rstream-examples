@@ -13,23 +13,22 @@ Run a video source and a YOLO worker on one laptop, then open a browser to see t
 
 ## 1. Prepare the laptop
 
-Use the same project for the device and worker. Replace `YOUR_PROJECT_ENDPOINT` with the endpoint from the Dashboard.
+Use the same project for the device and worker. Sign in on each host if needed.
 
 ```bash
 rstream login
 ```
 
-Select the project for this example.
+Replace `YOUR_PROJECT_ENDPOINT` with the project endpoint from the Dashboard.
 
 ```bash
 rstream project use YOUR_PROJECT_ENDPOINT
 ```
 
-Get the sources and build the worker and device applications.
+From the root of the [examples checkout](../README.md), enter the vision sample and build both roles.
 
 ```bash
-git clone https://github.com/rstreamlabs/rstream-examples.git
-cd rstream-examples/python-vision-inference
+cd python-vision-inference
 make build PYTHON=python3.13
 ```
 
@@ -55,7 +54,7 @@ The default viewer URL gives anyone who can reach it access to the video and the
 
 ## 3. Verify failover
 
-1. Start a second worker with `make run-worker PYTHON=python3.13 ARGS="--name vision-second --device cpu"`.
+1. In a third terminal in the example directory, start a second worker with `make run-worker PYTHON=python3.13 ARGS="--name vision-second --device cpu"`.
 2. Wait for both workers to appear, then stop the worker serving the device. The video continues while detection reconnects. Confirm the active worker changes and detections resume.
 3. Restart the stopped worker and verify it rejoins the pool. Click a worker in the pool to pin detection to it. If it disappears, the device uses another worker until the pinned worker returns.
 

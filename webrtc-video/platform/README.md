@@ -6,9 +6,10 @@ Publish a video device through rstream and let its owner watch from a signed-in 
 
 Use Node.js 24 with npm, a dedicated PostgreSQL database and a GitHub OAuth application with callback `http://localhost:3000/api/auth/callback/github`. Use a hosted project that permits token-authenticated HTTP publication and managed TURN. Create a server-side [application credential with the required project permissions](docs/000-setup.md#rstream-project-setup). The producer needs the [Go and GStreamer toolchain](../producer/docs/000-build.md#requirements).
 
-Create the platform environment file from the template in `webrtc-video/platform`.
+From the root of the examples checkout, enter the platform directory and create its environment file from the template.
 
 ```sh
+cd webrtc-video/platform
 cp .env.example .env.local
 ```
 
