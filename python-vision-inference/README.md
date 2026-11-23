@@ -17,7 +17,17 @@ Use the same project for the device and worker. Replace `YOUR_PROJECT_ENDPOINT` 
 
 ```bash
 rstream login
+```
+
+Select the project for this example.
+
+```bash
 rstream project use YOUR_PROJECT_ENDPOINT
+```
+
+Get the sources and build the worker and device applications.
+
+```bash
 git clone https://github.com/rstreamlabs/rstream-examples.git
 cd rstream-examples/python-vision-inference
 make build PYTHON=python3.13

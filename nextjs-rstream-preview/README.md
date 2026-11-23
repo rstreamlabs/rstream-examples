@@ -29,14 +29,34 @@ access controls before exposing sensitive data.
 
 ```sh
 rstream login
+```
+
+List the projects available to your account.
+
+```sh
 rstream project list
+```
+
+Select the endpoint from the list.
+
+```sh
 rstream project use my-project-endpoint
+```
+
+Generate a signing secret for this preview and copy it for the GitHub webhook form.
+
+```sh
 export GITHUB_WEBHOOK_SECRET="$(node -p 'require("node:crypto").randomBytes(24).toString("hex")')"
 printf '%s\n' "$GITHUB_WEBHOOK_SECRET"
+```
+
+Start the preview from the same shell.
+
+```sh
 npm run dev:tunnel
 ```
 
-Keep the generated signing secret for the GitHub form. Open the `Public URL`
+Open the `Public URL`
 printed by the server. Configure a GitHub webhook at `/api/webhooks/github`
 on that origin. Choose `application/json` and enter the signing secret. Expect a signed delivery to appear in the inbox.
 For a GitHub delivery, use a disposable preview whose edge policy allows the

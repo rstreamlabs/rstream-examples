@@ -8,6 +8,11 @@ Install the rstream CLI and GStreamer on both machines. Use a project that suppo
 
 ```sh
 rstream login
+```
+
+Select the project for this example.
+
+```sh
 rstream project use your-project-endpoint
 ```
 

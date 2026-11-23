@@ -15,6 +15,11 @@ are missing.
 ```sh
 conan profile detect
 conan remote add rstream https://nexus.rstream.io/repository/conan
+```
+
+Build the server from the example directory.
+
+```sh
 make build
 ```
 
@@ -30,15 +35,30 @@ printed by `rstream project list`.
 
 ```sh
 rstream login
+```
+
+List the projects available to your account.
+
+```sh
 rstream project list
+```
+
+Select the endpoint from the list.
+
+```sh
 rstream project use my-project-endpoint
-./out/bin/cpp_beast_rstream_tunnel
 ```
 
 For a self-hosted Engine, prepare a
 [direct Engine context](https://rstream.io/docs/tunnels/self-hosted/deployment#agent-context)
 with its agent credential and CA bundle. Use the same `RSTREAM_CONFIG`
 if you stored that context in a separate file.
+
+Start the installed server using the selected context.
+
+```sh
+./out/bin/cpp_beast_rstream_tunnel
+```
 
 Request the printed `Forwarding address`. Expect HTTP 200 with
 `Hello from Boost.Beast through rstream`. Use an authorized caller

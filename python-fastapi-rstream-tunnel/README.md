@@ -22,14 +22,29 @@ and select the endpoint listed for the project. Create a project in the Dashboar
 
 ```sh
 rstream login
+```
+
+List the projects available to your account.
+
+```sh
 rstream project list
+```
+
+Select the endpoint from the list.
+
+```sh
 rstream project use my-project-endpoint
-python main.py
 ```
 
 For a self-hosted Engine, configure a [direct context](https://rstream.io/docs/tunnels/self-hosted/deployment#agent-context)
 that permits the operation. Set `SSL_CERT_FILE` to the private CA bundle
 when needed. Configure trust for your HTTPS client as well.
+
+Start the application from the activated virtual environment.
+
+```sh
+python main.py
+```
 
 Open the printed `Forwarding address` and try `/items/42`. A successful
 request returns HTTP 200 and `{"item_id":42,"source":"rstream tunnel"}`.

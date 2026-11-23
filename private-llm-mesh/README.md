@@ -44,11 +44,21 @@ Open [the chat app](http://127.0.0.1:3000). The pool starts empty.
 
 ## 2. Start a worker
 
-In a second terminal, select the same project for the worker's CLI context. Replace `YOUR_PROJECT_ENDPOINT` with your actual endpoint. From the repository root, build and run the worker.
+In a second terminal, select the same project for the worker's CLI context. Replace `YOUR_PROJECT_ENDPOINT` with your actual endpoint.
 
 ```bash
 rstream login
+```
+
+Select the project for this example.
+
+```bash
 rstream project use YOUR_PROJECT_ENDPOINT
+```
+
+From the repository root, build and start the worker.
+
+```bash
 cd private-llm-mesh/worker
 make build
 ./bin/worker --model qwen3:4b --tunnel-name laptop-qwen

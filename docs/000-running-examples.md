@@ -19,7 +19,17 @@ and use the endpoint shown by `rstream project list`. If the list is empty, crea
 
 ```sh
 rstream login
+```
+
+List the projects available to your account.
+
+```sh
 rstream project list
+```
+
+Select the endpoint from the list.
+
+```sh
 rstream project use my-project-endpoint
 ```
 
