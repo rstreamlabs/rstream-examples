@@ -1,7 +1,7 @@
 # Run an rstream example
 
-From the repository checkout, open the application directory listed in
-the [example catalog](../README.md). Follow its prerequisites, run
+From the root of the checkout, choose an application in the
+[example catalog](../README.md). Follow its working-directory instructions, prerequisites, run
 commands and expected result. The [Next.js preview](../nextjs-rstream-preview/README.md)
 has a loopback path you can try before configuring rstream.
 
@@ -15,11 +15,23 @@ has a loopback path you can try before configuring rstream.
 | Local test fixture | Follow the example's verification command. Unit and local fixture checks run independently of a hosted project. |
 
 To select a hosted project, [install the CLI](https://rstream.io/docs/getting-started/installation)
-and use the endpoint shown by `rstream project list`. If the list is empty, create a project in the [Dashboard](https://rstream.io/dashboard) or ask for access to an existing one.
+and sign in if needed.
 
 ```sh
 rstream login
+```
+
+Once signed in, list the projects available to your account.
+
+```sh
 rstream project list
+```
+
+Choose an endpoint from the list and substitute it for `my-project-endpoint`.
+If the list is empty, create a project in the [Dashboard](https://rstream.io/dashboard)
+or ask for access to an existing one.
+
+```sh
 rstream project use my-project-endpoint
 ```
 

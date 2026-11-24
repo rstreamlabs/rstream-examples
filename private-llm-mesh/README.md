@@ -18,9 +18,10 @@ The same laptop can run both roles. The default worker model, `qwen3:4b`, downlo
 
 In the rstream Dashboard, open the workspace's Tokens page and create an Application key (APP) for the selected project. Grant `account.projects.read-only` for project resolution, `tunnels.resources.read-only` for inventory and watches, and `tunnels.streams.create-delete` for worker requests. The Next.js server keeps the client ID and secret and signs the scoped tokens it needs. See [Tokens](https://rstream.io/docs/security/tokens).
 
+From the root of the [examples checkout](../README.md), enter the web application directory.
+
 ```bash
-git clone https://github.com/rstreamlabs/rstream-examples.git
-cd rstream-examples/private-llm-mesh/web
+cd private-llm-mesh/web
 cp .env.example .env.local
 openssl rand -hex 32
 ```
@@ -44,17 +45,27 @@ Open [the chat app](http://127.0.0.1:3000). The pool starts empty.
 
 ## 2. Start a worker
 
-In a second terminal, select the same project for the worker's CLI context. Replace `YOUR_PROJECT_ENDPOINT` with your actual endpoint. From the repository root, build and run the worker.
+In a second terminal, open the repository root on the worker machine. If the worker runs on another machine, install the worker prerequisites and clone the repository there first. Sign in to rstream on the worker machine if needed.
 
 ```bash
 rstream login
+```
+
+Replace `YOUR_PROJECT_ENDPOINT` with the same endpoint you set in the web app’s `.env.local`.
+
+```bash
 rstream project use YOUR_PROJECT_ENDPOINT
+```
+
+Build and start the worker.
+
+```bash
 cd private-llm-mesh/worker
 make build
 ./bin/worker --model qwen3:4b --tunnel-name laptop-qwen
 ```
 
-If the worker runs on another machine, install the worker prerequisites and clone the repository there first. The worker uses its CLI context or [provisioned agent credentials](worker/README.md#rstream-credentials). The first build compiles the pinned llama.cpp revision, and the worker reports `worker online` with its tunnel URL when the model and tunnel are ready.
+The worker uses its CLI context or [provisioned agent credentials](worker/README.md#rstream-credentials). The first build compiles the pinned llama.cpp revision, and the worker reports `worker online` with its tunnel URL when the model and tunnel are ready.
 
 ## 3. Verify a turn
 

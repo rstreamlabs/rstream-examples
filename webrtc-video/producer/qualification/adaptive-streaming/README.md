@@ -40,12 +40,12 @@ threshold is implied by measurement validity.
 The distributor runner's `RSTREAM_DISTRIBUTOR_STARTUP_CYCLES=true` mode provides
 that repeated adaptive MediaMTX check using the same viewer/client bundle.
 It measures cold/reopen/join cases and observes setup cancellations through
-the source setup deadline. See the [distribution qualification](../../../distributor/README.md#technical-qualification)
+the source setup deadline. See the [distribution qualification](../../../distributor/docs/004-testing.md#technical-qualification)
 for its scope and lifecycle gates.
 
 For QUIC signaling, first prepare adequate UDP socket limits on the Linux
 container host (the Linux VM when using Docker Desktop). The
-[distribution prerequisites](../../../distributor/README.md#technical-qualification)
+[distribution prerequisites](../../../distributor/docs/004-testing.md#technical-qualification)
 give the commands and explain how to preserve and restore temporary settings.
 
 Each run starts the exact producer source in an ephemeral Linux container and
@@ -388,7 +388,8 @@ requires the measured target to remain below 250 ms.
 
 ## Run one scenario
 
-Requirements are Docker with `NET_ADMIN` support, Node.js, jq, and an
+Run the scenario and matrix commands below from `webrtc-video/producer`.
+Use Docker with `NET_ADMIN` support, Node.js, Git, jq, tar, and an
 authenticated rstream CLI context. Go builds the context-preparation helper by
 default. A qualification host without Go can use the same audited helper as a
 prebuilt binary through `RSTREAM_QUALIFICATION_PREPARE_CONTEXT_BINARY`. The
@@ -463,6 +464,7 @@ the browser stays on the machine running the harness:
 docker context create video-producer \
   --docker host=ssh://qualification-host
 
+RSTREAM_CONTEXT=your-context \
 RSTREAM_QUALIFICATION_PATH=relay \
 RSTREAM_QUALIFICATION_PROTECTION=nack-rtx-flexfec \
 RSTREAM_QUALIFICATION_PRODUCER_DOCKER_CONTEXT=video-producer \
@@ -516,6 +518,7 @@ The release-oriented command runs both paths and both protection profiles, then
 generates a single comparison report:
 
 ```bash
+RSTREAM_CONTEXT=your-context \
 RSTREAM_QUALIFICATION_REPETITIONS=3 \
   ./qualification/adaptive-streaming/run-matrix.sh
 ```

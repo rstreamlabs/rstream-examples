@@ -29,19 +29,22 @@ Build the pinned MediaMTX binary with `make -C ../distributor mediamtx` for the 
 ```sh
 export RSTREAM_MEDIAMTX_BINARY="$PWD/../distributor/out/mediamtx"
 npm run test:mediamtx-auth
-npm run test:mediamtx-recording
 ```
 
-For the recording check, install FFmpeg with `libx264`, FFprobe and the browser runtimes that match the lockfile. Both checks start local MediaMTX processes and verify actual runtime behavior.
+For the recording check, install FFmpeg with `libx264` and FFprobe. In the same shell, install the browser runtimes that match the lockfile and run the check.
 
 ```sh
 npx playwright-core install chromium firefox webkit
+npm run test:mediamtx-recording
 ```
 
 ## Qualify discovered devices
 
 To check discovery against a real rstream project, configure the application
-credentials and project endpoint in `.env.local`, build the application, then run:
+credentials and project endpoint in `.env.local` and build the application.
+Prepare the Linux host’s UDP socket limits as described in the
+[distribution prerequisites](../../distributor/docs/004-testing.md#technical-qualification).
+Then build the producer image and run the check.
 
 ```bash
 docker build --file ../producer/qualification/adaptive-streaming/Dockerfile \
@@ -98,14 +101,13 @@ encoder for two MediaMTX readers, synchronizes a source-quality change, denies
 a nonmember, preserves playback when the first member leaves and stops the
 encoder after the last leaves. Both persistent-history and live-only inventory
 checks still run. GitHub membership remains a fixture. Neither variant forces
-a relay path. First prepare adequate Linux UDP socket limits
-as described in the [distribution prerequisites](../../distributor/docs/004-testing.md#technical-qualification).
+a relay path.
 These graceful UI closures do not measure abrupt browser loss, which can use the
 producer's longer bounded ICE recovery grace period before stopping the encoder.
 
 ## Check full-page viewing and playback
 
-This optional layer of the access-route suite uses Chromium, Firefox and WebKit. Pass the Chromium executable and an output location for captures.
+This optional layer of the access-route suite uses Chromium, Firefox and WebKit. Install FFmpeg for the recording check. Pass the Chromium executable and an output location for captures.
 
 ```bash
 npx playwright-core install firefox webkit
@@ -122,7 +124,7 @@ UI. It checks session continuity, keyboard/focus handling, scroll restoration,
 portrait/landscape layout and source disappearance. `RSTREAM_METRICS_BROWSER=1`
 also checks distribution indicators and recovery after a metrics outage. It does not replace network
 qualification or testing on physical mobile devices.
-`RSTREAM_RECORDING_BROWSER=1` additionally requires FFmpeg and checks real MP4
+`RSTREAM_RECORDING_BROWSER=1` checks real MP4
 decoding in Chromium/Firefox/WebKit, replay navigation, gaps, expiry, index outages,
 visibility cancellation and return to the same live session. The recording
 index and media service are controlled fixtures in this UI check; the native
@@ -142,16 +144,36 @@ automatically allocated application ports.
 
 ## Qualify the complete distribution paths
 
-Install Docker, Git, curl, Node.js 24 with npm, the rstream CLI and Chrome or Chromium. Configure the sample credentials in `.env.local`. The recording scenario also requires FFprobe. Choose a distribution scenario and use a fresh output directory outside the checkout for each run.
+Install Docker, Git, curl, Node.js 24 with npm, the rstream CLI and Chrome or Chromium. Configure the sample credentials in `.env.local`. The recording scenario also requires FFprobe. Use a fresh output directory outside the checkout for each run. Choose one scenario.
 
 ```bash
 npm run qualify:distribution -- /path/to/empty/evidence-directory
+```
+
+To measure source quality, select the variant you need.
+
+```bash
 RSTREAM_QUALIFICATION_QUALITY=1 \
   ./qualification/end-to-end/run.sh /path/to/empty/quality-evidence public
+```
+
+Use this variant to require MediaMTX throughout the quality check.
+
+```bash
 MEDIAMTX_ALLOW_DIRECT_FALLBACK=false RSTREAM_QUALIFICATION_QUALITY=1 \
   ./qualification/end-to-end/run.sh /path/to/empty/required-media-evidence public
+```
+
+Use this variant to check selectable source formats.
+
+```bash
 RSTREAM_QUALIFICATION_QUALITY=1 RSTREAM_QUALIFICATION_SOURCE_FORMATS=1 \
   ./qualification/end-to-end/run.sh /path/to/empty/source-format-evidence public
+```
+
+Use this variant to check recording.
+
+```bash
 RSTREAM_QUALIFICATION_QUALITY=1 RSTREAM_QUALIFICATION_RECORDING=1 \
   ./qualification/end-to-end/run.sh /path/to/empty/recording-evidence public
 ```

@@ -12,8 +12,7 @@ git clone https://github.com/rstreamlabs/rstream-examples.git
 cd rstream-examples
 ```
 
-For a first tunnel, start with [FastAPI](python-fastapi-rstream-tunnel).
-Each directory gives its prerequisites, run commands and expected result.
+For a first tunnel, follow the [FastAPI example](python-fastapi-rstream-tunnel) from this repository root. Each example gives its working directory, prerequisites and expected result.
 See [prepare access](docs/000-running-examples.md) to choose between a
 hosted project, a direct Engine and local fixtures.
 
@@ -29,7 +28,7 @@ hosted project, a direct Engine and local fixtures.
 
 | Example | What you can run |
 | --- | --- |
-| [Homelab services](homelab-rstream) | Publish a Grafana dashboard and keep selected Docker services private. |
+| [Homelab services](homelab-rstream) | Publish Grafana while keeping Prometheus accessible only from the host and the Compose network. |
 | [Private PostgreSQL](private-postgres-access) | Connect standard database tools through a local relay and a private tunnel. |
 | [SSH over TCP](published-tcp-ssh) | Reach an SSH server via a published TCP address using public-key authentication. |
 | [Private egress gateway](private-masque-egress-gateway) | Route TCP or UDP through an authenticated gateway with explicit destination policy. |

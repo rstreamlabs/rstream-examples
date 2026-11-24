@@ -8,12 +8,22 @@ tool calls.
 ## Build and run
 
 Install Git, Go 1.27.4, Make, CMake, a C/C++ toolchain, and the
-[rstream CLI](https://rstream.io/download). From `private-llm-mesh/worker`,
-select the same hosted project as the web app and build the worker.
+[rstream CLI](https://rstream.io/download). Sign in on the worker machine if needed.
 
 ```bash
 rstream login
+```
+
+Replace `YOUR_PROJECT_ENDPOINT` with the endpoint from the web app’s `.env.local`.
+
+```bash
 rstream project use YOUR_PROJECT_ENDPOINT
+```
+
+From the root of the examples checkout, build and start the worker.
+
+```bash
+cd private-llm-mesh/worker
 make build
 ./bin/worker --model qwen3:4b --tunnel-name laptop-qwen
 ```

@@ -9,7 +9,11 @@ the host's loopback interface.
 ## Start and verify the stack locally
 
 Use Docker with the `docker compose` command, Node.js 24 or newer, and Make.
-Run the commands from this directory.
+Enter the sample from the root of the examples checkout.
+
+```sh
+cd homelab-rstream
+```
 
 On Linux with the default local Docker socket:
 

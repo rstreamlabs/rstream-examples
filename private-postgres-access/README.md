@@ -7,9 +7,10 @@ authenticate database users and enforce their SQL permissions.
 
 ## Verify the sample database locally
 
-Use Docker with Compose and Make on the database host. In this directory, run:
+Use Docker with Compose and Make on the database host. From the root of the examples checkout, enter the sample directory and verify the database.
 
 ```sh
+cd private-postgres-access
 make verify
 ```
 

@@ -6,11 +6,16 @@ on the home page.
 
 ## Start on loopback
 
-Use Node.js 24 and npm. From this directory, install the dependencies and
-start Next.js.
+Use Node.js 24 and npm. From the root of the examples checkout, install the preview application's dependencies.
 
 ```sh
+cd nextjs-rstream-preview
 npm ci
+```
+
+Start the preview from the same terminal.
+
+```sh
 npm run dev
 ```
 
@@ -23,20 +28,40 @@ fixture, checks the inbox and stops the fixture.
 
 Use a self-hosted Node process and a project that permits published HTTP.
 Install the [rstream CLI](https://rstream.io/docs/getting-started/installation),
-then select the endpoint shown by the project list. Use disposable content
+then sign in if needed. Use disposable content
 in this preview, since its inbox displays delivery details. Set project
 access controls before exposing sensitive data.
 
 ```sh
 rstream login
+```
+
+List your projects to find the endpoint for the preview.
+
+```sh
 rstream project list
+```
+
+Replace `my-project-endpoint` with the endpoint for your preview project.
+
+```sh
 rstream project use my-project-endpoint
+```
+
+Generate a signing secret and copy the printed value for the GitHub webhook.
+
+```sh
 export GITHUB_WEBHOOK_SECRET="$(node -p 'require("node:crypto").randomBytes(24).toString("hex")')"
 printf '%s\n' "$GITHUB_WEBHOOK_SECRET"
+```
+
+Start the preview in the same shell.
+
+```sh
 npm run dev:tunnel
 ```
 
-Keep the generated signing secret for the GitHub form. Open the `Public URL`
+Open the `Public URL`
 printed by the server. Configure a GitHub webhook at `/api/webhooks/github`
 on that origin. Choose `application/json` and enter the signing secret. Expect a signed delivery to appear in the inbox.
 For a GitHub delivery, use a disposable preview whose edge policy allows the

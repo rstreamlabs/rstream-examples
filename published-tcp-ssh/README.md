@@ -19,8 +19,13 @@ key pair ready and copy only its public key to the server.
 See [TCP Tunnels](https://rstream.io/docs/tunnels/tcp-tunnels) for published TCP
 policy and engine configuration.
 
-Set the runtime values from this directory. Use the path to your public key
-and a protected file containing the agent token.
+On the server, enter the sample directory from the root of the examples checkout.
+
+```sh
+cd published-tcp-ssh
+```
+
+Set the runtime values using the path to your public key and a protected file containing the agent token.
 
 ```sh
 export SSH_PUBLIC_KEY_PATH="$HOME/.ssh/id_ed25519.pub"

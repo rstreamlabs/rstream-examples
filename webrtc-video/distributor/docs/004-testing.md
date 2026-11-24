@@ -57,13 +57,20 @@ being hidden behind aggregate byte counters.
 
 ## Technical qualification
 
-Set the Linux host's receive and send buffer limits before running live QUIC qualification.
+Before running live QUIC qualification, record the Linux host’s current UDP buffer limits so you can restore them after the run. With Docker Desktop, run these commands in its Linux VM.
 
 ```sh
-sudo sysctl -w net.core.rmem_max=7500000 net.core.wmem_max=7500000
+sysctl net.core.rmem_max net.core.wmem_max
 ```
 
-With Docker Desktop, set the limits in its Linux VM. Record the old values and restore them after the run. The performance gate requires sufficient UDP buffers even when video plays. See the [quic-go buffer guidance](https://github.com/quic-go/quic-go/wiki/UDP-Buffer-Sizes).
+Raise each limit below 7,500,000 bytes using its corresponding command.
+
+```sh
+sudo sysctl -w net.core.rmem_max=7500000
+sudo sysctl -w net.core.wmem_max=7500000
+```
+
+After the run, use `sudo sysctl -w` with the values you recorded to restore any limit you changed. The performance gate requires sufficient UDP buffers even when video plays. See the [quic-go buffer guidance](https://github.com/quic-go/quic-go/wiki/UDP-Buffer-Sizes).
 
 The finite browser qualification needs Docker, Git, Go, jq, Node.js 24, rstream CLI 1.29.0 or newer, and an explicit rstream context. The runner builds its own browser image and enables edge authentication by default. Open `result.json` in the output directory for the verdict and individual gates.
 

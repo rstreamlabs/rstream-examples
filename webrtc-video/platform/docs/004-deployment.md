@@ -13,15 +13,23 @@ Give each deployment its own database, OAuth application and secrets. Complete t
 
 ## Try the hosted demo
 
-Use the hosted demo as the producer's product backend. Sign in at `https://webrtc-video-platform.demo.rstream.io`, create a device and copy the secret shown by the dashboard. Run these commands from `webrtc-video/platform`.
+Use the hosted demo as the producer's product backend. Sign in at `https://webrtc-video-platform.demo.rstream.io`, create a device and copy the secret shown by the dashboard. Install the [producer build dependencies](../../producer/docs/000-build.md#requirements).
+From `webrtc-video/platform`, build the producer.
 
 ```bash
 cd ../producer
 make build-provisioning
+```
+
+Replace `dev_...` with the device secret and start the producer from the same directory.
+
+```bash
 API_URL=https://webrtc-video-platform.demo.rstream.io \
 DEVICE_SECRET=dev_... \
 ./webrtc-video-producer -config ./config.provisioning.h264.yaml
 ```
+
+Once the device appears online in the dashboard, open its viewer and check that the H.264 test pattern plays. Stop the producer with Ctrl+C.
 
 ## Configure demo cleanup
 
